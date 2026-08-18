@@ -1,0 +1,88 @@
+<div id="abaEvolucao" class="aba-conteudo hidden">
+                <div class="mb-6 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800">📈 Evolução de Produção (Plan vs Real)</h2>
+                        <p class="text-xs text-slate-500 mt-1">Isola o volume entregue em: No Prazo, Antecipado (Ganho) e Atrasado Recuperado (Dívida Paga).</p>
+                    </div>
+                    
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="bg-white border border-slate-200 p-1.5 rounded shadow-sm flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase ml-1">Período:</span>
+                            <select id="evoPeriodo" onchange="processarEvolucao()" class="bg-slate-50 border border-slate-200 text-slate-700 rounded p-1 text-xs font-bold outline-none cursor-pointer">
+                                <option value="d-0">Hoje (D-0)</option>
+                                <option value="d-1">Ontem (D-1)</option>
+                                <option value="d-2">Anteontem (D-2)</option>
+                                <option value="d-3">Há 3 dias (D-3)</option>
+                                <option value="u7d" selected>Últimos 7 Dias</option>
+                                <option value="u30d">Últimos 30 Dias</option>
+                                <option value="tudo">Todo o Histórico</option>
+                            </select>
+                        </div>
+                        <div class="bg-white border border-slate-200 p-1.5 rounded shadow-sm flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase ml-1">Visão Gráfico:</span>
+                            <select id="evoGranul" onchange="processarEvolucao()" class="bg-slate-50 border border-slate-200 text-indigo-700 rounded p-1 text-xs font-bold outline-none cursor-pointer">
+                                <option value="dia">📅 Diária</option>
+                                <option value="semana">📆 Semanal</option>
+                            </select>
+                        </div>
+                        <div class="bg-white border border-slate-200 p-1.5 rounded shadow-sm flex items-center gap-2 hidden">
+                            <select id="evoFase" onchange="processarEvolucao()"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="containerCardsEvolucao" class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6"></div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+                    <div class="xl:col-span-2 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Desempenho Temporal da Máquina</h3>
+                        <div class="relative h-72 w-full"><canvas id="graficoEvolucao"></canvas></div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Resumo Geral por Etapa</h3>
+                        <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-500 uppercase border-b-2 border-slate-300 text-[9px]">
+                                <tr>
+                                    <th class="p-2 border-r border-slate-200">Etapa</th>
+                                    <th class="p-2 border-r border-slate-200 text-right">Planeado</th>
+                                    <th class="p-2 border-r border-slate-200 text-right text-emerald-700">Real (Pz)</th>
+                                    <th class="p-2 border-r border-slate-200 text-right text-blue-700">Antecip</th>
+                                    <th class="p-2 border-r border-slate-200 text-right text-orange-700">Atraso</th>
+                                    <th class="p-2 text-right font-bold text-slate-800">% Tot</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbEvolucaoFases" class="text-slate-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mt-8 mb-4 border-l-4 border-indigo-500 pl-3">
+                    <h2 class="text-lg font-black text-slate-800 tracking-tight" id="tituloDetalheEvo">🔍 Detalhamento da Fase</h2>
+                    <p class="text-xs text-slate-500">Abaixo o raio-x exato da fase que está selecionada no gráfico.</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller max-h-[400px]">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Por Gráfica</h3>
+                        <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap"><thead class="bg-slate-50 text-slate-500 uppercase text-[9px] sticky top-0 shadow-sm"><tr><th class="p-2 border-r border-slate-200">Gráfica</th><th class="p-2 text-right">Plan</th><th class="p-2 text-right text-emerald-700">Real (Pz)</th><th class="p-2 text-right text-blue-700">Ant.</th><th class="p-2 text-right text-orange-700">Atr.</th><th class="p-2 text-right font-bold">% Tot</th></tr></thead><tbody id="tbEvoGrafica" class="text-slate-700"></tbody></table>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller max-h-[400px]">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Por Marca</h3>
+                        <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap"><thead class="bg-slate-50 text-slate-500 uppercase text-[9px] sticky top-0 shadow-sm"><tr><th class="p-2 border-r border-slate-200">Marca</th><th class="p-2 text-right">Plan</th><th class="p-2 text-right text-emerald-700">Real (Pz)</th><th class="p-2 text-right text-blue-700">Ant.</th><th class="p-2 text-right text-orange-700">Atr.</th><th class="p-2 text-right font-bold">% Tot</th></tr></thead><tbody id="tbEvoMarca" class="text-slate-700"></tbody></table>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller max-h-[400px] mb-6">
+                    <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Visão Conjunta: Gráfica x Marca</h3>
+                    <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap"><thead class="bg-slate-100 text-slate-500 uppercase text-[9px] sticky top-0 shadow-sm border-b-2 border-slate-300"><tr><th class="p-2 border-r border-slate-200">Gráfica</th><th class="p-2 border-r border-slate-200">Marca</th><th class="p-2 text-right border-r border-slate-200">Plan</th><th class="p-2 text-right border-r border-slate-200 text-emerald-700">Real (Pz)</th><th class="p-2 text-right border-r border-slate-200 text-blue-700">Antecip.</th><th class="p-2 text-right border-r border-slate-200 text-orange-700">Atraso</th><th class="p-2 text-right font-bold bg-indigo-50">% Plan</th><th class="p-2 text-right font-bold">% Tot</th></tr></thead><tbody id="tbEvoGM" class="text-slate-700"></tbody></table>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller max-h-[500px] mb-10">
+                    <div class="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase">Detalhamento Nível SKU</h3>
+                        <button onclick="exportarEvolucaoCSV()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-[10px] font-bold shadow-sm transition-colors flex items-center gap-1">📥 Baixar Lista (CSV)</button>
+                    </div>
+                    <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap"><thead class="bg-slate-100 text-slate-500 uppercase text-[9px] sticky top-0 shadow-sm border-b-2 border-slate-300"><tr><th class="p-2 border-r border-slate-200">Gráfica</th><th class="p-2 border-r border-slate-200">Marca</th><th class="p-2 border-r border-slate-200">SKU / Descrição</th><th class="p-2 text-right border-r border-slate-200">Plan</th><th class="p-2 text-right border-r border-slate-200 text-emerald-700">Real (Pz)</th><th class="p-2 text-right border-r border-slate-200 text-blue-700">Ant.</th><th class="p-2 text-right text-orange-700">Atr.</th></tr></thead><tbody id="tbEvoSku" class="text-slate-700"></tbody></table>
+                </div>
+            </div>

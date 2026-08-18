@@ -1,0 +1,126 @@
+<div id="abaReentradasGerencial" class="aba-conteudo hidden h-full flex flex-col">
+                <div class="bg-white shadow-sm border-b border-indigo-200 flex-shrink-0 z-20 relative p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 class="text-xl font-black text-indigo-800 tracking-tight">📊 Painel Gerencial (Visão Executiva)</h2>
+                        <p class="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-1">Análise de causa raiz, chamados em aberto e SLAs.</p>
+                    </div>
+                    <button onclick="iniciarAbaReentradasGerencial(true)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1">🔄 Atualizar Base</button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-4 md:p-6 scroller bg-neutral-100">
+                    
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 mb-6">
+                        <div class="flex flex-wrap items-center gap-3 text-[10px] uppercase font-bold text-neutral-500">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Filtros:</span>
+                                <div id="containerFiltrosMultiGer" class="flex flex-wrap gap-2 relative z-50"></div>
+                            </div>
+                            <div class="w-px h-6 bg-slate-200 mx-2"></div>
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="gerBuscaId" onkeyup="processarReentradasGerencial()" placeholder="Buscar ID..." class="bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-1.5 w-32 text-neutral-800 outline-none focus:border-indigo-400 transition-colors shadow-sm">
+                            </div>
+                            <button onclick="limparFiltrosGerencial()" class="bg-neutral-200 hover:bg-neutral-300 text-neutral-700 px-3 py-1.5 rounded-lg transition-colors ml-auto shadow-sm">Limpar Tudo</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 lg:grid-cols-7 gap-3 mb-4">
+                        <div class="bg-white p-3 rounded-xl border-l-4 border-slate-600 shadow-sm flex flex-col justify-center">
+                            <h3 class="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Chamados</h3>
+                            <p class="text-2xl font-black text-slate-800" id="kpiGerTodos">-</p>
+                        </div>
+                        <div class="bg-white p-3 rounded-xl border-l-4 border-indigo-500 shadow-sm flex flex-col justify-center">
+                            <h3 class="text-[8px] font-bold text-indigo-600 uppercase tracking-widest mb-1">Em Aberto</h3>
+                            <p class="text-2xl font-black text-indigo-700" id="kpiGerAbertos">-</p>
+                        </div>
+                        <div class="bg-white p-3 rounded-xl border-l-4 border-emerald-500 shadow-sm flex flex-col justify-center">
+                            <h3 class="text-[8px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Concluídos</h3>
+                            <p class="text-2xl font-black text-emerald-700" id="kpiGerConcluidos">-</p>
+                        </div>
+                        <div class="bg-white p-3 rounded-xl border-l-4 border-red-500 shadow-sm flex flex-col justify-center">
+                            <h3 class="text-[8px] font-bold text-red-600 uppercase tracking-widest mb-1">Cancelados</h3>
+                            <p class="text-2xl font-black text-red-700" id="kpiGerCancelados">-</p>
+                        </div>
+                        
+                        <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+                            <h3 class="text-[8px] font-bold text-emerald-700 uppercase tracking-widest mb-1">% Coleta SLA</h3>
+                            <p class="text-2xl font-black" id="kpiGerSlaCol">-</p>
+                            <p class="text-[7px] font-semibold text-emerald-600 mt-1">Exceto Canc.</p>
+                        </div>
+                        <div class="bg-blue-50 p-3 rounded-xl border border-blue-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+                            <h3 class="text-[8px] font-bold text-blue-700 uppercase tracking-widest mb-1">% Abr. no Prazo</h3>
+                            <p class="text-2xl font-black" id="kpiGerSlaAbe">-</p>
+                            <p class="text-[7px] font-semibold text-blue-600 mt-1">Exceto Canc.</p>
+                        </div>
+                        <div class="bg-purple-50 p-3 rounded-xl border border-purple-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+                            <h3 class="text-[8px] font-bold text-purple-700 uppercase tracking-widest mb-1 leading-tight">% Formalizado vs Real</h3>
+                            <p class="text-2xl font-black" id="kpiGerSlaGrafica">-</p>
+                            <p class="text-[7px] font-semibold text-purple-600 mt-1">Acordado c/ Gráfica</p>
+                        </div>
+                    </div>
+
+                    <h3 class="text-xs font-black text-slate-700 uppercase tracking-widest mb-2 border-b border-slate-200 pb-1 mt-4">Volume em Aberto por Categoria</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6" id="cardsGerCategorias"></div>
+
+                    
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-xs font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Status dos Prazos de Coleta (Em Aberto)</h3>
+                            <div class="relative h-64 w-full"><canvas id="grafGerPrazos"></canvas></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <div class="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
+                                <h3 class="text-xs font-bold text-slate-700 uppercase">Previsão de Coleta Diária (Por Marca)</h3>
+                                <p class="text-[9px] text-slate-400 font-bold uppercase">Volume de Chamados (Abertos/Marca)</p>
+                            </div>
+                            <div class="relative h-64 w-full"><canvas id="grafGerColetaDiaria"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-xs font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Abertos por Marca</h3>
+                            <div class="relative h-64 w-full"><canvas id="grafGerMarca"></canvas></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-xs font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Abertos por Gráfica</h3>
+                            <div class="relative h-64 w-full"><canvas id="grafGerGrafica"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-6 mb-8">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-xs font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Distribuição por Status (Produção)</h3>
+                            <div class="relative h-64 w-full"><canvas id="grafGerStatus"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-10">
+                        <div class="bg-slate-800 p-3 flex justify-between items-center border-b border-slate-700">
+                            <h3 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">📑 Base de Dados Gerencial (Uma linha por solicitação)</h3>
+                        </div>
+                        <div class="overflow-x-auto scroller max-h-[400px]">
+                            <table class="w-full text-left border-collapse whitespace-nowrap">
+                                <thead class="bg-slate-50 text-slate-600 uppercase text-[9px] sticky top-0 shadow-sm z-10">
+                                    <tr>
+                                        <th class="p-2 border-r border-slate-200">Nº Chamado</th>
+                                        <th class="p-2 border-r border-slate-200">Indexador</th>
+                                        <th class="p-2 border-r border-slate-200">CD Destino</th>
+                                        <th class="p-2 border-r border-slate-200">Categoria</th>
+                                        <th class="p-2 border-r border-slate-200">Marca</th>
+                                        <th class="p-2 border-r border-slate-200">Gráfica</th>
+                                        <th class="p-2 border-r border-slate-200 text-center">Dt Abertura</th>
+                                        <th class="p-2 border-r border-slate-200 text-center">Dt Coleta (SLA)</th>
+                                        <th class="p-2 border-r border-slate-200 text-center">Dt Prev. / Real</th>
+                                        <th class="p-2 border-r border-slate-200 text-center text-purple-700 bg-purple-50">Dt Formalizada</th>
+                                        <th class="p-2 border-r border-slate-200 text-center">Coleta no SLA?</th>
+                                        <th class="p-2 border-r border-slate-200">Status Produção</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbGerencialBase"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>

@@ -1,0 +1,794 @@
+// =========================================================================
+// MÓDULO 0 - CACHE TURBO (FATIAMENTO PARA BURLAR O LIMITE DE 100KB)
+// =========================================================================
+
+function salvarNoCache(chave, dados) {
+  var cache = CacheService.getScriptCache();
+  var jsonString = JSON.stringify(dados);
+  // Limite seguro de caracteres (aprox. 90KB, já que JS usa 2 bytes por char)
+  var maxChars = 45000; 
+  var numChunks = Math.ceil(jsonString.length / maxChars);
+  var cacheData = {};
+
+  for (var i = 0; i < numChunks; i++) {
+    var chunk = jsonString.substring(i * maxChars, (i + 1) * maxChars);
+    cacheData[chave + '_chunk_' + i] = chunk;
+  }
+
+  // Salva no cache por 30 minutos (1800 segundos)
+  cache.putAll(cacheData, 1800);
+  cache.put(chave + '_metadata', numChunks.toString(), 1800);
+}
+
+function lerDoCache(chave) {
+  var cache = CacheService.getScriptCache();
+  var numChunksStr = cache.get(chave + '_metadata');
+
+  if (!numChunksStr) return null; 
+
+  var numChunks = parseInt(numChunksStr, 10);
+  var jsonString = "";
+
+  for (var i = 0; i < numChunks; i++) {
+    var chunk = cache.get(chave + '_chunk_' + i);
+    if (!chunk) return null; 
+    jsonString += chunk;
+  }
+
+  try {
+    return JSON.parse(jsonString);
+  } catch(e) {
+    return null;
+  }
+}
+
+// ⚠️ ATENÇÃO: Configure um Acionador (Trigger) de tempo para rodar esta função a cada 10 ou 15 minutos!
+function TRIGGER_AtualizarCache() {
+  var dados = _processarDadosDashboardBruto();
+  salvarNoCache('DADOS_DASHBOARD', dados);
+  Logger.log("Cache atualizado com sucesso. SKUs lidos: " + dados.length);
+}
+
+// ======================================================
+// 1. ROTEAMENTO E HTML (CORE DO SISTEMA)
+// ======================================================
+
+function doGet() {
+  return HtmlService.createTemplateFromFile('Main')
+      .evaluate()
+      .setTitle('Portal da Produção Gráfica')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function include(filename) {
+  return HtmlService.createTemplateFromFile(filename).evaluate().getContent();
+} 
+
+// ======================================================
+// 2. DADOS DO DASHBOARD (INDEX) - COM CACHE ATIVADO
+// ======================================================
+
+function getDadosDashboard() {
+  var dadosEmCache = lerDoCache('DADOS_DASHBOARD');
+  
+  if (dadosEmCache) {
+    return dadosEmCache;
+  }
+  
+  var dadosFrescos = _processarDadosDashboardBruto();
+  salvarNoCache('DADOS_DASHBOARD', dadosFrescos);
+  return dadosFrescos;
+}
+
+// A FUNÇÃO ORIGINAL RENOMEADA (A "LEITURA TURBO REVISADA")
+function _processarDadosDashboardBruto() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var result = [];
+  function limparHeader(h) { return h ? String(h).trim() : ""; }
+ 
+  var safeIsoDate = function(valData) {
+      if (!valData || valData === "") return "";
+      if (valData instanceof Date) return valData.toISOString();
+      if (typeof valData === 'string' && valData.includes('-')) return valData;
+      return "";
+  };
+
+  // --- A. LER ABA PCP PRINCIPAL ---
+  var sheetPCP = ss.getSheetByName("PCP");
+  if(sheetPCP) {
+    var dataPCP = sheetPCP.getDataRange().getValues();
+    if (dataPCP.length > 1) {
+      var headersPCP = dataPCP[0].map(limparHeader);
+     
+      for (var i = 1; i < dataPCP.length; i++) {
+        // TRAVA: IGNORAR ITENS CANCELADOS
+        var statusCancelado = false;
+        if (dataPCP[i].length > 61 && String(dataPCP[i][61] || "").trim().toUpperCase() === "CANCELADO") statusCancelado = true;
+        if (dataPCP[i].length > 72 && String(dataPCP[i][72] || "").trim().toUpperCase() === "CANCELADO") statusCancelado = true;
+        if (statusCancelado) continue;
+        var obj = {};
+       
+        for (var j = 0; j < headersPCP.length; j++) {
+          var val = dataPCP[i][j];
+          if(val !== "" && val !== null) {
+            if (val instanceof Date) {
+               obj[headersPCP[j]] = val.toISOString();
+            } else {
+               obj[headersPCP[j]] = val;
+            }
+          }
+        }
+        
+        // MAPEAMENTO POR ÍNDICE
+        if(dataPCP[i].length > 1)   obj["JOIN_KEY"] = String(dataPCP[i][1] || "").trim();
+        if(dataPCP[i].length > 2)   obj["META_OKR_POS"] = safeIsoDate(dataPCP[i][2]);
+        if(dataPCP[i].length > 3)   obj["META_COLETA_D"] = safeIsoDate(dataPCP[i][3]);
+        if(dataPCP[i].length > 16)  obj["Chave"] = dataPCP[i][16] || "";                 
+        if(dataPCP[i].length > 46)  obj["META_ARM_POS"] = safeIsoDate(dataPCP[i][46]);   
+        if(dataPCP[i].length > 68)  obj["GRAFICA_FINAL"] = String(dataPCP[i][68] || "").trim().toUpperCase(); 
+        if(dataPCP[i].length > 74)  obj["SKU_REAL"] = dataPCP[i][74] || "";              
+        if(dataPCP[i].length > 88)  obj["CD_FINAL"] = String(dataPCP[i][88] || "").trim().toUpperCase(); 
+        if(dataPCP[i].length > 89)  obj["META_PCP_POS"] = safeIsoDate(dataPCP[i][89]);   
+        if(dataPCP[i].length > 90)  obj["META_COL_LIMITE"] = safeIsoDate(dataPCP[i][90]); 
+        if(dataPCP[i].length > 110) obj["DT_ENTREGA_DG"] = safeIsoDate(dataPCP[i][110]); 
+        if(dataPCP[i].length > 111) obj["META_COL_BASE"] = safeIsoDate(dataPCP[i][111]); 
+        if(dataPCP[i].length > 134) obj["STATUS_EE"] = String(dataPCP[i][134] || "").trim(); 
+        if(dataPCP[i].length > 69) obj["MARCA_FINAL"] = String(dataPCP[i][69] || "").trim().toUpperCase(); 
+        if(dataPCP[i].length > 51)  obj["VOLUME_AZ"] = dataPCP[i][51] || 0;          // Coluna AZ (Tiragem Coletada)
+        if(dataPCP[i].length > 129) obj["DATA_DZ"] = safeIsoDate(dataPCP[i][129]);   // Coluna DZ (Data Coleta TP)
+        if(dataPCP[i].length > 130) obj["DATA_EA"] = safeIsoDate(dataPCP[i][130]);   // Coluna EA (Data Entrega TP)
+        
+        obj["TIRAGEM"] = obj["TIRAGEM"] || obj["QUANTIDADE"] || 0;
+        
+        if (!obj["Chave"] || obj["Chave"] === "") {
+             var op = obj["Ordem de Produção"] || obj["Ordem"] || obj["OP"] || "";
+             var sku = obj["Produto"] || obj["Item"] || obj["SKU"] || "";
+             if(op && sku) obj["Chave"] = op + "_" + sku;
+        }
+        if(obj["Chave"]) {
+          obj["_SOURCE"] = "PCP";
+          result.push(obj);
+        }
+      }
+    }
+  }
+ 
+  // --- B. LER ABA PCP_ACABADORAS ---
+  var sheetAcab = ss.getSheetByName("PCP_ACABADORAS");
+  if(sheetAcab) {
+    var dataAcab = sheetAcab.getDataRange().getValues();
+    if (dataAcab.length > 1) {
+      var headersAcab = dataAcab[0].map(limparHeader);
+     
+      for (var i = 1; i < dataAcab.length; i++) {
+        var statusAcab = String(dataAcab[i][33] || "").trim().toUpperCase();
+        if (statusAcab === "CANCELADO") continue;
+        var obj = {};
+       
+        for (var j = 0; j < headersAcab.length; j++) {
+          var val = dataAcab[i][j];
+          if(val !== "" && val !== null) {
+            if (val instanceof Date) {
+               obj[headersAcab[j]] = val.toISOString();
+            } else {
+               obj[headersAcab[j]] = val;
+            }
+          }
+        }
+         
+        obj["Chave"] = dataAcab[i][0]; 
+        if(dataAcab[i].length > 1)  obj["JOIN_KEY"] = String(dataAcab[i][1] || "").trim(); 
+        if(dataAcab[i].length > 2)  obj["META_OKR_POS"] = safeIsoDate(dataAcab[i][2]);    
+        if(dataAcab[i].length > 3)  obj["META_COLETA_D"] = safeIsoDate(dataAcab[i][3]);   
+        if(dataAcab[i].length > 7)  obj["META_ARM_POS"] = safeIsoDate(dataAcab[i][7]);    
+        if(dataAcab[i].length > 29) obj["GRAFICA_FINAL"] = String(dataAcab[i][29] || "").trim().toUpperCase(); 
+        if(dataAcab[i].length > 43) obj["TIRAGEM"] = dataAcab[i][43] || 0;               
+        if(dataAcab[i].length > 44) obj["CD_FINAL"] = String(dataAcab[i][44] || "").trim().toUpperCase(); 
+        if(dataAcab[i].length > 48) obj["META_PCP_POS"] = safeIsoDate(dataAcab[i][48]);   
+        if(dataAcab[i].length > 49) obj["META_COL_LIMITE"] = safeIsoDate(dataAcab[i][49]); 
+        if(dataAcab[i].length > 72) obj["DT_ENTREGA_DG"] = safeIsoDate(dataAcab[i][72]); 
+        if(dataAcab[i].length > 73) obj["META_COL_BASE"] = safeIsoDate(dataAcab[i][73]); 
+        if(dataAcab[i].length > 30) obj["MARCA_FINAL"] = String(dataAcab[i][30] || "").trim().toUpperCase(); 
+        
+        if(obj["Chave"]) {
+          obj["_SOURCE"] = "ACABADORA";
+          result.push(obj);
+        }
+      }
+    }
+  }
+  return result;
+}
+
+// =========================================================================
+// MÓDULOS SECUNDÁRIOS E DADOS DE APOIO
+// =========================================================================
+
+function atualizar_PCP_Funil_e_Atrasos() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  /* =====================================================
+     MÓDULO 1.5 – import_cal → CAL. EDIT.
+     ===================================================== */
+  const abaImportCal = ss.getSheetByName("import_cal");
+  const abacal = ss.getSheetByName("CAL. EDIT.");
+  if (!abaImportCal || !abacal) throw new Error("Aba cal edit ou import cal não encontrada.");
+  abacal.getRange("k2:at").clearContent();
+  const ultimaLinhaCal = abaImportCal.getLastRow();
+  if (ultimaLinhaCal >= 2) {
+    const dadosCal = abaImportCal
+      .getRange(2, 2, ultimaLinhaCal - 1, 36)
+      .getValues()
+      .filter(l => l[1] !== "");
+    if (dadosCal.length > 0) {
+      abacal.getRange(2, 11, dadosCal.length, dadosCal[0].length)
+        .setValues(dadosCal);
+    }
+  }
+  
+  /* =====================================================
+     MÓDULO 2 – IMPORT_MP → MAPA DE SAÍDA
+     ===================================================== */
+  const abaImportMP = ss.getSheetByName("import_mp");
+  const abaMapaSaida = ss.getSheetByName("MAPA DE SAÍDA");
+  if (!abaImportMP || !abaMapaSaida) throw new Error("Aba import_mp ou MAPA DE SAÍDA não encontrada.");
+  abaMapaSaida.getRange("D2:AC").clearContent();
+  const ultimaLinhaMP = abaImportMP.getLastRow();
+  if (ultimaLinhaMP >= 2) {
+    const dadosMP = abaImportMP
+      .getRange(2, 1, ultimaLinhaMP - 1, 26)
+      .getValues()
+      .filter(l => l[1] !== "");
+    if (dadosMP.length > 0) {
+      abaMapaSaida.getRange(2, 4, dadosMP.length, dadosMP[0].length)
+        .setValues(dadosMP);
+    }
+  }
+}
+
+function salvarObsGiro(tipo, chave, obs, contextoStr) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var nomeAba = tipo === 'SKU' ? 'Obs_Cockpit_sku' : 'Obs_Cockpit';
+    var sheet = ss.getSheetByName(nomeAba);
+    
+    if (!sheet) {
+      sheet = ss.insertSheet(nomeAba);
+      sheet.appendRow(["Data e Hora", "Usuário", "Chave de Ligação", "Observação", "Contexto Físico (JSON)"]);
+      sheet.getRange("A1:E1").setFontWeight("bold").setBackground("#4f46e5").setFontColor("white");
+      sheet.setFrozenRows(1);
+    }
+    
+    var email = "Modo Desenvolvedor / Desconhecido";
+    try { email = Session.getActiveUser().getEmail() || "Anônimo"; } catch(e){}
+    var agora = new Date();
+    
+    sheet.appendRow([agora, email, chave, obs, contextoStr]);
+   
+    var dataFormatada = Utilities.formatDate(agora, "GMT-3", "dd/MM/yyyy HH:mm");
+    return { success: true, data: dataFormatada, user: email, obs: obs, chave: chave, tipo: tipo };
+   
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function buscarHistoricoObsGiro() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var result = { master: {}, sku: {} };
+    
+    function lerAba(nomeAba, destinoMap) {
+      var sheet = ss.getSheetByName(nomeAba);
+      if (!sheet) return;
+     
+      var data = sheet.getDataRange().getDisplayValues();
+      for (var i = 1; i < data.length; i++) {
+        var dt = data[i][0];
+        var usr = data[i][1];
+        var chave = data[i][2];
+        var obs = data[i][3];
+       
+        if (!chave) continue;
+        if (!destinoMap[chave]) destinoMap[chave] = [];
+       
+        destinoMap[chave].unshift({ data: dt, user: usr, obs: obs });
+      }
+    }
+    
+    lerAba('Obs_Cockpit', result.master);
+    lerAba('Obs_Cockpit_sku', result.sku);
+    return result;
+  } catch(e) {
+    return { master: {}, sku: {} };
+  }
+}
+
+function getDadosCockpit() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetCockpit = ss.getSheetByName("Base_Cockpit_Status");
+  if (!sheetCockpit) return [];
+  
+  var data = sheetCockpit.getRange("A:AD").getDisplayValues();
+  var result = [];
+  
+  function safeDate(val) {
+    if (!val) return "";
+    return String(val).trim();
+  }
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][1]) {
+      var k = data[i][0];
+      var row = { _rowIndex: i + 1 };
+      row["CHAVE"] = k;
+      row["METADATA"] = {
+        grafica: data[i][1], unidade: data[i][2], ciclo: data[i][3], envio: data[i][4],
+        caracteristica: data[i][5], segmento: data[i][6], serie: data[i][7],
+        tipo: data[i][8], cd: data[i][9]
+      };
+      
+      row["ESTATICAS"] = { status: data[i][10], dtPlan: safeDate(data[i][11]), dtReal: safeDate(data[i][12]), resp: data[i][13], obs: data[i][14] };
+      row["CAIXAS"]    = { status: data[i][15], dtPlan: safeDate(data[i][16]), dtReal: safeDate(data[i][17]), resp: data[i][18], obs: data[i][19] };
+      row["PAPEL"]     = { status: data[i][20], dtPlan: safeDate(data[i][21]), dtReal: safeDate(data[i][22]), resp: data[i][23], obs: data[i][24] };
+      row["ENVIO_EZ"]  = { status: data[i][25], dtPlan: safeDate(data[i][26]), dtReal: safeDate(data[i][27]), resp: data[i][28], obs: data[i][29] };
+      
+      result.push(row);
+    }
+  }
+  return result;
+}
+
+function salvarItemCockpit(form) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Base_Cockpit_Status");
+  var row = Number(form.rowIndex);
+  var type = form.tipoItem;
+ 
+  var colStart = 0;
+  if(type === 'ESTATICAS') colStart = 11;
+  if(type === 'CAIXAS') colStart = 16;
+  if(type === 'PAPEL') colStart = 21;
+  if(type === 'ENVIO_EZ') colStart = 26;
+ 
+  if(colStart === 0 || row < 2) return { success: false, msg: "Erro de mapeamento" };
+ 
+  var dadosSalvar = [[form.status, form.dataPlan, form.dataReal, form.responsavel, form.obs]];
+  sheet.getRange(row, colStart, 1, 5).setValues(dadosSalvar);
+  return { success: true };
+}
+
+function salvarLoteCockpit(form, rowIndexes) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Base_Cockpit_Status");
+  if (!sheet) return { success: false, msg: "Aba não encontrada" };
+ 
+  var type = form.tipoItem;
+  var colStart = 0;
+  if(type === 'ESTATICAS') colStart = 11;
+  if(type === 'CAIXAS') colStart = 16;
+  if(type === 'PAPEL') colStart = 21;
+  if(type === 'ENVIO_EZ') colStart = 26;
+ 
+  if(colStart === 0 || !rowIndexes || rowIndexes.length === 0) {
+    return { success: false, msg: "Configuração inválida ou lista vazia" };
+  }
+  
+  function getColLetter(idx) {
+    var letter = "";
+    while (idx > 0) {
+      var temp = (idx - 1) % 26;
+      letter = String.fromCharCode(temp + 65) + letter;
+      idx = (idx - temp - 1) / 26;
+    }
+    return letter;
+  }
+  
+  var cStatus = getColLetter(colStart);
+  var cDtPlan = getColLetter(colStart + 1);
+  var cDtReal = getColLetter(colStart + 2);
+  var cResp   = getColLetter(colStart + 3);
+  var cObs    = getColLetter(colStart + 4);
+  var rangesStatus = [], rangesDtPlan = [], rangesDtReal = [], rangesResp = [], rangesObs = [];
+  
+  rowIndexes.forEach(function(r) {
+    rangesStatus.push(cStatus + r);
+    rangesDtPlan.push(cDtPlan + r);
+    rangesDtReal.push(cDtReal + r);
+    rangesResp.push(cResp + r);
+    rangesObs.push(cObs + r);
+  });
+  
+  if(form.status) sheet.getRangeList(rangesStatus).setValue(form.status);
+  if(form.dataPlan) sheet.getRangeList(rangesDtPlan).setValue(form.dataPlan);
+ 
+  if(form.status === 'CONCLUIDO') {
+      if(form.dataReal) sheet.getRangeList(rangesDtReal).setValue(form.dataReal);
+      if(form.responsavel) sheet.getRangeList(rangesResp).setValue(form.responsavel);
+  }
+ 
+  if(form.obs) sheet.getRangeList(rangesObs).setValue(form.obs);
+  return { success: true, count: rowIndexes.length };
+}
+
+function getEmailUsuario() {
+  try {
+    return Session.getActiveUser().getEmail();
+  } catch(e) {
+    return "Modo Desenvolvedor";
+  }
+}
+
+function getDadosPreProducao() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("CAL. EDIT.");
+  
+  if (!sheet) {
+    var sheets = ss.getSheets();
+    for (var i = 0; i < sheets.length; i++) {
+      var nome = sheets[i].getName().toUpperCase();
+      if (nome.includes("CAL") && nome.includes("EDIT")) {
+        sheet = sheets[i];
+        break;
+      }
+    }
+  }
+  if(!sheet) return [{ erro: "Aba 'CAL. EDIT.' não encontrada." }];
+  
+  var data = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getDisplayValues();
+  var result = [];
+  
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var sku = row[18];
+    var status = row[16]; 
+   
+    if(!sku || sku.toString().trim() === "") continue;
+    if(status && status.toString().trim().toUpperCase() === "CANCELADO") continue;
+    
+    var periodoRaw = row[38] ? String(row[38]).trim() : "";
+    var periodoTratado = "(Vazio)";
+    
+    if (periodoRaw !== "" && periodoRaw !== "-") {
+      var partes = periodoRaw.split("/");
+      if (partes.length === 3) {
+        var mes = parseInt(partes[1], 10);
+        var ano = partes[2];
+        if (ano.length === 2) ano = "20" + ano; 
+        var tri = "";
+        if (mes >= 1 && mes <= 3) tri = "T1";
+        else if (mes >= 4 && mes <= 6) tri = "T2";
+        else if (mes >= 7 && mes <= 9) tri = "T3";
+        else if (mes >= 10 && mes <= 12) tri = "T4";
+        if (tri !== "") periodoTratado = tri + "." + ano;
+        else periodoTratado = periodoRaw.toUpperCase();
+      }
+      else if (periodoRaw.includes("-") && periodoRaw.split("-").length >= 3) {
+        var partesISO = periodoRaw.split(" ")[0].split("T")[0].split("-");
+        var anoISO = partesISO[0];
+        var mesISO = parseInt(partesISO[1], 10);
+        var triISO = "";
+        if (mesISO >= 1 && mesISO <= 3) triISO = "T1";
+        else if (mesISO >= 4 && mesISO <= 6) triISO = "T2";
+        else if (mesISO >= 7 && mesISO <= 9) triISO = "T3";
+        else if (mesISO >= 10 && mesISO <= 12) triISO = "T4";
+        if (triISO !== "") periodoTratado = triISO + "." + anoISO;
+        else periodoTratado = periodoRaw.toUpperCase();
+      }
+      else {
+        periodoTratado = periodoRaw.toUpperCase();
+      }
+    }
+    
+    result.push({
+      sku: sku,
+      descricao: row[19],
+      un: row[10],          
+      ciclo: row[11],      
+      envio: row[12],      
+      pr: row[13],          
+      indexTiragem: row[14],
+      segmento: row[20],    
+      serie: row[21],      
+      tipo: row[22],        
+      paginas: row[24],    
+      grafica: row[25],    
+      dtEnvioPlan: row[33],
+      dtEnvioReal: row[34],
+      dtRecBonPlan: row[35],
+      dtRecBonReal: row[36],
+      dtApvBonPlan: row[38],
+      dtApvBonReal: row[39],
+      periodo: periodoTratado 
+    });
+  }
+  
+  if (result.length === 0) {
+    return [{ erro: "Li a aba, mas não achei dados na Coluna S (SKU)." }];
+  }
+  return result;
+}
+
+function getUltimaAtualizacaoPCP() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("PCP");
+   
+    if (!sheet) return "Aba PCP não encontrada";
+    var dataHora = sheet.getRange(2, 66).getDisplayValue(); // Coluna BN
+   
+    return dataHora && dataHora !== "" ? dataHora : "Data não disponível";
+  } catch(e) {
+    return "Erro ao ler data";
+  }
+}
+
+function getDadosQualidade() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("qualidade_reclamacoes");
+    if (!sheet) return [];
+   
+    var data = sheet.getRange("A:S").getValues();
+    if (data.length <= 1) return [];
+    var headers = data[0];
+    var result = [];
+    
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[0] && !row[1]) continue;
+      
+      var obj = {};
+      for (var j = 0; j < headers.length; j++) {
+        var header = headers[j] ? String(headers[j]).trim() : "Col" + j;
+        var valor = row[j];
+        if (valor instanceof Date) {
+          obj[header] = valor.toISOString();
+        } else {
+          obj[header] = valor;
+        }
+      }
+      result.push(obj);
+    }
+    return result;
+  } catch (e) {
+    Logger.log("Erro Qualidade: " + e.toString());
+    return [];
+  }
+}
+
+function getDadosPPM() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("ppm_consolidado");
+    if (!sheet) return [];
+   
+    var data = sheet.getRange("A:G").getValues();
+    if (data.length <= 1) return [];
+    var headers = data[0];
+    var result = [];
+    
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[0]) continue;
+      var obj = {};
+      for (var j = 0; j < headers.length; j++) {
+        var header = headers[j] ? String(headers[j]).trim() : "Col" + j;
+        obj[header] = row[j];
+      }
+      result.push(obj);
+    }
+    return result;
+  } catch (e) {
+    Logger.log("Erro PPM: " + e.toString());
+    return [];
+  }
+}
+
+function registrarAcessoUsuario() {
+  try {
+    var email = Session.getActiveUser().getEmail();
+    if (!email || email === "") email = "Usuário Anônimo / Fora do Domínio";
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("Log_Acessos");
+    
+    if (!sheet) {
+      sheet = ss.insertSheet("Log_Acessos");
+      sheet.appendRow(["Data e Hora do Acesso", "Email do Usuário"]);
+      sheet.getRange("A1:B1").setFontWeight("bold").setBackground("#4f46e5").setFontColor("white");
+      sheet.setFrozenRows(1); 
+      sheet.setColumnWidth(1, 200); 
+      sheet.setColumnWidth(2, 300); 
+    }
+    
+    var agora = new Date();
+    sheet.appendRow([agora, email]);
+    return true;
+  } catch (e) {
+    Logger.log("Erro ao registrar acesso invisível: " + e.message);
+    return false;
+  }
+}
+
+function getDadosAlocacao() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Alocacao_Reentradas");
+    if (!sheet) return [];
+   
+    var data = sheet.getRange("A:AD").getValues();
+    if (data.length <= 1) return [];
+    var headers = data[0];
+    var result = [];
+    
+    for (var i = 1; i < data.length; i++) {
+      if (!data[i][0] && !data[i][1]) continue; 
+     
+      var obj = {};
+      for (var j = 0; j < headers.length; j++) {
+        var header = headers[j] ? String(headers[j]).trim() : "Col" + j;
+        var valor = data[i][j];
+        obj[header] = (valor instanceof Date) ? valor.toISOString() : valor;
+      }
+      result.push(obj);
+    }
+    return result;
+  } catch (e) {
+    Logger.log("Erro Alocação: " + e.toString());
+    return [];
+  }
+}
+
+function getDadosChamados() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Chamados");
+    if (!sheet) return [];
+   
+    var data = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
+    if (data.length <= 1) return [];
+    var headers = data[0];
+    var result = [];
+    
+    for (var i = 1; i < data.length; i++) {
+      if (!data[i][6] || String(data[i][6]).trim() === "") continue;
+     
+      var obj = {};
+      var rawRow = []; 
+     
+      for (var j = 0; j < headers.length; j++) {
+        var header = headers[j] ? String(headers[j]).trim() : "Col" + j;
+        var valor = data[i][j];
+        var valorTratado = (valor instanceof Date) ? valor.toISOString() : valor;
+       
+        obj[header] = valorTratado;
+        rawRow.push(valorTratado); 
+      }
+     
+      obj["_linhaBruta"] = rawRow;
+      result.push(obj);
+    }
+    return result;
+  } catch (e) {
+    Logger.log("Erro Chamados: " + e.toString());
+    return [];
+  }
+}
+
+function getDadosCaixas() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Caixas");
+    if (!sheet) return [];
+   
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return []; 
+   
+    var data = sheet.getRange(1, 1, lastRow, 36).getValues();
+    var headers = data[0];
+   
+    var uniqueHeaders = [];
+    var headerCounts = {};
+    for (var j = 0; j < headers.length; j++) {
+        var h = headers[j] ? String(headers[j]).trim() : "Col" + j;
+        if (headerCounts[h]) {
+            headerCounts[h]++;
+            uniqueHeaders.push(h + "_" + headerCounts[h]);
+        } else {
+            headerCounts[h] = 1;
+            uniqueHeaders.push(h);
+        }
+    }
+    
+    var result = [];
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[5] && !row[9]) continue;
+      
+      var obj = {};
+      for (var j = 0; j < uniqueHeaders.length; j++) {
+        var header = uniqueHeaders[j];
+        var valor = row[j];
+        obj[header] = (valor instanceof Date) ? valor.toISOString() : valor;
+      }
+      result.push(obj);
+    }
+    return result;
+  } catch (e) {
+    Logger.log("Erro Caixas: " + e.toString());
+    return [];
+  }
+}
+
+function getDadosMapaSaida() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("MAPA DE SAÍDA") || ss.getSheetByName("MAPA DE SAIDA") || ss.getSheetByName("MAPA DE SAIDA ");
+   
+    if (!sheet) return { _ERRO_CRITICO: "Aba 'MAPA DE SAÍDA' não encontrada." };
+    
+    var data = sheet.getDataRange().getValues();
+    var mapaSKU = {};
+    var hoje = new Date();
+    hoje.setHours(23, 59, 59, 999); 
+    
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var skuChave = String(row[41] || "").trim(); // Coluna AP
+      if (!skuChave) continue;
+      if (!mapaSKU[skuChave]) mapaSKU[skuChave] = [];
+     
+      var processarData = function(val) {
+        if (val instanceof Date) return val;
+        if (typeof val === 'string' && val.trim() !== "") {
+          var d = new Date(val);
+          return isNaN(d.getTime()) ? null : d;
+        }
+        return null;
+      };
+      
+      var dtColeta = processarData(row[15]);  // Coluna P
+      var dtEntrega = processarData(row[26]); // Coluna AA
+      
+      if (dtColeta && dtColeta > hoje) continue;
+      
+      mapaSKU[skuChave].push({
+        vol: parseFloat(row[14]) || 0, // Coluna O
+        dataColeta: dtColeta ? dtColeta.toISOString().split('T')[0] : null,
+        dataEntrega: dtEntrega ? dtEntrega.toISOString().split('T')[0] : null
+      });
+    }
+    return mapaSKU;
+   
+  } catch (e) {
+    return { _ERRO_CRITICO: "Erro ao ler Mapa: " + e.toString() };
+  }
+}
+
+function getDadosInspecaoCDs() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("qlogs_V4");
+    if (!sheet) return [];
+   
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return [];
+    
+    var headers = data[0];
+    var result = [];
+    
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[1] && !row[10]) continue;
+      
+      var obj = {};
+      for (var j = 0; j < headers.length; j++) {
+        var header = headers[j] ? String(headers[j]).trim() : "Col" + j;
+        var valor = row[j];
+        if (valor instanceof Date) {
+          obj[header] = valor.toISOString();
+        } else {
+          obj[header] = valor;
+        }
+      }
+      result.push(obj);
+    }
+    return result;
+  } catch (e) {
+    Logger.log("Erro Inspeções CDs: " + e.toString());
+    return [];
+  }
+}

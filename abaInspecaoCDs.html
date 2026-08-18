@@ -1,0 +1,63 @@
+<div id="abaInspecaoCDs" class="aba-conteudo hidden h-full flex flex-col">
+    <div class="mb-6 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
+        <div>
+            <h2 class="text-xl font-bold text-slate-800">🔎 Inspeções de Qualidade nos CDs</h2>
+            <p class="text-xs text-slate-500 mt-1">Análise de conformidade e desvios nas inspeções nos CDs.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="bg-white border border-slate-200 p-1.5 rounded shadow-sm flex items-center gap-2">
+                <span class="text-[10px] font-bold text-slate-500 uppercase ml-1">CD:</span>
+                <select id="filtroInspCD" onchange="processarInspecoesCDs()" class="bg-slate-50 border border-slate-200 text-indigo-700 rounded p-1 text-xs font-bold outline-none cursor-pointer"><option value="TODOS">Todos</option></select>
+            </div>
+            <div class="bg-white border border-slate-200 p-1.5 rounded shadow-sm flex items-center gap-2">
+                <span class="text-[10px] font-bold text-slate-500 uppercase ml-1">Gráfica:</span>
+                <select id="filtroInspGrafica" onchange="processarInspecoesCDs()" class="bg-slate-50 border border-slate-200 text-indigo-700 rounded p-1 text-xs font-bold outline-none cursor-pointer"><option value="TODOS">Todas</option></select>
+            </div>
+            <div class="bg-white border border-slate-200 p-1.5 rounded shadow-sm flex items-center gap-2">
+                <span class="text-[10px] font-bold text-slate-500 uppercase ml-1">Marca:</span>
+                <select id="filtroInspMarca" onchange="processarInspecoesCDs()" class="bg-slate-50 border border-slate-200 text-indigo-700 rounded p-1 text-xs font-bold outline-none cursor-pointer"><option value="TODOS">Todas</option></select>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white p-5 rounded-xl border-l-4 border-indigo-500 shadow-sm flex flex-col justify-center">
+            <h3 class="text-[10px] font-bold text-indigo-700 uppercase tracking-widest mb-1">Adesão (Inspeção)</h3>
+            <p class="text-3xl font-black text-indigo-800" id="kpiInspAdesao">-</p>
+        </div>
+        <div class="bg-white p-5 rounded-xl border-l-4 border-emerald-500 shadow-sm flex flex-col justify-center">
+            <h3 class="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1">Conformidade</h3>
+            <p class="text-3xl font-black text-emerald-800" id="kpiInspConformidade">-</p>
+        </div>
+        <div class="bg-white p-5 rounded-xl border-l-4 border-rose-500 shadow-sm flex flex-col justify-center">
+            <h3 class="text-[10px] font-bold text-rose-700 uppercase tracking-widest mb-1">Volume Reprovado</h3>
+            <p class="text-3xl font-black text-rose-800" id="kpiInspReprovado">-</p>
+        </div>
+        <div class="bg-white p-5 rounded-xl border-l-4 border-slate-400 shadow-sm flex flex-col justify-center">
+            <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Inspecionado</h3>
+            <p class="text-3xl font-black text-slate-700" id="kpiInspTotal">-</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Funil de Inspeção</h3>
+            <div id="containerFunilInspecao" class="flex flex-col items-center justify-center h-64 w-full"></div>
+        </div>
+        <div class="xl:col-span-2 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Pareto de Desvios</h3>
+            <div class="relative h-64 w-full"><canvas id="graficoInspPareto"></canvas></div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-10">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Conformidade por Gráfica</h3>
+            <div class="relative h-72 w-full"><canvas id="graficoInspGraficas"></canvas></div>
+        </div>
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Volume Inspecionado por Semana</h3>
+            <div class="relative h-72 w-full"><canvas id="graficoInspSemana"></canvas></div>
+        </div>
+    </div>
+</div>

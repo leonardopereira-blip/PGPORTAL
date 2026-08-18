@@ -1,0 +1,97 @@
+<div id="abaPlan" class="aba-conteudo hidden">
+    <div class="mb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+        <div>
+            <h2 class="text-xl font-bold text-slate-800">📅 Backlog & Pipeline de Semanas</h2>
+        </div>
+        <div class="bg-white border border-slate-200 p-1.5 rounded shadow-sm flex items-center gap-2">
+            <span class="text-[10px] font-bold text-slate-500 uppercase ml-1">Analisar:</span>
+            <select id="selFasePlan" onchange="renderTabelaPlan()" class="bg-slate-50 border border-slate-200 text-slate-700 rounded p-1 text-xs font-bold"></select>
+        </div>
+    </div>
+
+    <div class="mb-6 flex flex-wrap gap-x-6 gap-y-2 text-[10px] text-slate-600 bg-white p-3 rounded-xl border border-slate-200 shadow-sm items-center">
+        <span class="font-black uppercase tracking-widest text-slate-400">Regra de Dias:</span>
+        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-orange-500 rounded-sm block shadow-sm"></span> Sem Data</div>
+        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-900/80 rounded-sm block"></span> Antigas (+14d)</div>
+        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-800/80 rounded-sm block"></span> Sem. Passada (8 a 14d)</div>
+        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-700/80 rounded-sm block"></span> Sem. Atual (4 a 7d)</div>
+        <div class="flex items-center gap-1 px-2 py-0.5 bg-yellow-100 border border-yellow-300 rounded-md font-bold text-yellow-800"><span class="w-2.5 h-2.5 bg-yellow-400 rounded-sm block shadow-sm"></span> CRÍTICO / ALERTA (0 a 3d)</div>
+        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-blue-900/80 rounded-sm block"></span> Sem. Atual (4 a 7d)</div>
+        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-blue-800/80 rounded-sm block"></span> Próx. Sem (8 a 14d)</div>
+        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-blue-700/80 rounded-sm block"></span> Futuro Longe (+14d)</div>
+    </div>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+            <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Resumo Consolidado: Gráficas</h3>
+            <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
+                <thead>
+                    <tr><th class="p-1 border-r border-slate-300"></th><th colspan="5" class="p-1 border-r border-slate-300 bg-red-100 text-red-800 text-center font-bold uppercase rounded-tl-lg text-[10px]">🔴 Backlog (Atrasado)</th><th colspan="4" class="p-1 bg-blue-100 text-blue-800 text-center font-bold uppercase rounded-tr-lg text-[10px]">🔵 Pipeline (No Prazo)</th></tr>
+                    <tr class="bg-slate-800 text-white uppercase text-[9px]">
+                        <th class="p-2 border-r border-slate-600">Gráfica</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-orange-600">S/ Data</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-red-900/80">Antigas</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-red-800/80">Sem. Pass</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-red-700/80">Sem. Atual</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-yellow-400 text-yellow-900 font-black">Últ. 3 Dias</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-yellow-400 text-yellow-900 font-black">Próx. 3 Dias</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-blue-900/80">Sem. Atual</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-blue-800/80">Próx. Sem</th>
+                        <th class="p-2 text-right bg-blue-700/80">Futuro</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaPlanGrafica" class="text-slate-700"></tbody>
+                <tfoot id="tfootPlanGrafica" class="bg-slate-200 font-black text-slate-800 border-t-2 border-slate-400"></tfoot>
+            </table>
+        </div>
+        
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+            <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Resumo Consolidado: Marcas</h3>
+            <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
+                <thead>
+                    <tr><th class="p-1 border-r border-slate-300"></th><th colspan="5" class="p-1 border-r border-slate-300 bg-red-100 text-red-800 text-center font-bold uppercase rounded-tl-lg text-[10px]">🔴 Backlog (Atrasado)</th><th colspan="4" class="p-1 bg-blue-100 text-blue-800 text-center font-bold uppercase rounded-tr-lg text-[10px]">🔵 Pipeline (No Prazo)</th></tr>
+                    <tr class="bg-slate-800 text-white uppercase text-[9px]">
+                        <th class="p-2 border-r border-slate-600">Marca</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-orange-600">S/ Data</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-red-900/80">Antigas</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-red-800/80">Sem. Pass</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-red-700/80">Sem. Atual</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-yellow-400 text-yellow-900 font-black">Últ. 3 Dias</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-yellow-400 text-yellow-900 font-black">Próx. 3 Dias</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-blue-900/80">Sem. Atual</th>
+                        <th class="p-2 border-r border-slate-600 text-right bg-blue-800/80">Próx. Sem</th>
+                        <th class="p-2 text-right bg-blue-700/80">Futuro</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaPlanMarca" class="text-slate-700"></tbody>
+                <tfoot id="tfootPlanMarca" class="bg-slate-200 font-black text-slate-800 border-t-2 border-slate-400"></tfoot>
+            </table>
+        </div>
+    </div>
+
+    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Visão Detalhada</h3>
+        <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
+            <thead>
+                <tr><th colspan="4" class="p-1 border-r border-slate-300"></th><th colspan="5" class="p-1 border-r border-slate-300 bg-red-100 text-red-800 text-center font-bold uppercase rounded-tl-lg text-[10px]">🔴 Backlog (Atrasado)</th><th colspan="4" class="p-1 bg-blue-100 text-blue-800 text-center font-bold uppercase rounded-tr-lg text-[10px]">🔵 Pipeline (No Prazo)</th></tr>
+                <tr class="bg-slate-800 text-white uppercase text-[9px]">
+                    <th class="p-2 border-r border-slate-600">Gráfica</th>
+                    <th class="p-2 border-r border-slate-600">Marca</th>
+                    <th class="p-2 border-r border-slate-600">Segmento</th>
+                    <th class="p-2 border-r border-slate-600">Série</th>
+                    <th class="p-2 border-r border-slate-600 text-right bg-orange-600">S/ Data</th>
+                    <th class="p-2 border-r border-slate-600 text-right bg-red-900/80">Antigas</th>
+                    <th class="p-2 border-r border-slate-600 text-right bg-red-800/80">Sem. Pass</th>
+                    <th class="p-2 border-r border-slate-600 text-right bg-red-700/80">Sem. Atual</th>
+                    <th class="p-2 border-r border-slate-600 text-right bg-yellow-400 text-yellow-900 font-black">Últ. 3 Dias</th>
+                    <th class="p-2 border-r border-slate-600 text-right bg-yellow-400 text-yellow-900 font-black">Próx. 3 Dias</th>
+                    <th class="p-2 border-r border-slate-600 text-right bg-blue-900/80">Sem. Atual</th>
+                    <th class="p-2 border-r border-slate-600 text-right bg-blue-800/80">Próx. Sem</th>
+                    <th class="p-2 text-right bg-blue-700/80">Futuro</th>
+                </tr>
+            </thead>
+            <tbody id="tabelaPlan" class="text-slate-700"></tbody>
+            <tfoot id="tfootPlan" class="bg-slate-200 font-black text-slate-800 border-t-2 border-slate-400"></tfoot>
+        </table>
+    </div>
+</div>

@@ -1,0 +1,85 @@
+<div id="abaMatriz" class="aba-conteudo hidden">
+                <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800">🔀 Status Operacional & Gargalos (End-to-End)</h2>
+                        <p class="text-xs text-slate-500 mt-1">Visão unificada de onde o material está parado (WIP) e quais são os pontos críticos de atraso.</p>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <div class="bg-white border border-slate-200 p-1.5 rounded shadow-sm flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase ml-1">Filtrar Gargalo:</span>
+                            <select id="selFaseMatriz" onchange="processarMatriz()" class="bg-slate-50 border border-slate-200 text-slate-700 rounded p-1 text-xs font-bold outline-none cursor-pointer">
+                            </select>
+                        </div>
+
+                        <button onclick="exportarCSVCascata()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold shadow-sm transition-colors flex items-center gap-1">
+                            📥 Exportar Lista (CSV)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-8">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 gap-2">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase">Matriz de Distribuição WIP (Volume e SKUs)</h3>
+                        <div class="flex flex-wrap items-center gap-3 text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                        <span>Legenda:</span>
+                        <div class="flex items-center gap-1 text-slate-600">⚫ No Prazo</div>
+                        <div class="flex items-center gap-1 text-purple-600">🟣 Início de fase</div>
+                        <div class="flex items-center gap-1 text-amber-600">🟡 Atraso</div>
+                        <div class="flex items-center gap-1 text-red-600">🔴 Impacta Próx. Fase</div>
+                        <div class="flex items-center gap-1 text-orange-500 font-bold">🟠 S/ Data</div>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto scroller pb-2">
+                        <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
+                            <thead><tr class="bg-slate-100 text-slate-500 uppercase border-b-2 border-slate-300" id="tbTabelonaCabecalho"></tr></thead>
+                            <tbody id="tbTabelona" class="text-slate-700"></tbody>
+                            <tfoot id="tbTabelonaRodape"></tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 gap-2">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase">⚠️ Lista de WIP e Gargalos (Top 50)</h3>
+                        <div class="flex flex-wrap items-center gap-3 text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                          <span>Legenda:</span>
+                          <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-slate-300"></span> No Prazo</div>
+                          <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-purple-400 shadow-sm"></span> Início de fase</div>
+                          <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-orange-400 shadow-sm"></span> S/ Data</div>
+                          <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-amber-400 shadow-sm"></span> Atraso</div>
+                          <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-red-500 shadow-sm"></span> Impacta Próx. Fase</div>
+                        </div>
+                    </div>
+                    <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap">
+                        <thead class="bg-slate-100 text-slate-500 uppercase">
+                            <tr>
+                                <th class="p-2 border-b">Gráfica</th>
+                                <th class="p-2 border-b">Marca</th>
+                                <th class="p-2 border-b text-indigo-700 font-bold">CD Destino</th>
+                                <th class="p-2 border-b">SKU / Descrição</th>
+                                <th class="p-2 border-b">Fase Atual (Travado)</th>
+                                
+                                <th class="p-2 border-b relative group cursor-help align-middle">
+                                    <div class="flex items-center gap-1">
+                                        Impacto Previsto 
+                                        <span class="bg-indigo-100 text-indigo-700 rounded-full w-3.5 h-3.5 flex items-center justify-center text-[9px] font-black shadow-sm">?</span>
+                                    </div>
+                                    <div class="absolute top-[110%] left-0 hidden group-hover:block w-64 bg-slate-800 text-white text-[10px] normal-case whitespace-normal font-normal p-3 rounded-lg shadow-2xl z-[999] border border-slate-700 pointer-events-none">
+                                        <p class="font-bold text-amber-400 mb-1 text-[11px] border-b border-slate-600 pb-1">Regra de Impacto:</p>
+                                        <ul class="list-disc pl-4 mt-2 space-y-1.5 text-slate-300">
+                                            <li><strong class="text-white">Fase Editorial:</strong> Mostra a data limite para iniciar a <span class="text-amber-200">Impressão</span>.</li>
+                                            <li><strong class="text-white">Fase de Produção:</strong> Mostra a <span class="text-amber-200">Próxima Etapa</span> da esteira e sua respectiva data limite.</li>
+                                        </ul>
+                                    </div>
+                                </th>
+                                
+                                <th class="p-2 border-b text-center">Status</th>
+                                <th class="p-2 border-b text-right">Dias Atraso</th>
+                                <th class="p-2 border-b text-right">Tiragem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaCriticos" class="text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>

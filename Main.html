@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal da Produção Gráfica</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <style>
+        /* GLOBAIS */
+        .scroller::-webkit-scrollbar { height: 8px; width: 8px; }
+        .scroller::-webkit-scrollbar-thumb { background: #525252; border-radius: 4px; }
+        .scroller::-webkit-scrollbar-track { background: transparent; }
+        
+        /* CORES DO MENU LATERAL */
+        .menu-btn { color: #9ca3af; transition: all 0.2s; }
+        .menu-btn:hover { background-color: #171717; color: white; }
+        .menu-active { background-color: #dc2626 !important; color: white !important; font-weight: bold; }
+
+        /* VISIBILIDADE */
+        .view-section { width: 100%; height: 100%; display: none; flex-direction: column; }
+        .view-visible { display: flex !important; }
+        
+        /* TOOLTIP GLOBAL */
+        .tooltip-container { position: relative; display: inline-flex; }
+        .tooltip-text { 
+            visibility: hidden; opacity: 0; pointer-events: none;
+            width: 200px; background-color: #000; color: #fff; text-align: left; 
+            border-radius: 6px; padding: 8px; position: absolute; z-index: 999; 
+            bottom: 125%; left: 50%; margin-left: -100px; font-size: 10px; 
+            border: 1px solid #333; transition: opacity 0.2s; white-space: normal;
+        }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+        /* ANIMAÇÃO */
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .toast-enter { animation: slideIn 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-neutral-100 font-sans text-neutral-800 h-screen flex flex-col overflow-hidden relative">
+
+    <div id="globalLoading" class="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center text-white transition-opacity duration-500">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-red-600 border-opacity-75 mb-6"></div>
+        <h2 class="text-3xl font-black tracking-widest text-red-600 mb-2">PORTAL <span class="text-white font-light">PG</span></h2>
+        <p id="loadingMsg" class="text-sm font-semibold text-neutral-500 uppercase tracking-widest animate-pulse mt-4">Carregando...</p>
+        <div class="w-64 h-1 bg-neutral-800 rounded-full mt-4 overflow-hidden">
+            <div id="loadingBar" class="h-full bg-red-600 w-0 transition-all duration-300"></div>
+        </div>
+    </div>
+
+    <div id="toastBox" class="fixed top-5 right-5 z-[9999] hidden flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl border-l-4 min-w-[300px] toast-enter bg-white">
+        <div id="toastIcon"></div>
+        <div><h4 class="text-sm font-bold" id="toastTitle">Info</h4><p class="text-xs" id="toastMsg">.</p></div>
+        <button onclick="hideToast()" class="ml-auto text-neutral-400 hover:text-neutral-600">&times;</button>
+    </div>
+
+    <header class="bg-black text-white shadow-md z-50 flex-shrink-0 h-14 flex items-center justify-between px-4 border-b border-neutral-800">
+        <div class="flex items-center gap-4">
+            <button onclick="toggleMenu()" class="p-2 text-neutral-400 hover:text-white rounded transition-colors" title="Recolher Menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+            <h1 onclick="voltarParaHome()" class="text-xl font-black text-white tracking-tight cursor-pointer hover:text-neutral-300 transition-colors" title="Voltar para a Tela Inicial">Portal <span class="text-red-600">PG</span></h1>
+        </div>
+        <div class="text-[10px] text-neutral-500" id="userEmail">...</div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden relative">
+        
+        <aside id="sidebarMenu" class="w-64 bg-black text-white flex flex-col shadow-xl z-40 transition-all duration-300 border-r border-neutral-800 overflow-hidden flex-shrink-0">
+    <nav class="flex-1 p-2 space-y-2 overflow-y-auto scroller mt-4">
+        
+        <div class="px-2">
+            <button onclick="toggleSubmenuMenu('sub-pre', 'ic-pre')" class="w-full flex items-center justify-between px-2 py-2 text-neutral-400 hover:text-white transition-colors group">
+                <span class="text-[10px] font-bold uppercase tracking-widest">Pré-Produção</span>
+                <svg id="ic-pre" class="w-4 h-4 transition-transform duration-200 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="sub-pre" class="hidden flex-col gap-1 pl-3 ml-2 border-l border-neutral-800 mt-1 pb-2">
+                <span class="text-[9px] text-neutral-600 uppercase mt-2 mb-1">Planejamento</span>
+                <button onclick="abrirGrafico('abaFalhasPlan', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📋 Falhas de Plan.</button>
+                <button onclick="abrirGrafico('abaQualidade', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">💎 ICP & Acurácia</button>
+                <span class="text-[9px] text-neutral-600 uppercase mt-3 mb-1">Arquivos</span>
+                <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('resumo')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📈 Resumo Executivo</button>
+                <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('wip')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📁 WIP (Andamento)</button>
+                <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('aderencia')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📉 Aderência (Produtividade)</button>
+                <span class="text-[9px] text-neutral-600 uppercase mt-3 mb-1">Caixas</span>
+                <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('caixas')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📦 Acompanhamento</button>
+                <span class="text-[9px] text-neutral-600 uppercase mt-3 mb-1">Papel</span>
+                <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-700 cursor-not-allowed text-left">📄 Pendente</button>
+            </div>
+        </div>
+
+        <div class="mx-4 border-t border-neutral-800"></div>
+
+        <div class="px-2">
+    <button onclick="toggleSubmenuMenu('sub-prod', 'ic-prod')" class="w-full flex items-center justify-between px-2 py-2 text-neutral-400 hover:text-white transition-colors group">
+        <span class="text-[10px] font-bold uppercase tracking-widest">Produção</span>
+        <svg id="ic-prod" class="w-4 h-4 transition-transform duration-200 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+    </button>
+    <div id="sub-prod" class="hidden flex-col gap-1 pl-3 ml-2 border-l border-neutral-800 mt-1 pb-2">
+        <!-- Botão NOVO que reabilita a abaGeral (Onde fica a Curva S) -->
+        <button onclick="abrirGrafico('abaGeral', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📈 Ritmo e Curva S</button>
+        
+        <!-- Botões Reabilitados e Padronizados -->
+        <button onclick="abrirGrafico('abaFunil', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🔽 Funil de Produção</button>
+        <button onclick="abrirGrafico('abaMatriz', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🔀 Status WIP & Cascata</button>
+        <button onclick="abrirGrafico('abaGiroSemanal', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🌪️ Giro Diario (Backlogs)</button>
+        <button onclick="abrirGrafico('abaEficiencia', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">⏱️ Eficiência & Lead Time</button>
+        <button onclick="navegarView('viewCockpit', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded-lg text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">✈️ Cockpit</button>
+        <button onclick="abrirGrafico('abaMetaCD', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🎯 Risco Meta Armazém</button>
+        <button onclick="abrirGrafico('abaOtif', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🏆 OTIF (Entregas CD)</button>
+        <button onclick="abrirGrafico('abaOKRQ2', this); setTimeout(window.iniciarAbaOKRQ2, 100);" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🎯 Aderência de Metas</button>
+        <button onclick="abrirGraficoDaHome('abaPlan')" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">📅 Backlog & Pipeline</button>
+    </div>
+</div>
+
+        <div class="mx-4 border-t border-neutral-800"></div>
+
+        <div class="px-2">
+            <button onclick="toggleSubmenuMenu('sub-pos', 'ic-pos')" class="w-full flex items-center justify-between px-2 py-2 text-neutral-400 hover:text-white transition-colors group">
+                <span class="text-[10px] font-bold uppercase tracking-widest">Pós Produção</span>
+                <svg id="ic-pos" class="w-4 h-4 transition-transform duration-200 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="sub-pos" class="hidden flex-col gap-1 pl-3 ml-2 border-l border-neutral-800 mt-1 pb-2">
+                <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-700 cursor-not-allowed text-left">🚚 Pendente de entrega (Em Breve)</button>
+                <button onclick="alternarAbaDash('abaColetas'); renderizarDashColetas();" class="w-full text-left px-4 py-2.5 bg-white hover:bg-indigo-50 hover:text-indigo-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-indigo-300 shadow-sm">
+    🗺️ Auditoria de Coletas Mapa
+</button>
+                <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-700 cursor-not-allowed text-left">🏢 Internalização (Em Breve)</button>
+                <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-700 cursor-not-allowed text-left">🚛 Transportes (Em Breve)</button>
+            </div>
+        </div>
+
+        <div class="mx-4 border-t border-neutral-800"></div>
+
+        <div class="px-2">
+            <button onclick="toggleSubmenuMenu('sub-qual', 'ic-qual')" class="w-full flex items-center justify-between px-2 py-2 text-neutral-400 hover:text-white transition-colors group">
+                <span class="text-[10px] font-bold uppercase tracking-widest">Qualidade</span>
+                <svg id="ic-qual" class="w-4 h-4 transition-transform duration-200 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="sub-qual" class="hidden flex-col gap-1 pl-3 ml-2 border-l border-neutral-800 mt-1 pb-2">
+                <!-- BOTÕES ATIVOS -->
+                <button onclick="abrirGrafico('abaQualidadeReclamacoes', this); iniciarAbaQualidadeReclamacoes();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">⚠️ Reclamações 2026</button>
+                <button onclick="abrirGrafico('abaQualidadePPM', this); iniciarAbaQualidadePPM();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📊 Matriz PPM</button>
+                
+                <!-- BOTÕES "EM BREVE" -->
+                <button onclick="abrirGrafico('abaInspecaoCDs', this); iniciarAbaInspecaoCDs(); document.querySelector('.bg-slate-50.p-2.rounded-xl.shadow-sm.border')?.setHTMLUnsafe ? document.querySelector('.bg-slate-50.p-2.rounded-xl.shadow-sm.border').style.display='none' : document.getElementById('filtrosGlobaisPCP') ? document.getElementById('filtrosGlobaisPCP').style.display='none' : document.querySelector('.flex.flex-wrap.items-center.justify-between').style.display='none';" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🔎 Inspeções CDs</button>
+                <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-600 cursor-not-allowed text-left">🧐 Insp. Gráficas (Breve)</button>
+                <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-600 cursor-not-allowed text-left">📋 Gestão RNCs (Breve)</button>
+            </div>
+        </div>
+
+        <div class="mx-4 border-t border-neutral-800"></div>
+
+        <div class="px-2 pb-4">
+            <button onclick="toggleSubmenuMenu('sub-reen', 'ic-reen')" class="w-full flex items-center justify-between px-2 py-2 text-neutral-400 hover:text-white transition-colors group">
+                <span class="text-[10px] font-bold uppercase tracking-widest">Reentradas</span>
+                <svg id="ic-reen" class="w-4 h-4 transition-transform duration-200 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="sub-reen" class="hidden flex-col gap-1 pl-3 ml-2 border-l border-neutral-800 mt-1 pb-2">
+                <button onclick="abrirGrafico('abaReentradasGerencial', this); window.iniciarAbaReentradasGerencial();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📊 Painel Gerencial</button>
+                <button onclick="abrirGrafico('abaReentradasAlocacao', this); iniciarAbaReentradas();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">🔄 Alocações de Reentradas</button>
+                <button onclick="abrirGrafico('abaReentradasProducao', this); window.iniciarAbaReentradasProducao();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">🏭 Acomp. Produção</button>
+                <button onclick="abrirGrafico('abaPendenciasProducao', this); window.iniciarAbaPendenciasProducao();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">🚨 Acomp. de Pendências</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="p-4 border-t border-neutral-800 bg-neutral-900/50 flex-shrink-0">
+        <p class="text-[9px] text-neutral-500 uppercase tracking-widest font-bold mb-1">Última Atualização</p>
+        <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span id="txtDataAtualizacao" class="text-xs text-neutral-300 font-mono font-semibold">A carregar...</span>
+        </div>
+    </div>
+</aside>
+
+        <div class="flex-1 relative overflow-hidden bg-neutral-100">
+            <div id="viewDash" class="view-section view-visible absolute inset-0 z-20 flex-col">
+                <?!= include('Index'); ?>
+            </div>
+            <div id="viewCockpit" class="view-section absolute inset-0 z-10 flex-col">
+                <?!= include('Cockpit'); ?>
+            </div>
+            <div id="viewPreProd" class="view-section absolute inset-0 z-10 flex-col">
+                <?!= include('PreProducao'); ?>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var formatarNum = (num) => new Intl.NumberFormat('pt-BR').format(num || 0);
+        var parseNumBR = (val) => {
+            if (!val) return 0;
+            let s = String(val).trim();
+            if (s === "" || s === "-") return 0;
+            s = s.replace(/\./g, '').replace(',', '.');
+            let n = Number(s);
+            return isNaN(n) ? 0 : n;
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            carregarSistema();
+            google.script.run.registrarAcessoUsuario();
+            try {
+                google.script.run.withSuccessHandler(email => { 
+                    if(email) document.getElementById('userEmail').innerText = email; 
+                }).getEmailUsuario();
+            } catch(e) { console.log("Modo local ou erro email"); }
+        });
+
+        function carregarSistema() {
+            const bar = document.getElementById('loadingBar');
+            const msg = document.getElementById('loadingMsg');
+            msg.innerText = "Carregando Base PCP...";
+            bar.style.width = "20%";
+
+            google.script.run.withSuccessHandler(dadosPCP => {
+                window.DADOS_PCP_CACHE = dadosPCP; 
+                window.dadosGlobais = dadosPCP || [];
+                if(typeof iniciarDashboard === 'function') {
+                    try { iniciarDashboard(dadosPCP); } catch(e) { console.warn("Erro Dashboard:", e); }
+                }
+                bar.style.width = "50%";
+                msg.innerText = "Carregando Módulos...";
+
+                let carregados = 0;
+                const checkFim = () => {
+                    carregados++;
+                    if(carregados >= 7) {
+                        bar.style.width = "100%";
+                        setTimeout(() => { document.getElementById('globalLoading').classList.add('hidden'); }, 500);
+                    }
+                };
+
+                google.script.run.withSuccessHandler(dadosCK => { if(typeof renderCockpit === 'function') { try { renderCockpit(dadosCK); } catch(e) {} } checkFim(); }).getDadosCockpit();
+                google.script.run.withSuccessHandler((dadosPre) => { window.DADOS_PREPROD_CACHE = dadosPre; checkFim(); }).getDadosPreProducao();
+                google.script.run.withSuccessHandler((dadosQuali) => { window.DADOS_QUALIDADE_CACHE = dadosQuali; checkFim(); }).withFailureHandler((erro) => { checkFim(); }).getDadosQualidade();
+                google.script.run.withSuccessHandler((dadosPPM) => { window.DADOS_PPM_CACHE = dadosPPM; checkFim(); }).withFailureHandler((erro) => { checkFim(); }).getDadosPPM();
+                google.script.run.withSuccessHandler((dadosAloc) => { window.DADOS_ALOCACAO_CACHE = dadosAloc; checkFim(); }).withFailureHandler((erro) => { checkFim(); }).getDadosAlocacao();
+                google.script.run.withSuccessHandler((dadosChamados) => { window.DADOS_CHAMADOS_CACHE = dadosChamados; checkFim(); }).withFailureHandler((erro) => { checkFim(); }).getDadosChamados();
+            }).getDadosDashboard();
+                google.script.run.withSuccessHandler((dadosInsp) => { window.DADOS_INSPECOES_CACHE = dadosInsp; checkFim(); }).withFailureHandler((erro) => { checkFim(); }).getDadosInspecaoCDs();
+        }
+
+        function navegarView(viewId, btnElement) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('view-visible'));
+            document.getElementById(viewId).classList.add('view-visible');
+            document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('menu-active'));
+            if(btnElement) btnElement.classList.add('menu-active');
+            if(viewId === 'viewPreProd') {
+                setTimeout(() => {
+                    if(typeof receberDadosPreProd === 'function' && window.DADOS_PREPROD_CACHE) {
+                        receberDadosPreProd(window.DADOS_PREPROD_CACHE);
+                    } 
+                    else if(typeof carregarPreProducao === 'function') {
+                        carregarPreProducao();
+                    }
+                }, 100);
+            }
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        function abrirGrafico(graficoId, btnElement) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('view-visible'));
+            document.getElementById('viewDash').classList.add('view-visible');
+            document.querySelectorAll('.menu-btn').forEach(b => { b.classList.remove('menu-active'); });
+            if(btnElement) btnElement.classList.add('menu-active');
+            if(typeof window.alternarAbaDash === 'function') {
+                window.alternarAbaDash(graficoId);
+            }
+        }
+
+        function toggleMenu() {
+            var sb = document.getElementById('sidebarMenu');
+            if(sb.classList.contains('w-64')) {
+                sb.classList.remove('w-64');
+                sb.classList.add('w-0');
+            } else {
+                sb.classList.remove('w-0');
+                sb.classList.add('w-64');
+            }
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 300); 
+        }
+
+        function toggleSubmenuMenu(subId, iconId) {
+            const sub = document.getElementById(subId);
+            const icon = document.getElementById(iconId);
+            if (sub.classList.contains('hidden')) {
+                sub.classList.remove('hidden');
+                sub.classList.add('flex');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                sub.classList.add('hidden');
+                sub.classList.remove('flex');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function setLoading(ativo, msg) {
+            const el = document.getElementById('globalLoading');
+            if(msg) document.getElementById('loadingMsg').innerText = msg;
+            if(ativo) el.classList.remove('hidden'); else el.classList.add('hidden');
+        }
+        
+        let toastTimeout;
+        function showToast(msg, type = 'success') {
+            const box = document.getElementById('toastBox');
+            box.classList.remove('hidden');
+            document.getElementById('toastTitle').innerText = (type === 'success') ? "Sucesso!" : "Atenção";
+            document.getElementById('toastMsg').innerText = msg;
+            if(toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => box.classList.add('hidden'), 4000);
+        }
+        function hideToast() { document.getElementById('toastBox').classList.add('hidden'); }
+
+        window.arredondar = function(valor) {
+            if (!valor) return 0;
+            if (typeof valor === 'number') return Math.round(valor);
+            let textoLimpo = String(valor).replace(/\./g, '').replace(',', '.');
+            return Math.round(parseFloat(textoLimpo)) || 0;
+        };
+
+        window.formatarBR = function(valor) {
+            return window.arredondar(valor).toLocaleString('pt-BR');
+        };
+
+        function carregarDataAtualizacao() {
+            google.script.run.withSuccessHandler(function(data) {
+                let el = document.getElementById('txtDataAtualizacao');
+                if(el) el.innerText = data;
+            }).getUltimaAtualizacaoPCP();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            carregarDataAtualizacao();
+            if(typeof recarregarDadosPreProd === 'function') {
+                recarregarDadosPreProd('wip', true);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,707 @@
+<div class="flex flex-col h-full bg-slate-50">
+    
+    <div class="bg-white p-3 border-b border-slate-200 flex flex-col gap-3 shadow-sm z-50 flex-shrink-0 relative">
+        
+        <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
+            <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto" id="containerHeaderEsquerda">
+                <div class="flex items-center gap-2 mr-2">
+                    <h2 class="text-lg font-black text-slate-700 tracking-tight">✈️ COCKPIT</h2>
+                    <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200" id="cockpitTotalRow">0</span>
+                </div>
+                
+                <div class="h-6 w-px bg-slate-200 mx-1"></div>
+
+                <div id="containerFiltrosCockpit" class="flex flex-wrap items-center gap-2"></div>
+                
+                <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                
+                <div class="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded border border-blue-100 shadow-sm">
+                    <span class="text-[9px] font-bold text-blue-400 uppercase">Insumos:</span>
+                    <select id="filtroStatusInsumos" onchange="filtrarTabelaCockpit()" class="bg-transparent text-[10px] font-bold text-blue-800 outline-none cursor-pointer">
+                        <option value="TODOS">Todos</option>
+                        <option value="SEM_INFO">🟡 Sem Informação</option>
+                        <option value="PENDENTE">⏳ Pendentes no Prazo</option>
+                        <option value="ATRASADO">🚨 Atrasados</option>
+                        <option value="CONCLUIDO">✅ Concluídos (Prazo)</option>
+                        <option value="CONCLUIDO_ATRASO">🟠 Concluídos (Atrasados)</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded border border-slate-200 shadow-sm">
+                    <span class="text-[9px] font-bold text-slate-400 uppercase">PCP:</span>
+                    <select id="filtroStatusPCP" onchange="filtrarTabelaCockpit()" class="bg-transparent text-[10px] font-bold text-slate-700 outline-none cursor-pointer">
+                        <option value="TODOS">Todos</option>
+                        <option value="ATRASADO">🔴 Atraso (Impacto)</option>
+                        <option value="PENDENTE">⚪ Pendente (No Prazo)</option>
+                        <option value="CONCLUIDO_ATRASO">🟡 Concluido c/ Atraso</option>
+                        <option value="CONCLUIDO">🟢 100% OK</option>
+                        <option value="FALTA_DATA">🟠 S/ Data (Alerta)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button onclick="abrirModalLote()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-1.5 rounded text-xs font-bold shadow-sm transition-colors flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><span>Massa</span></button>
+                <button onclick="carregarCockpit()" class="text-slate-400 hover:text-emerald-600 p-2 hover:bg-slate-100 rounded transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg></button>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-4 text-[9px] text-slate-600 bg-slate-50 px-4 py-2 rounded border border-slate-100 w-full">
+            <span class="uppercase font-black text-slate-400 tracking-widest mr-2">Regra PCP:</span>
+            
+            <div class="flex items-center gap-2 border-r border-slate-200 pr-4">
+                <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm"></div>
+                <div>
+                    <span class="font-bold text-emerald-700 block">Concluído (100%)</span>
+                    <span class="text-[8px] text-slate-400">Todo o lote finalizado no prazo.</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2 border-r border-slate-200 pr-4">
+                <div class="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow-sm border border-yellow-500"></div>
+                <div>
+                    <span class="font-bold text-yellow-700 block">Concluído c/ Atraso</span>
+                    <span class="text-[8px] text-slate-400">Finalizado, mas estourou o prazo.</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2 border-r border-slate-200 pr-4">
+                <div class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-sm"></div>
+                <div>
+                    <span class="font-bold text-red-600 block">Atraso (Impacto)</span>
+                    <span class="text-[8px] text-slate-400">Pendente e já passou da data.</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2 border-r border-slate-200 pr-4">
+                <div class="w-2.5 h-2.5 rounded-full bg-slate-300 shadow-sm"></div>
+                <div>
+                    <span class="font-bold text-slate-500 block">Pendente (No Prazo)</span>
+                    <span class="text-[8px] text-slate-400">Ainda não iniciou ou está em dia.</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 border-r border-slate-200 pr-4">
+                <div class="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse shadow-sm"></div>
+                <div>
+                    <span class="font-bold text-orange-600 block">S/ Data</span>
+                    <span class="text-[8px] text-slate-400">Pendente sem data preenchida.</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full bg-amber-200 shadow-sm border border-amber-300"></div>
+                <div>
+                    <span class="font-bold text-amber-600 block">Sem Informação</span>
+                    <span class="text-[8px] text-slate-400">Falta preencher data planejada.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-1 overflow-auto scroller p-4 bg-slate-50 relative z-0">
+        <div class="bg-white rounded-lg shadow border border-slate-200 inline-block min-w-full align-middle">
+            <table class="text-left border-collapse text-xs whitespace-nowrap table-fixed">
+                <thead class="bg-slate-800 text-white uppercase text-[9px] sticky top-0 z-50 shadow-md h-10">
+                    <tr>
+                        <th class="p-2 border-r border-slate-600 bg-slate-900 sticky left-0 z-50 text-center w-[40px] min-w-[40px] max-w-[40px]">#</th>
+                        <th class="p-2 border-r border-slate-600 bg-slate-900 sticky left-[40px] z-50 w-[140px] min-w-[140px] max-w-[140px] shadow-[2px_0_5px_rgba(0,0,0,0.3)]">Gráfica</th>
+                        <th class="p-2 border-r border-slate-600 bg-slate-800 w-[80px] min-w-[80px]">Unidade</th>
+                        <th class="p-2 border-r border-slate-600 bg-slate-800 w-[60px] min-w-[60px]">Envio</th>
+                        <th class="p-2 border-r border-slate-600 bg-slate-800 w-[100px] min-w-[100px]">Caract.</th>
+                        <th class="p-2 border-r border-slate-600 bg-slate-800 w-[80px] min-w-[80px]">Segmento</th>
+                        <th class="p-2 border-r border-slate-600 bg-slate-800 w-[60px] min-w-[60px]">Série</th>
+                        <th class="p-2 border-r border-slate-600 bg-slate-800 w-[60px] min-w-[60px]">Tipo</th>
+                        <th class="p-2 border-r border-slate-600 bg-slate-800 w-[60px] min-w-[60px]">CD</th>
+                        <th class="p-2 border-r border-slate-600 text-center bg-blue-900/90 w-[100px] min-w-[100px]">Estáticas</th>
+                        <th class="p-2 border-r border-slate-600 text-center bg-orange-900/90 w-[100px] min-w-[100px]">Caixas</th>
+                        <th class="p-2 border-r border-slate-600 text-center bg-emerald-900/90 w-[100px] min-w-[100px]">Papel</th>
+                        <th class="p-2 border-r border-slate-600 text-center bg-indigo-900/90 w-[100px] min-w-[100px]">Envio EZ</th>
+                        
+                        <th class="p-2 text-center bg-slate-700 border-l-4 border-slate-900 w-[90px] min-w-[90px]">Env. Arq</th>
+                        <th class="p-2 text-center bg-slate-700 border-r border-slate-600 w-[90px] min-w-[90px]">Rec. Bon</th>
+                        <th class="p-2 text-center bg-slate-700 border-r border-slate-600 w-[90px] min-w-[90px]">Apv. Bon</th>
+                        <th class="p-2 text-center bg-slate-600 border-r border-slate-500 w-[90px] min-w-[90px] font-bold text-yellow-300">Imp.</th>
+                        <th class="p-2 text-center bg-slate-700 border-r border-slate-600 w-[90px] min-w-[90px]">Transf.</th>
+                        <th class="p-2 text-center bg-slate-700 border-r border-slate-600 w-[90px] min-w-[90px]">Rec. Mat</th>
+                        <th class="p-2 text-center bg-slate-600 border-r border-slate-500 w-[90px] min-w-[90px] font-bold text-yellow-300">Acab.</th>
+                        <th class="p-2 text-center bg-slate-700 border-r border-slate-600 w-[90px] min-w-[90px]">Kit</th>
+                        <th class="p-2 text-center bg-slate-800 w-[90px] min-w-[90px] font-bold text-emerald-400">Coleta</th>
+                    </tr>
+                </thead>
+                <tbody id="tbCockpitBody" class="text-slate-700 divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="22" class="p-8 text-center text-slate-400 animate-pulse">Carregando dados...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="modalEdit" class="fixed inset-0 bg-slate-900/80 z-[60] hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-96 overflow-hidden border border-slate-300">
+            <div class="bg-slate-800 p-4 flex justify-between items-center text-white">
+            <h3 class="font-bold text-sm uppercase flex items-center gap-2">✏️ Editar Item</h3>
+            <button onclick="fecharModal('modalEdit')" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+            </div>
+            
+            <form id="formEdit" onsubmit="salvarEdicao(event)" class="p-5 space-y-4">
+            <input type="hidden" id="editRowIndex">
+            <input type="hidden" id="editType">
+
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status</label>
+                <select id="inpEditStatus" class="w-full border border-slate-300 rounded p-2 text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 transition-colors" onchange="toggleCamposUnitarios(this)">
+                    <option value="PENDENTE">⏳ Pendente / Solicitado</option>
+                    <option value="ATRASADO">🚨 Atrasado</option>
+                    <option value="CONCLUIDO">✅ Concluído</option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data Plan.</label>
+                <input type="date" id="inpEditDtPlan" class="w-full border border-slate-300 rounded p-2 text-sm outline-none focus:border-blue-500">
+                </div>
+                <div id="divEditDtReal" class="hidden">
+                <label class="block text-[10px] font-bold text-emerald-700 uppercase mb-1">Data Real</label>
+                <input type="date" id="inpEditDtReal" class="w-full border border-emerald-300 bg-emerald-50 rounded p-2 text-sm font-bold outline-none">
+                </div>
+            </div>
+
+            <div id="divEditResp" class="hidden">
+                <label class="block text-[10px] font-bold text-emerald-700 uppercase mb-1">Responsável</label>
+                <input type="text" id="inpEditResp" placeholder="Quem finalizou?" class="w-full border border-emerald-300 bg-emerald-50 rounded p-2 text-sm outline-none">
+            </div>
+
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Observações</label>
+                <textarea id="inpEditObs" rows="3" class="w-full border border-slate-300 rounded p-2 text-xs outline-none focus:border-blue-500" placeholder="Detalhes adicionais..."></textarea>
+            </div>
+
+            <div class="pt-2 flex gap-2">
+                <button type="button" onclick="fecharModal('modalEdit')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded text-xs font-bold transition-colors">Cancelar</button>
+                <button type="submit" id="btnSalvarModal" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded text-xs font-bold shadow-md transition-colors">Salvar Alterações</button>
+            </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="modalLote" class="fixed inset-0 bg-violet-900/90 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-96 overflow-hidden border-2 border-violet-500">
+            <div class="bg-violet-700 p-4 flex justify-between items-center text-white">
+            <h3 class="font-bold text-sm uppercase flex items-center gap-2">⚡ Edição em Massa</h3>
+            <button onclick="fecharModal('modalLote')" class="text-violet-300 hover:text-white text-xl">&times;</button>
+            </div>
+
+            <form id="formLote" onsubmit="salvarLote(event)" class="p-5 space-y-4">
+            <div class="bg-violet-50 p-3 rounded border border-violet-100 text-center">
+                <p class="text-[10px] text-violet-600 font-bold uppercase mb-1">Selecionados</p>
+                <p class="text-3xl font-black text-violet-800" id="lblQtdLote">0</p>
+            </div>
+
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Etapa</label>
+                <select name="tipoItem" id="inpTipoLote" class="w-full border border-violet-300 rounded p-2 text-sm font-bold text-violet-900 outline-none">
+                <option value="PAPEL">Papel</option><option value="CAIXAS">Caixas</option><option value="ESTATICAS">Estáticas</option><option value="ENVIO_EZ">Envio EZ</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status</label>
+                <select name="status" class="inpStatus w-full border border-violet-300 rounded p-2 text-sm font-bold text-violet-900 outline-none" onchange="toggleCamposConclusao(this)">
+                <option value="">-- Selecione --</option><option value="PENDENTE">Pendente</option><option value="ATRASADO">Atrasado</option><option value="CONCLUIDO">Concluído</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data Planejada</label>
+                <input type="date" name="dataPlan" class="inpDtPlan w-full border border-violet-300 rounded p-2 text-sm text-violet-900 outline-none">
+            </div>
+
+            <div class="divDtReal hidden">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data Real</label>
+                <input type="date" name="dataReal" class="inpDtReal w-full border border-violet-300 rounded p-2 text-sm text-violet-900 outline-none">
+            </div>
+
+            <div class="divResp hidden">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Responsável</label>
+                <input type="text" name="responsavel" placeholder="Nome do responsável" class="inpResp w-full border border-violet-300 rounded p-2 text-sm text-violet-900 outline-none">
+            </div>
+
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Observações</label>
+                <textarea name="obs" rows="3" class="inpObs w-full border border-violet-300 rounded p-2 text-sm text-violet-900 outline-none"></textarea>
+            </div>
+
+            <div class="pt-2 flex gap-2">
+                <button type="button" onclick="fecharModal('modalLote')" class="flex-1 bg-slate-100 text-slate-600 py-2 rounded text-xs font-bold">Cancelar</button>
+                <button type="submit" class="flex-1 bg-violet-600 text-white py-2 rounded text-xs font-bold hover:bg-violet-700">Aplicar</button>
+            </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- VARIÁVEIS LOCAIS ---
+    let dadosRawCockpit = [];
+    let dadosFiltradosCockpit = []; 
+
+    // --- SISTEMA DE FILTROS INTELIGENTES ---
+    const camposFiltroCK = ["grafica", "unidade", "envio", "cd"];
+    const cfgFiltrosCK = [
+        { id: "f_grafica", campo: "grafica", label: "GRÁFICA" },
+        { id: "f_un", campo: "unidade", label: "UNIDADE" },
+        { id: "f_envio", campo: "envio", label: "ENVIO" },
+        { id: "f_cd", campo: "cd", label: "CD DESTINO" }
+    ];
+
+    let selFiltrosCK = {};
+    window.opcFiltrosCK = {}; 
+    window.dropAbertoCK = null; 
+    camposFiltroCK.forEach(c => selFiltrosCK[c] = []);
+
+    function toggleDropCK(campoId) {
+        let menuId = 'drop_ck_' + campoId;
+        let menuEl = document.getElementById(menuId);
+        let isClosed = menuEl.classList.contains('hidden');
+        document.querySelectorAll('.drop-menu-ck').forEach(m => m.classList.add('hidden'));
+        if(isClosed) { menuEl.classList.remove('hidden'); window.dropAbertoCK = menuId; } 
+        else { window.dropAbertoCK = null; }
+    }
+
+    function toggleCheckCK(campo, valor) {
+        let arr = selFiltrosCK[campo];
+        let idx = arr.indexOf(valor);
+        if(idx > -1) arr.splice(idx, 1); else arr.push(valor);
+        window.dropAbertoCK = 'drop_ck_' + campo; 
+        popularFiltrosCockpit(); filtrarTabelaCockpit();
+    }
+
+    window.marcarTodosCK = function(campo) { selFiltrosCK[campo] = [...window.opcFiltrosCK[campo]]; window.dropAbertoCK = 'drop_ck_' + campo; popularFiltrosCockpit(); filtrarTabelaCockpit(); }
+    window.limparUnicoCK = function(campo) { selFiltrosCK[campo] = []; window.dropAbertoCK = 'drop_ck_' + campo; popularFiltrosCockpit(); filtrarTabelaCockpit(); }
+    function limparFiltrosCockpit() { camposFiltroCK.forEach(c => selFiltrosCK[c] = []); document.getElementById('filtroStatusInsumos').value = "TODOS"; document.getElementById('filtroStatusPCP').value = "TODOS"; window.dropAbertoCK = null; popularFiltrosCockpit(); filtrarTabelaCockpit(); }
+
+    function popularFiltrosCockpit() {
+        const container = document.getElementById('containerFiltrosCockpit');
+        let html = '';
+
+        cfgFiltrosCK.forEach(cfg => {
+            let dadosPossiveis = dadosRawCockpit.filter(r => {
+                let passa = true;
+                cfgFiltrosCK.forEach(outroCfg => {
+                    if (outroCfg.campo !== cfg.campo && selFiltrosCK[outroCfg.campo].length > 0) {
+                        if (!selFiltrosCK[outroCfg.campo].includes(r.METADATA[outroCfg.campo])) passa = false;
+                    }
+                });
+                return passa;
+            });
+
+            let unicos = [...new Set(dadosPossiveis.map(item => item.METADATA[cfg.campo]))].filter(v => v).sort();
+            window.opcFiltrosCK[cfg.campo] = unicos; 
+            
+            let qtdSelec = selFiltrosCK[cfg.campo].length;
+            let corBotao = qtdSelec > 0 ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600';
+
+            html += `<div class="relative inline-block text-left">
+                <button onclick="toggleDropCK('${cfg.campo}')" class="${corBotao} border px-2 py-1.5 text-[10px] font-bold rounded shadow-sm hover:border-indigo-400 flex items-center gap-2 min-w-[90px] justify-between transition-colors">
+                    ${cfg.label}
+                    <span class="bg-indigo-100 text-indigo-700 px-1 rounded-full text-[9px] ${qtdSelec === 0 ? 'hidden':''}">${qtdSelec}</span>
+                    <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div id="drop_ck_${cfg.campo}" class="drop-menu-ck hidden absolute left-0 z-50 mt-1 w-64 bg-white border border-slate-200 rounded-lg shadow-xl max-h-64 overflow-y-auto">
+                    <div class="flex justify-between items-center px-3 py-2 border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
+                        <button onclick="marcarTodosCK('${cfg.campo}')" class="text-[9px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-wider bg-indigo-50 px-2 py-1 rounded">Marcar Todos</button>
+                        <button onclick="limparUnicoCK('${cfg.campo}')" class="text-[9px] font-black text-slate-500 hover:text-red-500 uppercase tracking-wider bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">Limpar</button>
+                    </div>`;
+            
+            unicos.forEach(val => { 
+                let checked = selFiltrosCK[cfg.campo].includes(val) ? "checked" : "";
+                html += `<label class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer text-[10px] font-bold text-slate-700 transition-colors border-b border-slate-50 last:border-0">
+                        <input type="checkbox" class="rounded text-indigo-600 focus:ring-indigo-500" value="${val}" onchange="toggleCheckCK('${cfg.campo}', '${val}')" ${checked}>
+                        <span class="truncate" title="${val}">${val}</span>
+                    </label>`; 
+            });
+            html += `</div></div>`;
+        });
+        html += `<button onclick="limparFiltrosCockpit()" class="ml-2 text-slate-400 hover:text-red-500 text-[10px] font-bold uppercase transition-colors">Limpar Todos</button>`;
+        container.innerHTML = html;
+
+        if(window.dropAbertoCK) {
+            let el = document.getElementById(window.dropAbertoCK);
+            if(el) el.classList.remove('hidden');
+        }
+    }
+
+    // Clique fora fecha o menu
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('#containerHeaderEsquerda')) {
+            document.querySelectorAll('.drop-menu-ck').forEach(m => m.classList.add('hidden'));
+            window.dropAbertoCK = null;
+        }
+    });
+
+    // --- UTILITÁRIOS SEGUROS ---
+    const fmtDataCK = (isoStr) => {
+        if(!isoStr || typeof isoStr !== 'string' || isoStr.length < 5) return "-";
+        let p = isoStr.split('-'); 
+        if(p.length < 3) return isoStr;
+        return `${p[2]}/${p[1]}/${p[0]}`;
+    };
+
+    function extDataIsoCK(str) {
+        if (!str) return null;
+        let s = String(str).trim();
+        if (s.length < 6 || s.toLowerCase().includes("n/a") || s === "-") return null;
+        if (s.includes('T')) s = s.split('T')[0];
+        if (s.includes('/')) { let pts = s.split('/'); if(pts.length === 3) return `${pts[2]}-${pts[1].padStart(2,'0')}-${pts[0].padStart(2,'0')}`; }
+        if (s.includes('-')) { let pts = s.split('-'); if(pts.length === 3 && pts[0].length === 4) return `${pts[0]}-${pts[1].padStart(2,'0')}-${pts[2].padStart(2,'0')}`; }
+        return null; 
+    }
+
+    function findVal(obj, colName) {
+        if (!obj || !colName) return null;
+        if (obj[colName] !== undefined) return obj[colName];
+        let keys = Object.keys(obj);
+        for (let i = 0; i < keys.length; i++) {
+            if (keys[i].toLowerCase() === colName.toLowerCase()) return obj[keys[i]];
+        }
+        return null;
+    }
+
+    function cleanKey(val) { return String(val || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+    function normCK(txt) { if(!txt) return ""; return txt.toString().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim(); }
+
+    function checkPhaseCK(linha, fId) {
+        if (linha["_SOURCE"] === "ACABADORA") {
+            const fasesPassado = ['env', 'rec', 'apv', 'imp', 'tra'];
+            if (fasesPassado.includes(fId)) return false;
+            return true; 
+        }
+        if (linha["_SOURCE"] === "PCP") {
+            let cd = String(findVal(linha, "CD DESTINO") || "").toUpperCase();
+            let vaiParaAcabadora = cd.includes("FELK") || cd.includes("ATHOS");
+            if (vaiParaAcabadora) {
+                const fasesDaAcabadora = ['rec_acab', 'acab', 'kit', 'col'];
+                if (fasesDaAcabadora.includes(fId)) return false;
+            } else {
+                if (fId === 'tra' || fId === 'rec_acab') return false;
+            }
+        }
+        return true;
+    }
+
+    const FASES_COCKPIT = [
+        { id: 'env', colPlan: 'ENV ARQUIVO PLAN', colReal: 'ENV ARQUIVO REAL' },
+        { id: 'rec', colPlan: 'REC BONECO PLAN', colReal: 'REC BONECO REAL' },
+        { id: 'apv', colPlan: 'APV BONECO PLAN', colReal: 'APV BONECO REAL' },
+        { id: 'imp', colPlan: 'Impressão Final (re) plan', colReal: 'Impressão Final Real.' },
+        { id: 'tra', colPlan: 'Coleta/Internalização de estoque final (re) plan', colReal: 'Coleta/Internalização de estoque Final Real' },
+        { id: 'rec_acab', colPlan: 'Recebimento de material final plan', colReal: 'Recebimento de material final real' },
+        { id: 'acab', colPlan: 'Acbto Final (re) plan', colReal: 'Acbto Final Real' },
+        { id: 'kit', colPlan: 'Formação de kit/Encaixotamento Final (re) plan', colReal: 'Formação de kit/Encaixotamento Final Real' },
+        { id: 'col', colPlan: 'Coleta/Internalização de estoque final (re) plan', colReal: 'Coleta/Internalização de estoque Final Real' }
+    ];
+
+    function carregarCockpit() {
+        if(window.setLoading) window.setLoading(true, "Carregando Cockpit...");
+        google.script.run.withSuccessHandler(renderCockpit).getDadosCockpit();
+    }
+
+    function renderCockpit(dados) {
+        if (!dados || !Array.isArray(dados)) { if(window.setLoading) window.setLoading(false); return; }
+
+        let basePCP = window.DADOS_PCP_CACHE || window.dadosGlobais || [];
+        let mapaPCP = {};
+        let tRef = document.getElementById('filtroReferencia') ? document.getElementById('filtroReferencia').value : 'replan';
+        let hoje = new Date(); hoje.setHours(0,0,0,0);
+        const superClean = (val) => String(val || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+        if (basePCP.length > 0) {
+            basePCP.forEach(l => {
+                let chaveOriginal = superClean(l["Chave"] || ""); 
+                let op = superClean(l["OP"] || "");
+                let sku = superClean(l["SKU"] || "");
+
+                if (chaveOriginal) { if (!mapaPCP[chaveOriginal]) mapaPCP[chaveOriginal] = []; mapaPCP[chaveOriginal].push(l); }
+                if (op && sku) { let k = op + sku; if (!mapaPCP[k]) mapaPCP[k] = []; mapaPCP[k].push(l); }
+                if (op) { if (!mapaPCP[op]) mapaPCP[op] = []; mapaPCP[op].push(l); }
+            });
+        }
+
+        dadosRawCockpit = dados.map((row) => {
+            let chaveCockpit = String(row.CHAVE || "");
+            let chaveLimpa = superClean(chaveCockpit);
+            
+            let pcpLines = mapaPCP[chaveLimpa];
+            if (!pcpLines && chaveCockpit.includes('_')) { let partes = chaveCockpit.split('_'); let opApenas = superClean(partes[0]); pcpLines = mapaPCP[opApenas]; }
+
+            let objProd = { env:{}, rec:{}, apv:{}, imp:{}, tra:{}, rec_acab:{}, acab:{}, kit:{}, col:{} };
+            
+            FASES_COCKPIT.forEach(f => {
+                let statusFinal = 'N/A';
+                let total = 0, ok = 0, atrasado = 0, pendente = 0, ok_atrasado = 0, sem_data = 0; // NEW: sem_data
+
+                if (pcpLines && pcpLines.length > 0) {
+                    pcpLines.forEach(l => {
+                        if (!checkPhaseCK(l, f.id)) return;
+                        total++;
+                        let colPlan = f.colPlan;
+                        if(tRef === 'baseline') {
+                            if(f.id === 'imp') colPlan = 'IMPRESSÃO FIM BASELINE';
+                            if(f.id === 'acab') colPlan = 'ACABAMENTO FIM BASELINE';
+                            if(f.id === 'col') colPlan = 'COLETA/INTERNALIZAÇÃO FIM BASELINE';
+                        }
+                        let valPlan = findVal(l, colPlan); let valReal = findVal(l, f.colReal);
+                        let dtPlanISO = extDataIsoCK(valPlan); let dtRealISO = extDataIsoCK(valReal);
+
+                        if (dtRealISO) {
+                            if (dtPlanISO && dtRealISO > dtPlanISO) ok_atrasado++;
+                            else ok++;
+                        } else {
+                            if (dtPlanISO) {
+                                let pts = dtPlanISO.split('-'); let dPlan = new Date(pts[0], pts[1]-1, pts[2]);
+                                if(dPlan < hoje) atrasado++; else pendente++;
+                            } else {
+                                sem_data++; // AQUI: Conta que falta data planejada!
+                            }
+                        }
+                    });
+                    if (atrasado > 0) statusFinal = 'ATRASADO';
+                    else if (sem_data > 0) statusFinal = 'FALTA_DATA'; // AQUI: Regra visual de alarme
+                    else if (pendente > 0) statusFinal = 'PENDENTE';
+                    else if (ok_atrasado > 0) statusFinal = 'CONCLUIDO_ATRASO';
+                    else if (total > 0) statusFinal = 'CONCLUIDO';
+                }
+                objProd[f.id] = { status: statusFinal, total: total, ok: ok, atrasado: atrasado, pendente: pendente, ok_atrasado: ok_atrasado, sem_data: sem_data };
+            });
+            row.PRODUCAO = objProd;
+            return row;
+        });
+
+        popularFiltrosCockpit();
+        filtrarTabelaCockpit();
+        if(window.setLoading) window.setLoading(false);
+    }
+
+    // --- NOVA LÓGICA DE CLASSIFICAÇÃO DOS INSUMOS ---
+    function getStatusInsumo(obj) {
+        let stRaw = obj.status || "PENDENTE"; 
+        let stNorm = normCK(stRaw);
+        let hojeISO = new Date().toISOString().split('T')[0];
+
+        // 1. SEM INFORMAÇÃO (Não tem data de plano)
+        if (!obj.dtPlan || obj.dtPlan === "") {
+            if (stNorm === "CONCLUIDO") return { tipo: "CONCLUIDO", label: "Concluído", cor: "bg-emerald-100 text-emerald-700 border-emerald-200", icon: "✅" };
+            return { tipo: "SEM_INFO", label: "Sem Info", cor: "bg-amber-100 text-amber-700 border-amber-300 font-bold", icon: "🟡" };
+        }
+
+        // 2. CONCLUÍDOS
+        if (stNorm === "CONCLUIDO") {
+            if (obj.dtReal && obj.dtPlan && obj.dtReal > obj.dtPlan) {
+                return { tipo: "CONCLUIDO_ATRASO", label: "Concluído Atrasado", cor: "bg-orange-100 text-orange-800 border-orange-300 font-bold", icon: "🟠" };
+            }
+            return { tipo: "CONCLUIDO", label: "Concluído", cor: "bg-emerald-100 text-emerald-700 border-emerald-200", icon: "✅" };
+        }
+
+        // 3. ATRASADOS (Passou da data e não está concluído)
+        if (obj.dtPlan < hojeISO) {
+            return { tipo: "ATRASADO", label: "Atrasado", cor: "bg-red-100 text-red-700 border-red-200 font-bold animate-pulse", icon: "🚨" };
+        }
+
+        // 4. PENDENTES NO PRAZO (Tem data plan futura ou igual a hoje)
+        return { tipo: "PENDENTE", label: "Pendente", cor: "bg-blue-50 text-blue-600 border-blue-100", icon: "⏳" };
+    }
+
+    function filtrarTabelaCockpit() {
+        let fInsumos = document.getElementById('filtroStatusInsumos')?.value || "TODOS";
+        let fPCP = document.getElementById('filtroStatusPCP')?.value || "TODOS";
+
+        dadosFiltradosCockpit = dadosRawCockpit.filter(r => {
+            // Filtro Inteligente (Metadados)
+            let matchMeta = true;
+            cfgFiltrosCK.forEach(cfg => {
+                if (selFiltrosCK[cfg.campo].length > 0) {
+                    if (!selFiltrosCK[cfg.campo].includes(r.METADATA[cfg.campo])) matchMeta = false;
+                }
+            });
+            if(!matchMeta) return false;
+
+            // Filtro Insumos
+            let matchInsumos = true;
+            if(fInsumos !== "TODOS") {
+                let stEst = getStatusInsumo(r.ESTATICAS).tipo;
+                let stCxi = getStatusInsumo(r.CAIXAS).tipo;
+                let stPap = getStatusInsumo(r.PAPEL).tipo;
+                let stEz = getStatusInsumo(r.ENVIO_EZ).tipo;
+                let arrSt = [stEst, stCxi, stPap, stEz];
+
+                if(fInsumos === "SEM_INFO") matchInsumos = arrSt.includes("SEM_INFO");
+                else if(fInsumos === "PENDENTE") matchInsumos = arrSt.includes("PENDENTE");
+                else if(fInsumos === "ATRASADO") matchInsumos = arrSt.includes("ATRASADO");
+                else if(fInsumos === "CONCLUIDO_ATRASO") matchInsumos = arrSt.includes("CONCLUIDO_ATRASO");
+                else if(fInsumos === "CONCLUIDO") matchInsumos = arrSt.every(s => s === "CONCLUIDO" || s === "CONCLUIDO_ATRASO");
+            }
+
+            // Filtro PCP
+            let matchPCP = true;
+            if(fPCP !== "TODOS") {
+                let p = r.PRODUCAO;
+                if (!p) return false; 
+                let fases = [p.env, p.rec, p.apv, p.imp, p.tra, p.rec_acab, p.acab, p.kit, p.col].map(i => i ? i.status : 'N/A');
+                
+                if (fPCP === 'ATRASADO') matchPCP = fases.includes('ATRASADO');
+                else if (fPCP === 'FALTA_DATA') matchPCP = fases.includes('FALTA_DATA'); // <--- LINHA NOVA
+                else if (fPCP === 'CONCLUIDO_ATRASO') matchPCP = fases.includes('CONCLUIDO_ATRASO');
+                else if (fPCP === 'PENDENTE') matchPCP = fases.includes('PENDENTE');
+                else if (fPCP === 'CONCLUIDO') matchPCP = fases.every(s => s === 'CONCLUIDO' || s === 'CONCLUIDO_ATRASO' || s === 'N/A') && fases.some(s => s === 'CONCLUIDO');
+            }
+
+            return matchInsumos && matchPCP;
+        });
+
+        let html = "";
+        
+        const renderCell = (rowId, tipo, obj) => {
+            let st = getStatusInsumo(obj);
+            let tt = `<div class='font-bold mb-1 border-b border-slate-600 pb-1'>${tipo}</div>Status Base: ${obj.status || "PENDENTE"}<br>Plan: ${fmtDataCK(obj.dtPlan)}`;
+            if(obj.dtReal) tt += `<br>Real: ${fmtDataCK(obj.dtReal)}`;
+            if(obj.obs) tt += `<div class='mt-1 text-[9px] italic text-slate-300 border-t border-slate-600 pt-1'>${obj.obs}</div>`;
+            let safeObj = JSON.stringify(obj).replace(/"/g, '&quot;');
+            return `<td class="p-2 border-r border-slate-100 text-center cursor-pointer hover:bg-slate-50 transition-colors min-w-[100px] w-[100px]" onclick="abrirModal('${rowId}', '${tipo}', ${safeObj})"><div class="tooltip-container w-full h-full flex items-center justify-center"><span class="text-[9px] px-1 py-1 rounded border ${st.cor} w-full truncate block">${st.icon} ${st.label}</span><div class="tooltip-text">${tt}</div></div></td>`;
+        };
+
+        const renderPhase = (dadosFase, nomeFase, isFirst) => {
+            let borderClass = isFirst ? "border-l-4 border-slate-900" : "border-r border-slate-200";
+            if (!dadosFase || dadosFase.status === 'N/A') return `<td class="p-2 text-center text-slate-300 text-[10px] bg-slate-50 ${borderClass} min-w-[90px] w-[90px]">-</td>`;
+            let s = dadosFase.status;
+            let color = "bg-slate-300"; let text = "Pendente"; let textClass = "text-slate-500";
+            if (s === 'CONCLUIDO') { color = "bg-emerald-500"; text = "Concluído"; textClass = "text-emerald-700 font-bold"; }
+            else if (s === 'CONCLUIDO_ATRASO') { color = "bg-yellow-400 border border-yellow-500"; text = "Concluido c/ Atraso"; textClass = "text-yellow-700 font-bold"; }
+            else if (s === 'ATRASADO') { color = "bg-red-600 animate-pulse"; text = "Atrasado"; textClass = "text-red-600 font-bold"; }
+            else if (s === 'FALTA_DATA') { color = "bg-orange-500 animate-pulse"; text = "S/ Data"; textClass = "text-orange-600 font-bold"; } // NEW
+
+            let tt = `<div class='font-bold mb-1 border-b border-slate-600 pb-1'>${nomeFase}</div>Status: <b>${s}</b><br><span class='text-emerald-400'>✅ No Prazo: ${dadosFase.ok}</span><br><span class='text-yellow-400'>⚠️ Concluido Atrasado: ${dadosFase.ok_atrasado}</span><br><span class='text-red-400'>🚨 Atrasado (Impacto): ${dadosFase.atrasado}</span><br><span class='text-orange-400'>⭕ Sem Data: ${dadosFase.sem_data || 0}</span><br><span class='text-slate-300'>⚪ Pendente: ${dadosFase.pendente}</span>`;
+            return `<td class="p-2 ${borderClass} text-center bg-slate-50 min-w-[90px] w-[90px]"><div class="tooltip-container flex items-center justify-center gap-2 cursor-help w-full"><div class="w-2.5 h-2.5 rounded-full ${color} flex-shrink-0"></div><span class="text-[9px] ${textClass} truncate">${text}</span><div class="tooltip-text">${tt}</div></div></td>`;
+        };
+
+        dadosFiltradosCockpit.forEach((row, idx) => {
+            let p = row.PRODUCAO || {};
+            html += `<tr class="border-b border-slate-100 hover:bg-slate-50 group">
+                <td class="p-3 border-r border-slate-200 font-mono text-slate-400 text-[9px] text-center sticky left-0 bg-white group-hover:bg-slate-50 z-30 w-[40px] min-w-[40px]">${idx + 1}</td>
+                <td class="p-2 border-r border-slate-200 sticky left-[40px] bg-white group-hover:bg-slate-50 z-30 shadow-[2px_0_4px_rgba(0,0,0,0.05)] text-[10px] font-bold text-slate-700 w-[140px] min-w-[140px] max-w-[140px] truncate" title="${row.METADATA.grafica}">${row.METADATA.grafica}</td>
+                <td class="p-2 border-r border-slate-200 text-[10px] w-[80px] min-w-[80px] truncate">${row.METADATA.unidade}</td>
+                <td class="p-2 border-r border-slate-200 text-[10px] w-[60px] min-w-[60px] truncate">${row.METADATA.envio}</td>
+                <td class="p-2 border-r border-slate-200 text-[10px] w-[100px] min-w-[100px] truncate" title="${row.METADATA.caracteristica}">${row.METADATA.caracteristica}</td>
+                <td class="p-2 border-r border-slate-200 text-[10px] text-slate-500 w-[80px] min-w-[80px] truncate">${row.METADATA.segmento}</td>
+                <td class="p-2 border-r border-slate-200 text-[10px] w-[60px] min-w-[60px] truncate">${row.METADATA.serie}</td>
+                <td class="p-2 border-r border-slate-200 text-[10px] w-[60px] min-w-[60px] truncate">${row.METADATA.tipo}</td>
+                <td class="p-2 border-r border-slate-200 text-[10px] text-slate-500 w-[60px] min-w-[60px] truncate">${row.METADATA.cd}</td>
+                ${renderCell(row._rowIndex, 'ESTATICAS', row.ESTATICAS)} ${renderCell(row._rowIndex, 'CAIXAS', row.CAIXAS)} ${renderCell(row._rowIndex, 'PAPEL', row.PAPEL)} ${renderCell(row._rowIndex, 'ENVIO_EZ', row.ENVIO_EZ)}
+                ${renderPhase(p.env, 'Envio Arq', true)} ${renderPhase(p.rec, 'Rec. Boneco')} ${renderPhase(p.apv, 'Apv. Boneco')} ${renderPhase(p.imp, 'Impressão')} ${renderPhase(p.tra, 'Transf.')} ${renderPhase(p.rec_acab, 'Rec. Mat.')} ${renderPhase(p.acab, 'Acabamento')} ${renderPhase(p.kit, 'Form. Kit')} ${renderPhase(p.col, 'Coleta')}
+            </tr>`;
+        });
+
+        let tb = document.getElementById('tbCockpitBody');
+        if(tb) tb.innerHTML = html || '<tr><td colspan="22" class="p-8 text-center text-slate-400">Nenhum item encontrado.</td></tr>';
+        let ct = document.getElementById('cockpitTotalRow');
+        if(ct) ct.innerText = dadosFiltradosCockpit.length;
+    }
+
+    // --- FUNÇÕES DE MODAL E SALVAR ---
+    function abrirModal(rowIndex, tipo, dadosObj) {
+        document.getElementById('modalEdit').classList.remove('hidden');
+        document.getElementById('editRowIndex').value = rowIndex;
+        document.getElementById('editType').value = tipo;
+        let st = dadosObj.status ? dadosObj.status.toUpperCase() : "PENDENTE";
+        if(st !== 'CONCLUIDO' && st !== 'ATRASADO' && st !== 'PENDENTE') st = 'PENDENTE';
+        let elStatus = document.getElementById('inpEditStatus');
+        elStatus.value = st;
+        document.getElementById('inpEditDtPlan').value = dadosObj.dtPlan || "";
+        document.getElementById('inpEditDtReal').value = dadosObj.dtReal || "";
+        document.getElementById('inpEditResp').value = dadosObj.resp || "";
+        document.getElementById('inpEditObs').value = dadosObj.obs || "";
+        toggleCamposUnitarios(elStatus);
+    }
+
+    function toggleCamposUnitarios(selectEl) {
+        let val = selectEl.value;
+        let divReal = document.getElementById('divEditDtReal');
+        let divResp = document.getElementById('divEditResp');
+        if(val === 'CONCLUIDO') {
+            divReal.classList.remove('hidden'); divResp.classList.remove('hidden');
+            if(!document.getElementById('inpEditDtReal').value) document.getElementById('inpEditDtReal').value = new Date().toISOString().split('T')[0];
+        } else {
+            divReal.classList.add('hidden'); divResp.classList.add('hidden');
+        }
+    }
+
+    function salvarEdicao(e) {
+        e.preventDefault();
+        let btn = document.getElementById('btnSalvarModal');
+        let txtOriginal = btn.innerText; btn.innerText = "Salvando..."; btn.disabled = true;
+        let form = { rowIndex: document.getElementById('editRowIndex').value, tipoItem: document.getElementById('editType').value, status: document.getElementById('inpEditStatus').value, dataPlan: document.getElementById('inpEditDtPlan').value, dataReal: document.getElementById('inpEditDtReal').value, responsavel: document.getElementById('inpEditResp').value, obs: document.getElementById('inpEditObs').value };
+        google.script.run.withSuccessHandler(res => {
+            btn.innerText = txtOriginal; btn.disabled = false; fecharModal('modalEdit');
+            if(res.success) { window.showToast("Item atualizado!"); fetchCockpitData(); }
+            else window.showToast("Erro: " + res.msg, "error");
+        }).salvarItemCockpit(form);
+    }
+
+    function abrirModalLote() { if(dadosFiltradosCockpit.length === 0) { window.showToast("Filtre itens antes!", "error"); return; } document.getElementById('modalLote').classList.remove('hidden'); document.getElementById('lblQtdLote').innerText = dadosFiltradosCockpit.length; document.getElementById('formLote').reset(); toggleCamposConclusao(document.querySelector('#formLote .inpStatus')); }
+    function fecharModal(id) { document.getElementById(id).classList.add('hidden'); }
+    function toggleCamposConclusao(selectEl) { let form = selectEl.closest('form'); let st = selectEl.value; if (st === 'CONCLUIDO') { form.querySelector('.divDtReal').classList.remove('hidden'); form.querySelector('.divResp').classList.remove('hidden'); if(!form.querySelector('.inpDtReal').value) form.querySelector('.inpDtReal').value = new Date().toISOString().split('T')[0]; } else { form.querySelector('.divDtReal').classList.add('hidden'); form.querySelector('.divResp').classList.add('hidden'); } }
+    
+    function salvarLote(e) {
+        e.preventDefault();
+        fecharModal('modalLote'); 
+        if(window.setLoading) window.setLoading(true, "Salvando " + dadosFiltradosCockpit.length + " itens em massa...");
+        let formEl = document.getElementById('formLote');
+        let ids = dadosFiltradosCockpit.map(r => r._rowIndex); 
+        let form = { tipoItem: document.getElementById('inpTipoLote').value, status: formEl.querySelector('.inpStatus').value, dataPlan: formEl.querySelector('.inpDtPlan').value, dataReal: formEl.querySelector('.inpDtReal').value, responsavel: formEl.querySelector('.inpResp').value, obs: formEl.querySelector('.inpObs').value };
+        google.script.run.withSuccessHandler(res => {
+            if(window.setLoading) window.setLoading(false);
+            if(res.success) { alert("✅ SUCESSO!\n\n" + res.count + " itens foram atualizados corretamente."); if(window.showToast) window.showToast(res.count + " itens atualizados!"); fetchCockpitData(); } 
+            else { alert("❌ ERRO: " + res.msg); if(window.showToast) window.showToast("Erro: " + res.msg, "error"); }
+        }).withFailureHandler(err => {
+            if(window.setLoading) window.setLoading(false); alert("❌ ERRO DE SERVIDOR: " + err);
+        }).salvarLoteCockpit(form, ids);
+    }
+
+    // 1. Função Inteligente de Unificação (O "PROCV" via código)
+    function cruzarDadosPCP(listaCockpit) {
+        if (!window.DADOS_PCP_CACHE || window.DADOS_PCP_CACHE.length === 0) { console.warn("Aguardando dados do PCP..."); return listaCockpit; }
+        var mapaPCP = new Map();
+        window.DADOS_PCP_CACHE.forEach(item => { if(item["Chave"]) mapaPCP.set(item["Chave"].toString().trim(), item); });
+        return listaCockpit.map(row => {
+            var chave = row.CHAVE ? row.CHAVE.toString().trim() : ""; var dadosPCP = mapaPCP.get(chave);
+            row.PCP_CALC = { encontrado: false, tiragem: "0", status: "S/ PCP", dataFim: "-", cor: "text-gray-400" };
+            if (dadosPCP) {
+                row.PCP_CALC.encontrado = true; row.PCP_CALC.tiragem = dadosPCP["TIRAGEM"] || "0";
+                var dtPlan = dadosPCP["Acbto Final (re) plan"]; var dtReal = dadosPCP["Acbto Final Real"];
+                row.PCP_CALC.dataFim = dtPlan || "-";
+                if (dtReal) { row.PCP_CALC.status = "Produzido"; row.PCP_CALC.cor = "text-green-600"; } 
+                else { row.PCP_CALC.status = "Em Andamento"; row.PCP_CALC.cor = "text-blue-600"; }
+            }
+            return row;
+        });
+    }
+
+    // 2. Função Principal de Carregamento
+    function fetchCockpitData() {
+        if(window.setLoading) window.setLoading(true, "Atualizando Cockpit...");
+        google.script.run.withSuccessHandler(function(data) {
+            var dadosBrutos = data;
+            var dadosUnificados = cruzarDadosPCP(dadosBrutos);
+            window.dadosCockpitGlobal = dadosUnificados; 
+            window.dadosRawCockpit = dadosUnificados; // Garante que o RAW recebe o dado também!
+            window.dadosFiltradosCockpit = dadosUnificados;
+
+            popularFiltrosCockpit();
+            filtrarTabelaCockpit();
+
+            if(document.getElementById('cockpitTotalRow')) document.getElementById('cockpitTotalRow').innerText = dadosUnificados.length;
+            if(window.setLoading) window.setLoading(false);
+        }).getDadosCockpit();
+    }
+
+</script>

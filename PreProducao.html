@@ -1,0 +1,1554 @@
+<div class="flex flex-col h-full w-full bg-slate-50 overflow-hidden relative">
+    
+    <div id="loadingPreProd" class="fixed inset-0 bg-slate-100/90 backdrop-blur-sm z-[9999] hidden flex-col items-center justify-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mb-3"></div>
+        <span class="text-indigo-800 font-black tracking-widest uppercase text-sm">Carregando Dados...</span>
+    </div>
+
+    <header class="bg-white border-b border-slate-200 shadow-sm flex-none z-30 w-full relative">
+        <div class="flex flex-wrap items-center justify-between p-3">
+            <h2 class="text-lg font-black text-slate-800 uppercase tracking-tight" id="tituloVisaoPreProd">🔥 Fila de Trabalho (WIP)</h2>
+            <div class="flex items-center gap-4">
+                <button onclick="recarregarDadosPreProd()" class="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded shadow transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    Atualizar Base
+                </button>
+            </div>
+        </div>
+
+        <div id="headerFiltrosWipPre" class="bg-slate-50 p-2 border-t border-slate-100 flex flex-wrap items-center gap-4 z-40 relative">
+            
+            <div class="flex items-center gap-2 border-r border-slate-300 pr-4">
+                <span class="text-[10px] font-black text-indigo-600 uppercase tracking-wider">Fase Pendente:</span>
+                <select id="filtroGargaloPre" onchange="aplicarFiltrosInteligentes()" class="bg-white border border-indigo-200 text-indigo-800 rounded p-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 shadow-sm cursor-pointer">
+                    <option value="TODAS">Ver Todas as Fases</option>
+                    <option value="ENVIO">Envio de Arquivo Pendente</option>
+                    <option value="REC">Recebimento de Boneco Pendente</option>
+                    <option value="APV">Aprovação de Boneco Pendente</option>
+                </select>
+            </div>
+
+            <div id="containerFiltrosPreProd" class="flex flex-wrap items-center gap-2"></div>
+        </div>
+    
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 scroller bg-slate-100 relative">
+        <div class="max-w-[1600px] mx-auto hidden" id="conteinerPrincipalPre">
+            
+            <div id="visaoResumo" class="hidden">
+                <h3 class="text-sm font-black text-slate-700 uppercase tracking-widest mb-3 border-b border-slate-200 pb-2">📦 Visão por Volume de SKUs</h3>
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-slate-400">
+                        <p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Total SKUs</p>
+                        <p class="text-2xl font-black text-slate-800" id="kpiSkuTot">-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-emerald-400">
+                        <p class="text-[10px] font-bold text-emerald-600 uppercase mb-1">Total Aprovado</p>
+                        <p class="text-2xl font-black text-slate-800" id="kpiSkuApv">-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-blue-400">
+                        <p class="text-[10px] font-bold text-blue-600 uppercase mb-1">Arq. Enviado Prazo</p>
+                        <p class="text-2xl font-black text-slate-800" id="kpiSkuEnv">-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-indigo-400">
+                        <p class="text-[10px] font-bold text-indigo-600 uppercase mb-1">Bon. Recebido Prazo</p>
+                        <p class="text-2xl font-black text-slate-800" id="kpiSkuRec">-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-violet-400">
+                        <p class="text-[10px] font-bold text-violet-600 uppercase mb-1">Arq. Aprovado Prazo</p>
+                        <p class="text-2xl font-black text-slate-800" id="kpiSkuApvP">-</p>
+                    </div>
+                </div>
+
+                <h3 class="text-sm font-black text-slate-700 uppercase tracking-widest mb-3 border-b border-slate-200 pb-2">📄 Visão por Volume de Páginas</h3>
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-slate-400">
+                        <p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Total Páginas</p>
+                        <p class="text-2xl font-black text-slate-800" id="kpiPgTot">-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-emerald-400">
+                        <p class="text-[10px] font-bold text-emerald-600 uppercase mb-1">Total Aprovado</p>
+                        <p class="text-2xl font-black text-slate-800" id="kpiPgApv">-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-blue-400">
+                        <p class="text-[10px] font-bold text-blue-600 uppercase mb-1">Arq. Enviado Prazo</p>
+                        <p class="text-2xl font-black text-slate-800" id="kpiPgEnv">-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-indigo-400">
+                        <p class="text-[10px] font-bold text-indigo-600 uppercase mb-1">Bon. Recebido Prazo</p>
+                        <p class="text-2xl font-black text-slate-800" id="kpiPgRec">-</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-violet-400">
+                        <p class="text-[10px] font-bold text-violet-600 uppercase mb-1">Arq. Aprovado Prazo</p>
+                        <p class="text-2xl font-black text-slate-800" id="kpiPgApvP">-</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-10">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Status do Volume por Gráfica (SKUs)</h3>
+                        <div class="relative h-80 w-full"><canvas id="chartResumoGrafica"></canvas></div>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Status do Volume por Marca (SKUs)</h3>
+                        <div class="relative h-80 w-full"><canvas id="chartResumoMarca"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 mb-6">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Resumo por Marca</h3>
+                        <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-500 uppercase text-[9px]">
+                                <tr>
+                                    <th class="p-2 border-r border-slate-200">Marca</th>
+                                    <th class="p-2 text-center border-r border-slate-200">Total SKUs</th>
+                                    <th class="p-2 text-center">Aprovados</th>
+                                    <th class="p-2 text-center border-r border-slate-200">Pendentes (Atr.)</th>
+                                    <th class="p-2 text-center">1º Envio (Plan)</th>
+                                    <th class="p-2 text-center border-r border-slate-200">Últ. Aprove (Plan)</th>
+                                    <th class="p-2 text-right">% Aprovado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyResumoMarca" class="text-slate-700"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Resumo por Gráfica</h3>
+                        <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-500 uppercase text-[9px]">
+                                <tr>
+                                    <th class="p-2 border-r border-slate-200">Gráfica</th>
+                                    <th class="p-2 text-center border-r border-slate-200">Total SKUs</th>
+                                    <th class="p-2 text-center">Aprovados</th>
+                                    <th class="p-2 text-center border-r border-slate-200">Pendentes (Atr.)</th>
+                                    <th class="p-2 text-center">1º Envio (Plan)</th>
+                                    <th class="p-2 text-center border-r border-slate-200">Últ. Aprove (Plan)</th>
+                                    <th class="p-2 text-right">% Aprovado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyResumoGrafica" class="text-slate-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller pb-10">
+                    <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Visão Geral (Gráfica x Marca)</h3>
+                    <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+                        <thead class="bg-slate-800 text-white uppercase text-[9px]">
+                            <tr>
+                                <th class="p-2 border-r border-slate-600">Gráfica</th>
+                                <th class="p-2 border-r border-slate-600">Marca</th>
+                                <th class="p-2 text-center border-r border-slate-600">Total SKUs</th>
+                                <th class="p-2 text-center">Aprovados</th>
+                                <th class="p-2 text-center border-r border-slate-600">Pendentes (Atr.)</th>
+                                <th class="p-2 text-center">1º Envio (Plan)</th>
+                                <th class="p-2 text-center border-r border-slate-600">Últ. Aprove (Plan)</th>
+                                <th class="p-2 text-right">% Aprovado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyResumoGeral" class="text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="visaoWIPPre">
+                <div class="mb-4">
+                    <span class="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded font-bold">Ocultando Aprovações Concluídas</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col justify-center items-center">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Total em WIP</span>
+                        <div class="text-4xl font-black text-slate-800 flex items-baseline gap-1" id="kpiWipTotal">-</div>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm border-t-4 border-t-orange-400">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center mb-2">Pendente: Envio</div>
+                        <div class="flex justify-between items-start">
+                            <div class="text-center w-1/3"><div class="text-xl font-black text-slate-600 leading-none" id="wipEnvP">-</div><div class="text-[9px] text-slate-400 uppercase font-bold mt-1">Prazo</div></div>
+                            <div class="text-center w-1/3"><div class="text-2xl font-black text-yellow-500 leading-none" id="wipEnvH">-</div><div class="text-[9px] text-yellow-600 uppercase font-bold mt-1">Hoje</div></div>
+                            <div class="text-center w-1/3"><div class="text-2xl font-black text-red-500 leading-none" id="wipEnvA">-</div><div class="text-[9px] text-red-600 uppercase font-bold mt-1">Atraso</div></div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm border-t-4 border-t-blue-400">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center mb-2">Pendente: Rec. Boneco</div>
+                        <div class="flex justify-between items-start">
+                            <div class="text-center w-1/3"><div class="text-xl font-black text-slate-600 leading-none" id="wipRecP">-</div><div class="text-[9px] text-slate-400 uppercase font-bold mt-1">Prazo</div></div>
+                            <div class="text-center w-1/3"><div class="text-2xl font-black text-yellow-500 leading-none" id="wipRecH">-</div><div class="text-[9px] text-yellow-600 uppercase font-bold mt-1">Hoje</div></div>
+                            <div class="text-center w-1/3"><div class="text-2xl font-black text-red-500 leading-none" id="wipRecA">-</div><div class="text-[9px] text-red-600 uppercase font-bold mt-1">Atraso</div></div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm border-t-4 border-t-purple-400">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center mb-2">Pendente: Aprov. Boneco</div>
+                        <div class="flex justify-between items-start">
+                            <div class="text-center w-1/3"><div class="text-xl font-black text-slate-600 leading-none" id="wipApvP">-</div><div class="text-[9px] text-slate-400 uppercase font-bold mt-1">Prazo</div></div>
+                            <div class="text-center w-1/3"><div class="text-2xl font-black text-yellow-500 leading-none" id="wipApvH">-</div><div class="text-[9px] text-yellow-600 uppercase font-bold mt-1">Hoje</div></div>
+                            <div class="text-center w-1/3"><div class="text-2xl font-black text-red-500 leading-none" id="wipApvA">-</div><div class="text-[9px] text-red-600 uppercase font-bold mt-1">Atraso</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
+                    <div class="flex flex-wrap justify-between items-center mb-4 border-b border-slate-100 pb-2">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wide">📊 Previsão Diária e Semanal de Demanda</h3>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase">Analisar Fase:</span>
+                            <select id="filtroFaseHist" onchange="atualizarGraficosPrevisao()" class="bg-slate-50 border border-slate-300 text-slate-700 rounded p-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 shadow-sm">
+                                <option value="envio">Envio de Arquivo</option>
+                                <option value="rec">Recebimento de Boneco</option>
+                                <option value="apv">Aprovação de Boneco</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-6">
+                        <div class="text-[10px] font-bold text-slate-500 text-center mb-1">Volume de SKUs (Diário)</div>
+                        <div class="h-48 relative"><canvas id="chartSkuDiario"></canvas></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 text-center mb-1">Paginação (Diária) - Limite: 6k</div>
+                            <div class="h-48 relative"><canvas id="chartPagDiario"></canvas></div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 text-center mb-1">Paginação (Semanal) - Limite: 30k</div>
+                            <div class="h-48 relative"><canvas id="chartPagSemanal"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+                    <div class="bg-indigo-50 p-3 border-b border-slate-200"><h3 class="text-xs font-black text-indigo-800 uppercase tracking-wide">📋 Detalhamento: Produção Principal</h3></div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead><tr class="bg-white text-[10px] uppercase text-slate-400 border-b border-slate-100"><th class="p-3 font-black text-center w-10 border-r border-slate-100">#</th><th class="p-3 font-black">Index (Chamado)</th><th class="p-3 font-black">Marca (UN)</th><th class="p-3 font-black">Gráfica</th><th class="p-3 font-black text-center">Total (SKUs / Pgs)</th><th class="p-3 font-black text-center border-l border-slate-100">Envio (Prz / Hj / Atr)</th><th class="p-3 font-black text-center border-l border-slate-100">Boneco (Prz / Hj / Atr)</th><th class="p-3 font-black text-center border-l border-slate-100">Aprove (Prz / Hj / Atr)</th></tr></thead>
+                            <tbody id="tbodyPrincipal"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+                    <div class="bg-red-50 p-3 border-b border-slate-200 flex items-center gap-2"><span class="text-xl">⚠️</span><h3 class="text-xs font-black text-red-800 uppercase tracking-wide">Detalhamento: Reentradas</h3></div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead><tr class="bg-white text-[10px] uppercase text-slate-400 border-b border-slate-100"><th class="p-3 font-black text-center w-10 border-r border-slate-100">#</th><th class="p-3 font-black">Index (Chamado)</th><th class="p-3 font-black">Marca (UN)</th><th class="p-3 font-black">Gráfica</th><th class="p-3 font-black text-center">Total (SKUs / Pgs)</th><th class="p-3 font-black text-center border-l border-slate-100">Envio (Prz / Hj / Atr)</th><th class="p-3 font-black text-center border-l border-slate-100">Boneco (Prz / Hj / Atr)</th><th class="p-3 font-black text-center border-l border-slate-100">Aprove (Prz / Hj / Atr)</th><th class="p-3 font-black text-center border-l border-slate-100 text-red-600">Pior Atraso</th></tr></thead>
+                            <tbody id="tbodyReentradas"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="visaoCaixasPre" class="hidden">
+    <div class="flex flex-wrap justify-between items-center mb-4 border-b border-slate-200 pb-2">
+        <h3 class="text-sm font-black text-slate-700 uppercase tracking-widest">📦 Acompanhamento de Caixas e Embalagens</h3>
+        <button onclick="exportarCaixasCSV()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-2">📥 Exportar (CSV)</button>
+    </div>
+
+    <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-wrap gap-3 items-center text-[10px] uppercase font-bold text-slate-500">
+        <div class="flex items-center gap-2">
+            <span>Form. Ini:</span>
+            <input type="date" id="fCxDtIni" onchange="renderTabelaCaixas()" class="bg-slate-50 border border-slate-200 rounded p-1.5 text-slate-700 outline-none focus:border-indigo-400 shadow-sm">
+            <span>Até:</span>
+            <input type="date" id="fCxDtFim" onchange="renderTabelaCaixas()" class="bg-slate-50 border border-slate-200 rounded p-1.5 text-slate-700 outline-none focus:border-indigo-400 shadow-sm">
+        </div>
+        <div class="w-px h-6 bg-slate-200 mx-1 hidden xl:block"></div>
+        
+        <div class="flex items-center gap-2 flex-1">
+            <span class="text-[10px] font-bold text-slate-500 uppercase">Filtros:</span>
+            <div id="containerFiltrosMultiCx" class="flex flex-wrap gap-2 relative z-50"></div>
+        </div>
+        
+        <input type="text" id="buscaCaixas" onkeyup="renderTabelaCaixas()" placeholder="🔍 Buscar Código/Descrição..." class="bg-white border border-slate-300 rounded p-1.5 text-xs outline-none flex-1 min-w-[150px] max-w-[250px] shadow-sm focus:border-indigo-400">
+        
+        <button onclick="limparFiltrosCx()" class="bg-neutral-200 hover:bg-neutral-300 text-neutral-700 px-3 py-1.5 rounded-lg transition-colors shadow-sm">Limpar Tudo</button>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-500">
+            <p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Total de Solicitações</p>
+            <p class="text-3xl font-black text-slate-800" id="kpiCxTotal">-</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-amber-500">
+            <p class="text-[10px] font-bold text-amber-600 uppercase mb-1">Em Produção</p>
+            <p class="text-3xl font-black text-amber-600" id="kpiCxProd">-</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-emerald-500">
+            <p class="text-[10px] font-bold text-emerald-600 uppercase mb-1">Entregues</p>
+            <p class="text-3xl font-black text-emerald-600" id="kpiCxEnt">-</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500">
+            <p class="text-[10px] font-bold text-red-600 uppercase mb-1">Entregas Atrasadas</p>
+            <p class="text-3xl font-black text-red-600" id="kpiCxAtr">-</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6 p-5">
+        <h3 class="text-xs font-black text-slate-700 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">🏆 Aderência ao Planejamento (SLA)</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="containerAderenciaCaixas">
+            </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+        <div class="bg-slate-50 p-3 border-b border-slate-200"><h3 class="text-xs font-black text-slate-700 uppercase">Lista de Pedidos</h3></div>
+        <div class="overflow-x-auto scroller max-h-[500px]">
+            <table class="w-full text-left border-collapse whitespace-nowrap">
+                <thead class="bg-white text-[9px] uppercase text-slate-500 border-b-2 border-slate-200 sticky top-0 z-10 shadow-sm">
+                    <tr>
+                        <th class="p-2 border-r border-slate-100 bg-slate-50">Consolidado</th>
+                        <th class="p-2 border-r border-slate-100">Fornecedor</th>
+                        <th class="p-2 border-r border-slate-100">Marca / Local</th>
+                        <th class="p-2 border-r border-slate-100">Código / Descrição</th>
+                        <th class="p-2 text-right border-r border-slate-100">Qtd</th>
+                        <th class="p-2 text-center border-r border-slate-100">Status</th>
+                        <th class="p-2 text-center border-r border-slate-100">St Prontidão</th>
+                        <th class="p-2 text-center border-r border-slate-100">St Coleta</th>
+                        <th class="p-2 text-center border-r border-slate-100">St Entrega</th>
+                        <th class="p-2 text-center border-r border-slate-100 bg-amber-50">Dt Entrega (Plan)</th>
+                        <th class="p-2 text-center border-r border-slate-100 bg-emerald-50">Dt Entrega (Real)</th>
+                        <th class="p-2 text-center">NF / Fat</th>
+                    </tr>
+                </thead>
+                </thead>
+                <tbody id="tbCaixasCorpo" class="text-[10px] text-slate-700"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+            <div id="visaoAderenciaPre" class="hidden">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+                    <span class="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-widest">Produtividade de Conclusão (Por Data Real)</span>
+                    
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase">Métrica Gráficos:</span>
+                            <select id="filtroMetricaAderencia" onchange="renderizarPainelAderencia()" class="bg-white border border-slate-300 text-slate-700 rounded p-1.5 text-xs font-bold shadow-sm outline-none focus:ring-1 focus:ring-emerald-500">
+                                <option value="sku">Volume de SKUs</option>
+                                <option value="paginas">Soma de Páginas</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase">Aderência por Fase (Linha do Tempo):</span>
+                            <select id="filtroFaseAderencia" onchange="renderizarPainelAderencia()" class="bg-white border border-slate-300 text-slate-700 rounded p-1.5 text-xs font-bold shadow-sm outline-none focus:ring-1 focus:ring-emerald-500">
+                                <option value="envio">Envio de Arquivos</option>
+                                <option value="rec">Recebimento de Bonecos</option>
+                                <option value="apv">Aprovação de Bonecos</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-8">
+                    <h3 class="text-xs font-black text-slate-700 uppercase tracking-wide mb-3 border-b border-slate-200 pb-1">Produção Principal</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 border-t-4 border-t-orange-400 text-center">
+                            <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Envio de Arquivo</div>
+                            <div class="text-3xl font-black text-emerald-600 leading-none" id="adEnvPrinPerc">-</div>
+                            <div class="text-[10px] text-slate-400 font-bold mt-1" id="adEnvPrinVol">-</div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 border-t-4 border-t-blue-400 text-center">
+                            <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Rec. de Boneco</div>
+                            <div class="text-3xl font-black text-emerald-600 leading-none" id="adRecPrinPerc">-</div>
+                            <div class="text-[10px] text-slate-400 font-bold mt-1" id="adRecPrinVol">-</div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 border-t-4 border-t-purple-400 text-center">
+                            <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Aprov. de Boneco</div>
+                            <div class="text-3xl font-black text-emerald-600 leading-none" id="adApvPrinPerc">-</div>
+                            <div class="text-[10px] text-slate-400 font-bold mt-1" id="adApvPrinVol">-</div>
+                        </div>
+                    </div>
+
+                    <h3 class="text-xs font-black text-slate-700 uppercase tracking-wide mb-3 border-b border-slate-200 pb-1 text-red-800">⚠️ Reentradas</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 border-t-4 border-t-orange-400 text-center">
+                            <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Envio de Arquivo</div>
+                            <div class="text-3xl font-black text-emerald-600 leading-none" id="adEnvReenPerc">-</div>
+                            <div class="text-[10px] text-slate-400 font-bold mt-1" id="adEnvReenVol">-</div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 border-t-4 border-t-blue-400 text-center">
+                            <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Rec. de Boneco</div>
+                            <div class="text-3xl font-black text-emerald-600 leading-none" id="adRecReenPerc">-</div>
+                            <div class="text-[10px] text-slate-400 font-bold mt-1" id="adRecReenVol">-</div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 border-t-4 border-t-purple-400 text-center">
+                            <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Aprov. de Boneco</div>
+                            <div class="text-3xl font-black text-emerald-600 leading-none" id="adApvReenPerc">-</div>
+                            <div class="text-[10px] text-slate-400 font-bold mt-1" id="adApvReenVol">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
+                    <h3 class="text-xs font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Linha do Tempo de Conclusão (Dentro x Fora do Prazo)</h3>
+                    
+                    <div class="mb-6">
+                        <div class="text-[10px] font-bold text-slate-500 text-center mb-1">Últimos 15 Dias Corridos (Somente Dias c/ Produção)</div>
+                        <div class="h-48 relative"><canvas id="chartAd15d"></canvas></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 text-center mb-1">Últimas 7 Semanas</div>
+                            <div class="h-48 relative"><canvas id="chartAd7s"></canvas></div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 text-center mb-1">Acumulado do Ano</div>
+                            <div class="h-48 relative"><canvas id="chartAdAno"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-6 mb-6">
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-slate-50 p-3 border-b border-slate-200"><h3 class="text-xs font-black text-slate-700 uppercase">Aderência por Gráfica (Produção Principal)</h3></div>
+                        <div class="overflow-x-auto"><table class="w-full text-left border-collapse"><thead class="bg-white text-[10px] uppercase text-slate-400 border-b border-slate-100"><tr><th class="p-3 font-black">Gráfica</th><th class="p-3 font-black text-center bg-slate-50">Total SKUs</th><th class="p-3 font-black text-center border-l">Envio (No Prazo)</th><th class="p-3 font-black text-center border-l">Rec. Boneco (No Prazo)</th><th class="p-3 font-black text-center border-l bg-purple-50/30">Aprov. Boneco (No Prazo)</th></tr></thead><tbody id="tbAdGrafPrin"></tbody></table></div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-slate-50 p-3 border-b border-slate-200"><h3 class="text-xs font-black text-slate-700 uppercase">Aderência por Gráfica (Reentradas)</h3></div>
+                        <div class="overflow-x-auto"><table class="w-full text-left border-collapse"><thead class="bg-white text-[10px] uppercase text-slate-400 border-b border-slate-100"><tr><th class="p-3 font-black">Gráfica</th><th class="p-3 font-black text-center bg-slate-50">Total SKUs</th><th class="p-3 font-black text-center border-l">Envio (No Prazo)</th><th class="p-3 font-black text-center border-l">Rec. Boneco (No Prazo)</th><th class="p-3 font-black text-center border-l bg-purple-50/30">Aprov. Boneco (No Prazo)</th></tr></thead><tbody id="tbAdGrafReen"></tbody></table></div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-slate-50 p-3 border-b border-slate-200"><h3 class="text-xs font-black text-slate-700 uppercase">Aderência por Marca (Produção Principal)</h3></div>
+                        <div class="overflow-x-auto"><table class="w-full text-left border-collapse"><thead class="bg-white text-[10px] uppercase text-slate-400 border-b border-slate-100"><tr><th class="p-3 font-black">Marca (UN)</th><th class="p-3 font-black text-center bg-slate-50">Total SKUs</th><th class="p-3 font-black text-center border-l">Envio (No Prazo)</th><th class="p-3 font-black text-center border-l">Rec. Boneco (No Prazo)</th><th class="p-3 font-black text-center border-l bg-purple-50/30">Aprov. Boneco (No Prazo)</th></tr></thead><tbody id="tbAdMarcPrin"></tbody></table></div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-slate-50 p-3 border-b border-slate-200"><h3 class="text-xs font-black text-slate-700 uppercase">Aderência por Marca (Reentradas)</h3></div>
+                        <div class="overflow-x-auto"><table class="w-full text-left border-collapse"><thead class="bg-white text-[10px] uppercase text-slate-400 border-b border-slate-100"><tr><th class="p-3 font-black">Marca (UN)</th><th class="p-3 font-black text-center bg-slate-50">Total SKUs</th><th class="p-3 font-black text-center border-l">Envio (No Prazo)</th><th class="p-3 font-black text-center border-l">Rec. Boneco (No Prazo)</th><th class="p-3 font-black text-center border-l bg-purple-50/30">Aprov. Boneco (No Prazo)</th></tr></thead><tbody id="tbAdMarcReen"></tbody></table></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    let dadosPreProdBrutos = [];
+    let dadosAtivosPre = []; 
+    let dadosFiltradosPre = [];
+    let graficosAtivosPre = {}; 
+    let visaoAtualPre = 'wip'; 
+
+    // 1. INCLUSÃO DO CAMPO NOVO NOS MATRICIAIS DE FILTRO
+    const camposFiltro = ["statusAtual", "un", "ciclo", "envio", "pr", "indexTiragem", "segmento", "serie", "tipo", "grafica", "periodo"];
+    const cfgFiltrosPre = [
+        { id: "f_periodo", campo: "periodo", label: "PERÍODO (ANO.T)" }, // Novo filtro no início
+        { id: "f_status", campo: "statusAtual", label: "STATUS GERAL" },
+        { id: "f_un", campo: "un", label: "UN" },
+        { id: "f_grafica", campo: "grafica", label: "GRÁFICA" },
+        { id: "f_ciclo", campo: "ciclo", label: "CICLO" },
+        { id: "f_envio", campo: "envio", label: "ENVIO" },
+        { id: "f_pr", campo: "pr", label: "P/R" },
+        { id: "f_index", campo: "indexTiragem", label: "INDEX" },
+        { id: "f_segmento", campo: "segmento", label: "SEGMENTO" },
+        { id: "f_serie", campo: "serie", label: "SÉRIE" },
+        { id: "f_tipo", campo: "tipo", label: "TIPO" }
+    ];
+
+    let selecoesFiltrosPre = {};
+    window.opcoesFiltrosPre = {}; 
+    window.dropdownAbertoPre = null; 
+    camposFiltro.forEach(c => selecoesFiltrosPre[c] = []);
+
+    window.chamarTelaPreProd = function(visao) {
+        visaoAtualPre = visao;
+        if (!dadosPreProdBrutos || dadosPreProdBrutos.length === 0) recarregarDadosPreProd(visao, false);
+        else alternarVisaoPreProd(visao);
+    };
+
+    function recarregarDadosPreProd(visaoAlvo = visaoAtualPre, silencioso = false) {
+        if(!silencioso) {
+            if(window.setLoading) window.setLoading(true, "Carregando Pré-Produção...");
+            let loaderLocal = document.getElementById('loadingPreProd');
+            if(loaderLocal) {
+                loaderLocal.classList.remove('hidden');
+                loaderLocal.classList.add('flex');
+            }
+            let ctPrin = document.getElementById('conteinerPrincipalPre');
+            if(ctPrin) ctPrin.classList.add('hidden');
+        }
+
+        google.script.run.withSuccessHandler(function(dadosNovos) {
+            if(!silencioso) {
+                if(window.setLoading) window.setLoading(false);
+                let loaderLocal = document.getElementById('loadingPreProd');
+                if(loaderLocal) {
+                    loaderLocal.classList.add('hidden');
+                    loaderLocal.classList.remove('flex');
+                }
+                let ctPrin = document.getElementById('conteinerPrincipalPre');
+                if(ctPrin) ctPrin.classList.remove('hidden');
+            }
+
+            if (!dadosNovos || dadosNovos.length === 0 || dadosNovos[0].erro) {
+                if(!silencioso) alert("Erro ao buscar base ou base vazia.");
+                return;
+            }
+
+            dadosPreProdBrutos = dadosNovos.map(item => {
+                camposFiltro.forEach(f => { if(f !== 'statusAtual' && item[f]) item[f] = String(item[f]).trim().toUpperCase(); });
+                item.paginas = window.arredondar(item.paginas);
+                return processarDatasPreProd(item);
+            });
+
+            if(!silencioso) {
+                alternarVisaoPreProd(visaoAlvo);
+            } else {
+                dadosAtivosPre = dadosPreProdBrutos;
+                window.opcoesFiltrosPre = {};
+            }
+
+        }).getDadosPreProducao();
+    }
+
+    function processarDatasPreProd(item) {
+        let hoje = new Date(); hoje.setHours(0,0,0,0);
+        function getStatus(dtReal, dtPlan) {
+            if (dtReal && dtReal.trim() !== "") return "CONCLUIDO";
+            if (!dtPlan || dtPlan.trim() === "") return "NO_PRAZO"; 
+            let p = dtPlan.split(" ")[0].split("/");
+            if (p.length === 3) {
+                let dPlan = new Date(p[2], p[1] - 1, p[0]); dPlan.setHours(0,0,0,0);
+                if (dPlan < hoje) return "ATRASO";
+                if (dPlan.getTime() === hoje.getTime()) return "HOJE";
+            }
+            return "NO_PRAZO";
+        }
+        item.stEnvio = getStatus(item.dtEnvioReal, item.dtEnvioPlan);
+        item.stRec = getStatus(item.dtRecBonReal, item.dtRecBonPlan);
+        item.stAprov = getStatus(item.dtApvBonReal, item.dtApvBonPlan);
+
+        function calcDiasAtraso(dtPlan) {
+            if (!dtPlan || dtPlan.trim() === "") return 0;
+            let p = dtPlan.split(" ")[0].split("/");
+            if (p.length === 3) {
+                let dPlan = new Date(p[2], p[1] - 1, p[0]); dPlan.setHours(0,0,0,0);
+                let diff = Math.floor((hoje.getTime() - dPlan.getTime()) / 86400000);
+                return diff > 0 ? diff : 0;
+            }
+            return 0;
+        }
+        item.diasAtrasoEnv = item.stEnvio === 'ATRASO' ? calcDiasAtraso(item.dtEnvioPlan) : 0;
+        item.diasAtrasoRec = item.stRec === 'ATRASO' ? calcDiasAtraso(item.dtRecBonPlan) : 0;
+        item.diasAtrasoApv = item.stAprov === 'ATRASO' ? calcDiasAtraso(item.dtApvBonPlan) : 0;
+        item.maxAtrasoDias = Math.max(item.diasAtrasoEnv, item.diasAtrasoRec, item.diasAtrasoApv);
+
+        let s = [];
+        if(item.stEnvio !== 'CONCLUIDO') s.push(item.stEnvio);
+        if(item.stRec !== 'CONCLUIDO') s.push(item.stRec);
+        if(item.stAprov !== 'CONCLUIDO') s.push(item.stAprov);
+        if(s.includes('ATRASO')) item.statusAtual = "VENCIDO";
+        else if(s.includes('HOJE')) item.statusAtual = "VENCE HOJE";
+        else item.statusAtual = "NO PRAZO";
+
+        function calcAd(real, plan) {
+            if(!real || real.trim() === "") return null;
+            let noPrazo = true;
+            if(plan && plan.trim() !== "") {
+                let p = plan.split(" ")[0].split("/"); let r = real.split(" ")[0].split("/");
+                if(p.length===3 && r.length===3) {
+                    let dPlan = new Date(p[2], p[1]-1, p[0]); dPlan.setHours(0,0,0,0);
+                    let dReal = new Date(r[2], r[1]-1, r[0]); dReal.setHours(0,0,0,0);
+                    noPrazo = dReal <= dPlan;
+                }
+            }
+            return { data: real.split(" ")[0], noPrazo: noPrazo };
+        }
+        item.adEnvio = calcAd(item.dtEnvioReal, item.dtEnvioPlan);
+        item.adRec = calcAd(item.dtRecBonReal, item.dtRecBonPlan);
+        item.adApv = calcAd(item.dtApvBonReal, item.dtApvBonPlan);
+        return item;
+    }
+
+    function alternarVisaoPreProd(visaoAlvo) {
+        visaoAtualPre = visaoAlvo;
+        
+        let elWip = document.getElementById('visaoWIPPre');
+        let elAderencia = document.getElementById('visaoAderenciaPre');
+        let elResumo = document.getElementById('visaoResumo');
+        let elCaixas = document.getElementById('visaoCaixasPre');
+        let elTitulo = document.getElementById('tituloVisaoPreProd');
+        let headerWip = document.getElementById('headerFiltrosWipPre'); 
+
+        if(elWip) elWip.classList.add('hidden');
+        if(elAderencia) elAderencia.classList.add('hidden');
+        if(elResumo) elResumo.classList.add('hidden');
+        if(elCaixas) elCaixas.classList.add('hidden');
+
+        document.getElementById('conteinerPrincipalPre').classList.remove('hidden');
+
+        let btnAtualizarTopo = document.querySelector('button[onclick^="recarregarDadosPreProd"], button[onclick^="carregarDadosCaixas"]');
+
+        if(visaoAlvo === 'caixas') { 
+            if(headerWip) headerWip.classList.add('hidden');
+            if(elCaixas) elCaixas.classList.remove('hidden');
+            if(elTitulo) elTitulo.innerText = '📦 Embalagens e Caixas';
+            
+            if(btnAtualizarTopo) btnAtualizarTopo.setAttribute("onclick", "carregarDadosCaixas(true)");
+
+            if(!window.DADOS_CAIXAS_CACHE) window.carregarDadosCaixas();
+            else window.renderTabelaCaixas();
+            return; 
+        }
+
+        if(btnAtualizarTopo) btnAtualizarTopo.setAttribute("onclick", "recarregarDadosPreProd()");
+        if(headerWip) headerWip.classList.remove('hidden'); 
+
+        if(visaoAlvo === 'wip' || visaoAlvo === 'WIP') {
+            if(elWip) elWip.classList.remove('hidden');
+            if(elTitulo) elTitulo.innerText = '🔥 Fila de Trabalho (WIP)';
+            dadosAtivosPre = dadosPreProdBrutos.filter(d => !d.dtApvBonReal || d.dtApvBonReal.trim() === "");
+        } 
+        else if(visaoAlvo === 'aderencia') {
+            if(elAderencia) elAderencia.classList.remove('hidden');
+            if(elTitulo) elTitulo.innerText = '🏆 Aderência e Produtividade';
+            dadosAtivosPre = dadosPreProdBrutos; 
+        }
+        else if(visaoAlvo === 'resumo') {
+            if(elResumo) elResumo.classList.remove('hidden');
+            if(elTitulo) elTitulo.innerText = '📈 Resumo Executivo';
+            dadosAtivosPre = dadosPreProdBrutos; 
+        }
+
+        desenharFiltrosInteligentes();
+        aplicarFiltrosInteligentes();
+    }
+
+    function alternarDropdownPre(campoId) {
+        let menuId = 'drop_pre_' + campoId;
+        let menuEl = document.getElementById(menuId);
+        let estaFechado = menuEl.classList.contains('hidden');
+
+        document.querySelectorAll('.drop-menu-pre').forEach(m => m.classList.add('hidden'));
+
+        if(estaFechado) {
+            menuEl.classList.remove('hidden');
+            window.dropdownAbertoPre = menuId; 
+        } else {
+            window.dropdownAbertoPre = null;
+        }
+    }
+
+    function toggleCheckFiltroPre(campo, valor) {
+        let arr = selecoesFiltrosPre[campo];
+        let idx = arr.indexOf(valor);
+        if(idx > -1) arr.splice(idx, 1); else arr.push(valor);
+        
+        window.dropdownAbertoPre = 'drop_pre_' + campo; 
+        desenharFiltrosInteligentes();
+        aplicarFiltrosInteligentes();
+    }
+
+    window.marcarTodosFiltro = function(campo) {
+        selecoesFiltrosPre[campo] = [...window.opcoesFiltrosPre[campo]];
+        window.dropdownAbertoPre = 'drop_pre_' + campo;
+        desenharFiltrosInteligentes(); aplicarFiltrosInteligentes();
+    }
+    
+    window.limparUnicoFiltro = function(campo) {
+        selecoesFiltrosPre[campo] = [];
+        window.dropdownAbertoPre = 'drop_pre_' + campo;
+        desenharFiltrosInteligentes(); aplicarFiltrosInteligentes();
+    }
+
+    function desenharFiltrosInteligentes() {
+        const container = document.getElementById('containerFiltrosPreProd');
+        let html = `<div class="text-[10px] font-black text-slate-500 uppercase tracking-wider mr-2">Filtros:</div>`;
+
+        cfgFiltrosPre.forEach(cfg => {
+            let dadosPossiveis = dadosAtivosPre.filter(d => {
+                let passa = true;
+                cfgFiltrosPre.forEach(outroCfg => {
+                    if (outroCfg.campo !== cfg.campo && selecoesFiltrosPre[outroCfg.campo].length > 0) {
+                        if (!selecoesFiltrosPre[outroCfg.campo].includes(d[outroCfg.campo])) passa = false;
+                    }
+                });
+                return passa;
+            });
+
+            let unicos = [...new Set(dadosPossiveis.map(item => item[cfg.campo]))].filter(v => v).sort();
+            window.opcoesFiltrosPre[cfg.campo] = unicos; 
+            
+            let qtdSelec = selecoesFiltrosPre[cfg.campo].length;
+            let corBotao = qtdSelec > 0 ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600';
+            if(cfg.campo === 'statusAtual' && qtdSelec === 0) corBotao = 'border-amber-400 bg-amber-50 text-amber-700';
+
+            html += `
+            <div class="relative inline-block text-left">
+                <button onclick="alternarDropdownPre('${cfg.campo}')" class="${corBotao} border px-2 py-1.5 text-[10px] font-bold rounded shadow-sm hover:border-indigo-400 flex items-center gap-2 min-w-[90px] justify-between transition-colors">
+                    ${cfg.label}
+                    <span class="bg-indigo-100 text-indigo-700 px-1 rounded-full text-[9px] ${qtdSelec === 0 ? 'hidden':''}">${qtdSelec}</span>
+                    <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div id="drop_pre_${cfg.campo}" class="drop-menu-pre hidden absolute left-0 z-50 mt-1 w-64 bg-white border border-slate-200 rounded-lg shadow-xl max-h-64 overflow-y-auto">
+                    <div class="flex justify-between items-center px-3 py-2 border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
+                        <button onclick="marcarTodosFiltro('${cfg.campo}')" class="text-[9px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-wider bg-indigo-50 px-2 py-1 rounded">Marcar Todos</button>
+                        <button onclick="limparUnicoFiltro('${cfg.campo}')" class="text-[9px] font-black text-slate-500 hover:text-red-500 uppercase tracking-wider bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">Limpar</button>
+                    </div>
+            `;
+            
+            unicos.forEach(val => { 
+                let checked = selecoesFiltrosPre[cfg.campo].includes(val) ? "checked" : "";
+                let corTexto = val === 'VENCIDO' ? 'text-red-600' : (val === 'VENCE HOJE' ? 'text-yellow-600' : 'text-slate-700');
+                html += `
+                    <label class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer text-[10px] font-bold ${corTexto} transition-colors border-b border-slate-50 last:border-0">
+                        <input type="checkbox" class="rounded text-indigo-600 focus:ring-indigo-500" value="${val}" onchange="toggleCheckFiltroPre('${cfg.campo}', '${val}')" ${checked}>
+                        <span class="truncate" title="${val}">${val}</span>
+                    </label>
+                `; 
+            });
+            html += `</div></div>`;
+        });
+        html += `<button onclick="limparFiltrosPre()" class="ml-2 text-slate-400 hover:text-red-500 text-[10px] font-bold uppercase transition-colors">Limpar Todos</button>`;
+        container.innerHTML = html;
+
+        if(window.dropdownAbertoPre) {
+            let el = document.getElementById(window.dropdownAbertoPre);
+            if(el) el.classList.remove('hidden');
+        }
+    }
+
+    function limparFiltrosPre() {
+        camposFiltro.forEach(c => selecoesFiltrosPre[c] = []);
+        window.dropdownAbertoPre = null;
+        desenharFiltrosInteligentes(); aplicarFiltrosInteligentes();
+    }
+
+    function aplicarFiltrosInteligentes() {
+        let filtroGargalo = document.getElementById('filtroGargaloPre') ? document.getElementById('filtroGargaloPre').value : 'TODAS';
+
+        dadosFiltradosPre = dadosAtivosPre.filter(d => {
+            let passa = true;
+            cfgFiltrosPre.forEach(cfg => {
+                if (selecoesFiltrosPre[cfg.campo].length > 0) {
+                    if (!selecoesFiltrosPre[cfg.campo].includes(d[cfg.campo])) passa = false;
+                }
+            });
+
+            if (passa && filtroGargalo !== 'TODAS') {
+                let isEnvioDone = d.dtEnvioReal && String(d.dtEnvioReal).trim().length > 5;
+                let isRecDone = d.dtRecBonReal && String(d.dtRecBonReal).trim().length > 5;
+                let isApvDone = d.dtApvBonReal && String(d.dtApvBonReal).trim().length > 5;
+
+                if (filtroGargalo === 'ENVIO') {
+                    if (isEnvioDone) passa = false; 
+                } 
+                else if (filtroGargalo === 'REC') {
+                    if (!isEnvioDone || isRecDone) passa = false;
+                } 
+                else if (filtroGargalo === 'APV') {
+                    if (!isEnvioDone || !isRecDone || isApvDone) passa = false;
+                }
+            }
+
+            return passa;
+        });
+
+        // RE-RENDERIZAÇÃO INTEGRAL DAS TELAS ATIVAS DE RESUMO, WIP E ADERÊNCIA
+        if(visaoAtualPre === 'wip' || visaoAtualPre === 'WIP') {
+            renderizarPainelWIP(dadosFiltradosPre);
+            atualizarGraficosPrevisao();
+        } else if (visaoAtualPre === 'resumo') {
+            renderizarResumoExecutivo(dadosFiltradosPre);
+        } else {
+            renderizarPainelAderencia();
+        }
+    }
+
+    function renderizarResumoExecutivo(dados) {
+        let kpis = { 
+            sku: { tot:0, apv:0, envT:0, envP:0, recT:0, recP:0, apvT:0, apvP:0 }, 
+            pg:  { tot:0, apv:0, envT:0, envP:0, recT:0, recP:0, apvT:0, apvP:0 } 
+        };
+        let cG = {}, cM = {};
+
+        dados.forEach(i => {
+            let p = i.paginas || 0;
+            
+            let envDone = i.dtEnvioReal && String(i.dtEnvioReal).trim().length > 5;
+            let recDone = i.dtRecBonReal && String(i.dtRecBonReal).trim().length > 5;
+            let apvDone = i.dtApvBonReal && String(i.dtApvBonReal).trim().length > 5;
+
+            kpis.sku.tot++; kpis.pg.tot += p;
+            if(apvDone) { kpis.sku.apv++; kpis.pg.apv += p; }
+
+            if(i.adEnvio) {
+                kpis.sku.envT++; kpis.pg.envT += p;
+                if(i.adEnvio.noPrazo) { kpis.sku.envP++; kpis.pg.envP += p; }
+            }
+            if(i.adRec) {
+                kpis.sku.recT++; kpis.pg.recT += p;
+                if(i.adRec.noPrazo) { kpis.sku.recP++; kpis.pg.recP += p; }
+            }
+            if(i.adApv) {
+                kpis.sku.apvT++; kpis.pg.apvT += p;
+                if(i.adApv.noPrazo) { kpis.sku.apvP++; kpis.pg.apvP += p; }
+            }
+
+            let g = i.grafica || "N/A", m = i.un || "N/A";
+            if(!cG[g]) cG[g] = { tot:0, apv:0, pEd:0, pGr:0 };
+            if(!cM[m]) cM[m] = { tot:0, apv:0, pEd:0, pGr:0 };
+
+            cG[g].tot++; cM[m].tot++;
+            if(apvDone) { cG[g].apv++; cM[m].apv++; }
+
+            if (!envDone && i.stEnvio === 'ATRASO') {
+                cG[g].pEd++; cM[m].pEd++; 
+            } else if (envDone && !recDone && i.stRec === 'ATRASO') {
+                cG[g].pGr++; cM[m].pGr++; 
+            } else if (recDone && !apvDone && i.stAprov === 'ATRASO') {
+                cG[g].pEd++; cM[m].pEd++; 
+            }
+        });
+
+        const updateRow = (pref, obj) => {
+            document.getElementById(pref+'Tot').innerText = window.formatarBR(obj.tot);
+            
+            const renderHtml = (valNoPrazo, baseRealizada, cor) => {
+                let pct = baseRealizada > 0 ? ((valNoPrazo / baseRealizada) * 100).toFixed(1) : 0;
+                return `<div class="flex items-end justify-between"><span>${window.formatarBR(valNoPrazo)}</span> <span class="text-sm ${cor} font-black bg-${cor.replace('text-', '')}/10 px-1.5 rounded">${pct}%</span></div>`;
+            };
+            
+            document.getElementById(pref+'Apv').innerHTML = renderHtml(obj.apv, obj.tot, 'text-emerald-600');
+            document.getElementById(pref+'Env').innerHTML = renderHtml(obj.envP, obj.envT, 'text-blue-600');
+            document.getElementById(pref+'Rec').innerHTML = renderHtml(obj.recP, obj.recT, 'text-indigo-600');
+            document.getElementById(pref+'ApvP').innerHTML = renderHtml(obj.apvP, obj.apvT, 'text-violet-600');
+        };
+
+        updateRow('kpiSku', kpis.sku);
+        updateRow('kpiPg', kpis.pg);
+
+        const renderChart = (ctxId, dataObj) => {
+            let labels = Object.keys(dataObj).sort();
+            if(window['chart_'+ctxId]) window['chart_'+ctxId].destroy();
+            
+            window['chart_'+ctxId] = new Chart(document.getElementById(ctxId), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Total Base', data: labels.map(k => dataObj[k].tot), backgroundColor: '#cbd5e1', borderRadius: 4 },
+                        { label: 'Aprovados', data: labels.map(k => dataObj[k].apv), backgroundColor: '#10b981', borderRadius: 4 },
+                        { label: 'Atraso Editorial', data: labels.map(k => dataObj[k].pEd), backgroundColor: '#ef4444', borderRadius: 4 },
+                        { label: 'Atraso Gráfica', data: labels.map(k => dataObj[k].pGr), backgroundColor: '#f59e0b', borderRadius: 4 }
+                    ]
+                },
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+        };
+
+        renderChart('chartResumoGrafica', cG);
+        renderChart('chartResumoMarca', cM);
+
+        let tblMarca = {}; let tblGrafica = {}; let tblGeral = {};
+
+        let parseDate = (dStr) => {
+            if(!dStr || String(dStr).trim() === "") return null;
+            let p = String(dStr).split(" ")[0].split("/");
+            if(p.length === 3) return new Date(p[2], p[1]-1, p[0]).getTime();
+            return null;
+        };
+
+        let fmtDate = (ts) => {
+            if(!ts) return "-";
+            let d = new Date(ts);
+            return d.getDate().toString().padStart(2,'0') + '/' + (d.getMonth()+1).toString().padStart(2,'0') + '/' + d.getFullYear();
+        };
+
+        dados.forEach(i => {
+            let g = i.grafica || "N/A";
+            let m = i.un || "N/A";
+            let gm = g + "@@" + m;
+
+            let isApv = i.dtApvBonReal && String(i.dtApvBonReal).trim().length > 5;
+            let tsEnvio = parseDate(i.dtEnvioPlan);
+            let tsApv = parseDate(i.dtApvBonPlan);
+            
+            let taAtrasado = (!isApv && (i.stEnvio === 'ATRASO' || i.stRec === 'ATRASO' || i.stAprov === 'ATRASO'));
+
+            let initObj = (l1, l2) => ({ l1: l1, l2: l2, tot: 0, apv: 0, minE: null, maxA: null, atr: 0 });
+
+            if(!tblMarca[m]) tblMarca[m] = initObj(m, "");
+            if(!tblGrafica[g]) tblGrafica[g] = initObj(g, "");
+            if(!tblGeral[gm]) tblGeral[gm] = initObj(g, m);
+
+            let updateObj = (obj) => {
+                obj.tot++;
+                if(isApv) obj.apv++;
+                if(taAtrasado) obj.atr++;
+                if(tsEnvio) { if(obj.minE === null || tsEnvio < obj.minE) obj.minE = tsEnvio; }
+                if(tsApv) { if(obj.maxA === null || tsApv > obj.maxA) obj.maxA = tsApv; }
+            };
+
+            updateObj(tblMarca[m]);
+            updateObj(tblGrafica[g]);
+            updateObj(tblGeral[gm]);
+        });
+
+        let renderTbl = (dataObj, tbodyId, showDoisLabels = false) => {
+            let html = "";
+            let arr = Object.values(dataObj).sort((a,b) => b.tot - a.tot);
+            
+            arr.forEach(r => {
+                let pend = r.tot - r.apv;
+                let pct = r.tot > 0 ? ((r.apv / r.tot) * 100).toFixed(1) : 0;
+                
+                let tdLabels = showDoisLabels 
+                    ? `<td class="p-2 font-bold text-slate-700 border-r border-slate-100">${r.l1}</td><td class="p-2 font-semibold text-slate-600 border-r border-slate-100">${r.l2}</td>` 
+                    : `<td class="p-2 font-bold text-slate-700 border-r border-slate-100">${r.l1}</td>`;
+                
+                let colorPct = 'text-slate-600';
+                let badgeAtraso = r.atr > 0 ? `<span class="text-red-600 font-black ml-1 text-[10px]" title="Itens Atrasados">(${r.atr} atr)</span>` : '';
+
+                html += `<tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                    ${tdLabels}
+                    <td class="p-2 text-center font-black text-indigo-700 bg-indigo-50/30 border-r border-slate-100">${window.formatarBR(r.tot)}</td>
+                    <td class="p-2 text-center font-bold text-emerald-600">${window.formatarBR(r.apv)}</td>
+                    <td class="p-2 text-center font-bold text-amber-500 border-r border-slate-100">${window.formatarBR(pend)}${badgeAtraso}</td>
+                    <td class="p-2 text-center text-slate-500 text-[10px]">${fmtDate(r.minE)}</td>
+                    <td class="p-2 text-center text-slate-500 text-[10px] border-r border-slate-100">${fmtDate(r.maxA)}</td>
+                    <td class="p-2 text-right font-black ${colorPct} bg-slate-50">${pct}%</td>
+                </tr>`;
+            });
+            document.getElementById(tbodyId).innerHTML = html || `<tr><td colspan="8" class="p-4 text-center text-slate-400">Nenhum dado encontrado</td></tr>`;
+        };
+
+        renderTbl(tblMarca, 'tbodyResumoMarca', false);
+        renderTbl(tblGrafica, 'tbodyResumoGrafica', false);
+        renderTbl(tblGeral, 'tbodyResumoGeral', true);
+    }
+
+    function renderizarPainelWIP(dados) {
+        let totSkus = dados.length; let totPags = 0;
+        let kpis = { env: {sP:0, pP:0, sH:0, pH:0, sA:0, pA:0}, rec: {sP:0, pP:0, sH:0, pH:0, sA:0, pA:0}, apv: {sP:0, pP:0, sH:0, pH:0, sA:0, pA:0} };
+        let grpIdx = {};
+
+        dados.forEach(i => {
+            totPags += i.paginas;
+            let sEnv = i.stEnvio; let sRec = i.stRec; let sApv = i.stAprov;
+            if(sEnv === 'ATRASO') { kpis.env.sA++; kpis.env.pA += i.paginas; } else if(sEnv === 'HOJE') { kpis.env.sH++; kpis.env.pH += i.paginas; } else if(sEnv === 'NO_PRAZO') { kpis.env.sP++; kpis.env.pP += i.paginas; }
+            if(sRec === 'ATRASO') { kpis.rec.sA++; kpis.rec.pA += i.paginas; } else if(sRec === 'HOJE') { kpis.rec.sH++; kpis.rec.pH += i.paginas; } else if(sRec === 'NO_PRAZO') { kpis.rec.sP++; kpis.rec.pP += i.paginas; }
+            if(sApv === 'ATRASO') { kpis.apv.sA++; kpis.apv.pA += i.paginas; } else if(sApv === 'HOJE') { kpis.apv.sH++; kpis.apv.pH += i.paginas; } else if(sApv === 'NO_PRAZO') { kpis.apv.sP++; kpis.apv.pP += i.paginas; }
+
+            let numIdx = i.indexTiragem || "S/ Chamado"; let unStr = i.un || "-"; let grStr = i.grafica || "-";
+            let chaveUnica = `${numIdx}@@${unStr}@@${grStr}`;
+
+            if(!grpIdx[chaveUnica]) {
+                grpIdx[chaveUnica] = { 
+                    indexStr: numIdx, un: unStr, grafica: grStr, totalSkus: 0, totalPags: 0, maxAtrasoDias: 0,
+                    env: {sP:0, pP:0, sH:0, pH:0, sA:0, pA:0}, rec: {sP:0, pP:0, sH:0, pH:0, sA:0, pA:0}, apv: {sP:0, pP:0, sH:0, pH:0, sA:0, pA:0}
+                };
+            }
+            let g = grpIdx[chaveUnica];
+            g.totalSkus++; g.totalPags += i.paginas;
+            
+            if(i.maxAtrasoDias > g.maxAtrasoDias) g.maxAtrasoDias = i.maxAtrasoDias;
+
+            if(sEnv === 'ATRASO') { g.env.sA++; g.env.pA += i.paginas; } else if(sEnv === 'HOJE') { g.env.sH++; g.env.pH += i.paginas; } else if(sEnv === 'NO_PRAZO') { g.env.sP++; g.env.pP += i.paginas; }
+            if(sRec === 'ATRASO') { g.rec.sA++; g.rec.pA += i.paginas; } else if(sRec === 'HOJE') { g.rec.sH++; g.rec.pH += i.paginas; } else if(sRec === 'NO_PRAZO') { g.rec.sP++; g.rec.pP += i.paginas; }
+            if(sApv === 'ATRASO') { g.apv.sA++; g.apv.pA += i.paginas; } else if(sApv === 'HOJE') { g.apv.sH++; g.apv.pH += i.paginas; } else if(sApv === 'NO_PRAZO') { g.apv.sP++; g.apv.pP += i.paginas; }
+        });
+
+        document.getElementById('kpiWipTotal').innerHTML = `${totSkus} <span class="text-lg text-slate-400 font-bold ml-1">/ ${totPags.toLocaleString('pt-BR')}pgs</span>`;
+        let fKPI = (skus, pags) => `${skus} <div class="text-[9px] text-slate-400 font-normal mt-0.5">(${pags.toLocaleString('pt-BR')}pgs)</div>`;
+        document.getElementById('wipEnvP').innerHTML = fKPI(kpis.env.sP, kpis.env.pP); document.getElementById('wipEnvH').innerHTML = fKPI(kpis.env.sH, kpis.env.pH); document.getElementById('wipEnvA').innerHTML = fKPI(kpis.env.sA, kpis.env.pA);
+        document.getElementById('wipRecP').innerHTML = fKPI(kpis.rec.sP, kpis.rec.pP); document.getElementById('wipRecH').innerHTML = fKPI(kpis.rec.sH, kpis.rec.pH); document.getElementById('wipRecA').innerHTML = fKPI(kpis.rec.sA, kpis.rec.pA);
+        document.getElementById('wipApvP').innerHTML = fKPI(kpis.apv.sP, kpis.apv.pP); document.getElementById('wipApvH').innerHTML = fKPI(kpis.apv.sH, kpis.apv.pH); document.getElementById('wipApvA').innerHTML = fKPI(kpis.apv.sA, kpis.apv.pA);
+
+        let tbPrin = document.getElementById('tbodyPrincipal'); tbPrin.innerHTML = ""; let tbReen = document.getElementById('tbodyReentradas'); tbReen.innerHTML = "";
+        let temPrin = false; let temReen = false;
+
+        let tTd = (o) => {
+            let f = (s, p, cor) => s > 0 ? `<span class="${cor}">${s}<span class="text-[8px] text-slate-400 font-normal ml-0.5">${p}p</span></span>` : `<span class="text-slate-300">0</span>`;
+            return `${f(o.sP, o.pP, 'text-slate-600 font-bold')} <span class="text-slate-200 mx-1">/</span> ${f(o.sH, o.pH, 'text-yellow-600 font-black')} <span class="text-slate-200 mx-1">/</span> ${f(o.sA, o.pA, 'text-red-600 font-black')}`;
+        };
+
+        let countPrin = 1; 
+        let countReen = 1;
+
+        Object.keys(grpIdx).sort((a,b) => grpIdx[b].totalSkus - grpIdx[a].totalSkus).forEach(k => {
+            let r = grpIdx[k];
+            let numChamado = parseInt(r.indexStr.replace(/\D/g, ''), 10);
+            let ehReentrada = (!isNaN(numChamado) && numChamado > 5);
+            
+            let countIndex = ehReentrada ? countReen++ : countPrin++;
+
+            let rowBase = `
+                <tr class="hover:bg-slate-50 border-b border-slate-100 transition-colors">
+                    <td class="p-3 text-[10px] font-bold text-slate-400 text-center border-r border-slate-100">${countIndex}</td>
+                    <td class="p-3 text-[11px] font-black text-slate-700">${r.indexStr}</td>
+                    <td class="p-3 text-[10px] font-bold text-slate-500">${r.un}</td>
+                    <td class="p-3 text-[10px] font-bold text-slate-500">${r.grafica}</td>
+                    <td class="p-3 text-[12px] font-black text-center text-indigo-600 bg-indigo-50/50 border-r border-slate-100">${r.totalSkus} <span class="text-[9px] text-indigo-400 ml-1">(${r.totalPags.toLocaleString('pt-BR')}p)</span></td>
+                    <td class="p-3 text-[11px] text-center border-l border-slate-100 whitespace-nowrap">${tTd(r.env)}</td>
+                    <td class="p-3 text-[11px] text-center border-l border-slate-100 whitespace-nowrap">${tTd(r.rec)}</td>
+                    <td class="p-3 text-[11px] text-center border-l border-slate-100 bg-purple-50/30 whitespace-nowrap">${tTd(r.apv)}</td>
+            `;
+            
+            if(ehReentrada) { 
+                let clAtraso = r.maxAtrasoDias > 0 ? `<span class="text-red-600 font-bold">${r.maxAtrasoDias} dias</span>` : `<span class="text-slate-300">-</span>`;
+                tbReen.innerHTML += rowBase + `<td class="p-3 text-[11px] text-center border-l border-slate-100 bg-red-50/30 whitespace-nowrap">${clAtraso}</td></tr>`; 
+                temReen = true; 
+            } else { 
+                tbPrin.innerHTML += rowBase + `</tr>`; 
+                temPrin = true; 
+            }
+        });
+
+        if(!temPrin) tbPrin.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-xs font-bold text-slate-400">Vazio.</td></tr>`;
+        if(!temReen) tbReen.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-xs font-bold text-slate-400">Vazio.</td></tr>`;
+    }
+
+    function getInicioSemana(dateObj) {
+        let d = new Date(dateObj.getTime()); let diaDaSemana = d.getDay();
+        d.setDate(d.getDate() - diaDaSemana + (diaDaSemana === 0 ? -6 : 1));
+        return d.getDate().toString().padStart(2,'0') + '/' + (d.getMonth()+1).toString().padStart(2,'0');
+    }
+
+    function atualizarGraficosPrevisao() {
+        let dadosParaGrafico = dadosFiltradosPre;
+        let fase = document.getElementById('filtroFaseHist').value; 
+        let propDataPlan = fase === 'envio' ? 'dtEnvioPlan' : (fase === 'rec' ? 'dtRecBonPlan' : 'dtApvBonPlan');
+        let propStatus = fase === 'envio' ? 'stEnvio' : (fase === 'rec' ? 'stRec' : 'stAprov');
+
+        let agpDia = {}; let agpSemana = {};
+
+        dadosParaGrafico.forEach(i => {
+            if (i[propStatus] !== 'CONCLUIDO' && i[propDataPlan] && i[propDataPlan].trim() !== "") {
+                let dtDia = i[propDataPlan].split(" ")[0]; 
+                let p = dtDia.split('/');
+                if(p.length === 3) {
+                    let dReal = new Date(p[2], p[1]-1, p[0]); dReal.setHours(0,0,0,0);
+                    let dtSem = getInicioSemana(dReal);
+
+                    if (!agpDia[dtDia]) agpDia[dtDia] = { skus: 0, pags: 0 };
+                    agpDia[dtDia].skus++; agpDia[dtDia].pags += i.paginas;
+                    if (!agpSemana[dtSem]) agpSemana[dtSem] = { pags: 0 };
+                    agpSemana[dtSem].pags += i.paginas;
+                }
+            }
+        });
+
+        let sortedDias = Object.keys(agpDia).sort((a,b) => { let [da,ma,ya]=a.split('/'); let [db,mb,yb]=b.split('/'); return new Date(ya,ma-1,da) - new Date(yb,mb-1,db); });
+        let sortedSemanas = Object.keys(agpSemana).sort((a,b) => { let [da,ma]=a.split('/'); let [db,mb]=b.split('/'); return new Date(2025,ma-1,da) - new Date(2025,mb-1,db); });
+
+        let optBase = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: false } }, scales: { x: { grid: { display: false } } } };
+
+        desenharGraficoChartJS('chartSkuDiario', 'bar', { labels: sortedDias, datasets: [{ data: sortedDias.map(k => agpDia[k].skus), backgroundColor: '#6366f1', borderRadius: 4 }] }, optBase);
+        desenharGraficoChartJS('chartPagDiario', 'bar', { labels: sortedDias, datasets: [{ type: 'line', data: sortedDias.map(()=>6000), borderColor: '#ef4444', borderDash: [5,5], borderWidth: 2, pointRadius: 0, fill: false }, { data: sortedDias.map(k => agpDia[k].pags), backgroundColor: '#f59e0b', borderRadius: 4 }] }, optBase);
+        desenharGraficoChartJS('chartPagSemanal', 'bar', { labels: sortedSemanas.map(k => "Sem. " + k), datasets: [{ type: 'line', data: sortedSemanas.map(()=>30000), borderColor: '#ef4444', borderDash: [5,5], borderWidth: 2, pointRadius: 0, fill: false }, { data: sortedSemanas.map(k => agpSemana[k].pags), backgroundColor: '#10b981', borderRadius: 4 }] }, optBase);
+    }
+    
+    function renderPainelAderenciaCell(p, t) {
+        if(t === 0) return `<span class="text-slate-300">-</span>`;
+        let perc = p === t ? 100 : Math.floor((p/t)*100);
+        let color = perc < 80 ? 'text-red-500' : 'text-emerald-600';
+        return `<div class="font-black text-slate-700">${p} <span class="text-[9px] ${color} ml-1">(${perc}%)</span></div>`;
+    }
+
+    function renderizarPainelAderencia() {
+        let dados = dadosFiltradosPre;
+        
+        let faseSel = document.getElementById('filtroFaseAderencia').value;
+        let metrSel = document.getElementById('filtroMetricaAderencia').value; 
+
+        let kAd = { env: {pT:0, pP:0, rT:0, rP:0}, rec: {pT:0, pP:0, rT:0, rP:0}, apv: {pT:0, pP:0, rT:0, rP:0} };
+        let grafPrin = {}, grafReen = {}; let marcPrin = {}, marcReen = {};
+
+        let hoje = new Date(); hoje.setHours(0,0,0,0);
+        let datas15 = []; for(let i=14; i>=0; i--) { let d = new Date(hoje); d.setDate(d.getDate()-i); datas15.push(d.getDate().toString().padStart(2,'0')+'/'+(d.getMonth()+1).toString().padStart(2,'0')); }
+        let sema7 = []; for(let i=6; i>=0; i--) { let d = new Date(hoje); d.setDate(d.getDate()-(i*7)); sema7.push(getInicioSemana(d)); }
+        let meses = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+        let anoAtual = hoje.getFullYear();
+
+        let st15 = {}, st7s = {}, stAn = {};
+        datas15.forEach(d => st15[d] = {p:0, f:0});
+        st7s.forEach(w => st7s[w] = {p:0, f:0});
+        meses.forEach(m => stAn[m] = {p:0, f:0});
+
+        dados.forEach(i => {
+            let num = parseInt(String(i.indexTiragem).replace(/\D/g, ''), 10);
+            let eR = (!isNaN(num) && num > 5);
+
+            if(i.adEnvio) { eR ? (kAd.env.rT++, i.adEnvio.noPrazo && kAd.env.rP++) : (kAd.env.pT++, i.adEnvio.noPrazo && kAd.env.pP++); }
+            if(i.adRec) { eR ? (kAd.rec.rT++, i.adRec.noPrazo && kAd.rec.rP++) : (kAd.rec.pT++, i.adRec.noPrazo && kAd.rec.pP++); }
+            if(i.adApv) { eR ? (kAd.apv.rT++, i.adApv.noPrazo && kAd.apv.rP++) : (kAd.apv.pT++, i.adApv.noPrazo && kAd.apv.pP++); }
+
+            let g = i.grafica || "-"; let m = i.un || "-";
+            let tg = eR ? grafReen : grafPrin; let tm = eR ? marcReen : marcPrin;
+            if(!tg[g]) tg[g] = { t:0, envT:0, envP:0, recT:0, recP:0, apvT:0, apvP:0 };
+            if(!tm[m]) tm[m] = { t:0, envT:0, envP:0, recT:0, recP:0, apvT:0, apvP:0 };
+            tg[g].t++; tm[m].t++;
+            if(i.adEnvio) { tg[g].envT++; tm[m].envT++; if(i.adEnvio.noPrazo){ tg[g].envP++; tm[m].envP++; } }
+            if(i.adRec) { tg[g].recT++; tm[m].recT++; if(i.adRec.noPrazo){ tg[g].recP++; tm[m].recP++; } }
+            if(i.adApv) { tg[g].apvT++; tm[m].apvT++; if(i.adApv.noPrazo){ tg[g].apvP++; tm[m].apvP++; } }
+
+            let propAd = faseSel === 'envio' ? 'adEnvio' : (faseSel === 'rec' ? 'adRec' : 'adApv');
+            let adFoco = i[propAd];
+            
+            if(adFoco) {
+                let valSoma = metrSel === 'sku' ? 1 : i.paginas;
+                let pt = adFoco.data.split('/');
+                if(pt.length === 3) {
+                    let dReal = new Date(pt[2], pt[1]-1, pt[0]); dReal.setHours(0,0,0,0);
+                    let dStr = dReal.getDate().toString().padStart(2,'0') + '/' + (dReal.getMonth()+1).toString().padStart(2,'0');
+                    if(st15[dStr]) { adFoco.noPrazo ? st15[dStr].p += valSoma : st15[dStr].f += valSoma; }
+                    let wStr = getInicioSemana(dReal);
+                    if(st7s[wStr]) { adFoco.noPrazo ? st7s[wStr].p += valSoma : st7s[wStr].f += valSoma; }
+                    if(dReal.getFullYear() === anoAtual) {
+                        let mStr = meses[dReal.getMonth()];
+                        if(stAn[mStr]) { adFoco.noPrazo ? stAn[mStr].p += valSoma : stAn[mStr].f += valSoma; }
+                    }
+                }
+            }
+        });
+
+        let fPost = (p,t) => {
+            if(t === 0) return '-';
+            let perc = p === t ? 100 : Math.floor((p/t)*100);
+            return `<span class="${perc < 80 ? 'text-red-500' : 'text-emerald-600'}">${perc}%</span>`;
+        };
+
+        document.getElementById('adEnvPrinPerc').innerHTML = fPost(kAd.env.pP, kAd.env.pT); document.getElementById('adEnvPrinVol').innerText = `${kAd.env.pP} de ${kAd.env.pT} SKUs`;
+        document.getElementById('adRecPrinPerc').innerHTML = fPost(kAd.rec.pP, kAd.rec.pT); document.getElementById('adRecPrinVol').innerText = `${kAd.rec.pP} de ${kAd.rec.pT} SKUs`;
+        document.getElementById('adApvPrinPerc').innerHTML = fPost(kAd.apv.pP, kAd.apv.pT); document.getElementById('adApvPrinVol').innerText = `${kAd.apv.pP} de ${kAd.apv.pT} SKUs`;
+
+        document.getElementById('adEnvReenPerc').innerHTML = fPost(kAd.env.rP, kAd.env.rT); document.getElementById('adEnvReenVol').innerText = `${kAd.env.rP} de ${kAd.env.rT} SKUs`;
+        document.getElementById('adRecReenPerc').innerHTML = fPost(kAd.rec.rP, kAd.rec.rT); document.getElementById('adRecReenVol').innerText = `${kAd.rec.rP} de ${kAd.rec.rT} SKUs`;
+        document.getElementById('adApvReenPerc').innerHTML = fPost(kAd.apv.rP, kAd.apv.rT); document.getElementById('adApvReenVol').innerText = `${kAd.apv.rP} de ${kAd.apv.rT} SKUs`;
+
+        let gerarHtmlTabela = (obj, idTbody) => {
+            let keys = Object.keys(obj).sort((a,b) => obj[b].t - obj[a].t);
+            if(keys.length === 0) { document.getElementById(idTbody).innerHTML = `<tr><td colspan="5" class="p-4 text-center text-xs text-slate-400">Nenhum dado encontrado.</td></tr>`; return; }
+            
+            let html = "";
+            keys.forEach(k => {
+                let r = obj[k];
+                html += `<tr class="border-b border-slate-50 hover:bg-slate-50">
+                    <td class="p-2 font-bold text-slate-700">${k}</td>
+                    <td class="p-2 text-center text-slate-500 font-bold bg-slate-50">${r.t}</td>
+                    <td class="p-2 text-center border-l border-slate-100">${renderPainelAderenciaCell(r.envP, r.envT)}</td>
+                    <td class="p-2 text-center border-l border-slate-100">${renderPainelAderenciaCell(r.recP, r.recT)}</td>
+                    <td class="p-2 text-center border-l border-slate-100 bg-purple-50/30">${renderPainelAderenciaCell(r.apvP, r.apvT)}</td>
+                </tr>`;
+            });
+            document.getElementById(idTbody).innerHTML = html;
+        };
+
+        gerarHtmlTabela(grafPrin, 'tbAdGrafPrin'); gerarHtmlTabela(grafReen, 'tbAdGrafReen');
+        gerarHtmlTabela(marcPrin, 'tbAdMarcPrin'); gerarHtmlTabela(marcReen, 'tbAdMarcReen');
+
+        let filterLabels = (arr, stObj) => arr.filter(k => stObj[k].p + stObj[k].f > 0);
+        let lb15 = filterLabels(datas15, st15);
+        let lb7s = filterLabels(sema7, st7s);
+        let lbAn = filterLabels(meses, stAn);
+
+        let optStacked = { 
+            responsive: true, maintainAspectRatio: false, 
+            plugins: { 
+                legend: { position: 'bottom' }, 
+                datalabels: { color: '#fff', font: { weight: 'bold', size: 9 }, formatter: (v) => v > 0 ? v : '' },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            let val = context.raw;
+                            let dataIdx = context.dataIndex;
+                            let total = 0;
+                            context.chart.data.datasets.forEach(d => { total += d.data[dataIdx]; });
+                            let perc = total > 0 ? (val === total ? 100 : Math.floor((val / total) * 100)) : 0;
+                            return `${label}: ${val} (${perc}%)`;
+                        }
+                    }
+                }
+            }, 
+            scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } } 
+        };
+
+        desenharGraficoChartJS('chartAd15d', 'bar', {
+            labels: lb15,
+            datasets: [ { label: 'No Prazo', data: lb15.map(d=>st15[d].p), backgroundColor: '#10b981', borderRadius: 2 }, { label: 'Atrasado', data: lb15.map(d=>st15[d].f), backgroundColor: '#ef4444', borderRadius: 2 } ]
+        }, optStacked);
+
+        desenharGraficoChartJS('chartAd7s', 'bar', {
+            labels: lb7s.map(w=>"S. "+w),
+            datasets: [ { label: 'No Prazo', data: lb7s.map(w=>st7s[w].p), backgroundColor: '#10b981', borderRadius: 2 }, { label: 'Atrasado', data: lb7s.map(w=>st7s[w].f), backgroundColor: '#ef4444', borderRadius: 2 } ]
+        }, optStacked);
+
+        desenharGraficoChartJS('chartAdAno', 'bar', {
+            labels: lbAn,
+            datasets: [ { label: 'No Prazo', data: lbAn.map(m=>stAn[m].p), backgroundColor: '#10b981', borderRadius: 2 }, { label: 'Atrasado', data: lbAn.map(m=>stAn[m].f), backgroundColor: '#ef4444', borderRadius: 2 } ]
+        }, optStacked);
+    }
+
+    function desenharGraficoChartJS(canvasId, tipo, data, customOptions) {
+        let ctx = document.getElementById(canvasId).getContext('2d');
+        if (graficosAtivosPre[canvasId]) graficosAtivosPre[canvasId].destroy();
+        graficosAtivosPre[canvasId] = new Chart(ctx, { type: tipo, data: data, options: customOptions, plugins: [ChartDataLabels] });
+    }
+
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('#containerFiltrosPreProd')) {
+            document.querySelectorAll('.drop-menu-pre').forEach(m => m.classList.add('hidden'));
+            window.dropdownAbertoPre = null;
+        }
+    });
+
+    // ==========================================
+    // MÓDULO DE CAIXAS (ATUALIZADO: CONSOLIDADO INCLUÍDO E OC REMOVIDA)
+    // ==========================================
+    window.filtrosCxIniciados = false;
+    window.caixasExportarGlobais = [];
+    window.listasMultiCx = {
+        'Fornecedor': new Set(), 'Marca': new Set(), 'Movimentação': new Set(), 
+        'Envio': new Set(), 'Status': new Set(), 'Local Ent.': new Set(),
+        'St Prontidão': new Set(), 'St Coleta': new Set(), 'St Entrega': new Set()
+    };
+    window.mapCamposCx = {
+        'Fornecedor': 'Fornecedor de saída', 'Marca': 'Marca', 'Movimentação': 'Produção ou Movimentação',
+        'Envio': 'Envio', 'Status': 'Status solicitação', 'Local Ent.': 'Local de Entrega',
+        'St Prontidão': '_stProntPlan', 'St Coleta': '_stColPlan', 'St Entrega': '_stEntPlan'
+    };
+
+    window.toggleFilterMenuCx = function(idCat, event) {
+        if(event) event.stopPropagation();
+        let menu = document.getElementById(`menu-cx-${idCat}`);
+        document.querySelectorAll('.menu-filtro-cx').forEach(m => m.classList.add('hidden'));
+        if(menu) menu.classList.remove('hidden');
+    };
+    window.checkAllCx = function(idCat, checkStatus) {
+        document.querySelectorAll(`.chk-cx-${idCat}`).forEach(cb => cb.checked = checkStatus);
+        window.renderTabelaCaixas();
+    };
+    window.checkOnlyCx = function(idCat, valToKeep) {
+        document.querySelectorAll(`.chk-cx-${idCat}`).forEach(cb => cb.checked = (cb.value === valToKeep));
+        window.renderTabelaCaixas();
+    };
+    window.limparFiltrosCx = function() {
+        let inputBusca = document.getElementById('buscaCaixas'); if(inputBusca) inputBusca.value = '';
+        let dIni = document.getElementById('fCxDtIni'); if(dIni) dIni.value = '';
+        let dFim = document.getElementById('fCxDtFim'); if(dFim) dFim.value = '';
+        document.querySelectorAll('input[class*="chk-cx-"]').forEach(cb => cb.checked = true);
+        window.renderTabelaCaixas();
+    };
+
+    document.addEventListener('click', function(e) {
+        if(!e.target.closest('.filtro-container-cx')) { 
+            document.querySelectorAll('.menu-filtro-cx').forEach(m => m.classList.add('hidden')); 
+        }
+    });
+
+    window.carregarDadosCaixas = function(force = false) {
+        if(window.setLoading) window.setLoading(true, "Carregando Base de Caixas...");
+        google.script.run.withSuccessHandler(dados => {
+            window.DADOS_CAIXAS_CACHE = dados;
+            window.filtrosCxIniciados = false; 
+            window.renderTabelaCaixas();
+            if(window.setLoading) window.setLoading(false);
+            if(force) showToast("Base de Caixas updated successfully!");
+        }).withFailureHandler(e => {
+            if(window.setLoading) window.setLoading(false);
+            alert("Erro ao carregar caixas: " + e.message);
+        }).getDadosCaixas();
+    };
+
+    window.exportarCaixasCSV = function() {
+        if (!window.caixasExportarGlobais || window.caixasExportarGlobais.length === 0) {
+            alert("Nenhum dado filtrado para exportar."); return;
+        }
+        // Cabeçalho CSV atualizado
+        let c = "\uFEFFConsolidado;Fornecedor;Marca;Código;Descrição;Local Entrega;Quantidade;Status;St Prontidão;St Coleta;St Entrega;Dt Entrega (Plan);Dt Entrega (Real);NF\n";
+        window.caixasExportarGlobais.forEach(i => {
+            c += `${i.consolForn};${i.forn};${i.marca};${i.cod};${i.desc};${i.loc};${i.qtd};${i.status};${i.stPront};${i.stCol};${i.stEnt};${i.dtPlan};${i.dtReal};${i.nf}\n`;
+        });
+        let a = document.createElement("a"); 
+        a.href = URL.createObjectURL(new Blob([c], {type:'text/csv;charset=utf-8;'})); 
+        a.download = `Acompanhamento_Caixas_${new Date().toISOString().split('T')[0]}.csv`; 
+        a.click();
+    };
+
+    window.renderTabelaCaixas = function() {
+        if(!window.DADOS_CAIXAS_CACHE) return;
+
+        let hoje = new Date(); hoje.setHours(0,0,0,0);
+        let hojeIso = hoje.toISOString().split('T')[0];
+
+        let calcStatusPrazo = (dtPlan, dtReal) => {
+            if (dtReal && dtReal !== "null" && /^\d{4}-\d{2}-\d{2}$/.test(dtReal)) {
+                if (dtPlan && dtPlan !== "null" && /^\d{4}-\d{2}-\d{2}$/.test(dtPlan)) {
+                    if (dtReal > dtPlan) return "Concluído Fora do Prazo";
+                    else return "Concluído no Prazo";
+                }
+                return "Concluído";
+            }
+            if (!dtPlan || dtPlan === "null" || !/^\d{4}-\d{2}-\d{2}$/.test(dtPlan)) return "S/ Data"; 
+            
+            let p = dtPlan.split('-');
+            let d = new Date(p[0], p[1]-1, p[2]);
+            d.setHours(0,0,0,0);
+            let diff = Math.ceil((d.getTime() - hoje.getTime()) / 86400000);
+            
+            if (diff < 0) return "Em atraso";
+            if (diff <= 7) return "Próximos 7 dias";
+            return "No prazo";
+        };
+
+        let safeIso = (raw) => {
+            if (!raw || String(raw).trim() === "") return null;
+            let str = String(raw).trim();
+            let iso = typeof extrairDataISO === "function" ? extrairDataISO(str) : null;
+            if (iso) return iso;
+            let splitT = str.split("T")[0];
+            if (/^\d{4}-\d{2}-\d{2}$/.test(splitT)) return splitT;
+            return str;
+        };
+
+        if (!window.filtrosCxIniciados) {
+            Object.keys(window.listasMultiCx).forEach(k => window.listasMultiCx[k].clear());
+            
+            window.DADOS_CAIXAS_CACHE.forEach(l => {
+                let prPlan = safeIso(l["Prontidão planejada"]);
+                let prReal = safeIso(l["Prontidão real"]);
+                let colPlan = safeIso(l["Coleta planejada"]);
+                let colReal = safeIso(l["Coleta realizada"]);
+                let entPlan = safeIso(l["Entrega planejada"]);
+                let entReal = safeIso(l["Entrega realizada"]);
+
+                l._stProntPlan = calcStatusPrazo(prPlan, prReal);
+                l._stColPlan = calcStatusPrazo(colPlan, colReal);
+                l._stEntPlan = calcStatusPrazo(entPlan, entReal);
+
+                Object.keys(window.mapCamposCx).forEach(k => {
+                    let val = String(l[window.mapCamposCx[k]] || "").trim();
+                    if(!val || val === "undefined" || val === "-") val = "(Vazio)"; 
+                    window.listasMultiCx[k].add(val);
+                });
+            });
+
+            let container = document.getElementById('containerFiltrosMultiCx');
+            let htmlFiltros = "";
+            Object.keys(window.listasMultiCx).forEach(key => {
+                let idCat = key.replace(/\s+/g, '').replace('.', ''); 
+                htmlFiltros += `
+                <div class="relative filtro-container-cx z-[60]">
+                    <button id="btn-filtro-cx-${idCat}" onclick="window.toggleFilterMenuCx('${idCat}', event)" class="bg-white border border-slate-300 px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1 shadow-sm uppercase tracking-wide transition-colors">
+                        ${key} <span class="text-[8px] opacity-60">▼</span>
+                    </button>
+                    <div id="menu-cx-${idCat}" class="menu-filtro-cx hidden absolute left-0 top-[calc(100%+4px)] bg-white border border-slate-200 shadow-xl rounded-xl w-60 p-2">
+                        <div class="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
+                            <button onclick="window.checkAllCx('${idCat}', true)" class="text-[9px] font-bold text-emerald-600 hover:underline px-1 py-0.5">Marcar Todos</button>
+                            <button onclick="window.checkAllCx('${idCat}', false)" class="text-[9px] font-bold text-red-600 hover:underline px-1 py-0.5">Desmarcar</button>
+                        </div>
+                        <div class="max-h-48 overflow-y-auto scroller space-y-1 pr-1">
+                            ${Array.from(window.listasMultiCx[key]).sort().map(val => `
+                                <div class="flex justify-between items-center hover:bg-slate-50 p-1 rounded border border-transparent hover:border-slate-100 group/item">
+                                    <label class="flex items-start gap-2 text-[10px] cursor-pointer font-semibold text-slate-700 flex-1">
+                                        <input type="checkbox" value="${val}" class="chk-cx-${idCat} mt-0.5" checked onchange="window.renderTabelaCaixas()">
+                                        <span class="whitespace-normal leading-tight">${val}</span>
+                                    </label>
+                                    <button onclick="window.checkOnlyCx('${idCat}', '${val}')" class="hidden group-hover/item:block text-[8px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-bold border border-indigo-100">Único</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>`;
+            });
+            if(container) container.innerHTML = htmlFiltros;
+            window.filtrosCxIniciados = true;
+        }
+
+        const getSelectedCx = (idCat) => new Set(Array.from(document.querySelectorAll(`.chk-cx-${idCat}:checked`)).map(cb => cb.value));
+        let selFilters = {};
+        Object.keys(window.listasMultiCx).forEach(k => { 
+            let idCat = k.replace(/\s+/g, '').replace('.', '');
+            selFilters[k] = getSelectedCx(idCat); 
+            let btn = document.getElementById(`btn-filtro-cx-${idCat}`);
+            if (btn) {
+                if (selFilters[k].size < window.listasMultiCx[k].size) {
+                    btn.classList.add('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
+                    btn.classList.remove('bg-white', 'border-slate-300', 'text-slate-700');
+                } else {
+                    btn.classList.add('bg-white', 'border-slate-300', 'text-slate-700');
+                    btn.classList.remove('bg-indigo-50', 'border-indigo-400', 'text-indigo-800');
+                }
+            }
+        });
+
+        let busca = document.getElementById('buscaCaixas') ? document.getElementById('buscaCaixas').value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+        let fDtIni = document.getElementById('fCxDtIni').value;
+        let fDtFim = document.getElementById('fCxDtFim').value;
+        
+        let kpis = { tot: 0, prod: 0, ent: 0, atr: 0, volTot: 0, volProd: 0, volEnt: 0, volAtr: 0 };
+        let adr = {
+            pront: { reqTot: 0, volTot: 0, reqOk: 0, volOk: 0 },
+            colet: { reqTot: 0, volTot: 0, reqOk: 0, volOk: 0 },
+            entre: { reqTot: 0, volTot: 0, reqOk: 0, volOk: 0 }
+        };
+
+        window.caixasExportarGlobais = [];
+        let html = "";
+
+        const badgeColor = (st) => {
+            if(st === "S/ Data") return "bg-slate-100 text-slate-500 border-slate-200";
+            if(st === "Em atraso") return "bg-red-100 text-red-700 border-red-200";
+            if(st === "Próximos 7 dias") return "bg-amber-100 text-amber-700 border-amber-200";
+            if(st === "Concluído no Prazo") return "bg-indigo-100 text-indigo-700 border-indigo-200";
+            if(st === "Concluído Fora do Prazo") return "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200";
+            if(st === "Concluído") return "bg-indigo-100 text-indigo-700 border-indigo-200";
+            return "bg-emerald-100 text-emerald-700 border-emerald-200"; 
+        };
+
+        window.DADOS_CAIXAS_CACHE.forEach(c => {
+            let matchAll = true;
+            Object.keys(selFilters).forEach(k => {
+                let valPlanilha = String(c[window.mapCamposCx[k]] || "").trim();
+                if(!valPlanilha || valPlanilha === "undefined" || valPlanilha === "-") valPlanilha = "(Vazio)"; 
+                if (!selFilters[k].has(valPlanilha)) matchAll = false;
+            });
+            if (!matchAll) return;
+
+            let dtFormIso = typeof extrairDataISO === "function" ? extrairDataISO(c["Data de formalização"]) : (c["Data de formalização"] ? String(c["Data de formalização"]).split("T")[0] : null);
+            if (fDtIni && dtFormIso && dtFormIso < fDtIni) return;
+            if (fDtFim && dtFormIso && dtFormIso > fDtFim) return;
+
+            let consolForn = String(c["Consolidado fornecedores"] || "").trim(); // NOVA COLUNA
+            let forn = String(c["Fornecedor de saída"] || "").trim();
+            let marca = String(c["Marca"] || "").trim();
+            let cod = String(c["Código"] || "").trim();
+            let desc = String(c["Descrição"] || "").trim();
+            let loc = String(c["Local de Entrega"] || "").trim();
+
+            let textoBusca = `${cod} ${desc} ${forn} ${consolForn} ${marca}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            if (busca !== "" && !textoBusca.includes(busca)) return;
+
+            let qtd = window.arredondar(c["Quantidade"]);
+            let status = String(c["Status solicitação"] || "-").trim();
+            let stLow = status.toLowerCase();
+            
+            let dtEntPlan = safeIso(c["Entrega planejada"]);
+            let dtEntReal = safeIso(c["Entrega realizada"]);
+            let dtProntPlan = safeIso(c["Prontidão planejada"]);
+            let dtProntReal = safeIso(c["Prontidão real"]);
+            let dtColPlan = safeIso(c["Coleta planejada"]);
+            let dtColReal = safeIso(c["Coleta realizada"]);
+            
+            kpis.tot++; kpis.volTot += qtd;
+            let taAtrasado = false;
+
+            let realIsDate = dtEntReal && /^\d{4}-\d{2}-\d{2}$/.test(dtEntReal);
+
+            if (stLow.includes("entregue") || stLow.includes("concluid") || realIsDate) {
+                kpis.ent++; kpis.volEnt += qtd;
+                status = status === "-" ? "Entregue" : status;
+            } else {
+                kpis.prod++; kpis.volProd += qtd;
+                if (dtEntPlan) {
+                    let planIsDate = /^\d{4}-\d{2}-\d{2}$/.test(dtEntPlan);
+                    if (!planIsDate || dtEntPlan < hojeIso) { 
+                        kpis.atr++; kpis.volAtr += qtd; taAtrasado = true; 
+                    }
+                }
+            }
+
+            const evalPrazo = (plan, real, obj) => {
+                let hasPlan = plan && plan !== "null" && plan !== "-";
+                let hasReal = real && real !== "null" && real !== "-";
+                if (!hasPlan && !hasReal) return; 
+
+                obj.reqTot++; obj.volTot += qtd;
+                let isNoPrazo = false;
+                let planIsDate = hasPlan && /^\d{4}-\d{2}-\d{2}$/.test(plan);
+                let realIsDate = hasReal && /^\d{4}-\d{2}-\d{2}$/.test(real);
+
+                if (hasPlan && !planIsDate) isNoPrazo = false;
+                else if (hasReal && !realIsDate) isNoPrazo = false;
+                else if (realIsDate && planIsDate) isNoPrazo = real <= plan; 
+                else if (realIsDate && !hasPlan) isNoPrazo = true; 
+                else if (!hasReal && planIsDate) isNoPrazo = plan >= hojeIso; 
+                
+                if (isNoPrazo) { obj.reqOk++; obj.volOk += qtd; }
+            };
+
+            evalPrazo(dtProntPlan, dtProntReal, adr.pront);
+            evalPrazo(dtColPlan, dtColReal, adr.colet);
+            evalPrazo(dtEntPlan, dtEntReal, adr.entre);
+
+            let formatarDT = (val) => {
+                if(!val || val === "null") return "-";
+                if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                    let p = val.split('-'); return `${p[2]}/${p[1]}/${p[0]}`;
+                }
+                return val;
+            };
+            
+            let nf = String(c["NF de faturamento"] || "-").trim();
+            let corStatus = stLow.includes("entregue") || stLow.includes("conclui") ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : (taAtrasado ? "bg-red-100 text-red-800 border border-red-300" : "bg-amber-100 text-amber-800 border border-amber-200");
+
+            window.caixasExportarGlobais.push({
+                consolForn, forn, marca, cod, desc: String(desc).replace(/;/g, ","), loc, qtd, status, 
+                stPront: c._stProntPlan, stCol: c._stColPlan, stEnt: c._stEntPlan, 
+                dtPlan: formatarDT(dtEntPlan), dtReal: formatarDT(dtEntReal), nf
+            });
+
+            html += `<tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                <td class="p-2 font-black text-[10px] text-indigo-700 bg-slate-50 border-r border-slate-100">${consolForn || "-"}</td>
+                <td class="p-2 font-bold text-slate-700 border-r border-slate-100">${forn || "-"}</td>
+                <td class="p-2 border-r border-slate-100"><span class="font-bold">${marca || "-"}</span><br><span class="text-[8px] text-slate-500">${loc}</span></td>
+                <td class="p-2 border-r border-slate-100"><span class="font-bold text-indigo-700">${cod || "-"}</span><br><span class="text-[8px] text-slate-500 truncate max-w-[150px] block" title="${desc}">${desc}</span></td>
+                <td class="p-2 text-right font-black text-slate-700 bg-slate-50 border-r border-slate-100">${window.formatarBR(qtd)}</td>
+                <td class="p-2 text-center border-r border-slate-100"><span class="px-2 py-0.5 rounded shadow-sm text-[9px] font-bold ${corStatus}">${status}</span></td>
+                
+                <td class="p-2 text-center border-r border-slate-100"><span class="px-2 py-0.5 rounded shadow-sm text-[9px] font-bold border ${badgeColor(c._stProntPlan)}">${c._stProntPlan}</span></td>
+                <td class="p-2 text-center border-r border-slate-100"><span class="px-2 py-0.5 rounded shadow-sm text-[9px] font-bold border ${badgeColor(c._stColPlan)}">${c._stColPlan}</span></td>
+                <td class="p-2 text-center border-r border-slate-100"><span class="px-2 py-0.5 rounded shadow-sm text-[9px] font-bold border ${badgeColor(c._stEntPlan)}">${c._stEntPlan}</span></td>
+
+                <td class="p-2 text-center font-mono font-bold text-amber-700 bg-amber-50/30 border-r border-slate-100">${formatarDT(dtEntPlan)}</td>
+                <td class="p-2 text-center font-mono font-bold text-emerald-700 bg-emerald-50/30 border-r border-slate-100">${formatarDT(dtEntReal)}</td>
+                <td class="p-2 text-center font-mono font-bold text-slate-600">${nf}</td>
+            </tr>`;
+        });
+
+        const upKpi = (id, reqs, vols) => {
+            let el = document.getElementById(id);
+            if(el) el.innerHTML = `${window.formatarBR(reqs)} <span class="block text-[10px] font-bold opacity-60 mt-0.5 tracking-wider uppercase">Vol: ${window.formatarBR(vols)}</span>`;
+        };
+        upKpi('kpiCxTotal', kpis.tot, kpis.volTot);
+        upKpi('kpiCxProd', kpis.prod, kpis.volProd);
+        upKpi('kpiCxEnt', kpis.ent, kpis.volEnt);
+        upKpi('kpiCxAtr', kpis.atr, kpis.volAtr);
+        
+        document.getElementById('tbCaixasCorpo').innerHTML = html || `<tr><td colspan="12" class="p-4 text-center font-bold text-slate-400">Nenhum pedido atende aos filtros.</td></tr>`;
+
+        const renderBlockAdr = (title, objAdr, icon) => {
+            let pR = objAdr.reqTot > 0 ? ((objAdr.reqOk / objAdr.reqTot) * 100).toFixed(1) : 0;
+            let pV = objAdr.volTot > 0 ? ((objAdr.volOk / objAdr.volTot) * 100).toFixed(1) : 0;
+            let colorReq = pR >= 90 ? 'text-emerald-600' : (pR >= 70 ? 'text-amber-500' : 'text-red-500');
+            let colorVol = pV >= 90 ? 'text-emerald-600' : (pV >= 70 ? 'text-amber-500' : 'text-red-500');
+
+            return `
+            <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-xl">${icon}</span>
+                    <h4 class="text-[10px] font-black text-slate-600 uppercase tracking-widest leading-tight">${title}</h4>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Por Pedidos</p>
+                        <p class="text-2xl font-black ${colorReq} leading-none">${objAdr.reqTot > 0 ? pR + '%' : '-'}</p>
+                        <p class="text-[9px] font-semibold text-slate-500 mt-1">${window.formatarBR(objAdr.reqOk)} de ${window.formatarBR(objAdr.reqTot)}</p>
+                    </div>
+                    <div>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Por Volume (Qtd)</p>
+                        <p class="text-2xl font-black ${colorVol} leading-none">${objAdr.volTot > 0 ? pV + '%' : '-'}</p>
+                        <p class="text-[9px] font-semibold text-slate-500 mt-1">${window.formatarBR(objAdr.volOk)} de ${window.formatarBR(objAdr.volTot)}</p>
+                    </div>
+                </div>
+            </div>`;
+        };
+
+        let adrHtml = renderBlockAdr("Prontidão Produção", adr.pront, "🏭");
+        adrHtml += renderBlockAdr("Coleta das Caixas", adr.colet, "🚛");
+        adrHtml += renderBlockAdr("Entrega no Destino", adr.entre, "📍");
+        document.getElementById('containerAderenciaCaixas').innerHTML = adrHtml;
+    };
+</script>

@@ -1,0 +1,103 @@
+<div id="abaHome" class="aba-conteudo h-full flex flex-col bg-neutral-100 overflow-y-auto scroller p-6 md:p-10 relative">
+                <div class="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-black to-neutral-100 z-0"></div>
+                
+                <div class="max-w-7xl mx-auto w-full relative z-10">
+                    <header class="mb-10 text-center md:text-left mt-4">
+                        <h1 class="text-3xl md:text-4xl font-black text-white tracking-tight drop-shadow-md">Portal da Produção Gráfica</h1>
+                        <p class="text-sm font-bold text-red-400 uppercase tracking-widest mt-2 drop-shadow">Selecione um módulo abaixo para começar</p>
+                    </header>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        
+                        <div class="bg-white rounded-2xl shadow-lg border border-neutral-200 overflow-hidden hover:-translate-y-1 transition-transform duration-300 xl:col-span-1">
+                            <div class="bg-neutral-900 p-5 border-b-4 border-red-600">
+                                <h2 class="text-xl font-black text-white flex items-center gap-2">📋 Pré-Produção</h2>
+                            </div>
+                            <div class="p-5 flex flex-col gap-2">
+                                <div class="bg-neutral-50 p-3 rounded-xl border border-neutral-200 mb-2">
+                                    <p class="text-[9px] font-black text-neutral-400 uppercase tracking-widest mb-2 ml-1">Fase: Planejamento</p>
+                                    <button onclick="abrirGraficoDaHome('abaFalhasPlan')" class="w-full text-left px-3 py-2 bg-white hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300 mb-2 shadow-sm">📋 Planejamento e Falhas</button>
+                                    <button onclick="abrirGraficoDaHome('abaQualidade')" class="w-full text-left px-3 py-2 bg-white hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300 shadow-sm">💎 ICP & Acurácia</button>
+                                </div>
+
+                                
+                                <div class="bg-neutral-50 p-3 rounded-xl border border-neutral-200">
+                                    <p class="text-[9px] font-black text-neutral-400 uppercase tracking-widest mb-2 ml-1">Fase: Arquivos</p>
+                                    <button onclick="navegarDaHome('viewPreProd', 'resumo')" class="w-full text-left px-3 py-2 bg-white hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300 mb-2 shadow-sm">📈 Resumo Executivo</button>
+                                    <button onclick="navegarDaHome('viewPreProd', 'wip')" class="w-full text-left px-3 py-2 bg-white hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300 mb-2 shadow-sm">📁 WIP (Andamento)</button>
+                                    <button onclick="navegarDaHome('viewPreProd', 'aderencia')" class="w-full text-left px-3 py-2 bg-white hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300 shadow-sm">📉 Aderência & Produt.</button>
+                                </div>
+
+                                    <div class="bg-neutral-50 p-3 rounded-xl border border-neutral-200 mt-2">
+                                    <p class="text-[9px] font-black text-neutral-400 uppercase tracking-widest mb-2 ml-1">Fase: Caixas & Papel</p>
+                                    <button class="w-full text-left px-3 py-2 bg-neutral-100 text-xs font-bold text-neutral-400 rounded-lg border border-neutral-200 mb-2 cursor-not-allowed">📦 Acompanhamento (Em validação final)</button>
+                                    <button class="w-full text-left px-3 py-2 bg-neutral-100 text-xs font-bold text-neutral-400 rounded-lg border border-neutral-200 cursor-not-allowed">📄 Pendências de Papel (Em Breve)</button>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl shadow-lg border border-neutral-200 overflow-hidden hover:-translate-y-1 transition-transform duration-300 xl:col-span-1">
+        <div class="bg-neutral-900 p-5 border-b-4 border-red-600">
+            <h2 class="text-xl font-black text-white flex items-center gap-2">⚙️ Produção</h2>
+        </div>
+        <div class="p-5 flex flex-col gap-2">
+            <button onclick="abrirGraficoDaHome('abaFunil')" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">🔽 Funil de Produção</button>
+            <button onclick="abrirGraficoDaHome('abaMatriz')" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">🔀 Status WIP & Cascata</button>
+            <button onclick="abrirGraficoDaHome('abaGeral')" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">📈 Ritmo e Curva S</button>
+            <button onclick="abrirGraficoDaHome('abaGiroSemanal')" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">🌪️ Giro Diario (Backlogs)</button>
+            <button onclick="abrirGraficoDaHome('abaEficiencia')" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">⏱️ Eficiência & Lead Time</button>
+            <button onclick="abrirGraficoDaHome('abaMetaCD')" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">🎯 Risco Meta Armazém</button>
+            <button onclick="abrirGraficoDaHome('abaOtif')" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">🏆 OTIF (Entregas CD)</button>
+            <button onclick="abrirGraficoDaHome('abaOKRQ2')" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">🎯 Aderência de Metas</button>
+            <button onclick="abrirGraficoDaHome('abaCockpit')" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">✈️ Cockpit</button>
+            <button onclick="abrirGrafico('abaPlan', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📅 Backlog & Pipeline</button>
+        </div>
+    </div>
+
+                        <div class="flex flex-col gap-6 xl:col-span-1">
+    <div class="bg-white rounded-2xl shadow-lg border border-neutral-200 overflow-hidden hover:-translate-y-1 transition-transform duration-300 xl:col-span-1">
+        <div class="bg-neutral-900 p-5 border-b-4 border-red-600">
+            <h2 class="text-lg font-black text-white flex items-center gap-2">⚠️ Qualidade</h2>
+        </div>
+        <div class="p-5 flex flex-col gap-2">
+            <!-- BOTÕES ATIVOS -->
+            <button onclick="abrirGraficoDaHome('abaQualidadeReclamacoes', true)" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">⚠️ Reclamações 2026</button>
+            <button onclick="abrirGraficoDaHome('abaQualidadePPM', true)" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-red-50 hover:text-red-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-red-300">📊 Matriz PPM</button>
+            
+            <!-- BOTÕES "EM BREVE" -->
+            <button onclick="abrirGraficoDaHome('abaInspecaoCDs', true); iniciarAbaInspecaoCDs();" class="w-full text-left px-4 py-2.5 bg-neutral-50 hover:bg-indigo-50 hover:text-indigo-700 text-xs font-bold text-neutral-600 rounded-lg transition-colors border border-neutral-200 hover:border-indigo-300">🔎 Inspeções CDs</button>
+            <button class="w-full text-left px-4 py-2.5 bg-neutral-100 text-neutral-400 text-xs font-bold rounded-lg border border-neutral-200 cursor-not-allowed">🧐 Inspeções Gráficas (Em breve)</button>
+            <button class="w-full text-left px-4 py-2.5 bg-neutral-100 text-neutral-400 text-xs font-bold rounded-lg border border-neutral-200 cursor-not-allowed">📋 Gestão RNCs (Em breve)</button>
+        </div>
+        
+    </div>
+
+                        <div class="bg-white rounded-2xl shadow-lg border border-neutral-200 overflow-hidden hover:-translate-y-1 transition-transform duration-300 xl:col-span-1">
+                            <div class="bg-neutral-900 p-5 border-b-4 border-red-600">
+                                    <h2 class="text-lg font-black text-white flex items-center gap-2">🔄 Reentradas</h2>
+                                </div>
+                                <div class="p-5 flex flex-col gap-2">
+                                    <button disabled class="w-full text-left px-4 py-2.5 bg-neutral-100 text-neutral-400 text-xs font-bold rounded-lg border border-neutral-200 cursor-not-allowed shadow-sm">📊 Painel Gerencial (Em Breve)</button>
+                                    <button disabled class="w-full text-left px-4 py-2.5 bg-neutral-100 text-neutral-400 text-xs font-bold rounded-lg border border-neutral-200 cursor-not-allowed">🔄 Alocações de Reentradas (Em Breve)</button>
+                                    <button disabled class="w-full text-left px-4 py-2.5 bg-neutral-100 text-neutral-400 text-xs font-bold rounded-lg border border-neutral-200 cursor-not-allowed">🏭 Acomp. Produção (Em Breve)</button>
+                                    <button disabled class="w-full text-left px-4 py-2.5 bg-neutral-100 text-neutral-400 text-xs font-bold rounded-lg border border-neutral-200 cursor-not-allowed">🚨 Acomp. de Pendências (Em Breve)</button>
+                                </div>
+                            </div>
+
+                            <div class="bg-neutral-100 rounded-2xl border border-neutral-200 overflow-hidden opacity-70">
+                                <div class="bg-neutral-300 p-5 border-b border-neutral-400">
+                                    <h2 class="text-lg font-black text-neutral-600 flex items-center gap-2">🚚 Pós Produção</h2>
+                                </div>
+                                <div class="p-5 flex flex-col gap-2">
+                                    <button class="w-full text-left px-4 py-2.5 bg-neutral-200 text-xs font-bold text-neutral-400 rounded-lg cursor-not-allowed border border-neutral-300">📦 Pendente de entrega (Em Breve)</button>
+                                    <button class="w-full text-left px-4 py-2.5 bg-neutral-200 text-xs font-bold text-neutral-400 rounded-lg cursor-not-allowed border border-neutral-300">🗺️ Coletas mapa (Em Breve)</button>
+                                    <button class="w-full text-left px-4 py-2.5 bg-neutral-200 text-xs font-bold text-neutral-400 rounded-lg cursor-not-allowed border border-neutral-300">🏢 Internalização (Em Breve)</button>
+                                    <button class="w-full text-left px-4 py-2.5 bg-neutral-200 text-xs font-bold text-neutral-400 rounded-lg cursor-not-allowed border border-neutral-300">🚛 Transportes (Em Breve)</button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>

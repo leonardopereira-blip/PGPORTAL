@@ -1,0 +1,81 @@
+<div id="abaGeral" class="aba-conteudo hidden">
+              
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-500 flex justify-between items-center"><h3 class="text-slate-500 text-xs font-bold uppercase tracking-wider">Total SKUs</h3><p class="text-3xl font-black text-slate-800" id="kpiSkuTotal">-</p></div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-indigo-500 flex justify-between items-center"><h3 class="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Tiragem</h3><p class="text-3xl font-black text-slate-800" id="kpiTiragemTotal">-</p></div>
+                </div>
+                
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-8">
+                    <h2 class="text-sm font-bold text-slate-700 uppercase mb-1">Ritmo de Produção (Status Até Hoje)</h2>
+                    <p class="text-[10px] text-slate-400 mb-3 border-b border-slate-100 pb-2">Volume planejado para entrega até a data atual vs Volume realizado. A linha preta indica a % de Aderência (Entregas No Prazo).</p>
+                    <div class="relative h-80 w-full"><canvas id="graficoRitmo"></canvas></div>
+                </div>
+
+
+                
+                <h2 class="text-sm font-bold mb-3 text-slate-700 flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Visão Realizada (Pronto)</h2>
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3 mb-6" id="containerRealizados"></div>
+                
+                <h2 class="text-sm font-bold mb-3 text-slate-700 flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Fila de Trabalho (Pendentes e Atrasos)</h2>
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3 mb-8" id="containerPendentes"></div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 border-b border-slate-100 pb-4 gap-4">
+                        <div><h2 class="text-sm font-bold text-slate-700 uppercase">Curva Acumulada S (100%) Multilinhas</h2><p class="text-[10px] text-slate-400 mt-1">Selecione as fases abaixo. <span class="font-bold text-slate-600">Sólida = Realizado</span> | <span class="font-bold border-b border-dashed border-slate-400 text-slate-600">Pontilhada = Planejado</span>.</p></div>
+                        <div id="containerCheckboxesCurvaS" class="flex flex-wrap gap-2 text-xs font-semibold"></div>
+                    </div>
+                    <div class="relative h-80 w-full"><canvas id="graficoCurvaS"></canvas></div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-6 mb-6">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+                        <div class="flex justify-between items-end mb-3 border-b border-slate-100 pb-2">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-700 uppercase">Aderência D-1 (Gráfica)</h3>
+                                <p class="text-[9px] text-slate-500">Meta: O que estava planejado até Ontem já foi feito? (Ideal 100%)</p>
+                            </div>
+                        </div>
+                        <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-500 uppercase border-b-2 border-slate-300 text-[9px]" id="thAderOntemG"></thead>
+                            <tbody id="tbAderOntemG" class="text-slate-700"></tbody>
+                        </table>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+                        <div class="flex justify-between items-end mb-3 border-b border-slate-100 pb-2">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-700 uppercase">Aderência D-1 (Marca)</h3>
+                                <p class="text-[9px] text-slate-500">Meta: O que estava planejado até Ontem já foi feito? (Ideal 100%)</p>
+                            </div>
+                        </div>
+                        <table class="w-full text-left border-collapse text-xs whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-500 uppercase border-b-2 border-slate-300 text-[9px]" id="thAderOntemM"></thead>
+                            <tbody id="tbAderOntemM" class="text-slate-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller mb-8">
+                    <div class="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-700 uppercase">⚠️ Lista de Atrasos (Gargalos Ativos D-1)</h3>
+                            <p class="text-[9px] text-slate-500">Mostra apenas a fase atual em que o material está travado e atrasado.</p>
+                        </div>
+                        <button onclick="exportarAderenciaOntemCSV()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm transition-colors flex items-center gap-1">📥 Baixar Lista (CSV)</button>
+                    </div>
+                    <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap">
+                        <thead class="bg-slate-100 text-slate-500 uppercase border-b-2 border-slate-300 text-[9px] sticky top-0 shadow-sm z-10">
+                            <tr>
+                                <th class="p-2 border-r border-slate-200">Gráfica</th>
+                                <th class="p-2 border-r border-slate-200">Marca</th>
+                                <th class="p-2 border-r border-slate-200">SKU / Descrição</th>
+                                <th class="p-2 border-r border-slate-200 font-bold text-indigo-700">Fase Atrasada</th>
+                                <th class="p-2 border-r border-slate-200 text-center">Dt Baseline</th>
+                                <th class="p-2 border-r border-slate-200 text-center">Dt Re-Plan</th>
+                                <th class="p-2 border-r border-slate-200 text-center text-red-600">Dias Atraso</th>
+                                <th class="p-2 text-right">Tiragem Presa</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbAtrasosOntem" class="text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>

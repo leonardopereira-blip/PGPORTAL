@@ -1,0 +1,99 @@
+<div id="abaReentradasProducao" class="aba-conteudo hidden h-full flex flex-col">
+                
+                <div class="bg-white shadow-sm border-b border-neutral-200 flex-shrink-0 z-20 relative p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 class="text-xl font-black text-neutral-900 tracking-tight">🏭 Produção de Chamados (Status & Prazos)</h2>
+                        <p class="text-[10px] font-bold text-red-600 uppercase tracking-widest mt-1">Acompanhamento detalhado, indicadores de SLAs e visão de coleta por semana.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="atualizarProducaoChamados()" class="bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1">🔄 Sincronizar Base</button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-4 md:p-6 scroller bg-neutral-100">
+                    
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 mb-6">
+                        
+                        <div class="flex flex-wrap items-center gap-4 mb-4 pb-4 border-b border-neutral-100 text-[10px] font-semibold text-neutral-600">
+                            <span class="font-black text-neutral-800 uppercase tracking-widest mr-2">Legenda:</span>
+                            <div class="flex items-center gap-1">🟢 <span class="ml-1">No Prazo / Seguro</span></div>
+                            <div class="flex items-center gap-1">🟡 <span class="ml-1">Atenção / Atr. s/ Impacto</span></div>
+                            <div class="flex items-center gap-1">🔴 <span class="ml-1">Atrasado / Crítico</span></div>
+                            <div class="flex items-center gap-1">⚫ <span class="ml-1">Em Alocação</span></div>
+                            <div class="flex items-center gap-1">⭕ <span class="ml-1">Faltam Dados</span></div>
+                            <div class="flex items-center gap-1">🔵 <span class="ml-1">Em Validação</span></div>
+                            <div class="flex items-center gap-1">✅ <span class="ml-1">Validado</span></div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3 text-[10px] uppercase font-bold text-neutral-500">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Filtros:</span>
+                                <div id="containerFiltrosMultiProd" class="flex flex-wrap gap-2 relative z-50"></div>
+                            </div>
+                            
+                            <div class="w-px h-6 bg-slate-200 mx-2"></div>
+                            
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="fpId" onkeyup="processarReentradasProducao()" placeholder="Buscar ID..." class="bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-1.5 w-32 text-neutral-800 outline-none focus:border-indigo-500 transition-colors shadow-sm">
+                            </div>
+                            
+                            <button onclick="limparFiltrosProdChamados()" class="bg-neutral-200 hover:bg-neutral-300 text-neutral-700 px-3 py-1.5 rounded-lg transition-colors ml-auto shadow-sm">Limpar Tudo</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-6">
+                        <div class="bg-slate-50 p-3 border-b border-slate-200">
+                            <h3 class="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">📅 Volume por Semana de Coleta (Visão Gráfica)</h3>
+                        </div>
+                        <div class="overflow-x-auto scroller">
+                            <table class="w-full text-left border-collapse whitespace-nowrap">
+                                <thead class="bg-slate-100 text-slate-600 uppercase text-[9px]" id="thVolumeSemanas"></thead>
+                                <tbody id="tbVolumeSemanas"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-8">
+                        <div class="bg-slate-50 p-3 border-b border-slate-200">
+                            <h3 class="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">📅 Volume por Semana de Coleta (Visão Resp. Chamado)</h3>
+                        </div>
+                        <div class="overflow-x-auto scroller">
+                            <table class="w-full text-left border-collapse whitespace-nowrap">
+                                <thead class="bg-slate-100 text-slate-600 uppercase text-[9px]" id="thVolumeSemanasResp"></thead>
+                                <tbody id="tbVolumeSemanasResp"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-8">
+                        <div class="p-3 border-b border-slate-200 bg-slate-50">
+                            <h3 class="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">📊 Resumo de Indicadores por Categoria (WIP)</h3>
+                        </div>
+                        <div class="overflow-x-auto scroller pb-20"> <table class="w-full text-left border-collapse whitespace-nowrap text-[10px]">
+                                <thead class="bg-slate-100 text-slate-600 uppercase text-[9px]">
+                                    <tr>
+                                        <th class="p-2 border-r border-slate-200">Categoria</th>
+                                        <th class="p-2 border-r border-slate-200 text-center">Solicitação x SLA</th>
+                                        <th class="p-2 border-r border-slate-200 text-center">Alocação x Solicitação</th>
+                                        <th class="p-2 border-r border-slate-200 text-center">Entrega prevista x Prazo Alocação</th>
+                                        <th class="p-2 text-center">Validação de Custos</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbResumoGeral" class="text-slate-700 font-medium"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 mb-4 mt-8 border-b border-neutral-300 pb-2">
+                        <h2 class="text-lg font-black text-neutral-800">📁 Detalhamento por Categoria</h2>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-6"><div class="bg-neutral-800 p-3 flex justify-between items-center border-b border-neutral-700"><h3 class="text-xs font-black text-white uppercase tracking-widest">🚨 Reentradas P0</h3><span id="badge-tbProdP0" class="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">0</span></div><div class="overflow-x-auto scroller min-h-[250px]"><table class="w-full text-left border-collapse whitespace-nowrap"><thead class="bg-neutral-100 text-neutral-500 uppercase text-[9px] thead-padrao"></thead><tbody id="tbProdP0"></tbody></table></div></div>
+                    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-6"><div class="bg-rose-900 p-3 flex justify-between items-center border-b border-rose-800"><h3 class="text-xs font-black text-white uppercase tracking-widest">⚠️ Reentradas Rupturas</h3><span id="badge-tbProdRupturas" class="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">0</span></div><div class="overflow-x-auto scroller min-h-[250px]"><table class="w-full text-left border-collapse whitespace-nowrap"><thead class="bg-rose-50 text-rose-700 uppercase text-[9px] thead-padrao"></thead><tbody id="tbProdRupturas"></tbody></table></div></div>
+                    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-6"><div class="bg-amber-600 p-3 flex justify-between items-center border-b border-amber-500"><h3 class="text-xs font-black text-white uppercase tracking-widest">🛡️ Preventiva + Defeito Gráfico</h3><span id="badge-tbProdPrevDef" class="bg-amber-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">0</span></div><div class="overflow-x-auto scroller min-h-[250px]"><table class="w-full text-left border-collapse whitespace-nowrap"><thead class="bg-amber-50 text-amber-700 uppercase text-[9px] thead-padrao"></thead><tbody id="tbProdPrevDef"></tbody></table></div></div>
+                    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-6"><div class="bg-emerald-700 p-3 flex justify-between items-center border-b border-emerald-600"><h3 class="text-xs font-black text-white uppercase tracking-widest">👐 Manuseios</h3><span id="badge-tbProdManuseios" class="bg-emerald-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">0</span></div><div class="overflow-x-auto scroller min-h-[250px]"><table class="w-full text-left border-collapse whitespace-nowrap"><thead class="bg-emerald-50 text-emerald-700 uppercase text-[9px] thead-padrao"></thead><tbody id="tbProdManuseios"></tbody></table></div></div>
+                    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-6"><div class="bg-indigo-700 p-3 flex justify-between items-center border-b border-indigo-600"><h3 class="text-xs font-black text-white uppercase tracking-widest">🔠 Adaptados</h3><span id="badge-tbProdAdaptados" class="bg-indigo-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">0</span></div><div class="overflow-x-auto scroller min-h-[250px]"><table class="w-full text-left border-collapse whitespace-nowrap"><thead class="bg-indigo-50 text-indigo-700 uppercase text-[9px] thead-padrao"></thead><tbody id="tbProdAdaptados"></tbody></table></div></div>
+                    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-10"><div class="bg-slate-500 p-3 flex justify-between items-center border-b border-slate-400"><h3 class="text-xs font-black text-white uppercase tracking-widest">📌 Spots / Demais</h3><span id="badge-tbProdSpots" class="bg-slate-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">0</span></div><div class="overflow-x-auto scroller min-h-[250px]"><table class="w-full text-left border-collapse whitespace-nowrap"><thead class="bg-slate-100 text-slate-500 uppercase text-[9px] thead-padrao"></thead><tbody id="tbProdSpots"></tbody></table></div></div>
+
+                </div>
+            </div>

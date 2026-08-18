@@ -1,0 +1,204 @@
+<script>
+window.filtrosInspIniciados = false;
+window.graficoInspPareto = null;
+window.graficoInspGraficas = null;
+window.graficoInspSemana = null;
+
+function iniciarAbaInspecaoCDs() {
+    console.log("=== DIAGNÓSTICO INSPEÇÕES CDS ===");
+    console.log("1. A variável de dados existe?", !!window.DADOS_INSPECOES_CACHE);
+    
+    if (window.DADOS_INSPECOES_CACHE) {
+        console.log("2. Quantas linhas de inspeção chegaram?", window.DADOS_INSPECOES_CACHE.length);
+        if (window.DADOS_INSPECOES_CACHE.length > 0) {
+            console.log("3. Amostra da 1ª linha:", window.DADOS_INSPECOES_CACHE[0]);
+        }
+    }
+    
+    if (!window.DADOS_INSPECOES_CACHE || window.DADOS_INSPECOES_CACHE.length === 0) {
+        console.error("❌ ERRO: O Google Sheets não enviou os dados! Verifique se a aba se chama exatamente 'qlogs_V4' (sem espaços no final).");
+        return;
+    }
+    
+    try {
+        processarInspecoesCDs();
+    } catch (erro) {
+        console.error("❌ ERRO AO MONTAR GRÁFICOS:", erro);
+    }
+}
+
+function processarInspecoesCDs() {
+    if (!window.DADOS_INSPECOES_CACHE) return;
+    let dados = window.DADOS_INSPECOES_CACHE;
+
+    if (!window.filtrosInspIniciados) {
+        let cds = new Set(), grafs = new Set(), marcas = new Set();
+        dados.forEach(l => {
+            let c = String(l["CD"] || "").trim(); let g = String(l["Gráfica"] || "").trim(); let m = String(l["Marca"] || "").trim();
+            if(c && c !== "undefined") cds.add(c); if(g && g !== "undefined") grafs.add(g); if(m && m !== "undefined") marcas.add(m);
+        });
+        const preencherSelect = (id, set, label) => {
+            let el = document.getElementById(id); if(!el) return;
+            let html = `<option value="TODOS">${label}</option>`;
+            Array.from(set).sort().forEach(i => html += `<option value="${i}">${i}</option>`);
+            el.innerHTML = html;
+        };
+        preencherSelect('filtroInspCD', cds, 'Todos os CDs');
+        preencherSelect('filtroInspGrafica', grafs, 'Todas as Gráficas');
+        preencherSelect('filtroInspMarca', marcas, 'Todas as Marcas');
+        window.filtrosInspIniciados = true;
+    }
+
+    let fCD = document.getElementById('filtroInspCD')?.value || "TODOS";
+    let fGraf = document.getElementById('filtroInspGrafica')?.value || "TODOS";
+    let fMarca = document.getElementById('filtroInspMarca')?.value || "TODOS";
+
+    let volTotal = 0, volAprovado = 0, volReprovado = 0, volPendente = 0;
+    let mapDesvios = {}, mapGraficas = {}, mapSemanas = {};
+    const colsDesvios = ["Páginas soltas", "Falta de páginas/caderno/capa/contra capa", "Erro de formação de kit (falta/sobra/troca/duplicado)", "Falta/mistura de kits/livros na caixa", "Furação (degolado/ausência de furo)", "Grampo (falha/ausência)", "Cola (ausência/excesso)", "Refile (sangria do conteúdo)", "Erro editorial", "Duplagem na impressão", "Capa ou miolo divergente", "Erro de projeto", "Shrink (ausência)", "Espiral (quebrado/curto)", "Cód. de barras (falha/erro)", "Impressão (ilegível)", "Capa/contra capa duplicada", "Sujo", "Atrito", "Espiral (marcas nos livros)", "Delaminado", "Riscado", "Amassado", "Rasgado", "Manchado", "Capa/contra capa/de ponta cabeça", "Falha/erro de cód. barras", "Impressão (falha)", "Refile (rebarbas/orelhas/emenda)", "Shrink (apertado/frouxo/rasgado)", "Furação (rebarbas)", "Miolo (desalinhado)", "Miolo (ponta cabeça)"];
+
+    dados.forEach(l => {
+        let cd = String(l["CD"] || "").trim(); let g = String(l["Gráfica"] || "").trim(); let m = String(l["Marca"] || "").trim();
+        let status = String(l["Status"] || "").trim().toLowerCase();
+        let tiragem = Number(l["Tiragem"]) || 0;
+        let dataRaw = l["Data de inicio da amostragem"];
+        
+        if (fCD !== "TODOS" && cd !== fCD) return;
+        if (fGraf !== "TODOS" && g !== fGraf) return;
+        if (fMarca !== "TODOS" && m !== fMarca) return;
+        
+        let dtObj = dataRaw ? new Date(dataRaw) : null;
+        if (dtObj && !isNaN(dtObj)) {
+            let diaSemana = dtObj.getDay();
+            let diff = dtObj.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
+            let segunda = new Date(dtObj.setDate(diff));
+            let semanaStr = segunda.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+            
+            if(!mapSemanas[semanaStr]) mapSemanas[semanaStr] = 0;
+            if (status.includes("aprovado") || status.includes("reprovado")) mapSemanas[semanaStr] += tiragem;
+        }
+
+        volTotal += tiragem;
+        if (status.includes("aprovado")) volAprovado += tiragem;
+        else if (status.includes("reprovado")) volReprovado += tiragem;
+        else volPendente += tiragem; 
+
+        if (!mapGraficas[g]) mapGraficas[g] = { aprovado: 0, inspecionado: 0 };
+        if (status.includes("aprovado") || status.includes("reprovado")) {
+            mapGraficas[g].inspecionado += tiragem;
+            if (status.includes("aprovado")) mapGraficas[g].aprovado += tiragem;
+        }
+
+        colsDesvios.forEach(desv => {
+            let val = Number(l[desv]) || 0;
+            if (val > 0) { if(!mapDesvios[desv]) mapDesvios[desv] = 0; mapDesvios[desv] += val; }
+        });
+    });
+
+    let volInspecionado = volAprovado + volReprovado;
+    let pAdesao = volTotal > 0 ? (volInspecionado / volTotal) * 100 : 0;
+    let pConformidade = volInspecionado > 0 ? (volAprovado / volInspecionado) * 100 : 0;
+
+    let formatNum = (n) => n.toLocaleString('pt-BR');
+    let formatPct = (n) => n.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%';
+
+    document.getElementById('kpiInspAdesao').innerText = formatPct(pAdesao); document.getElementById('kpiInspConformidade').innerText = formatPct(pConformidade);
+    document.getElementById('kpiInspReprovado').innerText = formatNum(volReprovado); document.getElementById('kpiInspTotal').innerText = formatNum(volInspecionado);
+
+    let elFunil = document.getElementById('containerFunilInspecao');
+    if (elFunil) {
+        let wTotal = 100; let wInsp = volTotal > 0 ? (volInspecionado / volTotal) * 100 : 0; let wAprov = volTotal > 0 ? (volAprovado / volTotal) * 100 : 0; let wReprov = volTotal > 0 ? (volReprovado / volTotal) * 100 : 0;
+        elFunil.innerHTML = `
+            <div class="w-full flex flex-col gap-2 items-center text-[12px] font-bold">
+                <div class="relative bg-slate-200 text-slate-700 h-8 flex items-center justify-center rounded transition-all" style="width: ${wTotal}%; min-width: 200px; white-space: nowrap;">Volume Total: ${formatNum(volTotal)}</div>
+                <div class="relative bg-indigo-200 text-indigo-800 h-8 flex items-center justify-center rounded transition-all" style="width: ${wInsp || 5}%; min-width: 180px; white-space: nowrap;">Inspecionado: ${formatNum(volInspecionado)}</div>
+                <div class="relative bg-emerald-200 text-emerald-800 h-8 flex items-center justify-center rounded transition-all" style="width: ${wAprov || 5}%; min-width: 180px; white-space: nowrap;">Aprovado: ${formatNum(volAprovado)}</div>
+                <div class="relative bg-rose-200 text-rose-800 h-8 flex items-center justify-center rounded transition-all" style="width: ${wReprov || 5}%; min-width: 180px; white-space: nowrap;">Reprovado: ${formatNum(volReprovado)}</div>
+                <div class="relative bg-amber-100 text-amber-700 h-8 flex items-center justify-center rounded border border-dashed border-amber-400 mt-2" style="width: 50%; min-width: 180px; white-space: nowrap;">Pendente: ${formatNum(volPendente)}</div>
+            </div>`;
+    }
+
+    if(window.graficoInspPareto) window.graficoInspPareto.destroy(); if(window.graficoInspGraficas) window.graficoInspGraficas.destroy(); if(window.graficoInspSemana) window.graficoInspSemana.destroy();
+
+    let arrPareto = Object.keys(mapDesvios).map(k => ({ desvio: k, val: mapDesvios[k] })).sort((a,b) => b.val - a.val);
+    if (arrPareto.length === 0) arrPareto = [{ desvio: 'Nenhum desvio', val: 0 }];
+    
+    let topPareto = arrPareto.slice(0, 15);
+    let totalPareto = arrPareto.reduce((s, d) => s + d.val, 0); let acumulado = 0; let dataParetoAcum = [];
+    topPareto.forEach(d => { acumulado += d.val; dataParetoAcum.push(totalPareto > 0 ? (acumulado / totalPareto) * 100 : 0); });
+
+    let ctxPareto = document.getElementById('graficoInspPareto')?.getContext('2d');
+    if (ctxPareto) {
+        window.graficoInspPareto = new Chart(ctxPareto, {
+            type: 'bar',
+            data: { labels: topPareto.map(d => d.desvio.length > 20 ? d.desvio.substring(0, 20)+'...' : d.desvio), datasets: [{ type: 'line', label: '% Acumulado', data: dataParetoAcum, borderColor: '#f59e0b', backgroundColor: '#f59e0b', yAxisID: 'y1', tension: 0.3 }, { type: 'bar', label: 'Qtd Desvios', data: topPareto.map(d => d.val), backgroundColor: '#ef4444', borderRadius: 4, yAxisID: 'y' }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { display: false } }, y1: { position: 'right', max: 100, grid: { display: false }, ticks: { callback: v => v+'%' } } }, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+
+    let arrGraf = Object.keys(mapGraficas).map(g => { 
+        let info = mapGraficas[g]; 
+        let reprov = info.inspecionado - info.aprovado;
+        return { g: g, aprov: info.aprovado, reprov: reprov, conf: info.inspecionado > 0 ? (info.aprovado / info.inspecionado)*100 : 0 }; 
+    }).filter(x => x.g !== "" && x.g !== "N/A" && x.g !== "undefined").sort((a,b) => b.conf - a.conf);
+    
+    if (arrGraf.length === 0) arrGraf = [{ g: 'Sem Dados', aprov: 0, reprov: 0, conf: 0 }];
+
+    let ctxGraficas = document.getElementById('graficoInspGraficas')?.getContext('2d');
+    if (ctxGraficas) {
+        window.graficoInspGraficas = new Chart(ctxGraficas, {
+            type: 'bar', 
+            data: { 
+                labels: arrGraf.map(x => x.g), 
+                datasets: [
+                    { type: 'line', label: '% Conformidade', data: arrGraf.map(x => x.conf), borderColor: '#10b981', backgroundColor: '#10b981', borderWidth: 2, pointBackgroundColor: '#ffffff', pointBorderColor: '#10b981', pointRadius: 4, pointHoverRadius: 6, tension: 0.4, yAxisID: 'y1' },
+                    { type: 'bar', label: 'Vol. Aprovado', data: arrGraf.map(x => x.aprov), backgroundColor: '#3b82f6', borderRadius: 4, yAxisID: 'y' },
+                    { type: 'bar', label: 'Vol. Reprovado', data: arrGraf.map(x => x.reprov), backgroundColor: '#ef4444', borderRadius: 4, yAxisID: 'y' }
+                ] 
+            },
+            options: { 
+                responsive: true, maintainAspectRatio: false, 
+                scales: { 
+                    x: { grid: { display: false } },
+                    y: { type: 'linear', display: true, position: 'left', grid: { display: false }, title: { display: true, text: 'Volume Inspecionado', font: {size: 10} } },
+                    y1: { type: 'linear', display: true, position: 'right', min: 0, max: 115, grid: { display: false }, ticks: { callback: v => v+'%' } } 
+                }, 
+                plugins: { legend: { display: true, position: 'bottom' } } 
+            },
+            plugins: [{
+                id: 'legendaPorcentagem',
+                afterDatasetsDraw: function(chart) {
+                    let ctx = chart.ctx;
+                    chart.data.datasets.forEach((dataset, i) => {
+                        if (dataset.type === 'line') {
+                            let meta = chart.getDatasetMeta(i);
+                            if (!meta.hidden) {
+                                meta.data.forEach((element, index) => {
+                                    ctx.fillStyle = '#064e3b';
+                                    ctx.font = 'bold 11px Arial';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'bottom';
+                                    let val = dataset.data[index];
+                                    let dataString = val.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%';
+                                    ctx.fillText(dataString, element.x, element.y - 8);
+                                });
+                            }
+                        }
+                    });
+                }
+            }]
+        });
+    }
+
+    let semKeys = Object.keys(mapSemanas).sort((a, b) => { let pA = a.split('/'), pB = b.split('/'); return new Date(`2026-${pA[1]}-${pA[0]}`) - new Date(`2026-${pB[1]}-${pB[0]}`); });
+    if (semKeys.length === 0) { semKeys = ['Sem data']; mapSemanas['Sem data'] = 0; }
+
+    let ctxSemana = document.getElementById('graficoInspSemana')?.getContext('2d');
+    if (ctxSemana) {
+        window.graficoInspSemana = new Chart(ctxSemana, {
+            type: 'line', data: { labels: semKeys.map(k => "Sem. " + k), datasets: [{ label: 'Volume Inspecionado', data: semKeys.map(k => mapSemanas[k]), borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.2)', fill: true, tension: 0.4 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { grid: { display: false } } }, plugins: { legend: { display: false } } }
+        });
+    }
+}
+</script>

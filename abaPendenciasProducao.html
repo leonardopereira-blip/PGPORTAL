@@ -1,0 +1,164 @@
+<div id="abaPendenciasProducao" class="aba-conteudo hidden h-full flex flex-col">
+    
+    <div class="bg-white shadow-sm border-b border-red-200 flex-shrink-0 z-20 relative p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <h2 class="text-xl font-black text-red-700 tracking-tight">🚨 Acompanhamento de Pendências</h2>
+            <p class="text-[10px] font-bold text-red-500 uppercase tracking-widest mt-1">Foco em Alocação, Arquivos, Custos e Ordens de Compra (OC).</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="atualizarProducaoChamados()" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1">🔄 Sincronizar Base</button>
+        </div>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-4 md:p-6 scroller bg-neutral-100">
+        
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 mb-6">
+            <div class="flex flex-wrap items-center gap-3 text-[10px] uppercase font-bold text-neutral-500">
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Filtros:</span>
+                    <div id="containerFiltrosMultiPend" class="flex flex-wrap gap-2 relative z-50"></div>
+                </div>
+                <div class="w-px h-6 bg-slate-200 mx-2"></div>
+                <div class="flex items-center gap-2">
+                    <input type="text" id="pendId" onkeyup="processarPendenciasProducao()" placeholder="Buscar ID..." class="bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-1.5 w-32 text-neutral-800 outline-none focus:border-red-400 transition-colors shadow-sm">
+                </div>
+                <button onclick="limparFiltrosPendencias()" class="bg-neutral-200 hover:bg-neutral-300 text-neutral-700 px-3 py-1.5 rounded-lg transition-colors ml-auto shadow-sm">Limpar Tudo</button>
+                <div class="flex items-center gap-1 ml-2">
+                    <select id="selExportPend" class="bg-white border border-red-300 text-red-800 rounded p-1.5 text-xs font-bold outline-none shadow-sm">
+                        <option value="TODAS">Todas as Pendências</option>
+                        <option value="ALOCACAO">Alocação Pendente</option>
+                        <option value="ARQUIVOS">Arquivos Pendentes</option>
+                        <option value="CUSTOS">Custos Pendentes</option>
+                        <option value="OC">OC Pendentes</option>
+                    </select>
+                    <button onclick="exportarPendenciasCSV()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm">📥 Exportar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-8">
+            <div class="bg-slate-800 p-3 flex justify-between items-center border-b border-slate-700">
+                <h3 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">⏳ Alocação Pendente</h3>
+                <span id="badge-tbPendAloc" class="bg-slate-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">0</span>
+            </div>
+            <div class="overflow-x-auto scroller max-h-[400px]">
+                <table class="w-full text-left border-collapse whitespace-nowrap">
+                    <thead class="bg-slate-50 text-slate-600 uppercase text-[9px] sticky top-0 shadow-sm z-10">
+                        <tr>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Coleta</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Ent. CD</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Abertura</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Prazo Coleta</th>
+                            <th class="p-2 border-r border-slate-200">Categoria (WIP)</th>
+                            <th class="p-2 border-r border-slate-200">ID</th>
+                            <th class="p-2 border-r border-slate-200">Descrição</th>
+                            <th class="p-2 border-r border-slate-200">Tipo</th>
+                            <th class="p-2 border-r border-slate-200">Marca</th>
+                            <th class="p-2 border-r border-slate-200">Gráfica</th>
+                            <th class="p-2 border-r border-slate-200 text-right">Tiragem</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Status Prod. (M)</th>
+                            <th class="p-2 border-r border-slate-200">Responsável</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbPendAloc"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-8">
+            <div class="bg-indigo-800 p-3 flex justify-between items-center border-b border-indigo-700">
+                <h3 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">📁 Arquivos Pendentes</h3>
+                <span id="badge-tbPendArq" class="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">0</span>
+            </div>
+            <div class="overflow-x-auto scroller max-h-[400px]">
+                <table class="w-full text-left border-collapse whitespace-nowrap">
+                    <thead class="bg-indigo-50 text-indigo-800 uppercase text-[9px] sticky top-0 shadow-sm z-10">
+                        <tr>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Coleta</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Ent. CD</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Abertura</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Prazo Coleta</th>
+                            <th class="p-2 border-r border-slate-200">Categoria (WIP)</th>
+                            <th class="p-2 border-r border-slate-200">ID</th>
+                            <th class="p-2 border-r border-slate-200">Descrição</th>
+                            <th class="p-2 border-r border-slate-200">Tipo</th>
+                            <th class="p-2 border-r border-slate-200">Marca</th>
+                            <th class="p-2 border-r border-slate-200">Gráfica</th>
+                            <th class="p-2 border-r border-slate-200 text-right">Tiragem</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Status Prod. (M)</th>
+                            <th class="p-2 border-r border-slate-200">Responsável</th>
+                            <th class="p-2 border-r border-slate-200 text-center border-l border-slate-200">Status Envio</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Status Rec. Boneco</th>
+                            <th class="p-2 text-center bg-indigo-100">Prazo Pré-Impressão</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbPendArq"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-8">
+            <div class="bg-amber-600 p-3 flex justify-between items-center border-b border-amber-500">
+                <h3 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">💲 Validação de Custos Pendente</h3>
+                <span id="badge-tbPendCustos" class="bg-amber-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">0</span>
+            </div>
+            <div class="overflow-x-auto scroller max-h-[400px]">
+                <table class="w-full text-left border-collapse whitespace-nowrap">
+                    <thead class="bg-amber-50 text-amber-800 uppercase text-[9px] sticky top-0 shadow-sm z-10">
+                        <tr>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Coleta</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Ent. CD</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Abertura</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Prazo Coleta</th>
+                            <th class="p-2 border-r border-slate-200">Categoria (WIP)</th>
+                            <th class="p-2 border-r border-slate-200">ID</th>
+                            <th class="p-2 border-r border-slate-200">Descrição</th>
+                            <th class="p-2 border-r border-slate-200">Tipo</th>
+                            <th class="p-2 border-r border-slate-200">Marca</th>
+                            <th class="p-2 border-r border-slate-200">Gráfica</th>
+                            <th class="p-2 border-r border-slate-200 text-right">Tiragem</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Status Prod. (M)</th>
+                            <th class="p-2 border-r border-slate-200">Responsável</th>
+                            <th class="p-2 border-r border-slate-200 text-center border-l border-slate-200">Data Coleta Formalizada</th>
+                            <th class="p-2 text-center">Urgência (Risco)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbPendCustos"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-10">
+            <div class="bg-rose-800 p-3 flex justify-between items-center border-b border-rose-700">
+                <h3 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">🛒 Ordens de Compra (OC) Pendentes</h3>
+                <span id="badge-tbPendOC" class="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">0</span>
+            </div>
+            <div class="overflow-x-auto scroller max-h-[400px]">
+                <table class="w-full text-left border-collapse whitespace-nowrap">
+                    <thead class="bg-rose-50 text-rose-800 uppercase text-[9px] sticky top-0 shadow-sm z-10">
+                        <tr>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Coleta</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Ent. CD</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Dt Abertura</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Prazo Coleta</th>
+                            <th class="p-2 border-r border-slate-200">Categoria (WIP)</th>
+                            <th class="p-2 border-r border-slate-200">ID</th>
+                            <th class="p-2 border-r border-slate-200">Descrição</th>
+                            <th class="p-2 border-r border-slate-200">Tipo</th>
+                            <th class="p-2 border-r border-slate-200">Marca</th>
+                            <th class="p-2 border-r border-slate-200">Gráfica</th>
+                            <th class="p-2 border-r border-slate-200 text-right">Tiragem</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Status Prod. (M)</th>
+                            <th class="p-2 border-r border-slate-200">Responsável</th>
+                            <th class="p-2 border-r border-slate-200 border-l border-slate-200">Indexador OC</th>
+                            <th class="p-2 border-r border-slate-200 text-center">Status OC</th>
+                            <th class="p-2 text-center">Aprovação OC Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbPendOC"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>

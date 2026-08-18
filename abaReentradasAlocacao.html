@@ -1,0 +1,118 @@
+<div id="abaReentradasAlocacao" class="aba-conteudo hidden h-full flex flex-col">
+                
+                <div class="bg-white shadow-sm border-b border-slate-200 flex-shrink-0 z-20 relative">
+                    
+                    
+                    <div class="p-3 bg-slate-50 flex flex-wrap gap-4 items-center border-b border-slate-200">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Período:</span>
+                            <select id="filtroReData" onchange="mudarPeriodoReentradas()" class="bg-white border border-slate-300 rounded p-1.5 text-xs font-bold text-indigo-700 cursor-pointer outline-none shadow-sm">
+                                <option value="TUDO" selected>Todo o Histórico</option>
+                                <option value="MES_ATUAL">Mês Atual</option>
+                                <option value="MES_PASSADO">Mês Passado</option>
+                                <option value="U7D">Últimos 7 Dias</option>
+                            </select>
+                            <input type="date" id="reDataIni" onchange="processarReentradas()" class="bg-white border border-slate-300 rounded p-1.5 text-xs font-semibold text-slate-600 outline-none shadow-sm">
+                            <span class="text-[10px] font-bold text-slate-400">ATÉ</span>
+                            <input type="date" id="reDataFim" onchange="processarReentradas()" class="bg-white border border-slate-300 rounded p-1.5 text-xs font-semibold text-slate-600 outline-none shadow-sm">
+                        </div>
+
+                        <div class="hidden xl:block w-px h-6 bg-slate-300"></div>
+
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Categorias:</span>
+                            <div id="containerFiltrosMultiReentradas" class="flex flex-wrap gap-2 relative">
+                                </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="limparFiltrosReentradas()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1">🧹 Limpar Filtros</button>
+                            <button onclick="atualizarProducaoChamados()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1">🔄 Atualizar Base</button>
+                        </div>
+                    </div>
+                    <div class="p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100">
+                        <div>
+                            <h2 class="text-xl font-black text-slate-800 tracking-tight">🔄 Controle de Alocações (Reentradas)</h2>
+                            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Análise de chamados, SLAs e alocação de PPGs.</p>
+                        </div>
+                        
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-4 md:p-6 scroller bg-neutral-100">
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                        <div class="bg-white p-4 rounded-xl border-l-4 border-slate-600 shadow-sm flex flex-col justify-center"><h3 class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Total Chamados</h3><p class="text-3xl font-black text-slate-700 mt-1" id="kpiReTotal">-</p></div>
+                        <div class="bg-white p-4 rounded-xl border-l-4 border-emerald-500 shadow-sm flex flex-col justify-center"><h3 class="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Alocados</h3><p class="text-3xl font-black text-emerald-700 mt-1" id="kpiReAlocado">-</p><p class="text-[10px] font-bold text-slate-400 mt-0.5" id="pctReAlocado">%</p></div>
+                        <div class="bg-white p-4 rounded-xl border-l-4 border-red-500 shadow-sm flex flex-col justify-center"><h3 class="text-[9px] font-bold text-red-600 uppercase tracking-widest">Cancelados</h3><p class="text-3xl font-black text-red-700 mt-1" id="kpiReCancelado">-</p><p class="text-[10px] font-bold text-slate-400 mt-0.5" id="pctReCancelado">%</p></div>
+                        <div class="bg-white p-4 rounded-xl border-l-4 border-amber-500 shadow-sm flex flex-col justify-center"><h3 class="text-[9px] font-bold text-amber-600 uppercase tracking-widest">WIP (Em Alocação)</h3><p class="text-3xl font-black text-amber-700 mt-1" id="kpiReWip">-</p><p class="text-[10px] font-bold text-slate-400 mt-0.5" id="pctReWip">%</p></div>
+                        <div class="bg-indigo-50 p-4 rounded-xl shadow-sm flex flex-col justify-center border border-indigo-200"><h3 class="text-[9px] font-bold text-indigo-800 uppercase tracking-widest">Aderência SLA</h3><p class="text-3xl font-black text-indigo-700 mt-1" id="kpiReSLA">-</p><p class="text-[10px] font-bold text-indigo-400 mt-0.5">Prazo vs Atraso</p></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Status Geral dos Chamados</h3>
+                            <div class="relative h-64 w-full"><canvas id="graficoReStatus"></canvas></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
+                                <h3 class="text-sm font-bold text-slate-700 uppercase">Aderência ao SLA (1 ou 2 Dias Úteis)</h3>
+                                <span class="bg-slate-100 text-[9px] font-bold px-2 py-1 rounded text-slate-500 border border-slate-200">Ref: WIP + Alocados</span>
+                            </div>
+                            <div class="relative h-64 w-full"><canvas id="graficoReSLA"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Volume de Chamados por UN</h3>
+                            <div class="relative h-64 w-full"><canvas id="graficoReUN"></canvas></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Top Motivos de Solicitação</h3>
+                            <div class="relative h-64 w-full"><canvas id="graficoReMotivos"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Impacto do Volume de PPGs no SLA (Prazo vs Atraso)</h3>
+                            <div class="relative h-72 w-full"><canvas id="graficoReImpacto"></canvas></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-2 gap-2">
+                                <h3 class="text-sm font-bold text-slate-700 uppercase">Evolução: Volume vs % SLA Atendido</h3>
+                                <select id="reGranulTempo" onchange="processarReentradas()" class="bg-slate-50 border border-slate-200 text-indigo-700 rounded p-1 text-xs font-bold outline-none cursor-pointer shadow-sm">
+                                    <option value="mes" selected>Mês a Mês</option>
+                                    <option value="semana">Por Semana</option>
+                                    <option value="dia">Por Dia</option>
+                                </select>
+                            </div>
+                            <div class="relative h-72 w-full"><canvas id="graficoReTemporal"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller mb-10">
+                        <div class="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
+                            <h3 class="text-xs font-bold text-slate-700 uppercase">Lista de Chamados Filtrados</h3>
+                            <button onclick="exportarReentradasCSV()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm flex items-center gap-1 transition-colors">📥 Baixar Excel (CSV)</button>
+                        </div>
+                        <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap">
+                            <thead class="bg-slate-100 text-slate-500 uppercase text-[9px] sticky top-0 shadow-sm">
+                                <tr>
+                                    <th class="p-2 border-r border-slate-200">ID</th>
+                                    <th class="p-2 border-r border-slate-200 text-center">Data Chamado</th>
+                                    <th class="p-2 border-r border-slate-200">UN</th>
+                                    <th class="p-2 border-r border-slate-200">Indexador (Descrição)</th>
+                                    <th class="p-2 border-r border-slate-200">Tipo</th>
+                                    <th class="p-2 border-r border-slate-200 text-center">Status SLA</th>
+                                    <th class="p-2 border-r border-slate-200 text-center">Status Aloc.</th>
+                                    <th class="p-2 border-r border-slate-200">Responsável</th>
+                                    <th class="p-2 border-r border-slate-200">Gráfica</th>
+                                    <th class="p-2 text-right">PPGs</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbReentradas" class="text-slate-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>

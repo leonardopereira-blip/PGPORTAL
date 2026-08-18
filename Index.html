@@ -1,0 +1,104 @@
+<div class="flex flex-col h-full w-full overflow-hidden bg-neutral-100">
+    
+    <header id="headerFiltrosProducao" class="bg-white p-4 shadow-sm relative z-[60] border-b border-neutral-200 flex-shrink-0">
+        <div id="barraFiltrosGlobais" class="max-w-[1500px] mx-auto flex flex-col xl:flex-row gap-4 items-center justify-between">
+            
+            <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto relative">
+                <div class="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex-shrink-0">Filtros:</div>
+                <div id="containerFiltrosMultiProducao" class="flex flex-wrap gap-2 relative z-[70]"></div>
+                <button onclick="limparFiltros()" class="bg-neutral-100 hover:bg-neutral-200 text-neutral-600 border border-neutral-300 px-2 py-1.5 rounded text-xs font-bold transition-colors shadow-sm ml-1" title="Zerar todos os filtros">🧹 Limpar</button>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-200 shadow-sm flex items-center gap-2 flex-shrink-0">
+                    <span class="text-[10px] font-bold text-indigo-800 uppercase tracking-wide">Base de Prazo:</span>
+                    <select id="filtroReferencia" class="bg-white border border-indigo-300 text-indigo-900 rounded p-1 text-xs font-bold focus:ring-indigo-500" onchange="aplicarFiltros()"><option value="replan">📅 Planejado (Re-Plan)</option><option value="baseline">🎯 Original (Baseline)</option></select>
+                </div>
+                <button onclick="exportarRelatorioFiltros()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1" title="Baixar itens ignorados pela regra de fase">🕵️ Raio-X Filtro</button>
+                <button onclick="atualizarDadosGeral()" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1">🔄 Atualizar</button>
+            </div>
+        </div>
+    </header>
+
+    
+    <?!= include('abaHome'); ?>
+
+<div class="flex-1 overflow-y-auto p-2 scroller bg-neutral-100">
+        <div class="w-full mx-auto">
+
+
+
+    <?!= include('abaGiroSemanal_1'); ?>
+
+
+
+    <?!= include('abaGiroSemanal'); ?>
+            
+    <?!= include('abaGeral'); ?>
+
+            
+    <?!= include('abaMatriz'); ?>
+            
+    <?!= include('abaFunil'); ?>
+
+            
+    <?!= include('abaEficiencia'); ?>
+            
+    <?!= include('abaMetaCD'); ?>
+            
+            
+    <?!= include('abaOtif'); ?>
+            
+            
+
+
+            
+    <?!= include('abaPlan'); ?>
+
+
+
+            
+    <?!= include('abaFalhasPlan'); ?>
+
+            
+    <?!= include('abaEvolucao'); ?>
+
+            
+    <?!= include('abaQualidadeReclamacoes'); ?>
+            
+    <?!= include('abaQualidadePPM'); ?>
+
+
+    <?!= include('abaInspecaoCDs'); ?>
+
+
+    <?!= include('Scripts_Globais_1'); ?>
+
+            
+    <?!= include('abaQualidade'); ?>
+            
+
+            
+    <?!= include('abaColetas'); ?>
+        
+    <?!= include('abaReentradasAlocacao'); ?>
+
+          
+    <?!= include('abaReentradasProducao'); ?>
+
+            
+    <?!= include('abaPendenciasProducao'); ?>
+
+          
+    <?!= include('abaReentradasGerencial'); ?>
+
+
+
+    <?!= include('abaOKRQ2'); ?>
+
+</div>
+</div>
+</div>
+
+
+    <?!= include('Scripts_Globais_2'); ?>

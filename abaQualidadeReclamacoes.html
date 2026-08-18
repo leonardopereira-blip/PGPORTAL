@@ -1,0 +1,179 @@
+<div id="abaQualidadeReclamacoes" class="aba-conteudo hidden h-full flex flex-col">
+                
+                <div class="bg-white p-4 shadow-sm border-b border-slate-200 flex-shrink-0 z-20 relative">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 border-b border-slate-100 pb-3">
+                        <div>
+                            <h2 class="text-xl font-black text-slate-800 tracking-tight">⚠️ Qualidade: Reclamações 2026</h2>
+                            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Gestão de Casos, Validações e Comparativos Anuais.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="iniciarAbaQualidadeReclamacoes(true)" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1">🔄 Atualizar Base</button>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex flex-wrap gap-4 items-center">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Filtrar Ano:</span>
+                            <select id="filtroReqAno" onchange="processarQualidadeReclamacoes()" class="bg-white border border-slate-300 rounded p-1.5 text-xs font-bold text-indigo-700 cursor-pointer outline-none shadow-sm"><option value="TODOS">Todos os Anos</option><option value="2026" selected>Apenas 2026</option><option value="2025">Apenas 2025</option></select>
+                        </div>
+                        <div class="w-px h-6 bg-slate-300"></div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Período:</span>
+                            <select id="filtroQualData" onchange="window.mudarPeriodoQualidade()" class="bg-white border border-slate-300 rounded p-1.5 text-xs font-bold text-indigo-700 cursor-pointer outline-none shadow-sm">
+                                <option value="TUDO" selected>Todo o Histórico</option>
+                                <option value="MES_ATUAL">Mês Atual</option>
+                                <option value="MES_PASSADO">Mês Passado</option>
+                                <option value="U7D">Últimos 7 Dias</option>
+                            </select>
+                            <input type="date" id="qualDataIni" onchange="window.processarQualidadeReclamacoes()" class="bg-white border border-slate-300 rounded p-1.5 text-xs font-semibold text-slate-600 outline-none shadow-sm">
+                            <span class="text-[10px] font-bold text-slate-400">ATÉ</span>
+                            <input type="date" id="qualDataFim" onchange="window.processarQualidadeReclamacoes()" class="bg-white border border-slate-300 rounded p-1.5 text-xs font-semibold text-slate-600 outline-none shadow-sm">
+                        </div>
+                        <div class="w-px h-6 bg-slate-300"></div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Marca:</span>
+                            <select id="filtroQualMarca" onchange="processarQualidadeReclamacoes()" class="bg-white border border-slate-300 rounded p-1.5 text-xs font-bold text-slate-700 cursor-pointer outline-none shadow-sm"><option value="TODAS">Todas</option></select>
+                        </div>
+                        <div class="w-px h-6 bg-slate-300"></div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Gráfica:</span>
+                            <select id="filtroQualGrafica" onchange="processarQualidadeReclamacoes()" class="bg-white border border-slate-300 rounded p-1.5 text-xs font-bold text-slate-700 cursor-pointer outline-none shadow-sm"><option value="TODAS">Todas</option></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-4 md:p-6 scroller bg-neutral-100">
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-white p-5 rounded-xl border-l-4 border-slate-600 shadow-sm"><h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Casos Recebidos</h3><p class="text-3xl font-black text-slate-700 mt-1" id="kpiQualRecebidos">-</p></div>
+                        <div class="bg-white p-5 rounded-xl border-l-4 border-emerald-500 shadow-sm"><h3 class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Validados</h3><p class="text-3xl font-black text-emerald-700 mt-1" id="kpiQualValidados">-</p></div>
+                        <div class="bg-white p-5 rounded-xl border-l-4 border-amber-500 shadow-sm"><h3 class="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Reclassificados</h3><p class="text-3xl font-black text-amber-700 mt-1" id="kpiQualReclass">-</p></div>
+                        <div class="bg-white p-5 rounded-xl border-l-4 border-indigo-500 shadow-sm"><h3 class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Rec. Recebidas</h3><p class="text-3xl font-black text-indigo-700 mt-1" id="kpiQualRecReceb">-</p></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Volume por Envio x Marca  (Casos Validados)</h3>
+                            <div class="relative h-96 w-full"><canvas id="graficoQualMarcaEnvio"></canvas></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Volume por Envio x Gráfica (Casos Validados)</h3>
+                            <div class="relative h-96 w-full"><canvas id="graficoQualGraficaEnvio"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Volume por Marca</h3>
+                            <div class="relative h-96 w-full"><canvas id="graficoQualMarcas"></canvas></div>
+                        </div>
+
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-2 gap-2">
+                                <h3 class="text-sm font-bold text-slate-700 uppercase">Evolução de Casos Validados</h3>
+                                <select id="reqGranulTempo" onchange="processarQualidadeReclamacoes()" class="bg-indigo-50 border border-indigo-200 text-indigo-700 rounded p-1.5 text-xs font-bold outline-none cursor-pointer shadow-sm">
+                                    <option value="mes" selected>Visão Mês a Mês</option>
+                                    <option value="semana">Visão por Semana</option>
+                                    <option value="dia">Visão por Dia</option>
+                                </select>
+                            </div>
+                            <div class="relative h-96 w-full"><canvas id="graficoQualTemporal"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Pareto: Motivos de Desvio (Top 10 + Outros)</h3>
+                            <div class="relative h-96 w-full"><canvas id="graficoQualPareto"></canvas></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Pareto: Volume por Gráfica (Top 10 + Outras)</h3>
+                            <div class="relative h-96 w-full"><canvas id="graficoQualParetoGrafica"></canvas></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Desvios por Marca (Casos Validados)</h3>
+                            <div class="relative h-96 w-full"><canvas id="graficoQualDesvios"></canvas></div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">Comparativo: Quais Gráficas impactam cada Marca (Horizontal)</h3>
+                            <div class="relative h-96 w-full"><canvas id="graficoQualMarcasGraficas"></canvas></div>
+                        </div>
+                    </div>
+
+
+
+                    <div class="mb-8 mt-12">
+                        <h3 class="text-lg font-black text-slate-800 tracking-tight mb-4 flex items-center gap-2 border-b border-slate-300 pb-2">
+                            <span class="bg-indigo-600 text-white px-2 py-0.5 rounded text-sm">YOY</span> 
+                            Comparativo Anual: 2025 vs 2026 (Ordenado pelo Maior Aumento)
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                                <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Evolução por Mês</h3>
+                                <div class="relative h-64 w-full"><canvas id="grafCompMes"></canvas></div>
+                            </div>
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                                <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Volume por Marca</h3>
+                                <div class="relative h-64 w-full"><canvas id="grafCompMarca"></canvas></div>
+                            </div>
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                                <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Volume por Gráfica</h3>
+                                <div class="relative h-64 w-full"><canvas id="grafCompGrafica"></canvas></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-auto scroller h-[800px]">
+                                <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2 sticky top-0 bg-white z-20">Análise de Desvios (Motivos) - 2025 vs 2026</h3>
+                                <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap">
+                                    <thead class="bg-slate-100 text-slate-500 uppercase text-[9px] sticky top-8 z-10 shadow-sm">
+                                        <tr>
+                                            <th class="p-2 border-r border-slate-200">Motivo do Desvio</th>
+                                            <th class="p-2 border-r border-slate-200 text-right bg-slate-50">Casos 2025</th>
+                                            <th class="p-2 border-r border-slate-200 text-right bg-indigo-50 text-indigo-700 font-bold">Casos 2026</th>
+                                            <th class="p-2 text-right">Aumento/Queda</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbCompDesvios" class="text-slate-700"></tbody>
+                                </table>
+                            </div>
+
+                            <div class="flex flex-col gap-6 h-[800px]">
+                                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-auto scroller flex-1">
+                                    <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2 sticky top-0 bg-white z-20">Volume por Marca - 2025 vs 2026</h3>
+                                    <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap">
+                                        <thead class="bg-slate-100 text-slate-500 uppercase text-[9px] sticky top-8 z-10 shadow-sm">
+                                            <tr>
+                                                <th class="p-2 border-r border-slate-200">Marca</th>
+                                                <th class="p-2 border-r border-slate-200 text-right bg-slate-50">2025</th>
+                                                <th class="p-2 border-r border-slate-200 text-right bg-indigo-50 text-indigo-700 font-bold">2026</th>
+                                                <th class="p-2 text-right">Aumento/Queda</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbCompMarca" class="text-slate-700"></tbody>
+                                    </table>
+                                </div>
+                                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-auto scroller flex-1">
+                                    <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2 sticky top-0 bg-white z-20">Volume por Gráfica - 2025 vs 2026</h3>
+                                    <table class="w-full text-left border-collapse text-[10px] whitespace-nowrap">
+                                        <thead class="bg-slate-100 text-slate-500 uppercase text-[9px] sticky top-8 z-10 shadow-sm">
+                                            <tr>
+                                                <th class="p-2 border-r border-slate-200">Gráfica</th>
+                                                <th class="p-2 border-r border-slate-200 text-right bg-slate-50">2025</th>
+                                                <th class="p-2 border-r border-slate-200 text-right bg-indigo-50 text-indigo-700 font-bold">2026</th>
+                                                <th class="p-2 text-right">Aumento/Queda</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbCompGrafica" class="text-slate-700"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>

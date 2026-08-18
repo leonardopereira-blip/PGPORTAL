@@ -1,0 +1,140 @@
+<div id="abaColetas" class="aba-conteudo hidden">
+    <div class="mb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+        <div>
+            <h2 class="text-xl font-black text-slate-800 tracking-tight">📦 Auditoria de Coletas (Mapa vs PCP)</h2>
+            <p class="text-xs text-slate-500 mt-1">Visão comparativa de aderência de expedição e status de pendências.</p>
+        </div>
+    </div>
+    
+    <!-- BARRA DE FILTROS LOCAL DA ABA COLETAS -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6">
+        <div class="flex flex-wrap items-center gap-4 text-[10px] font-bold text-slate-500 uppercase">
+            <div class="flex items-center gap-2">
+                <span>Status Físico:</span>
+                <select id="filtroStatusColeta" onchange="window.renderizarDashColetas()" class="bg-slate-50 border border-slate-300 text-indigo-700 rounded p-1.5 outline-none cursor-pointer shadow-sm">
+                    <option value="TODOS">Todas as OPs</option>
+                    <option value="MAIS">🟩 Sobra (Coletado a Mais)</option>
+                    <option value="MENOS">🟥 Faltante (Coletado a Menos)</option>
+                    <option value="PENDENTE">🟦 Apenas Pendentes</option>
+                    <option value="OK">✅ Coleta Exata (OK)</option>
+                </select>
+            </div>
+            <div class="w-px h-6 bg-slate-200 mx-1"></div>
+            <div class="flex items-center gap-2">
+                <span>Prazo PCP (Base):</span>
+                <select id="filtroPrazoColeta" onchange="window.renderizarDashColetas()" class="bg-slate-50 border border-slate-300 text-rose-700 rounded p-1.5 outline-none cursor-pointer shadow-sm">
+                    <option value="TODOS">Qualquer Prazo</option>
+                    <option value="VENCIDO">🚨 Base Vencida (Atrasado / Até Hoje)</option>
+                    <option value="FUTURO">⏳ Base Futura (Prazo à frente)</option>
+                </select>
+            </div>
+            <div class="flex-1"></div>
+            <button onclick="exportarDivergenciasColetas()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-sm text-xs transition-colors flex items-center gap-2">
+                📥 Exportar Visão Atual (CSV)
+            </button>
+        </div>
+    </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller mb-6">
+    <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Resumo Consolidado de Coletas por Gráfica</h3>
+    <table class="w-full text-left border-collapse whitespace-nowrap text-[10px]">
+        <thead class="bg-slate-800 text-white uppercase font-bold text-[9px]">
+            <tr>
+                <th class="p-2 border-r border-slate-600">Gráfica</th>
+                <th class="p-2 border-r border-slate-600 text-right bg-slate-700">Volume Total</th>
+                <th class="p-2 border-r border-slate-600 text-right bg-rose-900/50 text-rose-200">Coleta Vencida</th>
+                <th class="p-2 border-r border-slate-600 text-right bg-emerald-900/50 text-emerald-200">Coletado PCP</th>
+                <th class="p-2 border-r border-slate-600 text-center bg-slate-700">% PCP x Total</th>
+                <th class="p-2 border-r border-slate-600 text-center bg-slate-700">% PCP x Vencido</th>
+                <th class="p-2 border-r border-slate-600 text-right bg-indigo-900/50 text-indigo-200">Coletado Mapa</th>
+                <th class="p-2 border-r border-slate-600 text-center bg-slate-700">% Mapa x Total</th>
+                <th class="p-2 border-r border-slate-600 text-center bg-slate-700">% Mapa x Vencido</th>
+                <th class="p-2 text-center bg-slate-700">% Mapa x PCP</th>
+            </tr>
+        </thead>
+        <tbody id="tbodyColetaResumo" class="text-slate-700"></tbody>
+    </table>
+</div>
+                <div class="grid grid-cols-1 gap-6 mb-6">
+                    
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Aderência por Marca / CD Destino</h3>
+                        <table class="w-full text-left border-collapse whitespace-nowrap text-[10px]">
+                            <thead id="theadColetaMarca" class="bg-slate-800 text-white uppercase font-bold"></thead>
+                            <tbody id="tbodyColetaMarca" class="text-slate-700"></tbody>
+                        </table>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Aderência por Gráfica</h3>
+                        <table class="w-full text-left border-collapse whitespace-nowrap text-[10px]">
+                            <thead id="theadColetaGrafica" class="bg-slate-800 text-white uppercase font-bold"></thead>
+                            <tbody id="tbodyColetaGrafica" class="text-slate-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-10">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller max-h-[400px]">
+            <h3 class="text-xs font-bold text-emerald-700 uppercase mb-3 border-b border-slate-100 pb-2 flex items-center justify-between">
+                <span>Coletados A MAIS</span>
+                <span id="badgeAMais" class="bg-emerald-100 px-2 py-0.5 rounded text-[10px]">0 itens</span>
+            </h3>
+            <table class="w-full text-left border-collapse whitespace-nowrap text-[10px]">
+                <thead class="bg-slate-50 text-slate-500 uppercase text-[9px] sticky top-0 shadow-sm z-10"><tr><th class="p-2 border-b border-r">Gráfica</th><th class="p-2 border-b border-r">Marca/CD</th><th class="p-2 border-b border-r">SKU / Descrição</th><th class="p-2 border-b text-right border-r">Tir. Total</th><th class="p-2 border-b text-right text-emerald-700 bg-emerald-50 border-r">Coleta PCP</th><th class="p-2 border-b text-right text-indigo-700 bg-indigo-50 border-r">Coleta Mapa</th><th class="p-2 border-b text-right border-r">Dif (Tot)</th><th class="p-2 border-b text-right">Dif (PCP)</th></tr></thead>
+                <tbody id="tbodyColetaMais" class="text-slate-700"></tbody>
+            </table>
+        </div>
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller max-h-[400px]">
+            <h3 class="text-xs font-bold text-red-700 uppercase mb-3 border-b border-slate-100 pb-2 flex items-center justify-between">
+                <span>Coletados A MENOS (Ou Pendentes)</span>
+                <span id="badgeAMenos" class="bg-red-100 px-2 py-0.5 rounded text-[10px]">0 itens</span>
+            </h3>
+            <table class="w-full text-left border-collapse whitespace-nowrap text-[10px]">
+                <thead class="bg-slate-50 text-slate-500 uppercase text-[9px] sticky top-0 shadow-sm z-10"><tr><th class="p-2 border-b border-r">Gráfica</th><th class="p-2 border-b border-r">Marca/CD</th><th class="p-2 border-b border-r">SKU / Descrição</th><th class="p-2 border-b text-right border-r">Tir. Total</th><th class="p-2 border-b text-right text-emerald-700 bg-emerald-50 border-r">Coleta PCP</th><th class="p-2 border-b text-right text-indigo-700 bg-indigo-50 border-r">Coleta Mapa</th><th class="p-2 border-b text-right border-r">Dif (Tot)</th><th class="p-2 border-b text-right">Dif (PCP)</th></tr></thead>
+                <tbody id="tbodyColetaMenos" class="text-slate-700"></tbody>
+            </table>
+        </div>
+    </div>
+
+                <div class="grid grid-cols-1 gap-6 mb-6">
+                    
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Aderência por Marca / CD Destino</h3>
+                        <table class="w-full text-left border-collapse whitespace-nowrap text-[10px]">
+                            <thead id="theadColetaMarca" class="bg-slate-800 text-white uppercase font-bold"></thead>
+                            <tbody id="tbodyColetaMarca" class="text-slate-700"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Aderência por Gráfica</h3>
+                        <table class="w-full text-left border-collapse whitespace-nowrap text-[10px]">
+                            <thead id="theadColetaGrafica" class="bg-slate-800 text-white uppercase font-bold"></thead>
+                            <tbody id="tbodyColetaGrafica" class="text-slate-700"></tbody>
+                        </table>
+                    </div>
+
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-10">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller max-h-[400px]">
+            <h3 class="text-xs font-bold text-emerald-700 uppercase mb-3 border-b border-slate-100 pb-2 flex items-center justify-between">
+                <span>Coletados A MAIS que o PCP</span>
+                <span id="badgeAMais" class="bg-emerald-100 px-2 py-0.5 rounded text-[10px]">0 itens</span>
+            </h3>
+            <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
+                <thead class="bg-slate-50 text-slate-500 uppercase text-[9px]"><tr><th class="p-2 border-b">Gráfica</th><th class="p-2 border-b">Marca / CD</th><th class="p-2 border-b">SKU / Descrição</th><th class="p-2 border-b text-right">PCP</th><th class="p-2 border-b text-right">Mapa</th><th class="p-2 border-b text-right">Dif</th></tr></thead>
+                <tbody id="tbodyColetaMais" class="text-slate-700"></tbody>
+            </table>
+        </div>
+
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller max-h-[400px]">
+            <h3 class="text-xs font-bold text-red-700 uppercase mb-3 border-b border-slate-100 pb-2 flex items-center justify-between">
+                <span>Coletados A MENOS que o PCP</span>
+                <span id="badgeAMenos" class="bg-red-100 px-2 py-0.5 rounded text-[10px]">0 itens</span>
+            </h3>
+            <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
+                <thead class="bg-slate-50 text-slate-500 uppercase text-[9px]"><tr><th class="p-2 border-b">Gráfica</th><th class="p-2 border-b">Marca / CD</th><th class="p-2 border-b">SKU / Descrição</th><th class="p-2 border-b text-right">PCP</th><th class="p-2 border-b text-right">Mapa</th><th class="p-2 border-b text-right">Dif</th></tr></thead>
+                <tbody id="tbodyColetaMenos" class="text-slate-700"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
