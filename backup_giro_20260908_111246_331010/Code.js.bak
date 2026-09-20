@@ -27,16 +27,13 @@ function lerDoCache(chave) {
   if (!numChunksStr) return null; 
 
   var numChunks = parseInt(numChunksStr, 10);
-  if (!Number.isInteger(numChunks) || numChunks < 1 || numChunks > 1000) return null;
-    var keys = [];
-    for (var i = 0; i < numChunks; i++) keys.push(chave + '_chunk_' + i);
-    var chunks = cache.getAll(keys);
-    var partes = [];
-    for (var i = 0; i < keys.length; i++) {
-      if (!Object.prototype.hasOwnProperty.call(chunks, keys[i])) return null;
-      partes.push(chunks[keys[i]]);
-    }
-    var jsonString = partes.join('');
+  var jsonString = "";
+
+  for (var i = 0; i < numChunks; i++) {
+    var chunk = cache.get(chave + '_chunk_' + i);
+    if (!chunk) return null; 
+    jsonString += chunk;
+  }
 
   try {
     return JSON.parse(jsonString);
@@ -86,6 +83,7 @@ function getDadosDashboard() {
 
 // A FUNÇÃO ORIGINAL RENOMEADA (A "LEITURA TURBO REVISADA")
 function _processarDadosDashboardBruto() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var result = [];
   function limparHeader(h) { return h ? String(h).trim() : ""; }
  
@@ -97,9 +95,9 @@ function _processarDadosDashboardBruto() {
   };
 
   // --- A. LER ABA PCP PRINCIPAL ---
-  var dataPCP = pgLerAbaCache_('PCP');
-  if(dataPCP) {
-    console.log('[cache] PCP: leitura concluida, ' + dataPCP.length + ' linhas; processando');
+  var sheetPCP = ss.getSheetByName("PCP");
+  if(sheetPCP) {
+    var dataPCP = sheetPCP.getDataRange().getValues();
     if (dataPCP.length > 1) {
       var headersPCP = dataPCP[0].map(limparHeader);
      
@@ -123,9 +121,6 @@ function _processarDadosDashboardBruto() {
         }
         
         // MAPEAMENTO POR ÍNDICE
-        obj["GIRO_STATUS_AY"] = String(dataPCP[i][50] || "").trim();
-        obj["GIRO_COLETADA_AZ"] = dataPCP[i][51];
-        obj["GIRO_TOTAL_BA"] = dataPCP[i][52];
         if(dataPCP[i].length > 1)   obj["JOIN_KEY"] = String(dataPCP[i][1] || "").trim();
         if(dataPCP[i].length > 2)   obj["META_OKR_POS"] = safeIsoDate(dataPCP[i][2]);
         if(dataPCP[i].length > 3)   obj["META_COLETA_D"] = safeIsoDate(dataPCP[i][3]);
@@ -160,9 +155,9 @@ function _processarDadosDashboardBruto() {
   }
  
   // --- B. LER ABA PCP_ACABADORAS ---
-  var dataAcab = pgLerAbaCache_('PCP_ACABADORAS', 0, false, true);
-  if(dataAcab) {
-    console.log('[cache] PCP_ACABADORAS: leitura concluida, ' + dataAcab.length + ' linhas; processando');
+  var sheetAcab = ss.getSheetByName("PCP_ACABADORAS");
+  if(sheetAcab) {
+    var dataAcab = sheetAcab.getDataRange().getValues();
     if (dataAcab.length > 1) {
       var headersAcab = dataAcab[0].map(limparHeader);
      
@@ -281,11 +276,14 @@ function salvarObsGiro(tipo, chave, obs, contextoStr) {
 
 function buscarHistoricoObsGiro() {
   try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
     var result = { master: {}, sku: {} };
     
     function lerAba(nomeAba, destinoMap) {
-      var data = pgLerAbaCache_(nomeAba, 4, true, true);
-      if (!data) return;
+      var sheet = ss.getSheetByName(nomeAba);
+      if (!sheet) return;
+     
+      var data = sheet.getDataRange().getDisplayValues();
       for (var i = 1; i < data.length; i++) {
         var dt = data[i][0];
         var usr = data[i][1];
@@ -303,13 +301,16 @@ function buscarHistoricoObsGiro() {
     lerAba('Obs_Cockpit_sku', result.sku);
     return result;
   } catch(e) {
-    if (e.cacheLeitura) throw e;
     return { master: {}, sku: {} };
   }
 }
 
 function getDadosCockpit() {
-  var data = pgLerAbaCache_('Base_Cockpit_Status', 30, true);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetCockpit = ss.getSheetByName("Base_Cockpit_Status");
+  if (!sheetCockpit) return [];
+  
+  var data = sheetCockpit.getRange("A:AD").getDisplayValues();
   var result = [];
   
   function safeDate(val) {
@@ -417,94 +418,23 @@ function getEmailUsuario() {
   }
 }
 
-// PG_FORECAST_COLETA_SERVER_V1
-var PG_FORECAST_COLETA_EDITOR = 'leonardo.pereira@arcoeducacao.com.br';
-var PG_FORECAST_COLETA_ABA = 'Forecast_Coleta_Portal';
-
-function getForecastsColetaPortal() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(PG_FORECAST_COLETA_ABA);
-  if (!sheet || sheet.getLastRow() < 2) return {};
-
-  var vals = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
-  var out = {};
-  vals.forEach(function(r) {
-    var chave = String(r[0] || '').trim();
-    var dataRaw = r[1];
-    var data = dataRaw instanceof Date
-      ? Utilities.formatDate(dataRaw, Session.getScriptTimeZone() || 'GMT-3', 'yyyy-MM-dd')
-      : String(dataRaw || '').trim();
-    var valor = Number(r[2]);
-    if (!chave || !/^\d{4}-\d{2}-\d{2}$/.test(data) || !isFinite(valor) || valor < 0) return;
-    if (!out[chave]) out[chave] = [];
-    out[chave].push({ data: data, valor: valor });
-  });
-  Object.keys(out).forEach(function(chave) {
-    out[chave].sort(function(a, b) { return a.data.localeCompare(b.data); });
-  });
-  return out;
-}
-
-function salvarForecastColetaPortal(payload) {
-  var email = '';
-  try { email = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase(); } catch (e) {}
-  if (email !== PG_FORECAST_COLETA_EDITOR) throw new Error('Usuário não autorizado a alterar o Forecast.');
-
-  payload = payload || {};
-  var chave = String(payload.chave || '').trim();
-  if (!/^FC_[0-9A-F]{8}$/.test(chave)) throw new Error('Contexto de Forecast inválido.');
-
-  var pontos = Array.isArray(payload.pontos) ? payload.pontos : [];
-  if (pontos.length > 500) throw new Error('Quantidade de pontos de Forecast acima do limite.');
-
-  var limpos = [];
-  pontos.forEach(function(p) {
-    var data = String((p && p.data) || '').trim();
-    var valor = Number(p && p.valor);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error('Data inválida no Forecast: ' + data);
-    if (!isFinite(valor) || valor < 0) throw new Error('Valor inválido no Forecast: ' + valor);
-    limpos.push({ data: data, valor: Math.round(valor) });
-  });
-  limpos.sort(function(a, b) { return a.data.localeCompare(b.data); });
-
-  for (var i = 1; i < limpos.length; i++) {
-    if (limpos[i].data === limpos[i - 1].data) throw new Error('Data duplicada no Forecast: ' + limpos[i].data);
-    if (limpos[i].valor < limpos[i - 1].valor) throw new Error('O Forecast acumulado não pode diminuir entre as datas.');
-  }
-
-  var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(PG_FORECAST_COLETA_ABA);
-    if (!sheet) {
-      sheet = ss.insertSheet(PG_FORECAST_COLETA_ABA);
-      sheet.getRange(1, 1, 1, 5).setValues([['Chave', 'Data', 'Forecast acumulado', 'Atualizado em', 'Usuário']]);
-      sheet.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
-      sheet.getRange('B:B').setNumberFormat('@');
-      sheet.setFrozenRows(1);
-    }
-
-    var existentes = [];
-    if (sheet.getLastRow() >= 2) {
-      existentes = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues()
-        .filter(function(r) { return String(r[0] || '').trim() !== chave; });
-      sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).clearContent();
-    }
-
-    var agora = new Date();
-    var novas = limpos.map(function(p) { return [chave, p.data, p.valor, agora, email]; });
-    var final = existentes.concat(novas);
-    if (final.length) sheet.getRange(2, 1, final.length, 5).setValues(final);
-    SpreadsheetApp.flush();
-    return { success: true, chave: chave, pontos: limpos };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
 function getDadosPreProducao() {
-  var data = pgLerAbaCache_('CAL. EDIT.', 40, true, false, true);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("CAL. EDIT.");
+  
+  if (!sheet) {
+    var sheets = ss.getSheets();
+    for (var i = 0; i < sheets.length; i++) {
+      var nome = sheets[i].getName().toUpperCase();
+      if (nome.includes("CAL") && nome.includes("EDIT")) {
+        sheet = sheets[i];
+        break;
+      }
+    }
+  }
+  if(!sheet) return [{ erro: "Aba 'CAL. EDIT.' não encontrada." }];
+  
+  var data = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getDisplayValues();
   var result = [];
   
   for (var i = 1; i < data.length; i++) {
@@ -594,7 +524,10 @@ function getUltimaAtualizacaoPCP() {
 
 function getDadosQualidade() {
   try {
-    var data = pgLerAbaCache_('qualidade_reclamacoes', 19);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("qualidade_reclamacoes");
+    if (!sheet) return [];
+   
+    var data = sheet.getRange("A:S").getValues();
     if (data.length <= 1) return [];
     var headers = data[0];
     var result = [];
@@ -618,14 +551,16 @@ function getDadosQualidade() {
     return result;
   } catch (e) {
     Logger.log("Erro Qualidade: " + e.toString());
-    if (e.cacheLeitura) throw e;
     return [];
   }
 }
 
 function getDadosPPM() {
   try {
-    var data = pgLerAbaCache_('ppm_consolidado', 7);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("ppm_consolidado");
+    if (!sheet) return [];
+   
+    var data = sheet.getRange("A:G").getValues();
     if (data.length <= 1) return [];
     var headers = data[0];
     var result = [];
@@ -643,7 +578,6 @@ function getDadosPPM() {
     return result;
   } catch (e) {
     Logger.log("Erro PPM: " + e.toString());
-    if (e.cacheLeitura) throw e;
     return [];
   }
 }
@@ -675,7 +609,10 @@ function registrarAcessoUsuario() {
 
 function getDadosAlocacao() {
   try {
-    var data = pgLerAbaCache_('Alocacao_Reentradas', 30);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Alocacao_Reentradas");
+    if (!sheet) return [];
+   
+    var data = sheet.getRange("A:AD").getValues();
     if (data.length <= 1) return [];
     var headers = data[0];
     var result = [];
@@ -694,14 +631,16 @@ function getDadosAlocacao() {
     return result;
   } catch (e) {
     Logger.log("Erro Alocação: " + e.toString());
-    if (e.cacheLeitura) throw e;
     return [];
   }
 }
 
 function getDadosChamados() {
   try {
-    var data = pgLerAbaCache_('Chamados');
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Chamados");
+    if (!sheet) return [];
+   
+    var data = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
     if (data.length <= 1) return [];
     var headers = data[0];
     var result = [];
@@ -727,15 +666,19 @@ function getDadosChamados() {
     return result;
   } catch (e) {
     Logger.log("Erro Chamados: " + e.toString());
-    if (e.cacheLeitura) throw e;
     return [];
   }
 }
 
 function getDadosCaixas() {
   try {
-    var data = pgLerAbaCache_('Caixas', 36);
-    if (data.length <= 1) return [];
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Caixas");
+    if (!sheet) return [];
+   
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return []; 
+   
+    var data = sheet.getRange(1, 1, lastRow, 36).getValues();
     var headers = data[0];
    
     var uniqueHeaders = [];
@@ -767,14 +710,18 @@ function getDadosCaixas() {
     return result;
   } catch (e) {
     Logger.log("Erro Caixas: " + e.toString());
-    if (e.cacheLeitura) throw e;
     return [];
   }
 }
 
 function getDadosMapaSaida() {
   try {
-    var data = pgLerAbaCache_(['MAPA DE SAÍDA', 'MAPA DE SAIDA', 'MAPA DE SAIDA '], 42);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("MAPA DE SAÍDA") || ss.getSheetByName("MAPA DE SAIDA") || ss.getSheetByName("MAPA DE SAIDA ");
+   
+    if (!sheet) return { _ERRO_CRITICO: "Aba 'MAPA DE SAÍDA' não encontrada." };
+    
+    var data = sheet.getDataRange().getValues();
     var mapaSKU = {};
     var hoje = new Date();
     hoje.setHours(23, 59, 59, 999); 
@@ -808,14 +755,16 @@ function getDadosMapaSaida() {
     return mapaSKU;
    
   } catch (e) {
-    if (e.cacheLeitura) throw e;
     return { _ERRO_CRITICO: "Erro ao ler Mapa: " + e.toString() };
   }
 }
 
 function getDadosInspecaoCDs() {
   try {
-    var data = pgLerAbaCache_('qlogs_V4');
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("qlogs_V4");
+    if (!sheet) return [];
+   
+    var data = sheet.getDataRange().getValues();
     if (data.length <= 1) return [];
     
     var headers = data[0];
@@ -840,7 +789,6 @@ function getDadosInspecaoCDs() {
     return result;
   } catch (e) {
     Logger.log("Erro Inspeções CDs: " + e.toString());
-    if (e.cacheLeitura) throw e;
     return [];
   }
 }

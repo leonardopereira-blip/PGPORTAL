@@ -258,7 +258,7 @@
     let selFiltrosCK = {};
     window.opcFiltrosCK = {}; 
     window.dropAbertoCK = null; 
-    camposFiltroCK.forEach(c => selFiltrosCK[c] = []);
+    camposFiltroCK.forEach(c => selFiltrosCK[c] = (c === 'envio' ? ['V1'] : []));
 
     function toggleDropCK(campoId) {
         let menuId = 'drop_ck_' + campoId;
@@ -279,7 +279,7 @@
 
     window.marcarTodosCK = function(campo) { selFiltrosCK[campo] = [...window.opcFiltrosCK[campo]]; window.dropAbertoCK = 'drop_ck_' + campo; popularFiltrosCockpit(); filtrarTabelaCockpit(); }
     window.limparUnicoCK = function(campo) { selFiltrosCK[campo] = []; window.dropAbertoCK = 'drop_ck_' + campo; popularFiltrosCockpit(); filtrarTabelaCockpit(); }
-    function limparFiltrosCockpit() { camposFiltroCK.forEach(c => selFiltrosCK[c] = []); document.getElementById('filtroStatusInsumos').value = "TODOS"; document.getElementById('filtroStatusPCP').value = "TODOS"; window.dropAbertoCK = null; popularFiltrosCockpit(); filtrarTabelaCockpit(); }
+    function limparFiltrosCockpit() { camposFiltroCK.forEach(c => selFiltrosCK[c] = (c === 'envio' ? ['V1'] : [])); document.getElementById('filtroStatusInsumos').value = "TODOS"; document.getElementById('filtroStatusPCP').value = "TODOS"; window.dropAbertoCK = null; popularFiltrosCockpit(); filtrarTabelaCockpit(); }
 
     function popularFiltrosCockpit() {
         const container = document.getElementById('containerFiltrosCockpit');
@@ -640,7 +640,7 @@
         let btn = document.getElementById('btnSalvarModal');
         let txtOriginal = btn.innerText; btn.innerText = "Salvando..."; btn.disabled = true;
         let form = { rowIndex: document.getElementById('editRowIndex').value, tipoItem: document.getElementById('editType').value, status: document.getElementById('inpEditStatus').value, dataPlan: document.getElementById('inpEditDtPlan').value, dataReal: document.getElementById('inpEditDtReal').value, responsavel: document.getElementById('inpEditResp').value, obs: document.getElementById('inpEditObs').value };
-        google.script.run.withSuccessHandler(res => {
+        google.script.run.withSuccessHandler(res => { try { if(typeof res === "string" && (res.trim().startsWith("[") || res.trim().startsWith("{"))) res = JSON.parse(res); if(typeof res === "string") res = JSON.parse(res); } catch(e){} 
             btn.innerText = txtOriginal; btn.disabled = false; fecharModal('modalEdit');
             if(res.success) { window.showToast("Item atualizado!"); fetchCockpitData(); }
             else window.showToast("Erro: " + res.msg, "error");
@@ -658,7 +658,7 @@
         let formEl = document.getElementById('formLote');
         let ids = dadosFiltradosCockpit.map(r => r._rowIndex); 
         let form = { tipoItem: document.getElementById('inpTipoLote').value, status: formEl.querySelector('.inpStatus').value, dataPlan: formEl.querySelector('.inpDtPlan').value, dataReal: formEl.querySelector('.inpDtReal').value, responsavel: formEl.querySelector('.inpResp').value, obs: formEl.querySelector('.inpObs').value };
-        google.script.run.withSuccessHandler(res => {
+        google.script.run.withSuccessHandler(res => { try { if(typeof res === "string" && (res.trim().startsWith("[") || res.trim().startsWith("{"))) res = JSON.parse(res); if(typeof res === "string") res = JSON.parse(res); } catch(e){} 
             if(window.setLoading) window.setLoading(false);
             if(res.success) { alert("✅ SUCESSO!\n\n" + res.count + " itens foram atualizados corretamente."); if(window.showToast) window.showToast(res.count + " itens atualizados!"); fetchCockpitData(); } 
             else { alert("❌ ERRO: " + res.msg); if(window.showToast) window.showToast("Erro: " + res.msg, "error"); }
@@ -689,7 +689,7 @@
     // 2. Função Principal de Carregamento
     function fetchCockpitData() {
         if(window.setLoading) window.setLoading(true, "Atualizando Cockpit...");
-        google.script.run.withSuccessHandler(function(data) {
+        google.script.run.withSuccessHandler(function(data) { try { if(typeof data === "string" && (data.trim().startsWith("[") || data.trim().startsWith("{"))) data = JSON.parse(data); if(typeof data === "string") data = JSON.parse(data); } catch(e){} 
             var dadosBrutos = data;
             var dadosUnificados = cruzarDadosPCP(dadosBrutos);
             window.dadosCockpitGlobal = dadosUnificados; 

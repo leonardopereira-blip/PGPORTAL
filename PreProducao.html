@@ -448,7 +448,7 @@
     let selecoesFiltrosPre = {};
     window.opcoesFiltrosPre = {}; 
     window.dropdownAbertoPre = null; 
-    camposFiltro.forEach(c => selecoesFiltrosPre[c] = []);
+    camposFiltro.forEach(c => selecoesFiltrosPre[c] = (c === 'envio' ? ['V1'] : []));
 
     window.chamarTelaPreProd = function(visao) {
         visaoAtualPre = visao;
@@ -468,7 +468,7 @@
             if(ctPrin) ctPrin.classList.add('hidden');
         }
 
-        google.script.run.withSuccessHandler(function(dadosNovos) {
+        google.script.run.withSuccessHandler(function(dadosNovos) { try { if(typeof dadosNovos === "string" && (dadosNovos.trim().startsWith("[") || dadosNovos.trim().startsWith("{"))) dadosNovos = JSON.parse(dadosNovos); if(typeof dadosNovos === "string") dadosNovos = JSON.parse(dadosNovos); } catch(e){} 
             if(!silencioso) {
                 if(window.setLoading) window.setLoading(false);
                 let loaderLocal = document.getElementById('loadingPreProd');
@@ -709,7 +709,7 @@
     }
 
     function limparFiltrosPre() {
-        camposFiltro.forEach(c => selecoesFiltrosPre[c] = []);
+        camposFiltro.forEach(c => selecoesFiltrosPre[c] = (c === 'envio' ? ['V1'] : []));
         window.dropdownAbertoPre = null;
         desenharFiltrosInteligentes(); aplicarFiltrosInteligentes();
     }
@@ -1240,7 +1240,7 @@
 
     window.carregarDadosCaixas = function(force = false) {
         if(window.setLoading) window.setLoading(true, "Carregando Base de Caixas...");
-        google.script.run.withSuccessHandler(dados => {
+        google.script.run.withSuccessHandler(dados => { try { if(typeof dados === "string" && (dados.trim().startsWith("[") || dados.trim().startsWith("{"))) dados = JSON.parse(dados); if(typeof dados === "string") dados = JSON.parse(dados); } catch(e){} 
             window.DADOS_CAIXAS_CACHE = dados;
             window.filtrosCxIniciados = false; 
             window.renderTabelaCaixas();

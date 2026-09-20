@@ -530,7 +530,7 @@ function aplicarFiltros() {
     window.dadosDenominadorColeta = [];
     window.dadosDestinoCDFinal = [];       // Base do caminho até CD usada pelas fases posteriores.
     window.dadosDestinoCDOrigem = [];      // Mesma regra de CD, respeitando a Origem escolhida.
-    window.dadosTotalCanonico = [];        // Tiragem canônica: depende da Origem, nunca do seletor Destino.
+    window.dadosTotalCanonico = [];        // Total final: PCP direto ao CD + PCP_ACABADORAS, respeitando Origem.
     window.dadosAcabamentoOrigem = [];     // Acabamento usa regra própria de Origem/Destino/Congelado.
     const categorias = Object.keys(selFilters);
     const origem = document.getElementById('pgFiltroOrigem')?.value || 'GRAFICA';
@@ -562,29 +562,18 @@ function aplicarFiltros() {
             if (origemLinha === 'GRAFICA') window.dadosDenominadorColeta.push(l);
         }
 
-        // TIRAGEM / TOTAL BASE CANÔNICO — REGRA DEFINITIVA:
-        // O seletor extra Destino (Todos / CD Destino / Acabadora) NÃO altera a tiragem.
-        // A tiragem reage à Origem e aos filtros gerais:
-        //   Origem = Gráfica    -> PCP completo.
-        //   Origem = Acabadora  -> PCP_ACABADORAS completo.
-        //   Origem = Todas      -> PCP_ACABADORAS + PCP, retirando do PCP o que tem
-        //                          CD Destino classificado como acabadora.
-        // Em Todas, a retirada do PCP evita empilhar o mesmo caminho antes e depois da acabadora.
-        if (passaCategoriasAtuais) {
+        // TOTAL BASE CANÔNICO:
+        // - respeita Origem e filtros gerais;
+        // - PCP: remove tudo que tem CD Destino classificado como acabadora;
+        // - PCP_ACABADORAS: entra normalmente;
+        // Assim o total NÃO empilha PCP + PCP_ACABADORAS para o mesmo caminho.
+        if (passaCategoriasAtuais && daOrigem) {
             const ehFonteAcabadoraTotal = origemLinha === 'ACABADORA';
             const pcpVaiParaAcabadoraTotal = !ehFonteAcabadoraTotal &&
                 typeof window.pgEhDestinoAcabadora === 'function' && window.pgEhDestinoAcabadora(l);
-
-            let entraTotalCanonico = false;
-            if (origem === 'GRAFICA') {
-                entraTotalCanonico = !ehFonteAcabadoraTotal; // PCP completo, inclusive PCP -> acabadora.
-            } else if (origem === 'ACABADORA') {
-                entraTotalCanonico = ehFonteAcabadoraTotal;  // somente PCP_ACABADORAS.
-            } else { // TODOS
-                entraTotalCanonico = ehFonteAcabadoraTotal || !pcpVaiParaAcabadoraTotal;
+            if (ehFonteAcabadoraTotal || !pcpVaiParaAcabadoraTotal) {
+                window.dadosTotalCanonico.push(l);
             }
-
-            if (entraTotalCanonico) window.dadosTotalCanonico.push(l);
         }
 
         // BASE SOBERANA DO ACABAMENTO:
@@ -1745,10 +1734,15 @@ let tRef = document.getElementById('filtroReferencia').value;
     let seriesGeral = calcSeries(seriesGlobais);
 
     // BASE CANÔNICA DO TOTAL / TABELAS
-    // A tiragem NÃO reage ao seletor extra Destino.
-    // Ela já foi montada em aplicarFiltros() exclusivamente pela Origem:
-    // Gráfica = PCP | Acabadora = PCP_ACABADORAS | Todas = PCP direto + PCP_ACABADORAS.
-    const linhasBaseCanonica = window.dadosTotalCanonico || [];
+    // Em Todos e CD, o Total parte SEMPRE da mesma regra final:
+    // PCP sem destinos de acabadora + PCP_ACABADORAS, respeitando a Origem.
+    // Isso impede que Destino = CD fique maior que Destino = Todos.
+    // Destino = Acabadora mantém a base filtrada específica desse destino.
+    const destinoAtualCanon = document.getElementById('pgFiltroDestino')?.value || 'TODOS';
+    const usaBaseFinalCanonica = destinoAtualCanon === 'TODOS' || destinoAtualCanon === 'CD';
+    const linhasBaseCanonica = usaBaseFinalCanonica
+        ? (window.dadosTotalCanonico || [])
+        : (dadosPadrao || []);
 
     const baseTotalCanonica = {};
     const baseMarcaCanonica = {};
@@ -1773,21 +1767,7 @@ let tRef = document.getElementById('filtroReferencia').value;
     });
 
     // IMPORTANTE: não altera a lógica/volumes das fases do Funil.
-    // Apenas faz Funil e tabelas compartilharem exatamente a mesma tiragem canônica.
-    // Cria também linhas de Marca/Gráfica que existam na tiragem, mesmo que o Destino
-    // atualmente selecionado não tenha volume em alguma fase.
-    Object.keys(baseMarcaCanonica).forEach(m => {
-        if (!mGrid[m]) {
-            mGrid[m] = { total: 0, pcp: {total:0}, acab: {total:0}, series: {} };
-            fasesAtivas.forEach(f => mGrid[m][f.id] = initFase());
-        }
-    });
-    Object.keys(baseGraficaCanonica).forEach(g => {
-        if (!gGrid[g]) {
-            gGrid[g] = { total: 0, pcp: {total:0}, acab: {total:0}, series: {} };
-            fasesAtivas.forEach(f => gGrid[g][f.id] = initFase());
-        }
-    });
+    // Apenas faz as tabelas usarem o mesmo denominador/base do Total do Funil.
     Object.keys(mGrid).forEach(m => { mGrid[m].total = baseMarcaCanonica[m] || 0; });
     Object.keys(gGrid).forEach(g => { gGrid[g].total = baseGraficaCanonica[g] || 0; });
 
@@ -8373,6 +8353,4 @@ window.exportarDivergenciasColetas = function() {
 <!-- PG_TABELAS_USAM_BASE_ANTIGA_FUNIL_V4 -->
 
 <!-- PG_TOTAL_CANONICO_ACAB_DESTINO_V5 -->
-
-<!-- PG_TOTAL_POR_ORIGEM_INDEPENDENTE_DESTINO_V6 -->
 </script>

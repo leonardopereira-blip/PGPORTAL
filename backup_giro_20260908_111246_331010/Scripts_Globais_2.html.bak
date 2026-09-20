@@ -1,7 +1,6 @@
 <script>
 
     window.alternarAbaDash = function(idAba) {
-        if (window.pgAtualizarAbaProducao) window.pgAtualizarAbaProducao(idAba);
         // Esconde todas as abas APENAS adicionando o hidden
         document.querySelectorAll('.aba-conteudo').forEach(el => { 
             el.classList.add('hidden'); 
@@ -120,54 +119,18 @@ const FASES = [
     { id: 'kit', nome: 'Form. Kit', colPlan: 'Formação de kit/Encaixotamento Final (re) plan', colReal: 'Formação de kit/Encaixotamento Final Real', colBase: 'FORM DE KIT/ENCAIXOTAMENTO FIM BASELINE', colIniReal: 'Formação de kit/Encaixotamento Início Real', corLinha: '#f97316' },
     { id: 'col', nome: 'Coleta PCP', colPlan: 'Coleta/Internalização de estoque final (re) plan', colReal: 'DT_ENTREGA_DG', colRealAlt: 'Coleta/Internalização de estoque Final Real', colBase: 'COLETA/INTERNALIZAÇÃO FIM BASELINE', colIniReal: 'Coleta/Internalização de estoque inicial Real', corLinha: '#10b981' },
     
-    { id: 'col_mapa', nome: 'Mapa Solicitado', colPlan: 'Coleta/Internalização de estoque final (re) plan', colReal: 'Data_Coleta_Mapa', colBase: 'COLETA/INTERNALIZAÇÃO FIM BASELINE', colIniReal: 'Coleta/Internalização de estoque inicial Real', corLinha: '#0284c7', colVol: 'TIRAGEM COLETADA' },
+    { id: 'col_mapa', nome: 'Mapa Solicitado', colPlan: 'Coleta/Internalização de estoque final (re) plan', colReal: 'DT_ENTREGA_DG', colBase: 'COLETA/INTERNALIZAÇÃO FIM BASELINE', colIniReal: 'Coleta/Internalização de estoque inicial Real', corLinha: '#0284c7', colVol: 'COLETADA_MAPA' },
     
     { id: 'col_tp', nome: 'Coleta TP', colPlan: 'Coleta/Internalização de estoque final (re) plan', colReal: 'Coleta_TP', colBase: 'COLETA/INTERNALIZAÇÃO FIM BASELINE', colIniReal: 'DT_ENTREGA_DG', corLinha: '#0ea5e9' },
     
     // --> ENTREGA TP E ENTREGA CD AGORA LÊEM META_PCP_POS (Coluna CL)
     { id: 'ent_tp', nome: 'Entrega TP', colPlan: 'META_PCP_POS', colReal: 'Entrega_TP', colBase: 'META_PCP_POS', colIniReal: 'Coleta_TP', corLinha: '#3b82f6' },
-    { id: 'ent_cd', nome: 'Confirmação CD', colPlan: 'META_PCP_POS', colReal: '_DT_ENTREGUE_CD_REAL', colBase: 'META_PCP_POS', colIniReal: 'Entrega_TP', corLinha: '#4f46e5', colVol: 'TIRAGEM CONFIRMADA CD' },
+    { id: 'ent_cd', nome: 'Entrega CD', colPlan: 'META_PCP_POS', colReal: '_DT_ENTREGUE_CD_REAL', colBase: 'META_PCP_POS', colIniReal: 'Entrega_TP', corLinha: '#4f46e5', colVol: 'TIRAGEM CONFIRMADA CD' },
     
     { id: 'int_cd', nome: 'Internalização', colPlan: null, colReal: 'Data Internalizado', colBase: null, colIniReal: '_DT_ENTREGUE_CD_REAL', corLinha: '#312e81', colVol: '# Tiragem Internalizada' }
 ];
 
-window.pgEstadoColetaMapa = function(l) {
-    const campo = nome => window.pgCampoColeta(l, nome);
-    const primeiro = valores => valores.find(v => v !== undefined && v !== null && String(v).trim() !== '');
-    const numero = v => {
-        if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-        let t = String(v ?? '').trim().replace(/\s/g, '');
-        if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
-        else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
-        return Number(t) || 0;
-    };
-    const ay = String(primeiro([l.GIRO_STATUS_AY, l.AY, campo('STATUS COLETA')]) ?? '')
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
-    const total = Math.max(0, numero(primeiro([campo('TIRAGEM'), l.GIRO_TOTAL_BA, campo('TIRAGEM TOTAL'), campo('QUANTIDADE')])));
-    const coletada = Math.max(0, numero(primeiro([l.GIRO_COLETADA_AZ, campo('TIRAGEM COLETADA'), l.VOLUME_AZ])));
-    const saldo = Math.max(0, total - coletada);
-    const statusPendenteAY = /PEND|NAO COLET|NAO SOLICIT|COLETADO A MENOS|PARCIAL/.test(ay);
-    // O status textual não reabre uma coleta cujo volume já foi integralmente atendido.
-    const volumeConcluido = total > 0 && saldo === 0;
-    const pendenteAY = statusPendenteAY && !volumeConcluido;
-    return { ay, total, coletada, saldo, pendenteAY,
-        pendente: pendenteAY || saldo > 0,
-        concluida: total > 0 && saldo === 0 && !pendenteAY,
-        parcial: !volumeConcluido && (ay.includes('COLETADO A MENOS') || (coletada > 0 && saldo > 0)) };
-};
-window.pgDataPlanoColetaLinha = function(l) {
-    const campo = n => window.pgCampoColeta(l, n);
-    const replan = campo('Coleta/Internalização de estoque final (re) plan');
-    // PCP e PCP_ACABADORAS usam exatamente a mesma regra:
-    // (re) plan; se estiver vazio, COLETA/INTERNALIZAÇÃO FIM BASELINE.
-    const valor = String(replan ?? '').trim() !== ''
-        ? replan
-        : campo('COLETA/INTERNALIZAÇÃO FIM BASELINE');
-    return extrairDataISO(valor);
-};
-
 window.getVolFase = function(linha, fObj, tBase) {
-    if (fObj.id === 'col_mapa') return window.pgEstadoColetaMapa(linha).coletada;
     // 🎯 Trava do mapa de saída removida para pegar tudo da aba PCP
     if (!fObj.colVol) return tBase;
     
@@ -182,18 +145,7 @@ window.getVolFase = function(linha, fObj, tBase) {
 
     function getCols(fObj, tRef) { return { plan: (tRef === 'baseline' && fObj.colBase) ? fObj.colBase : fObj.colPlan, real: fObj.colReal, realAlt: fObj.colRealAlt, iniReal: fObj.colIniReal }; }
     
-    window.pgDataPlanoFaseFunil = function(l, f, tRef) {
-        const campo = n => window.pgCampoColeta(l, n);
-        if (f.id === 'col_mapa') return window.pgDataPlanoColetaLinha(l);
-        if (f.id !== 'kit') return extrairDataISO(l[getCols(f, tRef).plan]);
-        const replan = campo(f.colPlan);
-        const valor = tRef === 'baseline' || String(replan ?? '').trim() === ''
-            ? campo(f.colBase) : replan;
-        return extrairDataISO(valor);
-    };
-
-    function dataFoiPreenchida(linha, fObj) {
-        if (fObj.id === 'col_mapa') return window.pgEstadoColetaMapa(linha).concluida; 
+    function dataFoiPreenchida(linha, fObj) { 
         let temData = extrairDataISO(linha[fObj.colReal]) !== null || (fObj.colRealAlt ? extrairDataISO(linha[fObj.colRealAlt]) !== null : false); 
         // 🎯 A MÁGICA: Se não tem data no PCP, mas tem volume no Mapa/CD, força como preenchido!
         if (!temData && fObj.colVol) {
@@ -234,7 +186,7 @@ window.getVolFase = function(linha, fObj, tBase) {
     function iniciarDashboard(dados) {
     window.DADOS_PCP_CACHE = dados; 
     window.dadosGlobais = dados || []; 
-    if(window.setLoading && !window.pgCarregamentoInicial) window.setLoading(false);
+    if(window.setLoading) window.setLoading(false);
     
     // 1. RENDERIZA OS CHECKBOXES DA CURVA S (Mantive o comportamento original aqui)
     let checkCurva = "";
@@ -247,9 +199,8 @@ window.getVolFase = function(linha, fObj, tBase) {
 
     // 🎯 2. RENDERIZA OS CHECKBOXES DO FUNIL 
     let checkFunil = "";
-    const fasesDefaultFunil = ['env', 'rec', 'apv', 'imp', 'cus', 'oc', 'acab', 'kit', 'col_mapa', 'col_tp', 'ent_tp', 'ent_cd'];
     FASES.forEach((f) => { 
-        let isChecked = fasesDefaultFunil.includes(f.id) ? 'checked' : '';
+        let isChecked = (['col', 'tra', 'rec_acab'].includes(f.id)) ? '' : 'checked';
         checkFunil += `<label class="flex items-center gap-1 cursor-pointer bg-slate-50 px-2 py-1 rounded border border-slate-200 hover:bg-slate-100 transition-colors"><input type="checkbox" class="chk-fase-funil" value="${f.id}" onchange="window.processarFunil()" ${isChecked}> <span style="color:${f.corLinha}">${f.nome}</span></label>`; 
     });
     if(document.getElementById('containerCheckboxesFunil')) document.getElementById('containerCheckboxesFunil').innerHTML = checkFunil;
@@ -274,38 +225,6 @@ window.getVolFase = function(linha, fObj, tBase) {
     preencherOpcoesFiltros(); 
     aplicarFiltros();
 }
-
-// Recebe o dashboard fatia a fatia (uma fatia por mes de coleta final (re) plan),
-// sem descartar o que o usuario ja tem filtrado na tela.
-window.pgAnexarDadosDashboard = function(fatia) {
-    if (!Array.isArray(fatia) || !fatia.length) return (window.dadosGlobais || []).length;
-    const base = window.dadosGlobais || [];
-    const juntos = base.concat(fatia);
-    window.dadosGlobais = juntos;
-    window.DADOS_PCP_CACHE = juntos;
-
-    // Guarda o que estava desmarcado para reconstruir os menus sem perder a selecao.
-    const desmarcados = {};
-    if (window.filtrosGeraisIniciados) {
-        Object.keys(window.listasMultiProducao || {}).forEach(k => {
-            const idCat = k.replace(/\s+/g, '').replace('.', '');
-            desmarcados[idCat] = new Set(
-                Array.from(document.querySelectorAll(`.chk-geral-${idCat}:not(:checked)`)).map(cb => cb.value)
-            );
-        });
-        window.filtrosGeraisIniciados = false;
-    }
-    preencherOpcoesFiltros();
-    Object.keys(desmarcados).forEach(idCat => {
-        if (!desmarcados[idCat].size) return;
-        document.querySelectorAll(`.chk-geral-${idCat}`).forEach(cb => {
-            if (desmarcados[idCat].has(cb.value)) cb.checked = false;
-        });
-    });
-    if (typeof injetarDatasMapa === 'function') injetarDatasMapa();
-    aplicarFiltros();
-    return juntos.length;
-};
 
     // =========================================================================
     // MOTOR DE FILTROS GLOBAIS (PRODUÇÃO) COM PRIORIDADE DINÂMICA
@@ -343,7 +262,6 @@ window.pgAnexarDadosDashboard = function(fatia) {
         document.querySelectorAll('input[class*="chk-geral-"]').forEach(cb => cb.checked = true);
         let fRef = document.getElementById('filtroReferencia');
         if(fRef) fRef.value = 'replan';
-        if (typeof window.pgLimparFiltrosExtras === 'function') window.pgLimparFiltrosExtras();
         window.aplicarFiltros();
     };
 
@@ -428,7 +346,6 @@ window.pgAnexarDadosDashboard = function(fatia) {
         });
         container.innerHTML = htmlFiltros;
         window.filtrosGeraisIniciados = true;
-        if (typeof window.pgMontarFiltrosExtras === 'function') window.pgMontarFiltrosExtras();
     }
 
     function injetarDatasMapa() {
@@ -477,30 +394,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
     });
 }
 
-window.pgAbasRenderizadas = new Map();
-window.pgAtualizarAbaProducao = function(id) {
-    id = id || document.querySelector('.aba-conteudo:not(.hidden)')?.id;
-    if (!id) return;
-    const motores = {
-        abaGeral: () => processarGeral(), abaFunil: () => processarFunil(),
-        abaMatriz: () => { atualizarOpcoesFiltroMatriz(); processarMatriz(); },
-        abaEficiencia: () => processarEficiencia(), abaMetaCD: () => processarMetaCD(),
-        abaOtif: () => processarOTIF(), abaPlan: () => renderTabelaPlan(),
-        abaFalhasPlan: () => processarFalhasPlan(), abaQualidade: () => processarQualidade(),
-        abaColetas: () => renderizarDashColetas(), abaEvolucao: () => processarEvolucao(),
-        abaGiroSemanal: () => window.processarGiroSemanal(), abaOnePage: () => window.processarOnePage(),
-        abaOKRQ2: () => window.processarOKRQ2()
-    };
-    if (!motores[id] || window.pgAbasRenderizadas.get(id) === window.pgVersaoFiltros) return;
-    const inicio = performance.now();
-    motores[id]();
-    window.pgAbasRenderizadas.set(id, window.pgVersaoFiltros);
-    console.info('[PERFORMANCE]', id, Math.round(performance.now() - inicio), 'ms');
-};
-
 function aplicarFiltros() {
-    const inicioPerf = performance.now();
-    const filtroExtra = window.pgCompilarFiltrosExtras ? window.pgCompilarFiltrosExtras() : () => true;
     const getSelectedGeral = (idCat) => new Set(Array.from(document.querySelectorAll(`.chk-geral-${idCat}:checked`)).map(cb => cb.value));
     let selFilters = {};
     let tRef = document.getElementById('filtroReferencia').value || 'replan';
@@ -526,128 +420,34 @@ function aplicarFiltros() {
 
     injetarDatasMapa(); // 🎯 INJETA AS DATAS DO MAPA DE SAÍDA ANTES DOS GRÁFICOS LEREM
 
-    window.dadosBaseColetaFunil = [];
-    window.dadosDenominadorColeta = [];
-    window.dadosDestinoCDFinal = [];       // Base do caminho até CD usada pelas fases posteriores.
-    window.dadosDestinoCDOrigem = [];      // Mesma regra de CD, respeitando a Origem escolhida.
-    window.dadosTotalCanonico = [];        // Tiragem canônica: depende da Origem, nunca do seletor Destino.
-    window.dadosAcabamentoOrigem = [];     // Acabamento usa regra própria de Origem/Destino/Congelado.
-    const categorias = Object.keys(selFilters);
-    const origem = document.getElementById('pgFiltroOrigem')?.value || 'GRAFICA';
-    const destinoExtra = document.getElementById('pgFiltroDestino')?.value || 'TODOS';
+    if(window.dadosGlobais) {
+        dadosFiltrados = window.dadosGlobais.filter(l => {
+            if(!window.filtrosGeraisIniciados) return true;
 
-    const passaCategorias = (l, ignorarCategoria) => categorias.every(k => {
-        if (k === ignorarCategoria) return true;
-        if (k === 'Prioridade') return selFilters[k].has(window.obterPrioridade(l, tRef));
-        let v = String(l[window.mapCamposProducao[k]] || '').trim();
-        if (!v || v === 'undefined' || v === '-') v = '(Vazio)';
-        return selFilters[k].has(v);
-    });
-
-    dadosFiltrados = [];
-    window.dadosSemFiltroCD = [];
-
-    (window.dadosGlobais || []).forEach(l => {
-        // Time/analista/gráfica continuam valendo, mas Origem/Destino são tratados abaixo.
-        if (!filtroExtra(l, { ignorarOrigem: true, ignorarDestino: true })) return;
-
-        const origemLinha = [l._SOURCE, l.BASE, l._base].some(v => String(v || '').toUpperCase().includes('ACAB'))
-            ? 'ACABADORA' : 'GRAFICA';
-        const daOrigem = origem === 'TODOS' || origem === origemLinha;
-        const passaCategoriasAtuais = !window.filtrosGeraisIniciados || passaCategorias(l, null);
-
-        // Env. Arq até O.C. não recebem o corte de Destino CD, mas DEVEM reagir à Origem.
-        if (!window.filtrosGeraisIniciados || passaCategorias(l, 'CD Destino')) {
-            if (daOrigem) window.dadosSemFiltroCD.push(l);
-            if (origemLinha === 'GRAFICA') window.dadosDenominadorColeta.push(l);
-        }
-
-        // TIRAGEM / TOTAL BASE CANÔNICO — REGRA DEFINITIVA:
-        // O seletor extra Destino (Todos / CD Destino / Acabadora) NÃO altera a tiragem.
-        // A tiragem reage à Origem e aos filtros gerais:
-        //   Origem = Gráfica    -> PCP completo.
-        //   Origem = Acabadora  -> PCP_ACABADORAS completo.
-        //   Origem = Todas      -> PCP_ACABADORAS + PCP, retirando do PCP o que tem
-        //                          CD Destino classificado como acabadora.
-        // Em Todas, a retirada do PCP evita empilhar o mesmo caminho antes e depois da acabadora.
-        if (passaCategoriasAtuais) {
-            const ehFonteAcabadoraTotal = origemLinha === 'ACABADORA';
-            const pcpVaiParaAcabadoraTotal = !ehFonteAcabadoraTotal &&
-                typeof window.pgEhDestinoAcabadora === 'function' && window.pgEhDestinoAcabadora(l);
-
-            let entraTotalCanonico = false;
-            if (origem === 'GRAFICA') {
-                entraTotalCanonico = !ehFonteAcabadoraTotal; // PCP completo, inclusive PCP -> acabadora.
-            } else if (origem === 'ACABADORA') {
-                entraTotalCanonico = ehFonteAcabadoraTotal;  // somente PCP_ACABADORAS.
-            } else { // TODOS
-                entraTotalCanonico = ehFonteAcabadoraTotal || !pcpVaiParaAcabadoraTotal;
-            }
-
-            if (entraTotalCanonico) window.dadosTotalCanonico.push(l);
-        }
-
-        // BASE SOBERANA DO ACABAMENTO:
-        // - Destino = Todos e Destino = CD usam a mesma base de Acabamento;
-        // - Destino = Acabadora zera o Acabamento;
-        // - respeita a Origem selecionada e os demais filtros gerais;
-        // - PCP_ACABADORAS entra em Todos/CD;
-        // - PCP -> acabadora com Congelado = Não sai do Acabamento;
-        // - PCP -> acabadora com Congelado = Sim é tratado como CD e entra em Todos/CD.
-        if (passaCategoriasAtuais && daOrigem) {
-            const ehFonteAcabadoraAcab = origemLinha === 'ACABADORA';
-            const congeladoAcab = String(l['Congelado'] ?? l['CONGELADO'] ?? '')
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .trim().toUpperCase();
-            const congeladoSim = ['SIM', 'S', 'YES', 'TRUE', '1'].includes(congeladoAcab);
-            const pcpVaiParaAcabadoraAcab = !ehFonteAcabadoraAcab &&
-                typeof window.pgEhDestinoAcabadora === 'function' && window.pgEhDestinoAcabadora(l);
-
-            let entraAcabamento = false;
-            if (destinoExtra !== 'ACAB') {
-                if (ehFonteAcabadoraAcab) entraAcabamento = true;
-                else if (pcpVaiParaAcabadoraAcab) entraAcabamento = congeladoSim;
-                else entraAcabamento = true;
-            }
-
-            if (entraAcabamento) window.dadosAcabamentoOrigem.push(l);
-        }
-
-        // Regra do caminho com Destino = CD:
-        // - PCP_ACABADORAS entra;
-        // - PCP entra apenas quando CD Destino NÃO está na lista de acabadoras
-        //   e NÃO contém "ACABADORA".
-        // A base TOTAL não muda quando se troca a Origem.
-        if (destinoExtra === 'CD' && passaCategoriasAtuais) {
-            const ehFonteAcabadora = origemLinha === 'ACABADORA';
-            const pcpVaiParaAcabadora = !ehFonteAcabadora &&
-                typeof window.pgEhDestinoAcabadora === 'function' && window.pgEhDestinoAcabadora(l);
-            const entraDestinoCD = ehFonteAcabadora || !pcpVaiParaAcabadora;
-            if (entraDestinoCD) {
-                window.dadosDestinoCDFinal.push(l);
-                if (daOrigem) window.dadosDestinoCDOrigem.push(l);
-            }
-        }
-
-        // Fluxo normal do restante do portal.
-        if (!filtroExtra(l, { ignorarOrigem: true })) return;
-        if (!passaCategoriasAtuais) return;
-        if (daOrigem) dadosFiltrados.push(l);
-        if (daOrigem && destinoExtra !== 'CD') window.dadosBaseColetaFunil.push(l);
-    });
-
-    // Curva: em Destino CD, o numerador respeita também a Origem selecionada.
-    // O Total Base do funil continua sendo a regra combinada PCP direto ao CD + PCP_ACABADORAS.
-    if (destinoExtra === 'CD') {
-        window.dadosBaseColetaFunil = window.dadosDestinoCDOrigem.slice();
+            let matchAll = true;
+            Object.keys(selFilters).forEach(k => {
+                if (k === 'Prioridade') {
+                    let prioridadeDaLinha = window.obterPrioridade(l, tRef);
+                    if (!selFilters[k].has(prioridadeDaLinha)) matchAll = false;
+                } 
+                else {
+                    let valPlanilha = String(l[window.mapCamposProducao[k]] || "").trim();
+                    if(!valPlanilha || valPlanilha === "undefined" || valPlanilha === "-") valPlanilha = "(Vazio)"; 
+                    if (!selFilters[k].has(valPlanilha)) matchAll = false;
+                }
+            });
+            return matchAll;
+        });
     }
-
-    window.pgVersaoFiltros = (window.pgVersaoFiltros || 0) + 1;
-    window.pgAtualizarAbaProducao();
-    window.PG_PERFORMANCE = window.PG_PERFORMANCE || {};
-    window.PG_PERFORMANCE.ultimoFiltroMs = Math.round(performance.now() - inicioPerf);
-    console.info('[PERFORMANCE] Filtro completo:', window.PG_PERFORMANCE.ultimoFiltroMs, 'ms');
+    
+    atualizarOpcoesFiltroMatriz();
+    processarGeral(); processarFunil(); processarMatriz(); processarEficiencia(); processarMetaCD(); processarOTIF(); renderTabelaPlan(); processarFalhasPlan(); processarQualidade();renderizarDashColetas();processarEvolucao();window.processarGiroSemanal();
+    if (typeof window.processarOKRQ2 === 'function') {
+        setTimeout(window.processarOKRQ2, 100);
+    }
 }
+
+    
 
     function atualizarOpcoesFiltroMatriz() {
         let elSelect = document.getElementById("selFaseMatriz");
@@ -948,750 +748,451 @@ function aplicarFiltros() {
     }
 window.processarGiroSemanal = function() {
     if (!document.getElementById('abaGiroSemanal') || !dadosFiltrados) return;
-    window.renderColetaFinalFunil('Giro');
-    if (typeof window.renderizarPontosAtencaoGiro === 'function') {
-        window.renderizarPontosAtencaoGiro(dadosFiltrados);
-    }
-};
 
-window.pgCampoColeta = (function() {
-    const indices = new WeakMap(), nomes = new Map();
-    const norm = nome => {
-        if (!nomes.has(nome)) nomes.set(nome, String(nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase());
-        return nomes.get(nome);
-    };
-    return (linha, nome) => {
-        if (Object.prototype.hasOwnProperty.call(linha, nome)) return linha[nome] ?? '';
-        let indice = indices.get(linha);
-        if (!indice) {
-            indice = new Map();
-            Object.keys(linha).forEach(k => { const n = norm(k); if (!indice.has(n)) indice.set(n, k); });
-            indices.set(linha, indice);
+    let tRef = document.getElementById('filtroReferencia').value || 'replan';
+    let hojeISO = dtHojeISO; // Usa sua variável global
+    let ontem = new Date(dtHoje); ontem.setDate(ontem.getDate() - 1);
+    let ontemISO = ontem.toISOString().split('T')[0];
+
+    let marcasData = {};
+    let totais = { tiragem: 0, prazo: 0, atraso: 0, pendente: 0 };
+    let efD1 = { baseVencida: 0, noPrazo: 0 };
+    
+    let aderFases = {};
+    FASES.forEach(f => aderFases[f.id] = { volPlan: 0, baseAtHoje: 0, planAtHoje: 0, realTotal: 0, noPrazo: 0 });
+
+    // Função de extração de data idêntica a da aba OKR
+    let parseMeta = (v) => {
+        if (!v) return null;
+        let str = String(v).trim();
+        if (str.includes('T')) str = str.split('T')[0];
+        if (str.includes('/')) { 
+            let p = str.split('/'); 
+            if (p.length === 3) return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`; 
         }
-        return linha[indice.get(norm(nome))] ?? '';
+        return str.substring(0, 10);
     };
-})();
-window.pgObterResumoColeta = function() {
-    const base = window.dadosBaseColetaFunil || [];
-    const cache = window.pgCacheResumoColeta;
-    if (cache && cache.base === base && cache.hoje === dtHojeISO) return cache.resumo;
-    const resumo = window.pgCalcularColetaFunil(base, dtHojeISO);
-    window.pgCacheResumoColeta = { base, hoje: dtHojeISO, resumo };
-    window.pgResumoColetaFunil = resumo;
-    return resumo;
-};
 
-window.pgCalcularColetaFunil = function(base, hoje) {
-    const norm = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
-    const campo = window.pgCampoColeta;
-    const numero = v => {
-        if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-        let s = String(v ?? '').trim();
-        if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
-        else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
-        return Number(s) || 0;
-    };
-    const data = v => {
-        if (v === null || v === undefined || String(v).trim() === '' || Number(v) === 0) return null;
-        let iso;
-        if (typeof v === 'number') {
-            if (!Number.isFinite(v) || v <= 0) return null;
-            const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 86400000);
-            if (!Number.isFinite(d.getTime())) return null;
-            iso = d.toISOString().slice(0, 10);
-        } else {
-            const s = String(v).trim();
-            let m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|$|\s)/);
-            if (m) iso = `${m[1]}-${m[2]}-${m[3]}`;
-            else {
-                m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:$|\s)/);
-                if (m) iso = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    // 1. Digerir os Dados
+    dadosFiltrados.forEach(l => {
+        let t = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"]);
+        if (t <= 0) return;
+
+        let m = String(l["UNIDADE"] || l["MARCA_FINAL"] || "N/A").trim().toUpperCase();
+        if (!marcasData[m]) marcasData[m] = { tiragem: 0, prazo: 0, atraso: 0, pendente: 0 };
+
+        marcasData[m].tiragem += t;
+        totais.tiragem += t;
+
+        // =========================================================================
+        // Análise específica de Coleta (Para os 3 painéis de cima)
+        // CORREÇÃO APLICADA: Filtro de Fase e Datas idênticas à Aba de Aderência (OKR)
+        // =========================================================================
+        if (belongsToPhase(l, 'col')) {
+            let fCol = FASES.find(f => f.id === 'col');
+            let colsCol = getCols(fCol, tRef);
+            
+            let metaISO = null;
+            // Garante o respeito ao toggle Global (Baseline vs Replan)
+            if (tRef === 'baseline') {
+                metaISO = parseMeta(l[colsCol.plan]);
+            } else {
+                metaISO = parseMeta(l["META_COLETA_D"] || l[colsCol.plan]);
+            }
+            
+            let dtColetaReal = parseMeta(l["DT_ENTREGA_DG"] || null);
+            
+            if (dtColetaReal) {
+                if (metaISO && dtColetaReal <= metaISO) {
+                    marcasData[m].prazo += t; totais.prazo += t;
+                } else {
+                    marcasData[m].atraso += t; totais.atraso += t;
+                }
+            } else {
+                marcasData[m].pendente += t; totais.pendente += t;
+            }
+
+            // Eficiência D-1 (Apenas itens onde a meta de coleta já venceu)
+            if (metaISO && metaISO <= ontemISO) {
+                efD1.baseVencida += t;
+                if (dtColetaReal && dtColetaReal <= metaISO) {
+                    efD1.noPrazo += t;
+                }
             }
         }
-        if (!iso) return null;
-        const d = new Date(iso + 'T00:00:00Z');
-        if (!Number.isFinite(d.getTime()) || d.getTime() <= 0 || d.toISOString().slice(0, 10) !== iso) return null;
 
-        // Blindagem da visão mensal: algumas células numéricas sem data real estavam sendo
-        // interpretadas como serial de data e criavam meses de 1986/1987/1988.
-        // O projeto corrente só considera datas dentro de uma janela operacional plausível.
-        const anoRef = Number(String(hoje || dtHojeISO).slice(0, 4));
-        const ano = Number(iso.slice(0, 4));
-        if (Number.isFinite(anoRef) && (ano < anoRef - 2 || ano > anoRef + 3)) return null;
-
-        return iso;
-    };
-
-    const ehAcab = l => [l._SOURCE, l.BASE, l._base].some(v => norm(v).includes('ACAB'));
-
-    // A regra pedida é idêntica em PCP e PCP_ACABADORAS:
-    // esperado = (re) plan; se vazio, baseline.
-    const plano = l => {
-        const replan = campo(l, 'Coleta/Internalização de estoque final (re) plan');
-        const valor = String(replan ?? '').trim() !== ''
-            ? replan
-            : campo(l, 'COLETA/INTERNALIZAÇÃO FIM BASELINE');
-        return data(valor);
-    };
-
-    const novo = () => ({ total: 0, esperadoHoje: 0, pendenteVencido: 0 });
-    const out = { ...novo(), realizado: 0, semPlano: 0, excluidoReal: 0, marcas: {}, graficas: {}, registros: [], dias: new Map() };
-    const grupo = (l, tipo) => norm(tipo === 'marcas' ? l.MARCA_FINAL || l.UNIDADE || 'N/A' : l.GRAFICA_FINAL || l['GRÁFICA'] || 'N/A');
-    const add = (l, campoNome, n) => {
-        out[campoNome] += n;
-        ['marcas', 'graficas'].forEach(tipo => {
-            const g = grupo(l, tipo);
-            if (!out[tipo][g]) out[tipo][g] = novo();
-            out[tipo][g][campoNome] += n;
+        // Aderência por Fase (Painel de baixo)
+        FASES.forEach(f => {
+            if (!belongsToPhase(l, f.id)) return;
+            let tFaseReal = window.getVolFase ? window.getVolFase(l, f, t) : t;
+            let cols = getCols(f, tRef);
+            let dtBase = extrairDataISO(l[f.colBase]);
+            let dtPlan = extrairDataISO(l[cols.plan]);
+            
+            aderFases[f.id].volPlan += t;
+            if (dtBase && dtBase <= hojeISO) aderFases[f.id].baseAtHoje += t;
+            if (dtPlan && dtPlan <= hojeISO) aderFases[f.id].planAtHoje += t;
+            
+            if (dataFoiPreenchida(l, f)) {
+                aderFases[f.id].realTotal += tFaseReal;
+                if (foiEntregueNoPrazo(l, f, tRef)) aderFases[f.id].noPrazo += tFaseReal;
+            }
         });
-    };
-    const somar = (dia, tipo, n) => {
-        if (!out.dias.has(dia)) out.dias.set(dia, { esperado: 0, real: 0 });
-        out.dias.get(dia)[tipo] += n;
-    };
-
-    (base || []).forEach(l => {
-        const tiragem = Math.max(0, numero(campo(l, 'TIRAGEM')));
-        if (tiragem <= 0) return;
-        add(l, 'total', tiragem);
-
-        // Realizado da curva = Coleta TP acumulada.
-        // O volume continua sendo TIRAGEM COLETADA; a data que posiciona o volume
-        // na curva passa a ser a data real de Coleta TP (DATA_DZ / Coleta_TP).
-        // Data_Coleta_Mapa fica reservada ao Mapa Solicitado (visão futura).
-        const coletada = Math.max(0, numero(campo(l, 'TIRAGEM COLETADA')));
-        const dtReal = data(l.DATA_DZ) || data(campo(l, 'Coleta_TP'));
-        if (coletada > 0 && dtReal && dtReal <= hoje) {
-            out.realizado += coletada;
-            somar(dtReal, 'real', coletada);
-        } else if (coletada > 0) {
-            out.excluidoReal += coletada;
-        }
-
-        const dtPlan = plano(l);
-        const motivo = ehAcab(l)
-            ? 'PCP_ACABADORAS: (re) plan; fallback baseline'
-            : 'PCP: (re) plan; fallback baseline';
-        out.registros.push({ linha: l, pcp: l, dtPlan, tiragem, motivo, coletada, dtReal });
-        if (!dtPlan) {
-            out.semPlano += tiragem;
-            return;
-        }
-        somar(dtPlan, 'esperado', tiragem);
-        if (dtPlan <= hoje) add(l, 'esperadoHoje', tiragem);
     });
 
-    window.pgItensColetaDia(out, hoje, hoje, hoje, true).forEach(item => {
-        if (item.dias < 0) add({ MARCA_FINAL: item.marca, GRAFICA_FINAL: item.graficaBase }, 'pendenteVencido', item.tiragem);
-    });
-    return out;
-};
+// 2. Montar KPI D-1
+    let pctD1 = efD1.baseVencida > 0 ? (efD1.noPrazo / efD1.baseVencida) * 100 : 0;
+    let efPendente = efD1.baseVencida - efD1.noPrazo;
+    let baseTotalColeta = totais.prazo + totais.atraso + totais.pendente; // Soma geral da fase Coleta
+    
+    document.getElementById('giroEfPz').innerText = window.formatarBR(efD1.noPrazo);
+    if(document.getElementById('giroEfPend')) document.getElementById('giroEfPend').innerText = window.formatarBR(efPendente);
+    document.getElementById('giroEfBase').innerText = window.formatarBR(efD1.baseVencida);
+    if(document.getElementById('giroEfTotal')) document.getElementById('giroEfTotal').innerText = window.formatarBR(baseTotalColeta);
+    
+    let elPct = document.getElementById('giroEfPct');
+    elPct.innerText = efD1.baseVencida > 0 ? pctD1.toFixed(1) + "%" : "-";
+    
+    // Cores Dinâmicas
+    if (pctD1 >= 90) elPct.className = "text-5xl font-black text-green-700 transition-colors";
+    else if (pctD1 >= 80) elPct.className = "text-5xl font-black text-green-500 transition-colors";
+    else if (pctD1 >= 65) elPct.className = "text-5xl font-black text-amber-500 transition-colors";
+    else elPct.className = "text-5xl font-black text-red-600 transition-colors";
 
-window.pgItensColetaDia = function(resumo, dia, hoje, inicioPeriodo = dia, incluirTodas = false) {
-    const futuro = dia > hoje;
-    const limiteReal = futuro ? hoje : dia;
-    if (!resumo._pendenciasPorData) resumo._pendenciasPorData = new Map();
-    let pendencias = resumo._pendenciasPorData.get(limiteReal);
-    if (!pendencias) {
-    const consumido = new Map();
-    pendencias = resumo.registros.slice().sort((a, b) => (a.dtPlan || '9999').localeCompare(b.dtPlan || '9999')).flatMap(r => {
-        // Rateia o volume PCP entre eventuais divisões da acabadora uma única vez.
-        const usado = consumido.get(r.pcp) || 0;
-        // No saldo atual, o volume coletado independe da data. A data só
-        // limita a reconstrução histórica e os pontos da curva realizada.
-        const coletaDisponivel = limiteReal >= hoje || (r.dtReal && r.dtReal <= limiteReal);
-        const disponivel = coletaDisponivel ? Math.max(0, r.coletada - usado) : 0;
-        const abatido = Math.min(r.tiragem, disponivel);
-        if (r.pcp) consumido.set(r.pcp, usado + abatido);
-        const saldo = r.tiragem - abatido;
-        if (saldo <= 0) return [];
-        const l = r.linha, pcp = r.pcp || l;
-        return [{ dtPlan: r.dtPlan,
-            graficaBase: String(pcp.GRAFICA_FINAL || pcp['GRÁFICA'] || 'N/A'),
-            segmento: String(pcp.SEGMENTO || 'N/A'),
-            grafica: String(l.GRAFICA_FINAL || l['GRÁFICA'] || 'N/A'),
-            marca: String(pcp.MARCA_FINAL || pcp.UNIDADE || 'N/A'),
-            serie: String(pcp['SÉRIE'] || pcp['Série'] || pcp.SERIE || '-'),
-            sku: String(pcp.SKU_REAL || pcp.SKU || '-'),
-            desc: String(pcp.DESC_REAL || pcp['DESCRIÇÃO'] || pcp.PRODUTO || '-'),
-            status: 'Em Aberto',
-            pendencia: 'Coleta Final',
-            dias: r.dtPlan ? Math.round((new Date(r.dtPlan + 'T00:00:00Z') - new Date((futuro ? hoje : dia) + 'T00:00:00Z')) / 86400000) : null,
-            tiragem: saldo
-        }];
-    });
-    // Limit historical snapshots retained in memory; the current date is reused most often.
-    if (resumo._pendenciasPorData.size >= 4) resumo._pendenciasPorData.delete(resumo._pendenciasPorData.keys().next().value);
-    resumo._pendenciasPorData.set(limiteReal, pendencias);
-    }
-    return pendencias.filter(r => incluirTodas || (r.dtPlan && (futuro ? r.dtPlan >= inicioPeriodo && r.dtPlan <= dia : r.dtPlan <= dia)))
-        .map(r => ({ ...r, pendencia: (futuro ? 'Coleta Final — A coletar ' : 'Coleta Final — Backlog em ') + dia.split('-').reverse().join('/') }));
-};
-
-window.extrairColetaFunilDia = function(dia, inicioPeriodo = dia, botao, sufixo = '') {
-    const resumo = window.pgResumoColetaFunil;
-    if (!resumo || window.pgExtraindoColeta) return;
-    const itens = window.pgItensColetaDia(resumo, dia, dtHojeISO, inicioPeriodo);
-    if (!itens.length) { alert('Nenhum saldo de coleta para extrair nesta data.'); return; }
-    window.pgExtraindoColeta = true;
-    if (botao) botao.disabled = true;
-    const novaAba = window.open('about:blank', '_blank');
-    const liberar = () => { window.pgExtraindoColeta = false; if (botao) botao.disabled = false; };
-    const falha = erro => { liberar(); if (novaAba) novaAba.close(); alert('Erro ao gerar planilha: ' + erro); };
-    google.script.run.withSuccessHandler(res => {
-        if (!res || !res.success) { falha(res?.error || 'Erro desconhecido'); return; }
-        liberar();
-        if (novaAba) novaAba.location.href = res.url;
-        const link = document.getElementById('linkExtracaoColetaFunil' + sufixo);
-        link.href = res.url; link.hidden = false;
-    }).withFailureHandler(falha).gerarPlanilhaGiroFiltrado(itens);
-};
-
-window.exportarAuditoriaMetaColeta = function() {
-    const resumo = window.pgObterResumoColeta();
-    const base = new Set(window.dadosBaseColetaFunil || []);
-    const denominador = new Set(document.getElementById('pgFiltroDestino')?.value === 'CD'
-        ? window.dadosDenominadorColeta || [] : window.dadosBaseColetaFunil || []);
-    const baseAcabadora = document.getElementById('pgFiltroOrigem')?.value === 'ACABADORA' && document.getElementById('pgFiltroDestino')?.value !== 'CD';
-    const registros = new Map(resumo.registros.map(r => [r.pcp, r]));
-    const campo = window.pgCampoColeta;
-    const cabecalho = ['Origem', 'Chave', 'Gráfica', 'Marca', 'Envio', 'SKU', 'No filtro atual', 'Tiragem original', 'Volume na base percentual', 'CD Destino', 'Característica da solicitação', 'Replan coleta', 'Baseline coleta PCP', 'Limite coleta acabadora', 'Data usada na meta', 'Volume usado na meta', 'Forecast acumulado até setembro/2026', 'Motivo', 'AY', 'Tiragem coletada', 'Data coleta mapa'];
-    const linhas = (window.dadosGlobais || []).map(l => {
-        const noFiltro = base.has(l), acab = String(l._SOURCE || '').toUpperCase().includes('ACAB');
-        const r = registros.get(l), estado = window.pgEstadoColetaMapa(l);
-        const meta = r?.dtPlan ? r.tiragem : 0;
-        const motivo = !noFiltro ? 'Fora dos filtros atuais' : r ? (r.dtPlan ? r.motivo : 'Sem data válida: ' + r.motivo) : acab ? 'Sem volume na meta atual' : 'Sem tiragem positiva';
-        return [l._SOURCE || 'PCP', l.JOIN_KEY || l.Chave || '', l.GRAFICA_FINAL || l['GRÁFICA'], l.MARCA_FINAL || l.UNIDADE, l.ENVIO || l.Envio,
-            l.SKU_REAL || l.SKU, noFiltro ? 'Sim' : 'Não', campo(l, 'TIRAGEM'), noFiltro ? Math.max(0, Number(window.arredondar(campo(l, 'TIRAGEM')))) : 0,
-            l.CD_FINAL || l['CD DESTINO'], campo(l, 'CARACTERÍSTICA DA SOLICITAÇÃO'), campo(l, 'Coleta/Internalização de estoque final (re) plan'),
-            campo(l, 'COLETA/INTERNALIZAÇÃO FIM BASELINE'), campo(l, 'DATA LIMITE DE COLETA'), r?.dtPlan || '', meta,
-            r?.dtPlan && r.dtPlan <= '2026-09-30' ? meta : 0, motivo, estado.ay, estado.coletada, campo(l, 'Data_Coleta_Mapa')];
-    });
-    const csv = v => {
-        let txt = String(v ?? '');
-        if (typeof v === 'string' && /^[=+@-]/.test(txt)) txt = "'" + txt;
-        return '"' + txt.replace(/"/g, '""') + '"';
-    };
-    const url = URL.createObjectURL(new Blob(['\uFEFF' + [cabecalho, ...linhas].map(l => l.map(csv).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = 'Auditoria_Forecast_Coleta_' + dtHojeISO + '.csv'; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
-
-// PG_CURVA_FILTROS_FORECAST_V1
-// O backend mantém os nomes históricos de Forecast para não quebrar dados já persistidos.
-// Na interface, esses pontos publicados passam a representar a META manual.
-window.PG_FORECAST_COLETA = window.PG_FORECAST_COLETA || {};
-window.PG_FORECAST_VIEW = window.PG_FORECAST_VIEW || {};
-window.PG_META_PREVIEW = window.PG_META_PREVIEW || {};
-window.PG_FORECAST_EDITOR_EMAIL = 'leonardo.pereira@arcoeducacao.com.br';
-
-window.pgPodeEditarForecastColeta = function() {
-    return String(window.PG_USER_EMAIL || '').trim().toLowerCase() === window.PG_FORECAST_EDITOR_EMAIL;
-};
-
-window.pgChaveForecastColeta = function() {
-    const ler = (id, padrao = 'TODOS') => document.getElementById(id)?.value || padrao;
-    const gerais = {};
-    Object.keys(window.listasMultiProducao || {}).sort().forEach(k => {
-        const id = k.replace(/\s+/g, '').replace('.', '');
-        const caixas = Array.from(document.querySelectorAll(`.chk-geral-${id}`));
-        if (!caixas.length) return;
-        const selecionados = caixas.filter(cb => cb.checked).map(cb => cb.value).sort();
-        gerais[k] = selecionados.length === caixas.length ? '*' : selecionados;
-    });
-    const cfg = {
-        origem: ler('pgFiltroOrigem', 'GRAFICA'),
-        destino: ler('pgFiltroDestino'),
-        time: ler('pgFiltroTime'),
-        analista: ler('pgFiltroAnalista'),
-        grafica: ler('pgFiltroGraficaAnalista'),
-        referencia: ler('filtroReferencia', 'replan'),
-        gerais
-    };
-    const raw = JSON.stringify(cfg);
-    let h = 2166136261;
-    for (let i = 0; i < raw.length; i++) {
-        h ^= raw.charCodeAt(i);
-        h = Math.imul(h, 16777619);
-    }
-    return 'FC_' + (h >>> 0).toString(16).padStart(8, '0').toUpperCase();
-};
-
-window.pgAtualizarBotaoForecastColeta = function(sufixo = '') {
-    const btn = document.getElementById('btnForecastColetaFunil' + sufixo);
-    if (!btn) return;
-    btn.classList.toggle('hidden', !window.pgPodeEditarForecastColeta());
-};
-
-window.pgLerPontosMetaEditor = function(sufixo = '') {
-    const chaveView = sufixo || 'FUNIL';
-    const view = window.PG_FORECAST_VIEW[chaveView];
-    const editor = document.getElementById('editorForecastColetaFunil' + sufixo);
-    if (!view || !editor) return null;
-
-    // Meta CD é persistida diretamente em percentual acumulado (0 a 100).
-    // Preserva pontos publicados fora da janela que está sendo editada.
-    const existentes = new Map(((window.PG_FORECAST_COLETA && window.PG_FORECAST_COLETA[view.chave]) || [])
-        .map(p => [p.data, Number(p.valor)]));
-    const inputs = Array.from(editor.querySelectorAll('[data-pg-forecast-date]'));
-    for (const input of inputs) {
-        const data = input.dataset.pgForecastDate;
-        const raw = String(input.value || '').trim();
-        if (!raw) {
-            existentes.delete(data);
-            continue;
-        }
-        const valor = Number(raw.replace(',', '.'));
-        if (!Number.isFinite(valor) || valor < 0 || valor > 100) {
-            alert('Meta CD inválida em ' + data + '. Informe um percentual entre 0 e 100.');
-            return null;
-        }
-        existentes.set(data, Math.round(valor * 10) / 10);
-    }
-
-    const pontos = Array.from(existentes, ([data, valor]) => ({ data, valor }))
-        .sort((a, b) => a.data.localeCompare(b.data));
-    for (let i = 1; i < pontos.length; i++) {
-        if (pontos[i].valor < pontos[i - 1].valor) {
-            alert('A Meta CD é acumulada e não pode diminuir entre as datas.');
-            return null;
-        }
-    }
-    return pontos;
-};
-
-window.pgAbrirEditorForecastColeta = function(sufixo = '') {
-    if (!window.pgPodeEditarForecastColeta()) return;
-    const chaveView = sufixo || 'FUNIL';
-    const view = window.PG_FORECAST_VIEW[chaveView];
-    const editor = document.getElementById('editorForecastColetaFunil' + sufixo);
-    if (!view || !editor) return;
-    if (!view.total || view.total <= 0) {
-        alert('Não há base de tiragem para registrar Meta CD neste filtro.');
-        return;
-    }
-
-    // Se houver uma prévia aberta, usa seus valores; senão usa o que já está publicado.
-    const fonte = window.PG_META_PREVIEW[chaveView]
-        || ((window.PG_FORECAST_COLETA && window.PG_FORECAST_COLETA[view.chave]) || []);
-    const mapa = new Map(fonte.map(p => [p.data, Number(p.valor)]));
-    const rotulo = d => view.modo === 'mensal'
-        ? d.slice(5, 7) + '/' + d.slice(0, 4)
-        : d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
-    const titulo = view.modo === 'atual' ? 'Meta CD acumulada diária (%)' : 'Meta CD acumulada (%)';
-    const ajuda = view.modo === 'atual'
-        ? 'Preencha o percentual acumulado dia a dia do mês atual. Use valores de 0 a 100. Campos vazios não criam ponto.'
-        : 'Informe o percentual acumulado da Meta CD, de 0 a 100. Campos vazios não criam ponto.';
-
-    editor.innerHTML = `
-        <div class="rounded-lg border border-blue-200 bg-blue-50 p-3">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <div>
-                    <div class="text-xs font-black text-blue-800 uppercase">${titulo}</div>
-                    <div class="text-[10px] text-blue-700">${ajuda}</div>
-                    <div id="statusPreviewMeta${sufixo}" class="text-[10px] text-slate-500 mt-1"></div>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <button type="button" onclick="window.pgPrevisualizarMetaColeta('${sufixo}')" class="text-xs font-bold text-blue-700 border border-blue-300 bg-white rounded px-3 py-1.5 hover:bg-blue-100">Pré-visualizar</button>
-                    <button type="button" onclick="window.pgSalvarForecastColeta('${sufixo}')" class="text-xs font-bold text-white bg-blue-700 rounded px-3 py-1.5 hover:bg-blue-800">Salvar e publicar</button>
-                    <button type="button" onclick="window.pgExcluirForecastColeta('${sufixo}')" class="text-xs font-bold text-rose-700 border border-rose-200 bg-white rounded px-3 py-1.5 hover:bg-rose-50">Excluir Meta CD</button>
-                    <button type="button" onclick="window.pgFecharEditorForecastColeta('${sufixo}')" class="text-xs font-bold text-slate-600 border border-slate-200 bg-white rounded px-3 py-1.5 hover:bg-slate-50">Cancelar</button>
-                </div>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2">
-                ${view.pontos.map(d => `<label class="bg-white border border-blue-100 rounded p-2 text-[10px] font-bold text-slate-600">${rotulo(d)}<div class="relative mt-1"><input type="number" min="0" max="100" step="0.1" inputmode="decimal" data-pg-forecast-date="${d}" value="${mapa.has(d) ? mapa.get(d) : ''}" class="w-full border border-slate-200 rounded px-2 py-1 pr-6 text-xs text-slate-800"><span class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">%</span></div></label>`).join('')}
-            </div>
-        </div>`;
-    editor.classList.remove('hidden');
-};
-
-window.pgPrevisualizarMetaColeta = function(sufixo = '') {
-    if (!window.pgPodeEditarForecastColeta()) return;
-    const chaveView = sufixo || 'FUNIL';
-    const pontos = window.pgLerPontosMetaEditor(sufixo);
-    if (!pontos) return;
-    window.PG_META_PREVIEW[chaveView] = pontos;
-    window.renderColetaFinalFunil(sufixo);
-    const status = document.getElementById('statusPreviewMeta' + sufixo);
-    if (status) status.textContent = 'Prévia local exibida no gráfico. Nada foi publicado ainda.';
-};
-
-window.pgFecharEditorForecastColeta = function(sufixo = '', renderizar = true) {
-    const chaveView = sufixo || 'FUNIL';
-    const editor = document.getElementById('editorForecastColetaFunil' + sufixo);
-    if (editor) editor.classList.add('hidden');
-    if (window.PG_META_PREVIEW) delete window.PG_META_PREVIEW[chaveView];
-    if (renderizar && typeof window.renderColetaFinalFunil === 'function') window.renderColetaFinalFunil(sufixo);
-};
-
-window.pgSalvarForecastColeta = function(sufixo = '') {
-    if (!window.pgPodeEditarForecastColeta()) return;
-    const chaveView = sufixo || 'FUNIL';
-    const view = window.PG_FORECAST_VIEW[chaveView];
-    if (!view) return;
-    const pontos = window.pgLerPontosMetaEditor(sufixo);
-    if (!pontos) return;
-
-    const finalizar = res => {
-        if (!res || !res.success) {
-            alert('Não foi possível salvar a Meta CD.');
-            return;
-        }
-        window.PG_FORECAST_COLETA = window.PG_FORECAST_COLETA || {};
-        if (res.pontos && res.pontos.length) window.PG_FORECAST_COLETA[view.chave] = res.pontos;
-        else delete window.PG_FORECAST_COLETA[view.chave];
-        if (window.PG_META_PREVIEW) delete window.PG_META_PREVIEW[chaveView];
-        window.pgFecharEditorForecastColeta(sufixo, false);
-        window.renderColetaFinalFunil(sufixo);
-        if (window.showToast) window.showToast('Meta CD publicada.', 'success', 'Meta CD');
-    };
-    google.script.run.withSuccessHandler(finalizar).withFailureHandler(err => {
-        alert('Erro ao salvar Meta CD: ' + (err && err.message ? err.message : err));
-    }).salvarForecastColetaPortal({ chave: view.chave, pontos });
-};
-
-window.pgExcluirForecastColeta = function(sufixo = '') {
-    if (!window.pgPodeEditarForecastColeta()) return;
-    const chaveView = sufixo || 'FUNIL';
-    const view = window.PG_FORECAST_VIEW[chaveView];
-    if (!view) return;
-    if (!confirm('Excluir a Meta CD publicada para este conjunto de filtros?')) return;
-    google.script.run.withSuccessHandler(res => {
-        if (!res || !res.success) { alert('Não foi possível excluir a Meta CD.'); return; }
-        if (window.PG_FORECAST_COLETA) delete window.PG_FORECAST_COLETA[view.chave];
-        if (window.PG_META_PREVIEW) delete window.PG_META_PREVIEW[chaveView];
-        window.pgFecharEditorForecastColeta(sufixo, false);
-        window.renderColetaFinalFunil(sufixo);
-        if (window.showToast) window.showToast('Meta CD excluída.', 'success', 'Meta CD');
-    }).withFailureHandler(err => {
-        alert('Erro ao excluir Meta CD: ' + (err && err.message ? err.message : err));
-    }).salvarForecastColetaPortal({ chave: view.chave, pontos: [] });
-};
-
-window.renderColetaFinalFunil = function(sufixo = '') {
-    const elemento = id => document.getElementById(id + sufixo);
-    const chaveGrafico = 'coletaFinalFunil' + sufixo;
-    const canvas = elemento('grafColetaFinalFunil');
-    if (!canvas) return;
-    const resumo = window.pgObterResumoColeta();
-    window.pgResumoColetaFunil = resumo;
-    const modo = document.querySelector(`input[name="visaoColetaFunil${sufixo}"]:checked`)?.value || 'mensal';
-    const custom = elemento('periodoColetaFunil');
-    custom.classList.toggle('hidden', modo !== 'personalizado');
-    const inicioInput = elemento('inicioColetaFunil');
-    const fimInput = elemento('fimColetaFunil');
-    const mes = dtHojeISO.slice(0, 7);
-    const ultimoDia = m => new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).toISOString().slice(0, 10);
-    if (!inicioInput.value) inicioInput.value = mes + '-01';
-    if (!fimInput.value) fimInput.value = ultimoDia(mes);
-    const dias = Array.from(resumo.dias.keys()).concat(dtHojeISO).sort();
-    let inicio = modo === 'mensal' ? dias[0].slice(0, 7) + '-01' : modo === 'atual' ? mes + '-01' : inicioInput.value;
-    let fim = modo === 'mensal' ? ultimoDia(dias.at(-1).slice(0, 7)) : modo === 'atual' ? ultimoDia(mes) : fimInput.value;
-    const nota = elemento('notaColetaFinalFunil');
-    if (!inicio || !fim || inicio > fim) {
-        nota.textContent = 'Informe uma data inicial menor ou igual à data final.';
-        if (graficos[chaveGrafico]) { graficos[chaveGrafico].destroy(); graficos[chaveGrafico] = null; }
-        return;
-    }
-    const pontos = [];
-    for (let d = new Date(inicio + 'T00:00:00Z'); d.toISOString().slice(0, 10) <= fim;) {
-        const iso = d.toISOString().slice(0, 10);
-        pontos.push(modo === 'mensal' ? ultimoDia(iso.slice(0, 7)) : iso);
-        if (modo === 'mensal') d.setUTCMonth(d.getUTCMonth() + 1);
-        else d.setUTCDate(d.getUTCDate() + 1);
-    }
-
-    const eventos = Array.from(resumo.dias.entries()).sort(([a], [b]) => a.localeCompare(b));
-    let i = 0, plan = 0, real = 0;
-    const esperado = [], realizado = [];
-    pontos.forEach(d => {
-        while (i < eventos.length && eventos[i][0] <= d) {
-            plan += eventos[i][1].esperado;
-            real += eventos[i][1].real;
-            i++;
-        }
-        esperado.push(resumo.total > 0 ? plan / resumo.total * 100 : 0);
-        const futuro = modo === 'mensal' ? d.slice(0, 7) > mes : d > dtHojeISO;
-        realizado.push(futuro ? null : resumo.total > 0 ? real / resumo.total * 100 : 0);
+    // 3. Montar Arrays para Gráficos Superiores
+    let labelsM = Object.keys(marcasData).sort();
+    labelsM.push('Total geral');
+    
+    let dTir = [], dPz = [], dAt = [], dPd = [];
+    
+    labelsM.forEach(m => {
+        let valTiragem = m === 'Total geral' ? totais.tiragem : marcasData[m].tiragem;
+        let valPrazo = m === 'Total geral' ? totais.prazo : marcasData[m].prazo;
+        let valAtraso = m === 'Total geral' ? totais.atraso : marcasData[m].atraso;
+        let valPendente = m === 'Total geral' ? totais.pendente : marcasData[m].pendente;
+        
+        dTir.push(valTiragem);
+        let totS = valPrazo + valAtraso + valPendente;
+        dPz.push(totS > 0 ? (valPrazo/totS)*100 : 0);
+        dPd.push(totS > 0 ? (valPendente/totS)*100 : 0);
+        dAt.push(totS > 0 ? (valAtraso/totS)*100 : 0);
     });
 
-    const chaveMeta = window.pgChaveForecastColeta();
-    const chaveView = sufixo || 'FUNIL';
-    const salvosMeta = (window.PG_FORECAST_COLETA && window.PG_FORECAST_COLETA[chaveMeta]) || [];
-    const fonteMeta = (window.PG_META_PREVIEW && window.PG_META_PREVIEW[chaveView]) || salvosMeta;
-    const mapaMeta = new Map(fonteMeta.map(p => [p.data, Number(p.valor)]));
-    const meta = pontos.map(d => mapaMeta.has(d) ? Math.max(0, Math.min(100, Number(mapaMeta.get(d)))) : null);
-    const temMeta = meta.some(v => v !== null && Number.isFinite(v));
-    window.PG_FORECAST_VIEW[chaveView] = { chave: chaveMeta, pontos: pontos.slice(), total: resumo.total, modo };
-    window.pgAtualizarBotaoForecastColeta(sufixo);
+    // 4. Desenhar Gráficos
+    if (window.chartGiroTir) window.chartGiroTir.destroy();
+    if (window.chartGiroSt) window.chartGiroSt.destroy();
+    if (window.chartGiroAd) window.chartGiroAd.destroy();
 
-    const fmt = n => Math.round(n).toLocaleString('pt-BR');
-    const pct = n => (resumo.total > 0 ? n / resumo.total * 100 : 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
-    const origemAtual = document.getElementById('pgFiltroOrigem')?.value || 'GRAFICA';
-    const destinoAtual = document.getElementById('pgFiltroDestino')?.value || 'TODOS';
-    const nomeBase = destinoAtual === 'CD' ? 'Destino CD' : origemAtual === 'ACABADORA' ? 'Acabadora' : origemAtual === 'TODOS' ? 'filtro atual' : 'PCP';
-    elemento('resumoColetaFinalFunil').innerHTML = `<span>Base ${nomeBase}: <b>${fmt(resumo.total)}</b></span><span>Forecast até hoje: <b>${fmt(resumo.esperadoHoje)} (${pct(resumo.esperadoHoje)})</b></span><span>Coleta TP: <b>${fmt(resumo.realizado)} (${pct(resumo.realizado)})</b></span>`;
-    nota.textContent = `Base, forecast e Coleta TP seguem os filtros Origem e Destino ativos. ` + (modo === 'mensal' ? 'Pontos no fechamento de cada mês; Coleta TP do mês atual parcial até hoje. ' : '')
-        + (resumo.semPlano ? `${fmt(resumo.semPlano)} exemplares sem data planejada. ` : '')
-        + (resumo.excluidoReal ? `${fmt(resumo.excluidoReal)} coletados excluídos por data ausente, inválida ou futura. ` : '')
-        + (!resumo.total ? 'Sem tiragem para os filtros selecionados.' : '');
-    elemento('larguraColetaFunil').style.minWidth = Math.max(800, pontos.length * 106) + 'px';
-    const faixa = elemento('diasColetaFunil');
-    faixa.style.gridTemplateColumns = `repeat(${pontos.length}, minmax(0, 1fr))`;
-    faixa.innerHTML = pontos.map((d, idx) => {
-        const futuro = d > dtHojeISO;
-        const ini = modo === 'mensal' ? d.slice(0, 7) + '-01' : d;
-        const valor = futuro ? window.pgItensColetaDia(resumo, d, dtHojeISO, ini).reduce((s, l) => s + l.tiragem, 0)
-            : ((realizado[idx] || 0) - esperado[idx]) * resumo.total / 100;
-        const textoData = modo === 'mensal' ? d.slice(5, 7) + '/' + d.slice(0, 4) : d.slice(8, 10) + '/' + d.slice(5, 7);
-        const cor = futuro ? '#334155' : valor < -0.5 ? '#dc2626' : '#047857';
-        return `<button type="button" title="Extrair dia" aria-label="Extrair dia ${textoData}" onclick="extrairColetaFunilDia('${d}', '${ini}', this, '${sufixo}')" style="padding:8px 2px;border-top:1px solid #e2e8f0;text-align:center;cursor:pointer" class="hover:bg-slate-100 rounded">
-            <span style="display:block;font-size:12px;font-weight:600">${textoData}</span>
-            <span style="display:block;font-size:13px;font-weight:800;color:${cor}">${valor > 0 && !futuro ? '+' : ''}${fmt(valor)}</span>
-            <span style="display:block;font-size:9px;color:#64748b">${futuro ? 'A coletar' : 'Saldo acumulado'}</span>
-        </button>`;
-    }).join('');
+    Chart.defaults.font.family = "sans-serif";
+    Chart.defaults.color = "#475569";
 
-    const datasets = [
-        // A curva que já existia no portal é o FORECAST calculado pelo PCP.
-        { label: 'Forecast', data: esperado, borderColor: '#64748b', backgroundColor: 'rgba(100,116,139,0.20)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.25, cubicInterpolationMode: 'monotone' },
-        // Realizado passa a ser o acumulado da Coleta TP.
-        { label: 'Realizado', data: realizado, borderColor: '#ff9800', backgroundColor: 'rgba(255,152,0,0.22)', fill: true, pointRadius: 0, borderWidth: 2, tension: 0.25, cubicInterpolationMode: 'monotone' }
-    ];
-    if (temMeta) {
-        // Meta é a linha manual publicada pelo usuário autorizado (ou a prévia local ainda não salva).
-        datasets.push({ label: 'Meta CD', data: meta, borderColor: '#4285ff', backgroundColor: 'transparent', fill: false, pointRadius: 3, pointHoverRadius: 5, borderWidth: 2.5, tension: 0.2, spanGaps: true });
-    }
 
-    const rotulos = {
-        id: 'rotulosColetaFinal',
+const drawLabelPct = {
+        id: 'drawLabelPct',
         afterDatasetsDraw(chart) {
-            const ctx = chart.ctx;
-            ctx.save(); ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-            chart.data.datasets.forEach((ds, di) => {
-                if (!chart.isDatasetVisible(di)) return;
-                const desloc = ds.label === 'Forecast' ? -8 : ds.label === 'Realizado' ? 14 : -24;
-                chart.getDatasetMeta(di).data.forEach((pt, idx) => {
-                    if (ds.data[idx] === null || ds.data[idx] === undefined) return;
-                    const label = Math.round(ds.data[idx]) + '%';
-                    ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText(label, pt.x, pt.y + desloc);
-                    ctx.fillStyle = ds.borderColor; ctx.fillText(label, pt.x, pt.y + desloc);
+            const { ctx, data } = chart;
+            const qtdBarras = data.labels.length;
+            const fontSize = qtdBarras <= 6 ? 14 : 10;
+            
+            ctx.font = `bold ${fontSize}px sans-serif`; 
+            ctx.textAlign = 'right'; 
+            ctx.textBaseline = 'middle';
+            
+            chart.data.datasets.forEach((dataset, i) => {
+                const bg = dataset.backgroundColor;
+                const isLight = bg === '#4ade80' || bg === '#fbbf24'; // Finalizado com Atraso ou Pendente
+                ctx.fillStyle = isLight ? '#0f172a' : '#ffffff';
+
+                chart.getDatasetMeta(i).data.forEach((bar, index) => {
+                    const val = dataset.data[index];
+                    if (val > 5) ctx.fillText(val.toFixed(0) + '%', bar.x - 6, bar.y);
                 });
             });
-            ctx.restore();
         }
     };
-    if (graficos[chaveGrafico]) graficos[chaveGrafico].destroy();
-    const serieY = esperado.concat(realizado.filter(v => v !== null));
-    if (temMeta) serieY.push(...meta.filter(v => v !== null));
-    graficos[chaveGrafico] = new Chart(canvas, {
-        type: 'line',
-        data: { labels: pontos, datasets },
-        plugins: [rotulos],
-        options: {
-            animation: false, maintainAspectRatio: false, layout: { padding: { top: 24, left: 24, right: 24, bottom: 12 } },
-            interaction: { mode: 'index', intersect: false },
-            scales: {
-                x: { offset: true, grid: { display: false }, ticks: { display: false, autoSkip: false, maxRotation: 0, callback: function(v) {
-                    const d = this.getLabelForValue(v);
-                    return modo === 'mensal' ? new Date(d + 'T12:00:00Z').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }) : d.slice(8, 10) + '/' + d.slice(5, 7);
-                } } },
-                y: { display: false, beginAtZero: true, suggestedMax: Math.max(10, ...serieY) * 1.15 }
+    
+
+let ctxTir = document.getElementById('grafGiroTiragem');
+    if (ctxTir) {
+        // --- NOVO PLUGIN PARA OS RÓTULOS CUSTOMIZADOS (K, mi e %) ---
+        const plugRotulosTiragem = {
+            id: 'plugRotulosTiragem',
+            afterDatasetsDraw(chart) {
+                const { ctx, data } = chart;
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+
+                const dataset = data.datasets[0];
+                const totalGeralVal = dataset.data[dataset.data.length - 1] || 1;
+                const qtdBarras = dataset.data.length;
+
+                // Definindo tamanhos de fonte e espaçamentos dinâmicos
+                const fontNumber = qtdBarras <= 6 ? 'bold 13px sans-serif' : 'bold 10px sans-serif';
+                const fontPct = qtdBarras <= 6 ? 'bold 11px sans-serif' : 'bold 9px sans-serif'; // Agora em negrito também
+                const offsetNum = qtdBarras <= 6 ? 18 : 14;
+                const offsetPct = qtdBarras <= 6 ? 5 : 4;
+
+                chart.getDatasetMeta(0).data.forEach((bar, index) => {
+                    const val = dataset.data[index];
+                    if (!val || val === 0) return;
+
+                    // Função auxiliar local para cortar na 1ª casa decimal sem arredondar
+                    const truncar1Casa = (num) => {
+                        let match = num.toString().match(/^-?\d+(?:\.\d{0,1})?/);
+                        return match ? match[0] : num.toString();
+                    };
+
+                    // 1. Regra de Formatação do Número Bruto (K / mi)
+                    let numeroFormatado = "";
+                    if (val >= 1000000) {
+                        numeroFormatado = truncar1Casa(val / 1000000).replace(/\.0$/, '') + 'mi';
+                    } else if (val >= 1000) {
+                        numeroFormatado = truncar1Casa(val / 1000).replace(/\.0$/, '') + 'k';
+                    } else {
+                        numeroFormatado = val.toString();
+                    }
+
+                    // 2. Regra de Cálculo do Percentual
+                    const pct = ((val / totalGeralVal) * 100).toFixed(0) + '%';
+                    
+                    const textoPct = (index === dataset.data.length - 1) ? "" : `(${pct})`;
+
+                    let x = bar.x;
+                    let y = bar.y;
+
+                    // Texto do número
+                    ctx.font = fontNumber;
+                    ctx.fillStyle = '#475569';
+                    ctx.fillText(numeroFormatado, x, y - offsetNum);
+
+                    // Texto do percentual
+                    if (textoPct) {
+                        ctx.font = fontPct;
+                        ctx.fillStyle = '#64748b';
+                        ctx.fillText(textoPct, x, y - offsetPct);
+                    }
+                });
+                ctx.restore();
+            }
+        };
+
+        window.chartGiroTir = new Chart(ctxTir, {
+            type: 'bar',
+            data: { labels: labelsM, datasets: [{ data: dTir, backgroundColor: '#312e81', borderRadius: 4 }] },
+            plugins: [plugRotulosTiragem],
+            options: { 
+                    maintainAspectRatio: false, 
+                    layout: { padding: { top: 40 } }, // Aumentado um pouco para caber a fonte maior sem cortar
+                    plugins: { legend: { display: false } }, 
+                    scales: { y: { display: false }, x: { grid: { display: false }, ticks: { font: { weight: 'bold', size: labelsM.length <= 6 ? 13 : 9 } } } } 
+                }
+        });
+    }
+
+let ctxSt = document.getElementById('grafGiroStatus');
+    if (ctxSt) {
+        window.chartGiroSt = new Chart(ctxSt, {
+            type: 'bar',
+            data: {
+                labels: labelsM,
+                datasets: [
+                    { label: 'Finalizado no Prazo', data: dPz, backgroundColor: '#1e40af', maxBarThickness: 45 },
+                    { label: 'Finalizado com Atraso', data: dAt, backgroundColor: '#3b82f6', maxBarThickness: 45 },
+                    { label: 'Pendente', data: dPd, backgroundColor: '#93c5fd', maxBarThickness: 45 }
+                ]
             },
-            plugins: { legend: { position: 'top', labels: { boxWidth: 10, boxHeight: 10 } }, tooltip: { callbacks: {
-                title: items => items[0]?.label.split('-').reverse().join('/'),
-                label: c => `${c.dataset.label}: ${c.parsed.y.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% (${fmt(c.parsed.y * resumo.total / 100)} exemplares)`
-            } } }
-        }
-    });
+            plugins: [drawLabelPct],
+            options: {
+                    indexAxis: 'y', maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.raw.toFixed(1)}%` } } },
+                    scales: { x: { stacked: true, max: 100, display: false }, y: { stacked: true, grid: { display: false }, ticks: { font: { weight: 'bold', size: labelsM.length <= 6 ? 14 : 10 } } } }
+                }
+        });
+    }
+
+let ctxAd = document.getElementById('grafGiroAderencia');
+    if (ctxAd) {
+        let activeFases = FASES.filter(f => aderFases[f.id].volPlan > 0 || aderFases[f.id].baseAtHoje > 0 || aderFases[f.id].planAtHoje > 0 || aderFases[f.id].realTotal > 0);
+        let lblsAd = activeFases.map(f => f.nome);
+        
+        let calcP = (v, t) => t > 0 ? Number(((v / t) * 100).toFixed(1)) : 0;
+        let dBase = activeFases.map(f => calcP(aderFases[f.id].baseAtHoje, aderFases[f.id].volPlan));
+        let dPlan = activeFases.map(f => calcP(aderFases[f.id].planAtHoje, aderFases[f.id].volPlan));
+        let dReal = activeFases.map(f => calcP(aderFases[f.id].realTotal, aderFases[f.id].volPlan));
+        let dAder = activeFases.map(f => {
+            let esp = tRef === 'baseline' ? aderFases[f.id].baseAtHoje : aderFases[f.id].planAtHoje;
+            if (esp === 0) return aderFases[f.id].realTotal > 0 ? 100 : 0;
+            let p = (aderFases[f.id].noPrazo / esp) * 100;
+            return Number((p > 100 ? 100 : p).toFixed(1));
+        });
+
+        // --- PLUGIN BLINDADO PARA RÓTULOS (LINHA E BARRAS) ---
+        const plugRotulosAderencia = {
+            id: 'plugRotulosAderencia',
+            afterDatasetsDraw(chart) {
+                try {
+                    const { ctx } = chart;
+                    ctx.save();
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    
+                    chart.data.datasets.forEach((dataset, i) => {
+                        const meta = chart.getDatasetMeta(i);
+                        if (meta.hidden || !meta.data) return;
+                        
+                        meta.data.forEach((element, index) => {
+                            const val = dataset.data[index];
+                            if (!val || val === 0) return; 
+                            
+                            let text = val + '%';
+                            let x = element.x;
+                            let y = element.y;
+                            
+                            if (x === undefined || y === undefined) return;
+                            
+                            if (dataset.type === 'line' || meta.type === 'line') {
+                                ctx.font = 'bold 12px sans-serif';
+                                ctx.fillStyle = '#0f172a'; // Cor escura para a linha
+                                ctx.fillText(text, x, y - 8);
+                            } else {
+                                ctx.font = 'bold 10px sans-serif';
+                                ctx.fillStyle = '#475569'; // Cor suave para as barras
+                                ctx.fillText(text, x, y - 2);
+                            }
+                        });
+                    });
+                    ctx.restore();
+                } catch (e) {
+                    console.error("Erro ignorado no plugin de rótulos:", e);
+                }
+            }
+        };
+
+        window.chartGiroAd = new Chart(ctxAd, {
+            type: 'bar',
+            data: {
+                labels: lblsAd,
+                datasets: [
+                    { type: 'line', label: 'Aderência (%)', data: dAder, borderColor: '#0f172a', backgroundColor: '#0f172a', borderWidth: 2, tension: 0.3, pointRadius: 4, order: 1 },
+                    { type: 'bar', label: 'Baseline', data: dBase, backgroundColor: '#93c5fd', borderRadius: 4, order: 2 },
+                    { type: 'bar', label: 'Re-Plan', data: dPlan, backgroundColor: '#3b82f6', borderRadius: 4, order: 3 },
+                    { type: 'bar', label: 'Realizado', data: dReal, backgroundColor: '#1e3a8a', borderRadius: 4, order: 4 }
+                ]
+            },
+            plugins: [plugRotulosAderencia],
+            options: {
+                maintainAspectRatio: false,
+                layout: { padding: { top: 25 } }, 
+                plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                scales: { 
+                    x: { 
+                        grid: { display: false },
+                        ticks: { font: { size: 10, weight: 'bold' } }
+                    }, 
+                    y: { 
+                        max: 120, 
+                        grid: { display: false, drawBorder: false }, 
+                        ticks: { display: false } 
+                    } 
+                }
+            }
+        });
+        // GATILHO DA TABELA DE ATENÇÃO
+if (typeof window.renderizarPontosAtencaoGiro === 'function') {
+    window.renderizarPontosAtencaoGiro(dadosFiltrados, tRef);
+}
+    }
+
+    
 };
 
-window.pgAtributosCaixaFunil = function(contexto, cor) {
-    if (!contexto) return '';
-    const id = window.pgCaixasFunil.push({ ...contexto, atrasados: cor.includes('rose') || cor.includes('amber') }) - 1;
-    return `role="button" tabindex="0" title="Extrair pendências" onclick="extrairCaixaFunil(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();extrairCaixaFunil(${id});}" style="cursor:pointer"`;
-};
-window.pgPendenciasCaixaFunil = function(contexto) {
-    if (contexto.coletaConcluida) return [];
-    const norm = v => String(v || 'N/A').trim().toUpperCase();
-    const casa = (g, m) => !contexto.grupo || norm(contexto.grupo) === norm(contexto.tipo === 'marca' ? m : g);
-    if (contexto.fase === 'col' || contexto.fase === 'col_mapa') {
-        return window.pgItensColetaDia(window.pgResumoColetaFunil, dtHojeISO, dtHojeISO, dtHojeISO, true)
-            .filter(i => casa(i.graficaBase, i.marca) && (!contexto.atrasados || (i.dias !== null && i.dias < 0)));
-    }
-    const f = FASES.find(f => f.id === (contexto.fase === 'series' ? 'col_mapa' : contexto.fase));
-    if (!f) return [];
-    const tRef = document.getElementById('filtroReferencia').value;
-    return dadosFiltrados.flatMap(l => {
-        const g = l.GRAFICA_FINAL || l['GRÁFICA'], m = l.MARCA_FINAL || l.UNIDADE;
-        if (!casa(g, m) || (f.id !== 'col_mapa' && !belongsToPhase(l, f.id))) return [];
-        const base = window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0);
-        let volume = window.getVolFase(l, f, base);
-        if (['col_tp', 'ent_tp'].includes(f.id)) volume = window.arredondar(l.VOLUME_AZ || l['TIRAGEM COLETADA'] || l.COLETADA_MAPA || 0);
-        let real = dataFoiPreenchida(l, f) || (volume > 0 && ['col_mapa', 'ent_cd'].includes(f.id));
-        if (f.id === 'col_tp') real = !!String(l.DATA_DZ || '').trim();
-        if (f.id === 'ent_tp') real = !!String(l.DATA_EA || '').trim();
-        const saldo = Math.max(0, base - (real ? volume : 0));
-        const dtPlan = window.pgDataPlanoFaseFunil(l, f, tRef);
-        const dias = dtPlan ? -calcDiffDiasISO(dtPlan, dtHojeISO) : null;
-        const serie = String(l['SÉRIE'] || l['Série'] || l.SERIE || '-');
-        if (saldo <= 0 || (contexto.atrasados && (dias === null || dias >= 0)) || (contexto.fase === 'series' && serie === '-')) return [];
-        return [{grafica:String(g || 'N/A'), marca:String(m || 'N/A'), serie,
-            sku:String(l.SKU_REAL || l.SKU || '-'), desc:String(l.DESC_REAL || l['DESCRIÇÃO'] || l.PRODUTO || '-'),
-            status:'Em Aberto', pendencia: contexto.fase === 'series' ? 'Série pendente — Coleta Final' : f.nome,
-            dias, tiragem:saldo}];
-    });
-};
-window.extrairCaixaFunil = function(id) {
-    if (window.pgExtraindoColeta) return;
-    const contexto = window.pgCaixasFunil[id];
-    if (!contexto) return;
-    const itens = window.pgPendenciasCaixaFunil(contexto);
-    if (!itens.length) { alert('Nenhuma pendência para este recorte.'); return; }
-    window.pgExtraindoColeta = true;
-    const aba = window.open('about:blank', '_blank');
-    const falha = e => { window.pgExtraindoColeta = false; if (aba) aba.close(); alert('Erro ao gerar planilha: ' + e); };
-    google.script.run.withSuccessHandler(res => {
-        if (!res || !res.success) { falha(res?.error || 'Erro desconhecido'); return; }
-        window.pgExtraindoColeta = false;
-        if (aba) aba.location.href = res.url;
-        const link = document.getElementById('linkExtracaoColetaFunil');
-        if (link) { link.href = res.url; link.hidden = false; }
-    }).withFailureHandler(falha).gerarPlanilhaGiroFiltrado(itens);
-};
 
 window.processarFunil = function() {
-    window.pgCaixasFunil = [];
-    window.renderColetaFinalFunil();
-let tRef = document.getElementById('filtroReferencia').value;
-    let mGrid = {}; let gGrid = {}; let fTotais = {};
-
+    let tRef = document.getElementById('filtroReferencia').value;
+    let mGrid = {}; let gGrid = {}; let fTotais = {}; 
+    
     let elsCb = document.querySelectorAll('.chk-fase-funil:checked');
     let fasesAtivasIds = Array.from(elsCb).map(cb => cb.value);
     if(fasesAtivasIds.length === 0) fasesAtivasIds = FASES.map(f => f.id);
-
+    
     let fasesAtivas = FASES.filter(f => fasesAtivasIds.includes(f.id));
-
-    const initFase = () => ({ pendenciasMapaAY: 0, base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0, pcp: {pendenciasMapaAY: 0, base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0}, acab: {pendenciasMapaAY: 0, base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0} });
+    
+    // Novo construtor de Fase com divisão PCP vs ACAB
+    const initFase = () => ({ base: 0, real: 0, planAtHoje: 0, pcp: {base: 0, real: 0, planAtHoje: 0}, acab: {base: 0, real: 0, planAtHoje: 0} });
     fasesAtivas.forEach(f => fTotais[f.id] = initFase());
+    
+    let mapTotal = {}; let seriesGlobais = {}; 
 
-    let mapTotal = {}; let seriesGlobais = {};
-    const destinoCDAtivo = document.getElementById('pgFiltroDestino')?.value === 'CD';
-    const dadosPadrao = dadosFiltrados || [];
-    const dadosInicio = destinoCDAtivo ? (window.dadosSemFiltroCD || []) : dadosPadrao;
-    const dadosFinalTotal = destinoCDAtivo ? (window.dadosDestinoCDFinal || []) : dadosPadrao;
-    const dadosFinalOrigem = destinoCDAtivo ? (window.dadosDestinoCDOrigem || []) : dadosPadrao;
-    const dadosAcabamentoOrigem = window.dadosAcabamentoOrigem || [];
-
-    const setPadrao = new Set(dadosPadrao);
-    const setInicio = new Set(dadosInicio);
-    const setFinalTotal = new Set(dadosFinalTotal);
-    const setFinalOrigem = new Set(dadosFinalOrigem);
-    const setAcabamentoOrigem = new Set(dadosAcabamentoOrigem);
-    const idsInicioSemDestino = new Set(['env', 'rec', 'apv', 'imp', 'cus', 'oc']);
-    const idsDaBaseFinal = new Set(['acab', 'kit', 'col', 'col_mapa', 'col_tp', 'ent_tp', 'ent_cd', 'int_cd']);
-
-    const linhaPermitidaNaFase = (l, id) => {
-        // Acabamento tem base própria e soberana: Destino não interfere.
-        // Ele muda com Origem e mantém a regra Congelado/Acabadora aplicada na montagem da base.
-        if (id === 'acab') return setAcabamentoOrigem.has(l);
-
-        if (!destinoCDAtivo) return setPadrao.has(l);
-        if (idsInicioSemDestino.has(id)) return setInicio.has(l);       // Destino não corta; Origem continua valendo.
-        if (idsDaBaseFinal.has(id)) return setFinalOrigem.has(l);       // Kit em diante mantém a lógica atual de Origem + Destino.
-        return setPadrao.has(l);                                       // Transf./Rec. Acab. preservados.
-    };
-
-    const dadosProcessamento = destinoCDAtivo
-        ? Array.from(new Set([...dadosInicio, ...dadosFinalTotal, ...dadosFinalOrigem, ...dadosAcabamentoOrigem, ...dadosPadrao]))
-        : Array.from(new Set([...dadosPadrao, ...dadosAcabamentoOrigem]));
-
-    dadosProcessamento.forEach(l => {
+    dadosFiltrados.forEach(l => {
         let tBase = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"]); if(tBase<=0) return;
-        let k = getKey(l);
-        let m = String(l["MARCA_FINAL"] || l["UNIDADE"] || "N/A").toUpperCase();
+        let k = getKey(l); 
+        let m = String(l["MARCA_FINAL"] || l["UNIDADE"] || "N/A").toUpperCase(); 
         let g = String(l["GRAFICA_FINAL"] || l["GRÁFICA"] || "N/A").toUpperCase();
         let nomeSerie = String(l["SÉRIE"] || l["Série"] || l["SERIE"] || l["SÉRIES"] || "").trim();
+        
         let src = l["_SOURCE"] === "ACABADORA" ? "acab" : "pcp";
 
-        if(!mGrid[m]) {
-            mGrid[m] = { total: 0, pcp: {total:0}, acab: {total:0}, series: {} };
-            fasesAtivas.forEach(f => mGrid[m][f.id] = initFase());
+        if(!mGrid[m]) { 
+            mGrid[m] = { total: 0, pcp: {total:0}, acab: {total:0}, series: {} }; 
+            fasesAtivas.forEach(f => mGrid[m][f.id] = initFase()); 
         }
-        if(!gGrid[g]) {
-            gGrid[g] = { total: 0, pcp: {total:0}, acab: {total:0}, series: {} };
-            fasesAtivas.forEach(f => gGrid[g][f.id] = initFase());
+        if(!gGrid[g]) { 
+            gGrid[g] = { total: 0, pcp: {total:0}, acab: {total:0}, series: {} }; 
+            fasesAtivas.forEach(f => gGrid[g][f.id] = initFase()); 
         }
-
-        // Total Base:
-        // - Destino = CD: soma PCP_ACABADORAS + PCP direto ao CD; por isso a fonte faz parte da chave.
-        // - Demais destinos (inclusive Todos/Todas): PCP e PCP_ACABADORAS NÃO podem duplicar a mesma chave.
-        //   Mantém a regra original do Funil: uma mesma chave entra uma única vez no Total Geral.
-        if(setFinalTotal.has(l)) {
-            let kTotal = destinoCDAtivo ? (src + '|' + k) : k;
-            if(!mapTotal[kTotal]) {
-                mapTotal[kTotal] = tBase;
-                mGrid[m].total += tBase; mGrid[m][src].total += tBase;
-                gGrid[g].total += tBase; gGrid[g][src].total += tBase;
-            }
+        
+        if(!mapTotal[k]) { 
+            mapTotal[k] = tBase; 
+            mGrid[m].total += tBase; mGrid[m][src].total += tBase;
+            gGrid[g].total += tBase; gGrid[g][src].total += tBase;
         }
-
+        
         if (nomeSerie !== "") {
-            if (!seriesGlobais[nomeSerie]) seriesGlobais[nomeSerie] = { base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0 };
-            if (!mGrid[m].series[nomeSerie]) mGrid[m].series[nomeSerie] = { base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0 };
-            if (!gGrid[g].series[nomeSerie]) gGrid[g].series[nomeSerie] = { base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0 };
+            if (!seriesGlobais[nomeSerie]) seriesGlobais[nomeSerie] = { base: 0, real: 0, planAtHoje: 0 };
+            if (!mGrid[m].series[nomeSerie]) mGrid[m].series[nomeSerie] = { base: 0, real: 0, planAtHoje: 0 };
+            if (!gGrid[g].series[nomeSerie]) gGrid[g].series[nomeSerie] = { base: 0, real: 0, planAtHoje: 0 };
         }
 
         fasesAtivas.forEach(f => {
-            if (!linhaPermitidaNaFase(l, f.id)) return;
-
             let passaFase = belongsToPhase(l, f.id);
-            if (f.id === 'col_mapa') passaFase = true;
+            if (f.id === 'col_mapa') passaFase = true; 
 
             if(passaFase) {
                 let tFaseReal = window.getVolFase(l, f, tBase);
-                if (f.id === 'col_tp' || f.id === 'ent_tp') {
+                if (f.id === 'col_mapa' || f.id === 'col_tp' || f.id === 'ent_tp') {
                     tFaseReal = window.arredondar(l["VOLUME_AZ"] || l["TIRAGEM COLETADA"] || l["COLETADA_MAPA"] || 0);
                 }
 
-                fTotais[f.id].base += tBase;
-                mGrid[m][f.id].base += tBase;
+                fTotais[f.id].base += tBase; 
+                mGrid[m][f.id].base += tBase; 
                 gGrid[g][f.id].base += tBase;
 
-                fTotais[f.id][src].base += tBase;
-                mGrid[m][f.id][src].base += tBase;
+                fTotais[f.id][src].base += tBase; 
+                mGrid[m][f.id][src].base += tBase; 
                 gGrid[g][f.id][src].base += tBase;
-
-                if (f.id === 'col_mapa' && window.pgEstadoColetaMapa(l).pendenteAY) {
-                    [fTotais[f.id], mGrid[m][f.id], gGrid[g][f.id]].forEach(c => { c.pendenciasMapaAY++; c[src].pendenciasMapaAY++; });
-                }
+                
                 let isReal = dataFoiPreenchida(l, f) || (tFaseReal > 0 && (f.id === 'col_mapa' || f.id === 'ent_cd'));
-
+                
+                // TRAVA RESTRITA: COLETA TP (DZ) e ENTREGA TP (EA)
                 if (f.id === 'col_tp') isReal = (l["DATA_DZ"] && String(l["DATA_DZ"]).trim() !== "");
                 if (f.id === 'ent_tp') isReal = (l["DATA_EA"] && String(l["DATA_EA"]).trim() !== "");
 
-                if(isReal || (f.id === 'col_mapa' && tFaseReal > 0)) {
-                    fTotais[f.id].real += tFaseReal;
-                    mGrid[m][f.id].real += tFaseReal;
-                    gGrid[g][f.id].real += tFaseReal;
+                if(isReal || (f.id === 'col_mapa' && tFaseReal > 0)) { 
+                    fTotais[f.id].real += tFaseReal; 
+                    mGrid[m][f.id].real += tFaseReal; 
+                    gGrid[g][f.id].real += tFaseReal; 
 
-                    fTotais[f.id][src].real += tFaseReal;
-                    mGrid[m][f.id][src].real += tFaseReal;
-                    gGrid[g][f.id][src].real += tFaseReal;
+                    fTotais[f.id][src].real += tFaseReal; 
+                    mGrid[m][f.id][src].real += tFaseReal; 
+                    gGrid[g][f.id][src].real += tFaseReal; 
                 }
 
-                let dtP = window.pgDataPlanoFaseFunil(l, f, tRef);
+                let cols = getCols(f, tRef);
+                let dtP = extrairDataISO(l[cols.plan]);
                 let diasAtrasoFunil = dtP ? calcDiffDiasISO(dtP, dtHojeISO) : 0;
-                let isMetaVencida = (dtP && diasAtrasoFunil >= (f.id === 'col_mapa' ? 0 : 3));
-                if (dtP && dtP < dtHojeISO && (!isReal || tFaseReal < tBase)) {
-                    const pendente = Math.max(0, tBase - (isReal ? tFaseReal : 0));
-                    [fTotais[f.id], mGrid[m][f.id], gGrid[g][f.id]].forEach(c => {
-                        c.pendenteVencido += pendente;
-                        c[src].pendenteVencido += pendente;
-                    });
-                }
-
+                let isMetaVencida = (dtP && diasAtrasoFunil >= 3);
+                
                 if (isMetaVencida) {
                     fTotais[f.id].planAtHoje += tBase;
                     mGrid[m][f.id].planAtHoje += tBase;
@@ -1701,15 +1202,15 @@ let tRef = document.getElementById('filtroReferencia').value;
                     mGrid[m][f.id][src].planAtHoje += tBase;
                     gGrid[g][f.id][src].planAtHoje += tBase;
                 }
-
+                
                 if (f.id === 'col' && nomeSerie !== "") {
                     seriesGlobais[nomeSerie].base += tBase;
                     mGrid[m].series[nomeSerie].base += tBase;
                     gGrid[g].series[nomeSerie].base += tBase;
-                    if (isReal) {
-                        seriesGlobais[nomeSerie].real += tFaseReal;
-                        mGrid[m].series[nomeSerie].real += tFaseReal;
-                        gGrid[g].series[nomeSerie].real += tFaseReal;
+                    if (isReal) { 
+                        seriesGlobais[nomeSerie].real += tFaseReal; 
+                        mGrid[m].series[nomeSerie].real += tFaseReal; 
+                        gGrid[g].series[nomeSerie].real += tFaseReal; 
                     }
                     if (isMetaVencida) {
                         seriesGlobais[nomeSerie].planAtHoje += tBase;
@@ -1720,17 +1221,7 @@ let tRef = document.getElementById('filtroReferencia').value;
             }
         });
     });
-
-    const coletaResumo = window.pgResumoColetaFunil;
-    const aplicarPlanoColeta = (grid, resumo) => {
-        ['col_mapa'].forEach(id => {
-            if (grid[id]) grid[id].planoColetaFinal = resumo || { total: 0, esperadoHoje: 0 };
-        });
-    };
-    aplicarPlanoColeta(fTotais, coletaResumo);
-    Object.keys(mGrid).forEach(g => aplicarPlanoColeta(mGrid[g], coletaResumo.marcas[g]));
-    Object.keys(gGrid).forEach(g => aplicarPlanoColeta(gGrid[g], coletaResumo.graficas[g]));
-
+    
     let calcSeries = (seriesObj) => {
         let tot = 0; let fin = 0; let atrasadas = 0;
         Object.values(seriesObj).forEach(s => {
@@ -1743,62 +1234,14 @@ let tRef = document.getElementById('filtroReferencia').value;
     };
     
     let seriesGeral = calcSeries(seriesGlobais);
-
-    // BASE CANÔNICA DO TOTAL / TABELAS
-    // A tiragem NÃO reage ao seletor extra Destino.
-    // Ela já foi montada em aplicarFiltros() exclusivamente pela Origem:
-    // Gráfica = PCP | Acabadora = PCP_ACABADORAS | Todas = PCP direto + PCP_ACABADORAS.
-    const linhasBaseCanonica = window.dadosTotalCanonico || [];
-
-    const baseTotalCanonica = {};
-    const baseMarcaCanonica = {};
-    const baseGraficaCanonica = {};
-
-    linhasBaseCanonica.forEach(l => {
-        const tBaseCanon = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"] || 0);
-        if (tBaseCanon <= 0) return;
-
-        const srcCanon = l["_SOURCE"] === "ACABADORA" ? "acab" : "pcp";
-        const chaveOperacional = getKey(l);
-        // A fonte NÃO entra na chave: a base já removeu do PCP os itens que seguem para acabadora.
-        // Se a mesma chave ainda aparecer nas duas fontes, conta uma única vez.
-        const chaveCanon = chaveOperacional;
-        if (baseTotalCanonica[chaveCanon] !== undefined) return;
-
-        baseTotalCanonica[chaveCanon] = tBaseCanon;
-        const marcaCanon = String(l["MARCA_FINAL"] || l["UNIDADE"] || "N/A").toUpperCase();
-        const graficaCanon = String(l["GRAFICA_FINAL"] || l["GRÁFICA"] || "N/A").toUpperCase();
-        baseMarcaCanonica[marcaCanon] = (baseMarcaCanonica[marcaCanon] || 0) + tBaseCanon;
-        baseGraficaCanonica[graficaCanon] = (baseGraficaCanonica[graficaCanon] || 0) + tBaseCanon;
-    });
-
-    // IMPORTANTE: não altera a lógica/volumes das fases do Funil.
-    // Apenas faz Funil e tabelas compartilharem exatamente a mesma tiragem canônica.
-    // Cria também linhas de Marca/Gráfica que existam na tiragem, mesmo que o Destino
-    // atualmente selecionado não tenha volume em alguma fase.
-    Object.keys(baseMarcaCanonica).forEach(m => {
-        if (!mGrid[m]) {
-            mGrid[m] = { total: 0, pcp: {total:0}, acab: {total:0}, series: {} };
-            fasesAtivas.forEach(f => mGrid[m][f.id] = initFase());
-        }
-    });
-    Object.keys(baseGraficaCanonica).forEach(g => {
-        if (!gGrid[g]) {
-            gGrid[g] = { total: 0, pcp: {total:0}, acab: {total:0}, series: {} };
-            fasesAtivas.forEach(f => gGrid[g][f.id] = initFase());
-        }
-    });
-    Object.keys(mGrid).forEach(m => { mGrid[m].total = baseMarcaCanonica[m] || 0; });
-    Object.keys(gGrid).forEach(g => { gGrid[g].total = baseGraficaCanonica[g] || 0; });
-
-    let tGeral = Object.values(baseTotalCanonica).reduce((a,b)=>a+b, 0);
+    let tGeral = Object.values(mapTotal).reduce((a,b)=>a+b, 0);
     
     let hFunil = `<div class="funnel-layer bg-black w-full shadow-lg rounded-t-md text-white text-center py-1">00 - Total Base (${window.formatarBR(tGeral)} | 100%)</div>`;
     
     fasesAtivas.forEach((f, index) => {
-        let tReal = fTotais[f.id].real;
-        let pct = tGeral > 0 ? (tReal / tGeral) * 100 : 0;
-        let tPct = pct.toFixed(1); if (tPct === "100.0" && tReal < tGeral) tPct = "99.9"; 
+        let tReal = fTotais[f.id].real; let tBase = fTotais[f.id].base;
+        let pct = tBase > 0 ? (tReal / tBase) * 100 : 0;
+        let tPct = pct.toFixed(1); if (tPct === "100.0" && tReal < tBase) tPct = "99.9"; 
         
         let widthCss = Math.min(Math.max(pct, 15), 100);
         hFunil += `<div class="funnel-layer text-center text-white py-1" style="width: ${widthCss}%; background-color: ${f.corLinha};">0${index+1} - ${f.nome} (${tPct}%)</div>`;
@@ -1967,198 +1410,16 @@ let tRef = document.getElementById('filtroReferencia').value;
     };
     
     let aM = Object.keys(mGrid).sort((a, b) => mGrid[b].total - mGrid[a].total);
-
-    const fmtCompactoFunil = (n) => {
-        n = Number(n || 0);
-        if (Math.abs(n) >= 1000000) return (n / 1000000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mi';
-        if (Math.abs(n) >= 1000) return (n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
-        return Math.round(n).toLocaleString('pt-BR');
-    };
-
-    const nomeFaseTabelaFunil = (f) => {
-        if (f.id === 'col_mapa') return 'Mapa Solicitado';
-        return f.nome;
-    };
-
-    const montarCelulaPctFunil = (cellData, totalDivisor, hasMeta, contexto) => {
-        const origem = document.getElementById('pgFiltroOrigem');
-        const valores = cellData && (origem && origem.value === 'ACABADORA' ? cellData.acab : origem && origem.value === 'TODOS' ? cellData : cellData.pcp);
-        if (!cellData || !valores || (valores.base <= 0 && !cellData.planoColetaFinal) || totalDivisor <= 0) {
-            return `<td class="p-1 border-r border-slate-200 text-center bg-slate-50 text-slate-300">-</td>`;
-        }
-
-        let realPct = Math.min(100, Math.round((valores.real / totalDivisor) * 100));
-        const plano = cellData.planoColetaFinal;
-        const planBase = plano ? plano.total : totalDivisor;
-        const planVolume = plano ? plano.esperadoHoje : valores.planAtHoje;
-        let planPct = planBase > 0 ? Math.min(100, Math.round((planVolume / planBase) * 100)) : 0;
-        if (realPct === 100 && valores.real < totalDivisor) realPct = 99;
-        if (planPct === 100 && planVolume < planBase) planPct = 99;
-        if (!Number.isFinite(realPct)) realPct = 0;
-        if (!Number.isFinite(planPct)) planPct = 0;
-
-        const pendenteVencido = plano ? plano.pendenteVencido : valores.pendenteVencido;
-        const realExato = valores.real / totalDivisor;
-        const planExato = planBase > 0 ? planVolume / planBase : 0;
-        // Usa o volume exato da própria célula, nunca o percentual arredondado.
-        const coletaConcluida = contexto?.fase === 'col_mapa' && totalDivisor > 0 && valores.real >= totalDivisor;
-        const cor = coletaConcluida
-            ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-            : hasMeta && realExato >= planExato && (pendenteVencido > 0 || valores.pendenciasMapaAY > 0)
-            ? 'bg-amber-50 text-amber-700 border-amber-300'
-            : getCorComparativo(realPct, planPct, hasMeta);
-        const planHtml = hasMeta
-            ? `<span class="text-[7px] opacity-75 font-black uppercase leading-none mt-0.5">PLAN: ${planPct}%</span>`
-            : '';
-
-        return `<td class="p-1 border-r border-slate-200 text-center align-middle">
-            <div ${window.pgAtributosCaixaFunil({ ...contexto, coletaConcluida }, cor)} class="min-w-[78px] rounded border shadow-sm px-1 py-1.5 flex flex-col items-center justify-center ${cor}">
-                <span class="text-[7px] font-black text-slate-500 uppercase leading-none">GRÁF</span>
-                <span class="text-[12px] font-black leading-none my-0.5">${realPct}%</span>
-                ${planHtml}
-            </div>
-        </td>`;
-    };
-
-    const montarCelulaBrutaFunil = (cellData) => {
-        if (!cellData || Number(cellData.real || 0) <= 0) {
-            return `<td class="p-2 border-r border-slate-200 text-right text-slate-300">-</td>`;
-        }
-        return `<td class="p-2 border-r border-slate-200 text-right font-bold text-slate-700">${window.formatarBR(cellData.real)}</td>`;
-    };
-
-    // Séries: lê diretamente a coluna Série e consolida os itens de cada série.
-    // Finalizada = a soma coletada da série alcançou a soma da tiragem planejada da própria série.
-    const pgSeriesPorGrafica = {};
-    const pgSeriesPorMarca = {};
-
-    const pgSerieValor = (l) => String(
-        l['Série'] ?? l['SÉRIE'] ?? l['SERIE'] ?? l['SÉRIES'] ?? ''
-    ).trim();
-
-    const pgGraficaValor = (l) => String(
-        l['GRAFICA_FINAL'] ?? l['GRÁFICA'] ?? l['GRAFICA'] ?? 'N/A'
-    ).trim().toUpperCase() || 'N/A';
-
-    const pgMarcaValor = (l) => String(
-        l['MARCA_FINAL'] ?? l['UNIDADE'] ?? l['MARCA'] ?? 'N/A'
-    ).trim().toUpperCase() || 'N/A';
-
-    const pgItemSerieKey = (l) => String(
-        l['JOIN_KEY'] ?? l['Chave'] ?? l['CHAVE'] ?? l['SKU_REAL'] ?? l['SKU'] ?? getKey(l)
-    ).trim();
-
-    const pgAddSerie = (destino, agrupador, serie, itemKey, base, real) => {
-        if (!destino[agrupador]) destino[agrupador] = {};
-        if (!destino[agrupador][serie]) destino[agrupador][serie] = {};
-        const atual = destino[agrupador][serie][itemKey];
-        if (!atual) {
-            destino[agrupador][serie][itemKey] = { base, real };
-        } else {
-            atual.base = Math.max(atual.base, base);
-            atual.real = Math.max(atual.real, real);
-        }
-    };
-
-    dadosFiltrados.forEach(l => {
-        const serie = pgSerieValor(l);
-        if (!serie || serie === '-' || serie.toUpperCase() === 'N/A') return;
-
-        const base = window.arredondar(l['TIRAGEM'] || l['QUANTIDADE'] || 0);
-        if (base <= 0) return;
-
-        const real = window.arredondar(
-            l['VOLUME_AZ'] ?? l['TIRAGEM COLETADA'] ?? l['Tiragem Coletada'] ?? l['COLETADA_MAPA'] ?? 0
-        );
-        const itemKey = pgItemSerieKey(l) || `${pgGraficaValor(l)}|${serie}|${base}|${real}`;
-
-        pgAddSerie(pgSeriesPorGrafica, pgGraficaValor(l), serie, itemKey, base, real);
-        pgAddSerie(pgSeriesPorMarca, pgMarcaValor(l), serie, itemKey, base, real);
-    });
-
-    const pgResumoSeries = (mapaGrupo, grupo) => {
-        const series = mapaGrupo[grupo] || {};
-        let total = 0;
-        let finalizadas = 0;
-
-        Object.values(series).forEach(itens => {
-            let base = 0;
-            let real = 0;
-            Object.values(itens).forEach(v => {
-                base += Number(v.base || 0);
-                real += Number(v.real || 0);
-            });
-            if (base <= 0) return;
-            total += 1;
-            if (real >= base) finalizadas += 1;
-        });
-
-        return { total, finalizadas, pct: total > 0 ? Math.round((finalizadas / total) * 100) : 0 };
-    };
-
-    const montarCelulaSeriesPct = (resumo, contexto) => {
-        if (!resumo || resumo.total <= 0) {
-            return `<td class="p-1 border-r border-slate-200 text-center bg-slate-50 text-slate-300">-</td>`;
-        }
-        const pct = Math.min(100, resumo.pct);
-        const cor = pct >= 100
-            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-            : pct > 0
-                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                : 'bg-rose-50 text-rose-700 border border-rose-200';
-
-        return `<td class="p-1 border-r border-slate-200 text-center align-middle">
-            <div ${window.pgAtributosCaixaFunil(contexto, cor)} class="min-w-[88px] rounded shadow-sm px-1 py-1.5 flex flex-col items-center justify-center ${cor}">
-                <span class="text-[7px] font-black text-slate-500 uppercase leading-none">FINALIZADAS</span>
-                <span class="text-[12px] font-black leading-none my-0.5">${pct}%</span>
-            </div>
-        </td>`;
-    };
-
-    const montarCelulaSeriesBruta = (resumo) => {
-        if (!resumo || resumo.total <= 0) {
-            return `<td class="p-2 border-r border-slate-200 text-center text-slate-300">-</td>`;
-        }
-        return `<td class="p-2 border-r border-slate-200 text-center font-black text-slate-700">${resumo.finalizadas.toLocaleString('pt-BR')}</td>`;
-    };
-
-    const renderResumoTransposto = (sufixo, grupos, grid, mapaSeries, percentual) => {
-        const th = document.getElementById('thFunil' + sufixo);
-        const tb = document.getElementById('tbFunil' + sufixo);
-        if (!th || !tb) return;
-        const contexto = (fase, grupo = null) => ({ fase, grupo, tipo: sufixo.startsWith('Marca') ? 'marca' : 'grafica' });
-        const ativos = grupos.filter(g => grid[g] && grid[g].total > 0);
-        const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const header = texto => `<th class="p-2 border-r border-slate-300 text-center min-w-[92px]">${esc(texto)}</th>`;
-        th.innerHTML = '<th class="p-2 border-r border-slate-300 sticky left-0 bg-slate-100 z-20 min-w-[150px]">Indicador</th>'
-            + ativos.map(header).join('') + header('Total Geral');
-        const inicio = nome => `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="p-2 border-r border-slate-200 font-black sticky left-0 bg-white z-10">${esc(nome)}</td>`;
-        const volume = n => `<td class="p-2 border-r border-slate-200 ${percentual ? 'text-center' : 'text-right'} font-black bg-slate-50">${percentual ? fmtCompactoFunil(n) : window.formatarBR(n)}</td>`;
-        let h = inicio('00 - Tiragem Total') + ativos.map(g => volume(grid[g].total)).join('') + volume(tGeral) + '</tr>';
-        fasesAtivas.forEach((f, idx) => {
-            h += inicio(String(idx + 1).padStart(2, '0') + ' - ' + nomeFaseTabelaFunil(f));
-            ativos.forEach(g => {
-                h += percentual ? montarCelulaPctFunil(grid[g][f.id], grid[g].total, f.colPlan !== null, contexto(f.id, g)) : montarCelulaBrutaFunil(grid[g][f.id]);
-            });
-            h += (percentual ? montarCelulaPctFunil(fTotais[f.id], tGeral, f.colPlan !== null, contexto(f.id)) : montarCelulaBrutaFunil(fTotais[f.id])) + '</tr>';
-        });
-        h += inicio(String(fasesAtivas.length + 1).padStart(2, '0') + ' - Séries Finalizadas');
-        const totalSeries = { finalizadas: 0, total: 0 };
-        ativos.forEach(g => {
-            const resumo = pgResumoSeries(mapaSeries, String(g).trim().toUpperCase());
-            totalSeries.finalizadas += resumo.finalizadas;
-            totalSeries.total += resumo.total;
-            h += percentual ? montarCelulaSeriesPct(resumo, contexto('series', g)) : montarCelulaSeriesBruta(resumo);
-        });
-        totalSeries.pct = totalSeries.total > 0 ? Math.round(totalSeries.finalizadas / totalSeries.total * 100) : 0;
-        h += (percentual ? montarCelulaSeriesPct(totalSeries, contexto('series')) : montarCelulaSeriesBruta(totalSeries)) + '</tr>';
-        tb.innerHTML = h;
-    };
-    const aG = Object.keys(gGrid).sort((a, b) => gGrid[b].total - gGrid[a].total);
-    renderResumoTransposto('MarcaTiragem', aM, mGrid, pgSeriesPorMarca, false);
-    renderResumoTransposto('MarcaPct', aM, mGrid, pgSeriesPorMarca, true);
-    renderResumoTransposto('GraficaTiragem', aG, gGrid, pgSeriesPorGrafica, false);
-    renderResumoTransposto('GraficaPct', aG, gGrid, pgSeriesPorGrafica, true);
+    document.getElementById('thFunilMarcaTiragem').innerHTML = geraTh(aM);
+    document.getElementById('tbFunilMarcaTiragem').innerHTML = geraBody(aM, mGrid, false);
+    document.getElementById('thFunilMarcaPct').innerHTML = geraTh(aM);
+    document.getElementById('tbFunilMarcaPct').innerHTML = geraBody(aM, mGrid, true);
+    
+    let aG = Object.keys(gGrid).sort((a, b) => gGrid[b].total - gGrid[a].total);
+    document.getElementById('thFunilGraficaTiragem').innerHTML = geraTh(aG);
+    document.getElementById('tbFunilGraficaTiragem').innerHTML = geraBody(aG, gGrid, false);
+    document.getElementById('thFunilGraficaPct').innerHTML = geraTh(aG);
+    document.getElementById('tbFunilGraficaPct').innerHTML = geraBody(aG, gGrid, true);
 };
 
     function renderCurvaAcumulada() {
@@ -2986,45 +2247,9 @@ window.processarOTIF = function() {
         document.getElementById('tbIfVolumes').innerHTML = tbIfVol;
     };
 
-// Faixas do Backlog & Pipeline por semana de calendario (segunda a sabado).
-// df = dias da data planejada em relacao a hoje (negativo = atrasado).
-// As janelas de 3 dias sao independentes da semana; o domingo fica na semana
-// que comeca na segunda anterior, para nao sobrar data sem faixa.
-window.pgFaixaPlan = function(df, hoje) {
-    const ref = hoje || (typeof dtHoje !== 'undefined' ? dtHoje : new Date());
-    const dow = (ref.getDay() + 6) % 7;   // 0 = segunda ... 6 = domingo
-    const semanaRelativa = Math.floor((dow + df) / 7);
-    const semana = df < 0
-        ? (semanaRelativa < -1 ? 'bRet' : semanaRelativa === -1 ? 'bPas' : 'bAtu')
-        : (semanaRelativa === 0 ? 'pAtu' : semanaRelativa === 1 ? 'pPrx' : 'pLon');
-    const janela = df >= -3 && df <= -1 ? 'bRec' : df >= 0 && df <= 3 ? 'pRec' : null;
-    return { semana, janela };
-};
-
 function renderTabelaPlan() {
     let fId = document.getElementById("selFasePlan").value; 
     let tRef = document.getElementById('filtroReferencia').value;
-    const normalizarCampoPlan = v => String(v ?? '').normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '').replace(/^[#\s]+/, '')
-        .replace(/_/g, ' ').trim().replace(/\s+/g, ' ').toUpperCase();
-    const campoPlan = (l, nomes) => {
-        const lista = Array.isArray(nomes) ? nomes : [nomes];
-        for (const nome of lista) {
-            const alvo = normalizarCampoPlan(nome);
-            const k = Object.keys(l || {}).find(k => normalizarCampoPlan(k) === alvo &&
-                l[k] !== null && l[k] !== undefined && String(l[k]).trim() !== '');
-            if (k !== undefined) return l[k];
-        }
-        return '';
-    };
-    const saldoVencido = l => {
-        const vencida = window.arredondar(campoPlan(l,
-            ['TRIAGEM VENCIDA', 'TIRAGEM VENCIDA', 'TIRAGEM VENCIDO', 'TIRAGEM VENC.', 'TIRAGEM VENC', 'L']) || 0);
-        const coletada = window.arredondar(campoPlan(l,
-            ['GIRO_COLETADA_AZ', 'VOLUME_AZ', 'TIRAGEM COLETADA', 'AZ']) || 0);
-        return Math.max(0, vencida - coletada);
-    };
-    const volumePlan = (l) => Math.max(0, window.arredondar(campoPlan(l, ['TIRAGEM', 'Tiragem', 'QUANTIDADE']) || 0));
     
     let plan = {}; let planGrafica = {}; let planMarca = {}; 
     let initObj = (props) => ({ ...props, bNd:0, bNdS:0, bRet:0, bRetS:0, bPas:0, bPasS:0, bAtu:0, bAtuS:0, bRec:0, bRecS:0, pRec:0, pRecS:0, pAtu:0, pAtuS:0, pPrx:0, pPrxS:0, pLon:0, pLonS:0 });
@@ -3033,12 +2258,9 @@ function renderTabelaPlan() {
     let totMarca = initObj({ label: "TOTAIS" });
     let totGeral = initObj({ label: "TOTAIS" });
 
-    const filtroExtraPlan = window.pgCompilarFiltrosExtras ? window.pgCompilarFiltrosExtras() : () => true;
-    const linhasPlan = (window.dadosGlobais || dadosFiltrados || []).filter(l => filtroExtraPlan(l));
-    const modoColeta = fId === 'col_mapa';
-    linhasPlan.forEach(l => {
-        let tBasePlan = volumePlan(l, 'pAtu'); 
-        if (tBasePlan <= 0 && !(modoColeta && saldoVencido(l) > 0)) return; 
+    dadosFiltrados.forEach(l => {
+        let t = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"]); 
+        if (t <= 0) return; 
         
         let fObj = null;
         
@@ -3054,7 +2276,7 @@ function renderTabelaPlan() {
         } else {
             // Se for uma fase específica, apenas checa ela
             let f = FASES.find(x => x.id === fId);
-            if (belongsToPhase(l, f.id) && (modoColeta || !dataFoiPreenchida(l, f))) {
+            if (belongsToPhase(l, f.id) && !dataFoiPreenchida(l, f)) {
                 fObj = f;
             }
         }
@@ -3062,71 +2284,51 @@ function renderTabelaPlan() {
         // Se o item já concluiu tudo ou não pertence à fase filtrada, pula
         if (!fObj) return; 
         
-        const coleta = modoColeta;
         let cols = getCols(fObj, tRef); 
         
         let g = l["GRÁFICA"]||"N/A", m = l["UNIDADE"]||"N/A", seg = l["SEGMENTO"]||"N/A", ser = l["SÉRIE"]||"N/A";
         let cv = g+"|"+m+"|"+seg+"|"+ser;
-
+        
+        if(!plan[cv]) plan[cv] = initObj({ grafica: g, marca: m, segmento: seg, serie: ser });
+        if(!planGrafica[g]) planGrafica[g] = initObj({ label: g });
+        if(!planMarca[m]) planMarca[m] = initObj({ label: m });
+        
         let dAtr = calcAtraso(l, fObj, tRef, dtHoje);
         let tgt = null; 
 
         // NOVA REGRA: Atraso NULL vai para S/ Data
-        const lancamentos = [];
-        if (coleta) {
-            const diasDaData = valor => {
-                const iso = extrairDataISO(valor);
-                if (!iso) return null;
-                const pts = iso.split('-');
-                const diff = Math.round((new Date(pts[0], pts[1] - 1, pts[2]).getTime() - dtHoje.getTime()) / 86400000);
-                return Number.isFinite(diff) ? diff : null;
-            };
-            // Backlog e pipeline têm volumes e datas independentes em Coleta Mapa.
-            const dfMapa = diasDaData(campoPlan(l, ['Data_Coleta_Mapa', 'K']));
-            if (dfMapa === null || dfMapa < 0) {
-                const faixaMapa = dfMapa === null ? { semana: 'bNd', janela: null } : window.pgFaixaPlan(dfMapa);
-                [faixaMapa.semana, faixaMapa.janela].filter(Boolean).forEach(faixa =>
-                    lancamentos.push({ faixa, t: saldoVencido(l) }));
-            }
-            const dfPlan = diasDaData(campoPlan(l, 'Coleta/Internalização de estoque final (re) plan'));
-            if (dfPlan !== null && dfPlan >= 0 && !dataFoiPreenchida(l, fObj)) {
-                const faixaPlan = window.pgFaixaPlan(dfPlan);
-                [faixaPlan.semana, faixaPlan.janela].filter(Boolean).forEach(faixa =>
-                    lancamentos.push({ faixa, t: volumePlan(l) }));
-            }
-        } else if (dAtr === null) {
-            tgt = { semana: 'bNd', janela: null };
+        if (dAtr === null) {
+            tgt = 'bNd';
         } else if (dAtr > 0) {
-            tgt = window.pgFaixaPlan(-dAtr);
+            if (dAtr > 14) tgt = 'bRet';       // Antigas
+            else if (dAtr > 7) tgt = 'bPas';   // Semana Passada (8 a 14)
+            else if (dAtr > 3) tgt = 'bAtu';   // Semana Atual (4 a 7)
+            else tgt = 'bRec';                 // Últimos 3 dias
         } 
         else {
             let dISO = extrairDataISO(l[cols.plan]);
             if(dISO) {
                 let pts = dISO.split('-'); let dp = new Date(pts[0], pts[1]-1, pts[2]);
                 let df = Math.floor((dp.getTime() - dtHoje.getTime()) / 86400000);
-                tgt = window.pgFaixaPlan(df);
+                
+                if (df <= 3) tgt = 'pRec';         // Próximos 3 dias
+                else if (df <= 7) tgt = 'pAtu';    // Semana Atual
+                else if (df <= 14) tgt = 'pPrx';   // Próxima Sem
+                else tgt = 'pLon';                 // Futuro
             } else {
-                tgt = { semana: 'bNd', janela: null }; // Prevenção caso a data fure o parse de cima
+                tgt = 'bNd'; // Prevenção caso a data fure o parse de cima
             }
         }
-        if (tgt) {
-            [tgt.semana, tgt.janela].filter(Boolean).forEach(faixa =>
-                lancamentos.push({ faixa, t: volumePlan(l) }));
-        }
-        lancamentos.forEach(({ faixa, t }) => {
-            if (t <= 0) return;
-            if(!plan[cv]) plan[cv] = initObj({ grafica: g, marca: m, segmento: seg, serie: ser });
-            if(!planGrafica[g]) planGrafica[g] = initObj({ label: g });
-            if(!planMarca[m]) planMarca[m] = initObj({ label: m });
+        if(tgt) {
             // Soma na Linha Específica
-            plan[cv][faixa] += t; plan[cv][faixa+'S'] += 1;
-            planGrafica[g][faixa] += t; planGrafica[g][faixa+'S'] += 1;
-            planMarca[m][faixa] += t; planMarca[m][faixa+'S'] += 1;
+            plan[cv][tgt] += t; plan[cv][tgt+'S'] += 1;
+            planGrafica[g][tgt] += t; planGrafica[g][tgt+'S'] += 1;
+            planMarca[m][tgt] += t; planMarca[m][tgt+'S'] += 1;
             // Soma no Rodapé (Acumulado)
-            totGrafica[faixa] += t; totGrafica[faixa+'S'] += 1;
-            totMarca[faixa] += t; totMarca[faixa+'S'] += 1;
-            totGeral[faixa] += t; totGeral[faixa+'S'] += 1;
-        });
+            totGrafica[tgt] += t; totGrafica[tgt+'S'] += 1;
+            totMarca[tgt] += t; totMarca[tgt+'S'] += 1;
+            totGeral[tgt] += t; totGeral[tgt+'S'] += 1;
+        }
     });
 
     const fmt = (v, s, cV, cS, bg) => {  
@@ -4655,6 +3857,7 @@ window.processarEvolucao = function() {
         let sidebar = document.getElementById('sidebarMenu');
         if (sidebar && !sidebar.classList.contains('w-64')) {
             if (typeof window.toggleMenu === 'function') window.toggleMenu();
+            if (abaId === 'abaGiroSemanal' && window.processarGiroSemanal) window.processarGiroSemanal();
         }
 
         // Sincroniza a sanfona inteligente
@@ -6431,7 +5634,7 @@ window.iniciarAbaOKRQ2 = function() {
                     }
                     console.error("Erro Fatal no Google Script:", erro);
                 })
-                .getDadosMapaSaida_Cache();
+                .getDadosMapaSaida();
         } else {
             window.processarOKRQ2();
         }
@@ -6770,7 +5973,7 @@ window.exportarCSV_OKR = function() {
 // CARREGAMENTO EM SEGUNDO PLANO (ONLOAD) DO MAPA DE SAÍDA
 // =========================================================
 document.addEventListener("DOMContentLoaded", function() {
-    if (window.MAPA_SAIDA_CACHE && Object.keys(window.MAPA_SAIDA_CACHE).length) return;
+    window.MAPA_SAIDA_CACHE = null;
     console.log("Iniciando busca do Mapa de Saída em background...");
     
     google.script.run
@@ -6790,7 +5993,7 @@ document.addEventListener("DOMContentLoaded", function() {
         .withFailureHandler(function(erro) {
             console.error("Falha ao carregar Mapa em background:", erro);
         })
-        .getDadosMapaSaida_Cache();
+        .getDadosMapaSaida();
 });
 
 // =========================================================================
@@ -6815,9 +6018,7 @@ const ETAPAS_MAPA = [
   { nome: 'Form. Kit (Início)', plan: ['Formação de kit/Encaixotamento início (re) plan'], real: ['Formação de kit/Encaixotamento Início Real'] },
   { nome: 'Form. Kit (Fim)', plan: ['Formação de kit/Encaixotamento Final (re) plan'], real: ['Formação de kit/Encaixotamento Final Real'] },
   { nome: 'Coleta Inicial', plan: ['Coleta/Internalização de estoque inicial (re) plan'], real: ['Coleta/Internalização de estoque inicial Real'] },
-  { nome: 'Coleta Final', plan: ['Coleta/Internalização de estoque final (re) plan'], real: ['Coleta/Internalização de estoque Final Real', 'Coleta Real PCP', 'Data coleta', 'Data da coleta realizada'] },
-  { nome: 'Coleta Mapa', plan: ['Coleta/Internalização de estoque final (re) plan', 'COLETA/INTERNALIZAÇÃO FIM BASELINE'], real: ['Data_Coleta_Mapa'] },
-  { nome: 'Coletado a menos', plan: [], real: [] }
+  { nome: 'Coleta Final', plan: ['Coleta/Internalização de estoque final (re) plan'], real: ['Coleta/Internalização de estoque Final Real', 'Coleta Real PCP', 'Data coleta', 'Data da coleta realizada'] }
 ];
 
 function getValFromCols(row, cols) {
@@ -6854,7 +6055,6 @@ window.renderizarPontosAtencaoGiro = function(dados) {
     }
     
     if (!window.OBS_GIRO_CARREGADO) {
-        window.reFiltrarTabelaGiro();
         try {
             google.script.run
                 .withSuccessHandler(function(res) {
@@ -6869,7 +6069,7 @@ window.renderizarPontosAtencaoGiro = function(dados) {
                     window.OBS_GIRO_CARREGADO = true;
                     window.reFiltrarTabelaGiro();
                 })
-                .buscarHistoricoObsGiro_Cache();
+                .buscarHistoricoObsGiro();
         } catch(e) {
             window.HISTORICO_OBS_GIRO = { master: {}, sku: {} };
             window.reFiltrarTabelaGiro();
@@ -6903,8 +6103,7 @@ window.construirBotoesEtapasGiro = function() {
   const macroGrupos = {
     'Pré produção': ['Env. Arquivo', 'Rec. Boneco', 'Apv. Boneco'],
     'Produção': ['Impressão (Início)', 'Impressão (Fim)', 'Acabamento (Início)', 'Acabamento (Fim)', 'Form. Kit (Início)', 'Form. Kit (Fim)', 'Coleta Inicial', 'Coleta Final'],
-    'Custos': ['Val. Custos (Início)', 'Val. Custos (Fim)', 'O.C. (Início)', 'O.C. (Fim)'],
-    'Pós': ['Coleta Mapa', 'Coletado a menos']
+    'Custos': ['Val. Custos (Início)', 'Val. Custos (Fim)', 'O.C. (Início)', 'O.C. (Fim)']
   };
 
   function renderizarFiltrosGiro() {
@@ -7075,28 +6274,11 @@ window.salvarObsFront = function(tipo, chave, inputEl) {
         .salvarObsGiro(tipo, chave, obs, contexto);
 };
 
-window.exportarPendenciasGiroVisiveis = function() {
-    const itens = window.pgGiroLinhasExportar || [];
-    if (!itens.length) { alert('Nenhum item filtrado para exportar.'); return; }
-    const btn = document.getElementById('btnExportarFiltrados');
-    if (btn.disabled) return;
-    btn.disabled = true;
-    const aba = window.open('about:blank', '_blank');
-    const falha = erro => { btn.disabled = false; if (aba) aba.close(); alert('Erro ao gerar planilha: ' + erro); };
-    google.script.run.withSuccessHandler(res => {
-        if (!res?.success) { falha(res?.error || 'Erro desconhecido'); return; }
-        btn.disabled = false;
-        if (aba) aba.location.href = res.url;
-        else window.open(res.url, '_blank');
-    }).withFailureHandler(falha).gerarPlanilhaGiroFiltrado(itens);
-};
-
 window.reFiltrarTabelaGiro = function() {
     const tbody = document.getElementById('tbodyPontosAtencaoGiro');
     if (!tbody) return;
 
     const optAberto = document.getElementById('chkGiroAberto').checked;
-    const optPos = document.getElementById('chkGiroPos') ? document.getElementById('chkGiroPos').checked : true;
     const optConcluido = document.getElementById('chkGiroConcluido').checked;
     const optCancelado = document.getElementById('chkGiroCancelado').checked;
     const minDias = parseInt(document.getElementById('sldGiroDiasMin').value);
@@ -7105,70 +6287,35 @@ window.reFiltrarTabelaGiro = function() {
     const maxRange = Math.max(minDias, maxDias);
 
     const grupos = {};
-    const planosFinais = new Map();
-    (window.pgObterResumoColeta().registros || []).forEach(r => {
-        if (r.pcp && r.dtPlan && (!planosFinais.has(r.pcp) || planosFinais.get(r.pcp) < r.dtPlan)) planosFinais.set(r.pcp, r.dtPlan);
-    });
+
     window.GIRO_DADOS_RAW.forEach(l => {
-        const estadoMapa = window.pgEstadoColetaMapa(l);
-        const pendenteMapa = estadoMapa.pendente;
-        const coletadoAMenos = estadoMapa.parcial;
-        const saldoColeta = estadoMapa.saldo;
         // ---> 1. TRAVA DA COLUNA EE <---
-        // AY e saldo do mapa prevalecem sobre EE e sobre a data PCP para pendências de coleta
+        // Se a coluna EE for OK ou Não Coletado, ignora a linha e pula para a próxima
         let statusEE = String(l["STATUS_EE"] || "").trim().toUpperCase();
-        if (!pendenteMapa && (statusEE === "OK" || statusEE === "NÃO COLETADO" || statusEE === "NAO COLETADO")) {
+        if (statusEE === "OK" || statusEE === "NÃO COLETADO" || statusEE === "NAO COLETADO") {
             return;
         }
 
         let statusFinalStr = 'Em Aberto';
         let ultEtapaStatus = String(l["Última Etapa"] || l["STATUS"] || l["Etapa Atual"] || "").toUpperCase();
         
-        // Data real da coleta. No Pós, o tempo é contado desde a coleta realizada.
-        let coletaReal = getValFromCols(l, ['DT_ENTREGA_DG', 'Coleta/Internalização de estoque Final Real', 'Coleta Real PCP', 'Data coleta', 'Data da coleta realizada', 'DATA_DZ']);
-
+        // Reconhecimento fiel de conclusão baseado na data real final
+        let coletaReal = getValFromCols(l, ['Coleta/Internalização de estoque Final Real', 'Coleta Real PCP', 'Data coleta', 'Data da coleta realizada', 'DT_ENTREGA_DG']);
+        
         if (ultEtapaStatus.includes("CANCEL")) {
             statusFinalStr = 'Cancelado';
-        } else if (coletadoAMenos) {
-            statusFinalStr = 'Coletado a menos';
-        } else if (pendenteMapa) {
-            statusFinalStr = 'Em Aberto';
-        } else if (estadoMapa.concluida || ultEtapaStatus.includes("CONCLU") || ultEtapaStatus.includes("FINALIZADO") || isDateFilled(coletaReal)) {
+        } else if (ultEtapaStatus.includes("CONCLU") || ultEtapaStatus.includes("FINALIZADO") || isDateFilled(coletaReal)) {
             statusFinalStr = 'Concluído';
         }
 
+        // Se a checkbox comanda que não deve mostrar, ignora.
         if (statusFinalStr === 'Concluído' && !optConcluido) return;
         if (statusFinalStr === 'Cancelado' && !optCancelado) return;
         if (statusFinalStr === 'Em Aberto' && !optAberto) return;
-        if (statusFinalStr === 'Coletado a menos' && !optPos) return;
 
         let etapaPendente = '-';
         let diasAtraso = 0;
         let pendenciasFormatadas = []; 
-
-        if (statusFinalStr === 'Coletado a menos') {
-            if (!window.GIRO_ETAPAS_SELECIONADAS.has('Coletado a menos') && !window.GIRO_ETAPAS_SELECIONADAS.has('Coleta Mapa')) return;
-
-            let dtColetaPos = parseValidDate(coletaReal);
-            let diasDesdeColeta = null;
-            if (dtColetaPos) {
-                const hojePos = new Date();
-                hojePos.setHours(0, 0, 0, 0);
-                dtColetaPos.setHours(0, 0, 0, 0);
-                diasDesdeColeta = Math.max(0, Math.floor((hojePos - dtColetaPos) / 86400000));
-            }
-
-            etapaPendente = 'Coletado a menos + Coleta Mapa';
-            diasAtraso = 0;
-            pendenciasFormatadas.push(
-                `<div class="leading-tight">Coletado a menos${
-                    diasDesdeColeta === null
-                        ? '<span class="block text-[9px] text-slate-500 mt-0.5">Data da coleta não disponível</span>'
-                        : `<span class="block text-[9px] text-rose-600 font-bold mt-0.5">Coleta realizada há ${diasDesdeColeta} ${diasDesdeColeta === 1 ? 'dia' : 'dias'}</span>`
-                }</div>`
-            );
-            l.__GIRO_DIAS_POS = diasDesdeColeta;
-        }
 
         if (statusFinalStr === 'Em Aberto') {
             let etapaProd = null;
@@ -7177,7 +6324,7 @@ window.reFiltrarTabelaGiro = function() {
             // 1. Encontra a pendência de PRODUÇÃO
             for (let i = 0; i < ETAPAS_MAPA.length; i++) {
                 let e = ETAPAS_MAPA[i];
-                if (e.nome === 'Coleta Mapa' || e.nome.includes('Val. Custos') || e.nome.includes('O.C.')) continue;
+                if (e.nome.includes('Val. Custos') || e.nome.includes('O.C.')) continue;
                 
                 let valReal = getValFromCols(l, e.real);
                 let valPlan = getValFromCols(l, e.plan);
@@ -7248,12 +6395,6 @@ window.reFiltrarTabelaGiro = function() {
                 selecionadas.push({ nome: etapaOC, dias: diasOC });
             }
 
-            if (pendenteMapa && window.GIRO_ETAPAS_SELECIONADAS.has('Coleta Mapa')) {
-                const dtMapa = planosFinais.get(l) || window.pgDataPlanoColetaLinha(l);
-                const atrasoMapa = dtMapa ? calcDiffDiasISO(dtMapa, dtHojeISO) : 0;
-                if (!dtMapa || validaNoSlider(atrasoMapa)) selecionadas.push({ nome: 'Coleta Mapa', dias: atrasoMapa, semPrazo: !dtMapa });
-            }
-
             // Se NENHUMA pendência passar nos botões + slider simultaneamente, oculta a linha inteira!
             if (selecionadas.length === 0) return; 
 
@@ -7269,7 +6410,6 @@ window.reFiltrarTabelaGiro = function() {
                 else if (escala > 0) lbl = `<span class="font-bold text-blue-600 block text-[9px] mt-0.5 mb-1">Vence em ${escala} dias</span>`;
                 else lbl = `<span class="font-bold text-emerald-600 block text-[9px] mt-0.5 mb-1">Vence hoje</span>`;
                 
-                if (s.semPrazo) lbl = '<span class="block text-xs">Sem prazo de coleta</span>';
                 // ---> 2. CÁLCULO DE DIAS DA COLETA PCP <---
                 if (s.nome === 'Coleta Mapa' || s.nome === 'Entrega TP') {
                     let dtColetaPCP = extrairDataISO(l["DT_ENTREGA_DG"] || l["Coleta/Internalização de estoque Final Real"]);
@@ -7299,7 +6439,7 @@ window.reFiltrarTabelaGiro = function() {
 
         if (statusFinalStr === 'Em Aberto') {
             // Redundância de segurança geral da linha
-            if (!(etapaPendente.includes('Coleta Mapa') && !(planosFinais.get(l) || window.pgDataPlanoColetaLinha(l))) && (escalaSlider < minRange || escalaSlider > maxRange)) return;
+            if (escalaSlider < minRange || escalaSlider > maxRange) return;
         }
 
         let grafica = String(l["GRAFICA_FINAL"] || l["GRÁFICA"] || "N/A").trim();
@@ -7309,7 +6449,6 @@ window.reFiltrarTabelaGiro = function() {
         let cd = String(l["CD DESTINO"] || l["CD_FINAL"] || l["CD"] || "-").trim();
         let sku = String(l["SKU_REAL"] || l["SKU"] || "-").trim();
         let tiragemBase = window.arredondar ? window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"] || 0) : 0;
-        let tiragemExibida = (coletadoAMenos || etapaPendente === 'Coleta Mapa') ? saldoColeta : tiragemBase;
 
         // CHAVE DE AGRUPAMENTO 100% BLINDADA (Identidade Absoluta)
         let chaveGrupo = `${grafica}|${marca}|${serie}|${envio}|${cd}`;
@@ -7317,33 +6456,11 @@ window.reFiltrarTabelaGiro = function() {
         if (!grupos[chaveGrupo]) {
             grupos[chaveGrupo] = { 
                 grafica: grafica, marca: marca, serie: serie, envio: envio, cd: cd,
-                skus: [], tiragemTotal: 0, tiragemNormal: 0, piorEscala: 999, diasPos: null,
-                statusGrupo: statusFinalStr, pendencias: new Set() 
+                skus: [], tiragemTotal: 0, piorEscala: 999, statusGrupo: statusFinalStr, pendencias: new Set() 
             };
         }
 
-        if (coletadoAMenos) {
-            const grupoSaldo = grupos[chaveGrupo];
-            grupoSaldo.coletadoAMenos = true;
-            if (!grupoSaldo.saldosColeta) grupoSaldo.saldosColeta = new Map();
-
-            // BA/AZ repetidos na mesma JOIN_KEY contam uma única vez no total do grupo.
-            const chaveSaldo = String(l["JOIN_KEY"] || `${grafica}|${marca}|${sku}|${envio}|${cd}`);
-            grupoSaldo.saldosColeta.set(chaveSaldo, Math.max(0, saldoColeta));
-
-            if (Number.isFinite(l.__GIRO_DIAS_POS)) {
-                grupoSaldo.diasPos = grupoSaldo.diasPos === null
-                    ? l.__GIRO_DIAS_POS
-                    : Math.max(grupoSaldo.diasPos, l.__GIRO_DIAS_POS);
-            }
-        } else {
-            grupos[chaveGrupo].tiragemNormal += tiragemExibida;
-        }
-
-        const prioridadeStatus = { 'Concluído': 1, 'Em Aberto': 2, 'Coletado a menos': 3, 'Cancelado': 4 };
-        if ((prioridadeStatus[statusFinalStr] || 0) > (prioridadeStatus[grupos[chaveGrupo].statusGrupo] || 0)) {
-            grupos[chaveGrupo].statusGrupo = statusFinalStr;
-        }
+        if (statusFinalStr === 'Em Aberto') grupos[chaveGrupo].statusGrupo = 'Em Aberto';
         if (etapaPendente !== '-') {
             let partes = etapaPendente.split(' + ');
             partes.forEach(p => grupos[chaveGrupo].pendencias.add(p));
@@ -7359,20 +6476,14 @@ window.reFiltrarTabelaGiro = function() {
             grafica: grafica,
             cd: cd,
             descricao: l["DESC_REAL"] || l["DESCRIÇÃO"] || l["PRODUTO"] || "-",
-            tiragem: tiragemExibida,
+            tiragem: tiragemBase,
             statusLinha: statusFinalStr,
             pendencia: etapaPendente,
             pendenciaHtml: pendenciasFormatadas.length > 0 ? pendenciasFormatadas.join('') : '-',
             escala: escalaSlider
         });
 
-        if (grupos[chaveGrupo].coletadoAMenos) {
-            grupos[chaveGrupo].tiragemTotal = Array.from(grupos[chaveGrupo].saldosColeta.values())
-                .filter(Number.isFinite)
-                .reduce((total, valor) => total + valor, 0);
-        } else {
-            grupos[chaveGrupo].tiragemTotal = grupos[chaveGrupo].tiragemNormal;
-        }
+        grupos[chaveGrupo].tiragemTotal += tiragemBase;
     });
 
     window.calcularTempoObs = function(dataString) {
@@ -7431,11 +6542,6 @@ let arrGrupos = Object.values(grupos);
         return true;
     });
 
-    window.pgGiroLinhasExportar = arrGrupos.flatMap(g => g.skus.map(l => ({
-        grafica: g.grafica, marca: g.marca, serie: g.serie, sku: l.sku, desc: l.descricao,
-        status: l.statusLinha, pendencia: l.pendencia, dias: l.escala, tiragem: l.tiragem
-    })));
-
     if (arrGrupos.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
         return;
@@ -7481,17 +6587,9 @@ let arrGrupos = Object.values(grupos);
         let pendenciasStr = g.pendencias.size > 0 ? Array.from(g.pendencias).join(', ') : '-';
 
         let prazoMasterLabel = '';
-        let corStatusMaster =
-            g.statusGrupo === 'Concluído' ? 'bg-emerald-100 text-emerald-800' :
-            g.statusGrupo === 'Cancelado' ? 'bg-slate-200 text-slate-700' :
-            g.statusGrupo === 'Coletado a menos' ? 'bg-rose-100 text-rose-700' :
-            'bg-indigo-100 text-indigo-800';
+        let corStatusMaster = g.statusGrupo === 'Concluído' ? 'bg-emerald-100 text-emerald-800' : (g.statusGrupo === 'Cancelado' ? 'bg-slate-200 text-slate-700' : 'bg-indigo-100 text-indigo-800');
 
-        if (g.statusGrupo === 'Coletado a menos') {
-            prazoMasterLabel = g.diasPos === null
-                ? `<span class="text-xs font-bold text-slate-500 block mt-0.5">Data da coleta não disponível</span>`
-                : `<span class="text-xs font-black text-rose-600 block mt-0.5">Coleta realizada há ${g.diasPos} ${g.diasPos === 1 ? 'dia' : 'dias'}</span>`;
-        } else if (g.statusGrupo === 'Em Aberto' && g.piorEscala !== 999) {
+        if (g.statusGrupo === 'Em Aberto' && g.piorEscala !== 999) {
             if (g.piorEscala <= -3) prazoMasterLabel = `<span class="text-xs font-black text-red-600 block mt-0.5">Vencido há ${Math.abs(g.piorEscala)} dias</span>`;
             else if (g.piorEscala < 0) prazoMasterLabel = `<span class="text-xs font-black text-amber-600 block mt-0.5">Vencido há ${Math.abs(g.piorEscala)} dias</span>`;
             else if (g.piorEscala > 0) prazoMasterLabel = `<span class="text-xs font-black text-blue-600 block mt-0.5">Vence em ${g.piorEscala} dias</span>`;
@@ -7528,9 +6626,9 @@ let arrGrupos = Object.values(grupos);
         </td>
         <td class="p-2 font-extrabold text-indigo-800 border-r border-slate-200">${g.grafica}</td>
         <td class="p-2 font-extrabold text-slate-800 border-r border-slate-200">${g.marca}</td>
-        <td class="p-2 text-slate-600 font-medium border-r border-slate-200" style="width:8ch;max-width:calc(8ch + 1rem)"><span style="display:block;width:8ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String((g.coletadoAMenos ? g.cd : g.serie) ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}">${String((g.coletadoAMenos ? g.cd : g.serie) ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></td>
+        <td class="p-2 text-slate-600 font-medium border-r border-slate-200">${g.serie}</td>
         <td class="p-2 border-r border-slate-200 text-center"><span class="px-2 py-1 rounded text-[10px] font-bold uppercase ${corStatusMaster}">${g.statusGrupo}</span></td>
-        <td class="p-2 border-r border-slate-200 font-bold text-slate-700" style="width:30ch;max-width:calc(30ch + 1rem)"><span style="display:block;width:30ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(pendenciasStr).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}">${String(pendenciasStr).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span><span style="display:block;width:30ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(prazoMasterLabel).replace(/<[^>]*>/g, '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">${prazoMasterLabel}</span></td>
+        <td class="p-2 border-r border-slate-200 font-bold text-slate-700">${pendenciasStr} ${prazoMasterLabel}</td>
         <td class="p-2 text-center font-bold text-slate-600 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.skus.length) : g.skus.length}</td>
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemTotal) : g.tiragemTotal}</td>
         <td class="p-2">
@@ -7561,11 +6659,7 @@ let arrGrupos = Object.values(grupos);
         `;
 
         g.skus.forEach(item => {
-        let corStatusSku =
-            item.statusLinha === 'Concluído' ? 'text-emerald-600' :
-            item.statusLinha === 'Cancelado' ? 'text-slate-400 line-through' :
-            item.statusLinha === 'Coletado a menos' ? 'text-rose-600' :
-            'text-indigo-600';
+        let corStatusSku = item.statusLinha === 'Concluído' ? 'text-emerald-600' : (item.statusLinha === 'Cancelado' ? 'text-slate-400 line-through' : 'text-indigo-600');
 
         let chaveSku = item.chaveUnica;
             let safeChaveSku = chaveSku.replace(/'/g, "\\'").replace(/"/g, "&quot;");
@@ -7789,590 +6883,4 @@ window.exportarDivergenciasColetas = function() {
     a.click();
 };
 
-</script>
-
-<!-- PG_ONEPAGE_FILTROS_V1 -->
-<script>
-(function() {
-    const PG_ACABADORAS = ['ANTILHAS', 'ANTIHAS', 'FELK', 'TRATTO', 'EMBALARTE', 'HR'];
-
-    const PG_PESSOAS = {
-        'joao.alberti@arcoeducacao.com.br': {
-            nome: 'João Alberti', time: 'CAMILA',
-            graficas: ['POSIGRAF', 'WALPRINT', 'LEOGRAF']
-        },
-        'klaytonmatos@arcoeducacao.com.br': {
-            nome: 'Klayton', time: 'CAMILA',
-            graficas: ['COAN', 'MAXI', 'MIDIOGRAF', 'REPROSET', 'IMOS', 'ZIT']
-        },
-        'amanda.costa@arcoeducacao.com.br': {
-            nome: 'Amanda Costa', time: 'CAMILA',
-            graficas: ['LOGPRINT', 'BERCROM', 'META']
-        },
-        'elisandraramos@arcoeducacao.com.br': {
-            nome: 'Elis', time: 'JAQUELINE',
-            graficas: ['PITFER', 'SAO FRANCISCO', 'FORMA CERTA', 'EMBALART', 'FELK', 'HR', 'ANTILHAS', 'KN', 'RAIZES']
-        },
-        'matheus.vasconcelos@arcoeducacao.com.br': {
-            nome: 'Matheus', time: 'JAQUELINE',
-            graficas: ['RICARGRAF', 'ATHOS', 'RONA', 'STAR 7', 'OCEANO']
-        }
-    };
-
-    const PG_GESTORES = {
-        'camila.pagliuca@arcoeducacao.com.br': 'CAMILA',
-        'jaqueline.melo@arcoeducacao.com.br': 'JAQUELINE'
-    };
-
-    const PG_LIDERANCA = new Set([
-        'leonardo.pereira@arcoeducacao.com.br',
-        'priscillabianchi@arcoeducacao.com.br'
-    ]);
-
-    function pgNorm(v) {
-        return String(v == null ? '' : v)
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            .trim().replace(/\s+/g, ' ').toUpperCase();
-    }
-
-    function pgEsc(v) {
-        return String(v == null ? '' : v)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    function pgGraficaLinha(l) {
-        return pgNorm(l['GRAFICA_FINAL'] || l['GRÁFICA'] || l['GRAFICA'] || l['BQ'] || '');
-    }
-
-    function pgCdLinha(l) {
-        return pgNorm(l['CD_FINAL'] || l['CD DESTINO'] || l['CD'] || l['CK'] || '');
-    }
-
-    const pgAcabadoraPorLinha = new WeakMap();
-    function pgEhAcabadora(l) {
-        if (pgAcabadoraPorLinha.has(l)) return pgAcabadoraPorLinha.get(l);
-        const cd = pgCdLinha(l);
-        // Destino CD segue exclusivamente a coluna CD Destino: estas acabadoras saem do recorte.
-        const resultado = PG_ACABADORAS.includes(cd) || cd.includes('ACABADORA');
-        pgAcabadoraPorLinha.set(l, resultado);
-        return resultado;
-    }
-
-    window.pgEhDestinoAcabadora = pgEhAcabadora;
-
-    function pgCasaGrafica(graficaLinha, graficasPessoa) {
-        const g = pgNorm(graficaLinha);
-        return (graficasPessoa || []).some(x => {
-            const n = pgNorm(x);
-            return g === n || g.includes(n) || n.includes(g);
-        });
-    }
-
-    function pgPessoasDoTime(time) {
-        return Object.entries(PG_PESSOAS)
-            .filter(([, p]) => p.time === time)
-            .map(([email, p]) => ({ email, ...p }));
-    }
-
-    function pgGraficasDoTime(time) {
-        const out = [];
-        pgPessoasDoTime(time).forEach(p => out.push(...p.graficas));
-        return out;
-    }
-
-    function pgEmailAtual() {
-        if (window.PG_USER_EMAIL && String(window.PG_USER_EMAIL).includes('@')) {
-            return String(window.PG_USER_EMAIL).trim().toLowerCase();
-        }
-        const el = document.getElementById('userEmail');
-        const txt = el ? String(el.innerText || '').trim().toLowerCase() : '';
-        return txt.includes('@') ? txt : '';
-    }
-
-    function pgRole(email) {
-        if (PG_LIDERANCA.has(email)) return 'LIDERANCA';
-        if (PG_GESTORES[email]) return 'GESTOR';
-        if (PG_PESSOAS[email]) return 'ANALISTA';
-        return 'PADRAO';
-    }
-
-    function pgSelect(id, label, options, onChange) {
-        return `
-            <div class="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2 py-1.5 shadow-sm">
-                <span class="text-[9px] font-black text-slate-500 uppercase whitespace-nowrap">${pgEsc(label)}:</span>
-                <select id="${id}" onchange="${onChange}" class="bg-transparent text-[10px] font-bold text-slate-700 outline-none cursor-pointer max-w-[180px]">
-                    ${options.map(o => `<option value="${pgEsc(o.value)}">${pgEsc(o.label)}</option>`).join('')}
-                </select>
-            </div>`;
-    }
-
-    window.pgMontarFiltrosExtras = function() {
-        const container = document.getElementById('containerFiltrosMultiProducao');
-        if (!container) return;
-
-        const antigo = document.getElementById('pgFiltrosExtras');
-        const origemAnterior = document.getElementById('pgFiltroOrigem');
-        const origemSelecionada = origemAnterior ? origemAnterior.value : 'GRAFICA';
-        if (antigo) antigo.remove();
-
-        const email = pgEmailAtual();
-        const role = pgRole(email);
-
-        let html = `<div id="pgFiltrosExtras" class="contents">`;
-
-        html += pgSelect(
-            'pgFiltroDestino',
-            'Destino',
-            [
-                { value: 'TODOS', label: 'Todos' },
-                { value: 'CD', label: 'CD Destino' },
-                { value: 'ACAB', label: 'Acabadora' }
-            ],
-            "window.pgAlterarFiltroExtra('destino')"
-        );
-
-        html += pgSelect('pgFiltroOrigem', 'Origem', [
-            { value: 'GRAFICA', label: 'Gráfica' },
-            { value: 'ACABADORA', label: 'Acabadora' },
-            { value: 'TODOS', label: 'Todas' }
-        ], "window.pgAlterarFiltroExtra('origem')");
-
-        const todasPessoas = Object.entries(PG_PESSOAS)
-            .map(([e, p]) => ({ email: e, ...p }))
-            .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-
-        if (role === 'LIDERANCA' || role === 'GESTOR') {
-            let opTimes;
-            if (role === 'GESTOR') {
-                const meu = PG_GESTORES[email];
-                const outro = meu === 'CAMILA' ? 'JAQUELINE' : 'CAMILA';
-                opTimes = [
-                    { value: 'TODOS', label: 'Todos os times' },
-                    { value: meu, label: 'Meu time' },
-                    { value: outro, label: outro === 'CAMILA' ? 'Time Camila' : 'Time Jaqueline' }
-                ];
-            } else {
-                opTimes = [
-                    { value: 'TODOS', label: 'Todos os times' },
-                    { value: 'CAMILA', label: 'Time Camila' },
-                    { value: 'JAQUELINE', label: 'Time Jaqueline' }
-                ];
-            }
-
-            html += pgSelect('pgFiltroTime', 'Time', opTimes, "window.pgAlterarFiltroExtra('time')");
-            html += pgSelect(
-                'pgFiltroAnalista',
-                'Analista',
-                [{ value: 'TODOS', label: 'Todos os analistas' }].concat(
-                    todasPessoas.map(p => ({ value: p.email, label: p.nome }))
-                ),
-                "window.pgAlterarFiltroExtra('analista')"
-            );
-        } else if (role === 'ANALISTA') {
-            const minhas = PG_PESSOAS[email];
-            const graficasBase = window.listasMultiProducao && window.listasMultiProducao['Gráfica']
-                ? Array.from(window.listasMultiProducao['Gráfica']).filter(v => v && v !== '(Vazio)').sort((a,b) => String(a).localeCompare(String(b), 'pt-BR'))
-                : [];
-
-            const opGraficas = [
-                { value: 'TODOS', label: 'Todas as gráficas' },
-                { value: 'MINHAS', label: 'Minhas gráficas' }
-            ];
-            graficasBase.forEach(g => opGraficas.push({ value: 'GRAFICA:' + String(g), label: String(g) }));
-            html += pgSelect('pgFiltroGraficaAnalista', 'Gráficas', opGraficas, "window.pgAlterarFiltroExtra('grafica')");
-        }
-
-        html += `</div>`;
-        container.insertAdjacentHTML('beforeend', html);
-        document.getElementById('pgFiltroOrigem').value = origemSelecionada;
-    };
-
-    window.pgAlterarFiltroExtra = function(tipo) {
-        if (tipo === 'time') {
-            const a = document.getElementById('pgFiltroAnalista');
-            if (a) a.value = 'TODOS';
-        } else if (tipo === 'analista') {
-            const t = document.getElementById('pgFiltroTime');
-            if (t) t.value = 'TODOS';
-        }
-        if (typeof window.aplicarFiltros === 'function') window.aplicarFiltros();
-    };
-
-    window.pgCompilarFiltrosExtras = function() {
-        const valor = (id, padrao = 'TODOS') => document.getElementById(id)?.value || padrao;
-        const origem = valor('pgFiltroOrigem', 'GRAFICA'), destino = valor('pgFiltroDestino');
-        const email = pgEmailAtual(), role = pgRole(email);
-        const time = valor('pgFiltroTime'), analista = valor('pgFiltroAnalista'), grafica = valor('pgFiltroGraficaAnalista');
-        const listas = [];
-        let unica = null;
-        if (role === 'LIDERANCA' || role === 'GESTOR') {
-            if (time !== 'TODOS') listas.push(pgGraficasDoTime(time));
-            if (analista !== 'TODOS' && PG_PESSOAS[analista]) listas.push(PG_PESSOAS[analista].graficas);
-        } else if (role === 'ANALISTA') {
-            if (grafica === 'MINHAS' && PG_PESSOAS[email]) listas.push(PG_PESSOAS[email].graficas);
-            else if (grafica.startsWith('GRAFICA:')) unica = pgNorm(grafica.substring(8));
-        }
-        return (l, opcoes = {}) => {
-            const origemLinha = [l._SOURCE, l.BASE, l._base].some(v => pgNorm(v).includes('ACAB')) ? 'ACABADORA' : 'GRAFICA';
-            if (!opcoes.ignorarOrigem && origem !== 'TODOS' && origem !== origemLinha) return false;
-            if (!opcoes.ignorarDestino && destino !== 'TODOS') {
-                const acab = pgEhAcabadora(l);
-                if ((destino === 'ACAB' && !acab) || (destino === 'CD' && acab)) return false;
-            }
-            if (unica !== null || listas.length) {
-                const g = pgGraficaLinha(l);
-                if (unica !== null && unica !== g) return false;
-                if (!listas.every(lista => pgCasaGrafica(g, lista))) return false;
-            }
-            return true;
-        };
-    };
-    window.pgLinhaAtendeFiltrosExtras = function(l, opcoes = {}) {
-        return window.pgCompilarFiltrosExtras()(l, opcoes);
-    };
-
-    window.pgLimparFiltrosExtras = function() {
-        const origem = document.getElementById('pgFiltroOrigem');
-        if (origem) origem.value = 'GRAFICA';
-        ['pgFiltroDestino', 'pgFiltroTime', 'pgFiltroAnalista', 'pgFiltroGraficaAnalista'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = 'TODOS';
-        });
-    };
-
-    function pgFmtCompacto(n) {
-        n = Number(n || 0);
-        if (Math.abs(n) >= 1000000) return (n / 1000000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mi';
-        if (Math.abs(n) >= 1000) return (n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
-        return Math.round(n).toLocaleString('pt-BR');
-    }
-
-    function pgChave(l, idx) {
-        const base = l['JOIN_KEY'] || l['Chave'] || l['CHAVE'] ||
-            [l['OP'] || '', l['SKU_REAL'] || l['SKU'] || '', l['CD_FINAL'] || l['CD DESTINO'] || ''].join('|');
-        return String(base || ('LINHA_' + idx)).trim();
-    }
-
-    function pgCampo(l, nomes) {
-        for (const n of nomes) {
-            if (l[n] !== undefined && l[n] !== null && String(l[n]).trim() !== '') return l[n];
-        }
-        return '';
-    }
-
-    function pgData(v) {
-        if (typeof extrairDataISO === 'function') return extrairDataISO(v);
-        if (!v) return null;
-        const d = new Date(v);
-        if (isNaN(d.getTime())) return null;
-        return d.toISOString().slice(0,10);
-    }
-
-    function pgDiff(ini, fim) {
-        if (!ini || !fim) return null;
-        if (typeof calcDiffDiasISO === 'function') return calcDiffDiasISO(ini, fim);
-        const a = new Date(ini + 'T00:00:00');
-        const b = new Date(fim + 'T00:00:00');
-        return Math.floor((b - a) / 86400000);
-    }
-
-    function pgFase(id) {
-        return (typeof FASES !== 'undefined' && Array.isArray(FASES)) ? FASES.find(f => f.id === id) : null;
-    }
-
-    function pgSpecAplicavel(l, spec) {
-        if (spec.custom === 'entrada_maquina') return l['_SOURCE'] !== 'ACABADORA';
-        if (spec.id === 'col_mapa') return true;
-        const f = pgFase(spec.id);
-        return f ? (typeof belongsToPhase === 'function' ? belongsToPhase(l, f.id) : true) : false;
-    }
-
-    function pgDatasSpec(l, spec, tRef) {
-        if (spec.custom === 'entrada_maquina') {
-            return {
-                plan: pgData(pgCampo(l, ['Impressão Inicio (re) plan', 'IMPRESSÃO INÍCIO BASELINE', 'IMPRESSAO INICIO (RE) PLAN'])),
-                real: pgData(pgCampo(l, ['Impressão Inicio Real', 'IMPRESSÃO INÍCIO REAL', 'IMPRESSAO INICIO REAL']))
-            };
-        }
-
-        const f = pgFase(spec.id);
-        if (!f) return { plan: null, real: null };
-        const cols = (typeof getCols === 'function') ? getCols(f, tRef) : { plan: f.colPlan, real: f.colReal, realAlt: f.colRealAlt };
-        let real = null;
-
-        if (spec.id === 'col_mapa') {
-            real = pgData(pgCampo(l, ['_DT_COLETA_MAPA_REAL', 'DT_ENTREGA_DG', 'Coleta/Internalização de estoque Final Real']));
-        } else {
-            real = pgData(l[cols.real]) || (cols.realAlt ? pgData(l[cols.realAlt]) : null);
-        }
-
-        return { plan: cols.plan ? pgData(l[cols.plan]) : null, real };
-    }
-
-    function pgVolumeReal(l, spec, tBase) {
-        if (spec.custom === 'entrada_maquina') return tBase;
-        const f = pgFase(spec.id);
-        if (!f) return tBase;
-        if (typeof window.getVolFase === 'function') return window.getVolFase(l, f, tBase);
-        return tBase;
-    }
-
-    function pgCalcularEtapa(data, spec, tRef, hojeIso) {
-        const vistos = new Set();
-        let baseVol = 0, completoVol = 0, onTimeVol = 0;
-        let completosSku = 0, atrasosSku = 0, somaAtraso = 0;
-        let planEsperado = 0, planPreenchido = 0;
-
-        data.forEach((l, idx) => {
-            if (!pgSpecAplicavel(l, spec)) return;
-            const chave = pgChave(l, idx) + '|' + String(l['_SOURCE'] || 'PCP') + '|' + spec.key;
-            if (vistos.has(chave)) return;
-            vistos.add(chave);
-
-            const tBase = Number(window.arredondar ? window.arredondar(l['TIRAGEM'] || l['QUANTIDADE'] || 0) : Number(l['TIRAGEM'] || l['QUANTIDADE'] || 0)) || 0;
-            if (tBase <= 0) return;
-
-            baseVol += tBase;
-            const datas = pgDatasSpec(l, spec, tRef);
-
-            planEsperado++;
-            if (datas.plan) planPreenchido++;
-
-            let concluido = !!datas.real;
-            if (!concluido && spec.custom !== 'entrada_maquina') {
-                const f = pgFase(spec.id);
-                if (f && typeof dataFoiPreenchida === 'function') concluido = dataFoiPreenchida(l, f);
-            }
-
-            if (concluido) {
-                completosSku++;
-                const vReal = Math.max(0, Number(pgVolumeReal(l, spec, tBase)) || tBase);
-                completoVol += vReal;
-
-                if (datas.plan && datas.real) {
-                    const dif = pgDiff(datas.plan, datas.real);
-                    if (dif !== null && dif <= 0) onTimeVol += vReal;
-                    if (dif !== null && dif > 0) {
-                        atrasosSku++;
-                        somaAtraso += dif;
-                    }
-                }
-            } else if (datas.plan && hojeIso > datas.plan) {
-                const difHoje = pgDiff(datas.plan, hojeIso);
-                if (difHoje !== null && difHoje > 0) {
-                    atrasosSku++;
-                    somaAtraso += difHoje;
-                }
-            }
-        });
-
-        const aderencia = completoVol > 0 ? Math.max(0, Math.min(100, (onTimeVol / completoVol) * 100)) : null;
-        const producao = baseVol > 0 ? Math.max(0, Math.min(100, (completoVol / baseVol) * 100)) : null;
-
-        return {
-            ...spec,
-            baseVol, completoVol, onTimeVol, completosSku, atrasosSku,
-            mediaAtraso: atrasosSku > 0 ? somaAtraso / atrasosSku : 0,
-            aderencia, producao, planEsperado, planPreenchido
-        };
-    }
-
-    function pgCorPct(pct) {
-        if (pct === null || pct === undefined || isNaN(pct)) return 'text-slate-400';
-        if (pct >= 90) return 'text-emerald-600';
-        if (pct >= 75) return 'text-amber-600';
-        return 'text-rose-600';
-    }
-
-    window.processarOnePage = function() {
-        const raiz = document.getElementById('abaOnePage');
-        if (!raiz) return;
-
-        const data = (typeof dadosFiltrados !== 'undefined' && Array.isArray(dadosFiltrados)) ? dadosFiltrados : [];
-        const tRefEl = document.getElementById('filtroReferencia');
-        const tRef = tRefEl ? (tRefEl.value || 'replan') : 'replan';
-        const hojeIso = (typeof dtHojeISO !== 'undefined' && dtHojeISO) ? dtHojeISO : new Date().toISOString().slice(0,10);
-
-        const specs = [
-            { key: 'apv', id: 'apv', nome: 'Aprovação de boneco' },
-            { key: 'entrada', custom: 'entrada_maquina', nome: 'Entrada em máquina' },
-            { key: 'imp', id: 'imp', nome: 'Impressão — fim' },
-            { key: 'acab', id: 'acab', nome: 'Acabamento' },
-            { key: 'kit', id: 'kit', nome: 'Formação de kit' },
-            { key: 'coleta', id: 'col_mapa', nome: 'Coleta' }
-        ];
-
-        const stats = specs.map(s => pgCalcularEtapa(data, s, tRef, hojeIso));
-        const byKey = Object.fromEntries(stats.map(s => [s.key, s]));
-
-        const totalPorChave = new Map();
-        data.forEach((l, idx) => {
-            const chave = pgChave(l, idx);
-            const tir = Number(window.arredondar ? window.arredondar(l['TIRAGEM'] || l['QUANTIDADE'] || 0) : Number(l['TIRAGEM'] || l['QUANTIDADE'] || 0)) || 0;
-            if (!totalPorChave.has(chave)) totalPorChave.set(chave, tir);
-        });
-        const tiragemTotal = Array.from(totalPorChave.values()).reduce((a,b) => a+b, 0);
-
-        const skuProduzidoSet = new Set();
-        data.forEach((l, idx) => {
-            const fImp = pgFase('imp');
-            if (!fImp || !pgSpecAplicavel(l, { id:'imp', key:'imp' })) return;
-            let concluido = false;
-            if (typeof dataFoiPreenchida === 'function') concluido = dataFoiPreenchida(l, fImp);
-            else concluido = !!pgDatasSpec(l, { id:'imp', key:'imp' }, tRef).real;
-            if (concluido) skuProduzidoSet.add(pgChave(l, idx));
-        });
-
-        const opKpiSku = document.getElementById('opKpiSku');
-        const opKpiTiragem = document.getElementById('opKpiTiragem');
-        const opKpiProducao = document.getElementById('opKpiProducao');
-        const opKpiPrazo = document.getElementById('opKpiPrazo');
-
-        if (opKpiSku) opKpiSku.innerText = skuProduzidoSet.size.toLocaleString('pt-BR');
-        if (opKpiTiragem) opKpiTiragem.innerText = pgFmtCompacto(tiragemTotal);
-
-        const prodPct = byKey.imp ? byKey.imp.producao : null;
-        if (opKpiProducao) {
-            opKpiProducao.innerText = prodPct === null ? '-' : Math.round(prodPct) + '%';
-            opKpiProducao.className = 'text-2xl font-black mt-1 ' + pgCorPct(prodPct);
-        }
-
-        const prazoPct = byKey.coleta ? byKey.coleta.aderencia : null;
-        if (opKpiPrazo) {
-            opKpiPrazo.innerText = prazoPct === null ? '-' : Math.round(prazoPct) + '%';
-            opKpiPrazo.className = 'text-2xl font-black mt-1 ' + pgCorPct(prazoPct);
-        }
-
-        const head = document.getElementById('opEtapasHead');
-        const body = document.getElementById('opEtapasBody');
-        if (head && body) {
-            head.innerHTML = `<th class="p-2 border-r border-slate-200 text-left min-w-[150px]">Indicador</th>` +
-                stats.map(s => `<th class="p-2 border-r border-slate-200 text-center min-w-[130px]">${pgEsc(s.nome)}</th>`).join('');
-
-            const linha = (nome, render) => `<tr class="border-b border-slate-100 hover:bg-slate-50">
-                <td class="p-2 border-r border-slate-200 font-bold text-[10px] uppercase text-slate-600">${nome}</td>
-                ${stats.map(s => `<td class="p-2 border-r border-slate-200 text-center">${render(s)}</td>`).join('')}
-            </tr>`;
-
-            body.innerHTML =
-                linha('% cumprimento do prazo', s => s.aderencia === null ? '<span class="text-slate-300">-</span>' : `<span class="font-black ${pgCorPct(s.aderencia)}">${Math.round(s.aderencia)}%</span>`) +
-                linha('Volume (SKU)', s => `<span class="font-black text-slate-700">${s.completosSku.toLocaleString('pt-BR')}</span>`) +
-                linha('Atrasos (SKU)', s => `<span class="font-black ${s.atrasosSku > 0 ? 'text-rose-600' : 'text-slate-400'}">${s.atrasosSku.toLocaleString('pt-BR')}</span>`) +
-                linha('Média de atraso (dias)', s => s.atrasosSku > 0 ? `<span class="font-black text-slate-700">${s.mediaAtraso.toLocaleString('pt-BR', {maximumFractionDigits:1})}</span>` : '<span class="text-slate-300">-</span>');
-        }
-
-        const planEsperado = stats.reduce((a,s) => a + s.planEsperado, 0);
-        const planPreenchido = stats.reduce((a,s) => a + s.planPreenchido, 0);
-        const pcpPct = planEsperado > 0 ? (planPreenchido / planEsperado) * 100 : null;
-        const pcpEl = document.getElementById('opPcpPct');
-        const pcpBar = document.getElementById('opPcpBar');
-        if (pcpEl) pcpEl.innerText = pcpPct === null ? '-' : Math.round(pcpPct) + '%';
-        if (pcpBar) pcpBar.style.width = (pcpPct === null ? 0 : Math.max(0, Math.min(100, pcpPct))) + '%';
-
-        const ofensoras = stats.filter(s => s.aderencia !== null).sort((a,b) => a.aderencia - b.aderencia).slice(0,3);
-        const opOf = document.getElementById('opOfensoras');
-        if (opOf) {
-            opOf.innerHTML = ofensoras.length ? ofensoras.map((s, i) => `
-                <div>
-                    <div class="flex justify-between items-center text-[10px] mb-1">
-                        <span class="font-bold text-slate-700">${i+1}. ${pgEsc(s.nome)}</span>
-                        <span class="font-black ${pgCorPct(s.aderencia)}">${Math.round(s.aderencia)}%</span>
-                    </div>
-                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div class="h-full bg-slate-500 rounded-full" style="width:${Math.max(2, Math.min(100, s.aderencia))}%"></div>
-                    </div>
-                </div>`).join('') : '<p class="text-xs text-slate-400">Sem base calculável para o recorte atual.</p>';
-        }
-
-        const rank = {};
-        const coletaSpec = specs.find(s => s.key === 'coleta');
-        data.forEach((l, idx) => {
-            if (!coletaSpec || !pgSpecAplicavel(l, coletaSpec)) return;
-            const graf = String(l['GRAFICA_FINAL'] || l['GRÁFICA'] || l['GRAFICA'] || 'N/A').trim() || 'N/A';
-            const datas = pgDatasSpec(l, coletaSpec, tRef);
-            if (!datas.real || !datas.plan) return;
-            const chave = graf + '|' + pgChave(l, idx);
-            if (!rank[graf]) rank[graf] = { total:0, ok:0, vistos:new Set() };
-            if (rank[graf].vistos.has(chave)) return;
-            rank[graf].vistos.add(chave);
-            const tir = Number(window.arredondar ? window.arredondar(l['TIRAGEM'] || l['QUANTIDADE'] || 0) : Number(l['TIRAGEM'] || l['QUANTIDADE'] || 0)) || 0;
-            rank[graf].total += tir;
-            const dif = pgDiff(datas.plan, datas.real);
-            if (dif !== null && dif <= 0) rank[graf].ok += tir;
-        });
-
-        const ranking = Object.entries(rank)
-            .map(([nome, r]) => ({ nome, pct: r.total > 0 ? (r.ok/r.total)*100 : null }))
-            .filter(r => r.pct !== null)
-            .sort((a,b) => b.pct - a.pct)
-            .slice(0,6);
-
-        const opRank = document.getElementById('opRanking');
-        if (opRank) {
-            opRank.innerHTML = ranking.length ? ranking.map((r,i) => `
-                <div class="flex items-center gap-2 text-[10px]">
-                    <span class="w-5 font-black text-slate-400">${i+1}º</span>
-                    <span class="flex-1 font-bold text-slate-700 truncate" title="${pgEsc(r.nome)}">${pgEsc(r.nome)}</span>
-                    <div class="w-24 h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-slate-500 rounded-full" style="width:${Math.max(2, Math.min(100, r.pct))}%"></div></div>
-                    <span class="w-9 text-right font-black ${pgCorPct(r.pct)}">${Math.round(r.pct)}%</span>
-                </div>`).join('') : '<p class="text-xs text-slate-400">Sem base calculável para o recorte atual.</p>';
-        }
-
-        const atencao = stats.filter(s => s.atrasosSku > 0).sort((a,b) => b.atrasosSku - a.atrasosSku).slice(0,3);
-        const opAt = document.getElementById('opPontosAtencao');
-        if (opAt) {
-            opAt.innerHTML = atencao.length ? atencao.map(s => `
-                <div class="rounded-lg border border-rose-100 bg-rose-50/60 p-3">
-                    <p class="text-[10px] font-black text-slate-700 uppercase">${pgEsc(s.nome)}</p>
-                    <p class="text-xl font-black text-rose-600 mt-1">${s.atrasosSku.toLocaleString('pt-BR')} <span class="text-[10px] font-bold">SKUs em atraso</span></p>
-                    <p class="text-[9px] text-slate-500 mt-1">Média: ${s.mediaAtraso.toLocaleString('pt-BR', {maximumFractionDigits:1})} dias</p>
-                </div>`).join('') : '<div class="text-xs text-slate-400">Sem atrasos identificados no recorte atual.</div>';
-        }
-    };
-
-    let pgEmailAnterior = '';
-    let pgTentativasEmail = 0;
-    const pgTimerEmail = setInterval(function() {
-        pgTentativasEmail++;
-        const email = pgEmailAtual();
-        if (email && email !== pgEmailAnterior) {
-            pgEmailAnterior = email;
-            window.PG_USER_EMAIL = email;
-            window.pgMontarFiltrosExtras();
-        }
-        if (pgTentativasEmail >= 60) clearInterval(pgTimerEmail);
-    }, 400);
-
-    document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(window.pgMontarFiltrosExtras, 50);
-    });
-})();
-
-<!-- PG_FUNIL_LAYOUT_SERIES_V2 -->
-
-<!-- PG_FUNIL_RAW_SERIES_V3 -->
-
-<!-- PG_DESTINO_CD_CURVA_FUNIL_V2 -->
-
-<!-- PG_ORIGEM_CD_MENSAL_V3 -->
-
-<!-- PG_FUNIL_LABELS_DEFAULTS_V4 -->
-
-<!-- PG_CURVA_META_FORECAST_COLETA_TP_V5 -->
-
-<!-- PG_CURVA_META_CD_PERCENTUAL_V6 -->
-
-<!-- PG_ACABAMENTO_CONGELADO_V1 -->
-
-<!-- PG_ACABAMENTO_ORIGEM_SOBERANA_V2 -->
-
-<!-- PG_TOTAL_GERAL_SEM_DUPLICAR_ACAB_V3 -->
-
-<!-- PG_TABELAS_USAM_BASE_ANTIGA_FUNIL_V4 -->
-
-<!-- PG_TOTAL_CANONICO_ACAB_DESTINO_V5 -->
-
-<!-- PG_TOTAL_POR_ORIGEM_INDEPENDENTE_DESTINO_V6 -->
 </script>

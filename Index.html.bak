@@ -32,11 +32,9 @@
 
 
 
-
+    <?!= include('abaGiroSemanal'); ?>
             
     <?!= include('abaGeral'); ?>
-
-    <?!= include('abaOnePage'); ?>
 
             
     <?!= include('abaMatriz'); ?>

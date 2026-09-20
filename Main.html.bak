@@ -701,15 +701,12 @@ window.exportarSkusFiltradosSheets = function() {
             const msg = document.getElementById('loadingMsg');
             const loading = document.getElementById('globalLoading');
             loading.classList.remove('hidden');
-            // O portal só fica bloqueado pelo que é indispensável para montar a base principal.
-            // Meta CD/forecast publicado é complementar: carrega depois e atualiza as curvas quando chegar.
-            // Assim uma falha de RPC nessa leitura nunca prende a tela de loading.
             const fontesCriticas = [
                 ['carregarDashboardPorMes', 'DADOS_PCP_CACHE', () => carregarDashboardPorMes(m => { window.PG_DASHBOARD_PROGRESSO = m; })],
-                ['getEmailUsuario', 'PG_USER_EMAIL']
+                ['getEmailUsuario', 'PG_USER_EMAIL'],
+                ['getForecastsColetaPortal', 'PG_FORECAST_COLETA']
             ];
             const fontesBackground = [
-                ['getForecastsColetaPortal', 'PG_FORECAST_COLETA'],
                 ['getDadosCockpit_Cache', 'DADOS_COCKPIT_INICIAL'],
                 ['getDadosPreProducao_Cache', 'DADOS_PREPROD_CACHE'],
                 ['getDadosMapaSaida_Cache', 'MAPA_SAIDA_CACHE'],
@@ -749,9 +746,7 @@ window.exportarSkusFiltradosSheets = function() {
                 try {
                     let valor = buscador
                         ? await buscador()
-                        : (obrigatoria || chave === 'PG_FORECAST_COLETA'
-                            ? await buscarComRetry(nome, 3)
-                            : await buscar(nome));
+                        : (obrigatoria ? await buscarComRetry(nome, 3) : await buscar(nome));
                     if (typeof valor === 'string' && chave !== 'PG_USER_EMAIL') valor = JSON.parse(valor);
                     if (valor && valor._ERRO_CRITICO) throw new Error(valor._ERRO_CRITICO);
                     if (valor == null) throw new Error('Resposta vazia');
@@ -759,11 +754,6 @@ window.exportarSkusFiltradosSheets = function() {
                     window[chave] = valor;
                     // O dashboard guarda copia local por fatia dentro de carregarDashboardPorMes.
                     if (chave === 'DADOS_COCKPIT_INICIAL' && typeof renderCockpit === 'function') renderCockpit(valor);
-                    if (chave === 'PG_FORECAST_COLETA' && typeof window.renderColetaFinalFunil === 'function') {
-                        // Atualiza Meta CD publicada nas duas curvas sem recarregar o portal inteiro.
-                        try { window.renderColetaFinalFunil(); } catch (e) { console.warn('[META CD] Funil ainda não pronto:', e); }
-                        try { window.renderColetaFinalFunil('Giro'); } catch (e) { console.warn('[META CD] Giro ainda não pronto:', e); }
-                    }
                 } catch (erro) {
                     if (chave === 'DADOS_PCP_CACHE') {
                         const valorSalvo = pgLerDashboardLocal();
@@ -1818,7 +1808,5 @@ window.exportarSkusFiltradosSheets = function() {
 
 </script>
 
-
-<!-- PG_LOADING_FORECAST_NAO_BLOQUEANTE_V2 -->
 </body>
 </html>

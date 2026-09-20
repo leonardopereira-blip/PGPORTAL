@@ -57,7 +57,7 @@
         </div>
         <div class="flex flex-wrap items-center gap-2 mb-3">
             <button type="button" onclick="exportarAuditoriaMetaColeta()" class="text-xs font-bold text-slate-600 border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50">Baixar auditoria do forecast</button>
-            <button id="btnForecastColetaFunil" type="button" onclick="window.pgAbrirEditorForecastColeta()" class="hidden text-xs font-bold text-violet-700 border border-violet-200 bg-violet-50 rounded px-3 py-1.5 hover:bg-violet-100">Registrar Meta CD</button>
+            <button id="btnForecastColetaFunil" type="button" onclick="window.pgAbrirEditorForecastColeta()" class="hidden text-xs font-bold text-violet-700 border border-violet-200 bg-violet-50 rounded px-3 py-1.5 hover:bg-violet-100">Registrar Meta</button>
         </div>
         <div id="editorForecastColetaFunil" class="hidden mb-4"></div>
         <div id="resumoColetaFinalFunil" class="flex flex-wrap gap-4 text-xs text-slate-700 mb-4"></div>

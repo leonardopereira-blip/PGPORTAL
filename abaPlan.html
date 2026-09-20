@@ -9,16 +9,22 @@
         </div>
     </div>
 
-    <div class="mb-6 flex flex-wrap gap-x-6 gap-y-2 text-[10px] text-slate-600 bg-white p-3 rounded-xl border border-slate-200 shadow-sm items-center">
-        <span class="font-black uppercase tracking-widest text-slate-400">Regra de Dias:</span>
-        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-orange-500 rounded-sm block shadow-sm"></span> Sem Data</div>
-        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-900/80 rounded-sm block"></span> Antigas (+14d)</div>
-        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-800/80 rounded-sm block"></span> Sem. Passada (8 a 14d)</div>
-        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-red-700/80 rounded-sm block"></span> Sem. Atual (4 a 7d)</div>
-        <div class="flex items-center gap-1 px-2 py-0.5 bg-yellow-100 border border-yellow-300 rounded-md font-bold text-yellow-800"><span class="w-2.5 h-2.5 bg-yellow-400 rounded-sm block shadow-sm"></span> CRÍTICO / ALERTA (0 a 3d)</div>
-        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-blue-900/80 rounded-sm block"></span> Sem. Atual (4 a 7d)</div>
-        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-blue-800/80 rounded-sm block"></span> Próx. Sem (8 a 14d)</div>
-        <div class="flex items-center gap-1"><span class="w-2.5 h-2.5 bg-blue-700/80 rounded-sm block"></span> Futuro Longe (+14d)</div>
+    <div class="mb-6 bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-[10px] text-slate-600">
+        <div class="flex flex-wrap items-baseline gap-x-2 mb-2">
+            <span class="font-black uppercase tracking-widest text-slate-400">Regra de Dias</span>
+            <span class="text-slate-400">Semanas de segunda a s&aacute;bado. Datas de domingo entram na semana iniciada na segunda anterior. As colunas amarelas mostram per&iacute;odos independentes e incluem itens j&aacute; contados nas semanas; por isso, a soma das colunas pode superar o total de itens.</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
+            <div class="flex items-start gap-1.5"><span class="w-2.5 h-2.5 mt-0.5 bg-orange-500 rounded-sm block shadow-sm shrink-0"></span><span><b>Sem Data</b> &mdash; fase sem data planejada</span></div>
+            <div class="flex items-start gap-1.5"><span class="w-2.5 h-2.5 mt-0.5 bg-red-900/80 rounded-sm block shrink-0"></span><span><b>Antigas</b> &mdash; venceu antes da segunda-feira da semana passada</span></div>
+            <div class="flex items-start gap-1.5"><span class="w-2.5 h-2.5 mt-0.5 bg-red-800/80 rounded-sm block shrink-0"></span><span><b>Sem. Passada</b> &mdash; seg a s&aacute;b da semana anterior</span></div>
+            <div class="flex items-start gap-1.5"><span class="w-2.5 h-2.5 mt-0.5 bg-red-700/80 rounded-sm block shrink-0"></span><span><b>Sem. Atual</b> (atrasado) &mdash; venceu entre a segunda-feira desta semana e ontem</span></div>
+            <div class="flex items-start gap-1.5 px-1.5 py-0.5 bg-yellow-100 border border-yellow-300 rounded-md text-yellow-800"><span class="w-2.5 h-2.5 mt-0.5 bg-yellow-400 rounded-sm block shadow-sm shrink-0"></span><span><b>&Uacute;lt. 3 Dias</b> &mdash; de ontem at&eacute; 3 dias atr&aacute;s</span></div>
+            <div class="flex items-start gap-1.5 px-1.5 py-0.5 bg-yellow-100 border border-yellow-300 rounded-md text-yellow-800"><span class="w-2.5 h-2.5 mt-0.5 bg-yellow-400 rounded-sm block shadow-sm shrink-0"></span><span><b>Pr&oacute;x. 3 Dias</b> &mdash; de hoje at&eacute; 3 dias &agrave; frente</span></div>
+            <div class="flex items-start gap-1.5"><span class="w-2.5 h-2.5 mt-0.5 bg-blue-900/80 rounded-sm block shrink-0"></span><span><b>Sem. Atual</b> (no prazo) &mdash; vence de hoje at&eacute; s&aacute;bado desta semana</span></div>
+            <div class="flex items-start gap-1.5"><span class="w-2.5 h-2.5 mt-0.5 bg-blue-800/80 rounded-sm block shrink-0"></span><span><b>Pr&oacute;x. Sem</b> &mdash; seg a s&aacute;b da semana que vem</span></div>
+            <div class="flex items-start gap-1.5"><span class="w-2.5 h-2.5 mt-0.5 bg-blue-700/80 rounded-sm block shrink-0"></span><span><b>Futuro</b> &mdash; vence nas semanas seguintes &agrave; pr&oacute;xima</span></div>
+        </div>
     </div>
     
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
