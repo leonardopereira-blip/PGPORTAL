@@ -196,6 +196,27 @@ function _processarDadosDashboardBruto() {
         if(dataAcab[i].length > 73) obj["META_COL_BASE"] = safeIsoDate(dataAcab[i][73]); 
         if(dataAcab[i].length > 30) obj["MARCA_FINAL"] = String(dataAcab[i][30] || "").trim().toUpperCase(); 
         
+        // BLINDAGEM SAS x WAYS NA PCP_ACABADORAS.
+        var marcaAcabKey = String(obj["MARCA_FINAL"] || "").trim().toUpperCase();
+
+        function pgCorrigirPrefixoSasWaysAcab_(valor) {
+          var chave = String(valor || "").trim();
+          if (!chave) return chave;
+
+          if (marcaAcabKey === "SAS" && /^WAYS(?=CD)/i.test(chave)) {
+            return "SAS" + chave.substring(4);
+          }
+
+          if (marcaAcabKey === "WAYS" && /^SAS(?=CD)/i.test(chave)) {
+            return "WAYS" + chave.substring(3);
+          }
+
+          return chave;
+        }
+
+        obj["JOIN_KEY"] = pgCorrigirPrefixoSasWaysAcab_(obj["JOIN_KEY"]);
+        obj["Chave"] = pgCorrigirPrefixoSasWaysAcab_(obj["Chave"]);
+
         if(obj["Chave"]) {
           obj["_SOURCE"] = "ACABADORA";
           result.push(obj);

@@ -47,12 +47,13 @@
         <h3 class="text-xs font-black text-slate-700 uppercase mb-2">Curva de Coleta Prevista — Esperado x Realizado</h3>
         <p class="text-xs text-slate-500 mb-4">Base, planejamento e volume coletado seguem exatamente os filtros Origem e Destino aplicados no portal.</p>
         <div class="flex flex-wrap items-center gap-3 mb-5 text-xs text-slate-600">
-            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunil" value="mensal" checked onchange="renderColetaFinalFunil()"> Mensal (fechado por mês)</label>
-            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunil" value="atual" onchange="renderColetaFinalFunil()"> Mês Atual</label>
-            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunil" value="personalizado" onchange="renderColetaFinalFunil()"> Data personalizada</label>
-            <div id="periodoColetaFunil" class="hidden flex flex-wrap items-center gap-2">
-                <label>De <input id="inicioColetaFunil" type="date" class="border rounded px-2 py-1" onchange="renderColetaFinalFunil()"></label>
-                <label>Até <input id="fimColetaFunil" type="date" class="border rounded px-2 py-1" onchange="renderColetaFinalFunil()"></label>
+            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunil" value="mes" checked onchange="renderColetaFinalFunil()"> Mês</label>
+            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunil" value="30d" onchange="renderColetaFinalFunil()"> Próximos 30 dias</label>
+            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunil" value="7d" onchange="renderColetaFinalFunil()"> Próximos 7 dias</label>
+            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunil" value="semana" onchange="renderColetaFinalFunil()"> Semana atual</label>
+            <label class="border border-violet-200 bg-violet-50 rounded-lg px-3 py-2 cursor-pointer"><input type="checkbox" id="acumuladaColetaFunil" onchange="renderColetaFinalFunil()"> Visão acumulada</label>
+            <div id="periodoColetaFunil" class="flex flex-wrap items-center gap-2">
+                <label>Mês <input id="mesColetaFunil" type="month" class="border rounded px-2 py-1" onchange="renderColetaFinalFunil()"></label>
             </div>
         </div>
         <div class="flex flex-wrap items-center gap-2 mb-3">

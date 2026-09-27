@@ -626,3 +626,134 @@ function gerarPlanilhaGiroFiltrado(dados) {
     return { success: false, error: e.toString() };
   }
 }
+
+
+// ============================================================================
+// REPORT EXECUTIVA — EXPORTADOR GOOGLE SHEETS
+// ============================================================================
+function gerarPlanilhaReportExecutiva(payload) {
+  try {
+    payload = payload || {};
+    var abas = Array.isArray(payload.abas) ? payload.abas : [];
+
+    if (!abas.length) {
+      throw new Error("Nenhuma aba recebida para exportação.");
+    }
+
+    var nomeBase = String(payload.nome || "Report_Executiva")
+      .replace(/[\\\/:*?"<>|#%]+/g, "_")
+      .substring(0, 120);
+
+    var nomeArquivo = nomeBase + "_" +
+      Utilities.formatDate(new Date(), "GMT-3", "dd_MM_yyyy_HHmm");
+
+    var ss = SpreadsheetApp.create(nomeArquivo);
+    var primeira = ss.getActiveSheet();
+
+    function nomeAbaSeguro_(nome, indice) {
+      var n = String(nome || ("Aba_" + (indice + 1)))
+        .replace(/[\\\/?*[\]:]+/g, "_")
+        .trim()
+        .substring(0, 90);
+
+      return n || ("Aba_" + (indice + 1));
+    }
+
+    abas.forEach(function(spec, indice) {
+      var sheet = indice === 0 ? primeira : ss.insertSheet();
+      sheet.setName(nomeAbaSeguro_(spec.nome, indice));
+
+      var cabecalho = Array.isArray(spec.cabecalho) ? spec.cabecalho : [];
+      var linhas = Array.isArray(spec.linhas) ? spec.linhas : [];
+
+      if (cabecalho.length) {
+        sheet.getRange(1, 1, 1, cabecalho.length).setValues([cabecalho]);
+        sheet.getRange(1, 1, 1, cabecalho.length)
+          .setFontWeight("bold")
+          .setBackground("#48659a")
+          .setFontColor("#ffffff");
+        sheet.setFrozenRows(1);
+      }
+
+      if (linhas.length && cabecalho.length) {
+        var normalizadas = linhas.map(function(l) {
+          var linha = Array.isArray(l) ? l.slice(0, cabecalho.length) : [];
+          while (linha.length < cabecalho.length) linha.push("");
+          return linha;
+        });
+
+        sheet.getRange(2, 1, normalizadas.length, cabecalho.length)
+          .setValues(normalizadas);
+      }
+
+      if (cabecalho.length) {
+        sheet.autoResizeColumns(1, cabecalho.length);
+
+        for (var c = 1; c <= cabecalho.length; c++) {
+          var largura = sheet.getColumnWidth(c);
+          if (largura > 360) sheet.setColumnWidth(c, 360);
+        }
+      }
+
+      sheet.getDataRange().setVerticalAlignment("middle");
+    });
+
+    var file = DriveApp.getFileById(ss.getId());
+
+    var emailSessao = "";
+    try {
+      emailSessao = Session.getActiveUser().getEmail() || "";
+    } catch (e) {}
+
+    var emailSolicitado = String(payload.usuarioEmail || "").trim().toLowerCase();
+    var usuario = String(emailSessao || emailSolicitado || "").trim().toLowerCase();
+    var ownerWarning = "";
+
+    if (usuario) {
+      try {
+        file.addEditor(usuario);
+      } catch (eAdd) {
+        ownerWarning += "Não foi possível adicionar o usuário como editor: " + eAdd.message + ". ";
+      }
+
+      try {
+        var ownerAntes = file.getOwner();
+        var ownerAntesEmail = ownerAntes ? String(ownerAntes.getEmail() || "").toLowerCase() : "";
+
+        if (ownerAntesEmail !== usuario) {
+          file.setOwner(usuario);
+        }
+      } catch (eOwner) {
+        ownerWarning += "Transferência de propriedade não permitida: " + eOwner.message + ". ";
+      }
+    }
+
+    var ownerEmail = "";
+    try {
+      var ownerFinal = file.getOwner();
+      ownerEmail = ownerFinal ? String(ownerFinal.getEmail() || "").toLowerCase() : "";
+    } catch (eFinal) {
+      ownerWarning += "Não foi possível confirmar o proprietário final: " + eFinal.message + ". ";
+    }
+
+    var ownerOk = usuario ? ownerEmail === usuario : true;
+
+    return {
+      success: true,
+      url: ss.getUrl(),
+      id: ss.getId(),
+      usuario: usuario,
+      ownerEmail: ownerEmail,
+      ownerOk: ownerOk,
+      ownerWarning: ownerWarning.trim()
+    };
+
+  } catch (e) {
+    return {
+      success: false,
+      error: e && e.message ? e.message : String(e)
+    };
+  }
+}
+
+// PG_REPORT_EXPORT_SHEETS_V14

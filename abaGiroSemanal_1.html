@@ -9,12 +9,13 @@
         <h3 class="text-xs font-black text-slate-700 uppercase mb-2">Curva de Coleta Prevista — Esperado x Realizado</h3>
         <p class="text-xs text-slate-500 mb-4">Base, planejamento e volume coletado seguem exatamente os filtros Origem e Destino aplicados no portal.</p>
         <div class="flex flex-wrap items-center gap-3 mb-5 text-xs text-slate-600">
-            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunilGiro" value="mensal" checked onchange="renderColetaFinalFunil('Giro')"> Mensal (fechado por mês)</label>
-            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunilGiro" value="atual" onchange="renderColetaFinalFunil('Giro')"> Mês Atual</label>
-            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunilGiro" value="personalizado" onchange="renderColetaFinalFunil('Giro')"> Data personalizada</label>
-            <div id="periodoColetaFunilGiro" class="hidden flex flex-wrap items-center gap-2">
-                <label>De <input id="inicioColetaFunilGiro" type="date" class="border rounded px-2 py-1" onchange="renderColetaFinalFunil('Giro')"></label>
-                <label>Até <input id="fimColetaFunilGiro" type="date" class="border rounded px-2 py-1" onchange="renderColetaFinalFunil('Giro')"></label>
+            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunilGiro" value="mes" checked onchange="renderColetaFinalFunil('Giro')"> Mês</label>
+            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunilGiro" value="30d" onchange="renderColetaFinalFunil('Giro')"> Próximos 30 dias</label>
+            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunilGiro" value="7d" onchange="renderColetaFinalFunil('Giro')"> Próximos 7 dias</label>
+            <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoColetaFunilGiro" value="semana" onchange="renderColetaFinalFunil('Giro')"> Semana atual</label>
+            <label class="border border-violet-200 bg-violet-50 rounded-lg px-3 py-2 cursor-pointer"><input type="checkbox" id="acumuladaColetaFunilGiro" onchange="renderColetaFinalFunil('Giro')"> Visão acumulada</label>
+            <div id="periodoColetaFunilGiro" class="flex flex-wrap items-center gap-2">
+                <label>Mês <input id="mesColetaFunilGiro" type="month" class="border rounded px-2 py-1" onchange="renderColetaFinalFunil('Giro')"></label>
             </div>
         </div>
         <div class="flex flex-wrap items-center gap-2 mb-3">
