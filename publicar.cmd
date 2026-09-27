@@ -39,7 +39,11 @@ if errorlevel 1 (
   goto :fail
 )
 echo.
-echo [2/3] Conferindo arquivos que o clasp enviara...
+echo [2/3] Conferindo arquivos do Apps Script...
+echo.
+echo "Tracked files" = arquivos do portal incluidos no envio.
+echo "Untracked files" = arquivos ignorados, NAO serao enviados.
+echo.
 call "%~dp0clasp-portatil.cmd" show-file-status
 if errorlevel 1 (
   echo.
@@ -47,7 +51,8 @@ if errorlevel 1 (
   goto :fail
 )
 echo.
-echo Confira a lista acima. Se houve edicao direta no Apps Script apos o ultimo pull, NAO publique.
+echo Apenas "Tracked files" entram no push. "Untracked files" ficam fora.
+echo Se houve edicao direta no Apps Script apos o ultimo pull, NAO publique.
 set "CONFIRMA="
 set /p "CONFIRMA=Digite PUBLICAR para enviar ao Apps Script (ou Enter para cancelar): "
 if /I not "%CONFIRMA%"=="PUBLICAR" (
