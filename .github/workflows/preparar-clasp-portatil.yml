@@ -1,0 +1,38 @@
+name: Preparar clasp portatil
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/preparar-clasp-portatil.yml
+
+permissions:
+  contents: write
+
+jobs:
+  preparar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Instalar clasp e dependencias sem instalacao no Windows
+        run: |
+          npm install --prefix . --no-save --omit=dev --ignore-scripts --no-audit --no-fund @google/clasp@3.4.1
+          node node_modules/@google/clasp/build/src/index.js --version
+      - name: Salvar pacote no repositorio para receber pelo GitHub Desktop
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f node_modules
+          if git diff --cached --quiet; then
+            echo "O pacote ja esta no repositorio."
+          else
+            git commit -m "Adicionar clasp portatil e dependencias"
+            git push origin HEAD:main
+          fi
