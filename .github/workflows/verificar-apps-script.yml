@@ -1,0 +1,57 @@
+name: Verificar conexao Apps Script
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/verificar-apps-script.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Executar clasp no GitHub, sem instalar no computador
+        run: |
+          npm install --global @google/clasp@3.4.1 --ignore-scripts --no-audit --no-fund
+          clasp --version
+      - name: Preparar pasta separada e aproveitar credencial existente
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import os from 'node:os';
+          const dir = path.join(process.env.RUNNER_TEMP, 'pgportal-online');
+          fs.mkdirSync(dir);
+          const config = JSON.parse(fs.readFileSync('.clasp.json', 'utf8'));
+          config.rootDir = '.';
+          fs.writeFileSync(path.join(dir, '.clasp.json'), JSON.stringify(config));
+          if (process.env.CLASPRC_JSON) {
+            const auth = JSON.parse(process.env.CLASPRC_JSON);
+            fs.writeFileSync(path.join(os.homedir(), '.clasprc.json'), JSON.stringify(auth), {mode: 0o600});
+          } else {
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              'O clasp foi executado no GitHub. Falta o segredo CLASPRC_JSON para autenticar o pull. Nenhum push sera executado.\n');
+            console.log('Segredo CLASPRC_JSON ausente. O pull a seguir verificara a conexao sem iniciar login.');
+          }
+          NODE
+      - name: Testar pull sem sobrescrever o repositorio
+        working-directory: ${{ runner.temp }}/pgportal-online
+        run: clasp pull < /dev/null
+      - name: Confirmar leitura
+        run: echo 'Pull concluido em pasta separada. Nenhum arquivo local foi sobrescrito e nenhum push foi executado.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Remover credencial temporaria
+        if: always()
+        run: rm -f "$HOME/.clasprc.json"
