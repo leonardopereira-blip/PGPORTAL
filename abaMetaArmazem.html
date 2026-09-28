@@ -210,7 +210,10 @@
     // Não separar por "+" ou espaço: APROVA +, 1ºAno, SEMI e PV E são individuais.
     var partes=bruto.split(/[|;]/).map(function(x){return x.trim();}).filter(Boolean);
     if(partes.length>1)return 'VARIOS';
-    var s=normal(partes[0]||bruto).replace(/(\d+)\s*[ºª°]?\s*ANO\b/g,'$1º ANO').replace(/(\d+)\s*[ºª°]?\s*SERIE\b/g,'$1ª SERIE');
+    var s=normal(partes[0]||bruto);
+    // Somente a equivalência literal 1A SÉRIE / 1ª SÉRIE.
+    if (/^1\s*(?:A|ª)\s*SERIE$/.test(s)) return '1ª SERIE';
+    s=s.replace(/(\d+)\s*[ºª°]?\s*ANO\b/g,'$1º ANO').replace(/(\d+)\s*[ºª°]?\s*SERIE\b/g,'$1ª SERIE');
     return s || 'SEM SÉRIE';
   }
   function data(v) {
