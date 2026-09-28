@@ -1,0 +1,327 @@
+<section id="abaMetaArmazem" class="aba-conteudo hidden px-3 py-4 md:px-6 md:py-5 space-y-5">
+  <style>
+    #abaMetaArmazem .ma-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 6px 20px rgba(15,23,42,.035)}
+    #abaMetaArmazem .ma-kpi{background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:16px;padding:18px;color:#fff}
+    #abaMetaArmazem .ma-kpi.alt{background:linear-gradient(135deg,#1e40af,#0f766e)}
+    #abaMetaArmazem .ma-kpi.warn{background:linear-gradient(135deg,#7c2d12,#b45309)}
+    #abaMetaArmazem .ma-kpi.neutral{background:linear-gradient(135deg,#334155,#475569)}
+    #abaMetaArmazem .ma-pill{padding:8px 12px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#475569;font-weight:800;font-size:11px;transition:.15s}
+    #abaMetaArmazem .ma-pill[aria-pressed=true]{background:#1e40af;color:#fff;border-color:#1d4ed8;box-shadow:0 4px 14px #1d4ed825}
+    #abaMetaArmazem .ma-select{width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;background:#fff;color:#0f172a;font-size:12px;font-weight:700}
+    #abaMetaArmazem .ma-bar{height:8px;overflow:hidden;border-radius:999px;background:#e2e8f0}
+    #abaMetaArmazem .ma-bar > b{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#2563eb,#14b8a6)}
+    #abaMetaArmazem .ma-heat{min-width:96px;text-align:center;border-radius:9px;padding:7px 5px;font-size:11px;font-weight:800}
+    #abaMetaArmazem .ma-heat small{display:block;font-size:9px;opacity:.8;font-weight:700}
+    #abaMetaArmazem .ma-table th{position:sticky;top:0;z-index:1;background:#e2e8f0;color:#334155;text-align:right;padding:11px 10px;white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.035em}
+    #abaMetaArmazem .ma-table th:first-child,#abaMetaArmazem .ma-table td:first-child{text-align:left}
+    #abaMetaArmazem .ma-table td{border-bottom:1px solid #eef2f7;text-align:right;padding:10px;font-size:12px;font-variant-numeric:tabular-nums}
+    #abaMetaArmazem .ma-table tr:hover td{background:#f8fafc}
+  </style>
+  <div class="ma-card overflow-hidden">
+    <div class="p-5 md:p-6 bg-gradient-to-r from-slate-950 via-indigo-950 to-blue-900 text-white">
+      <p class="text-[10px] uppercase tracking-[.22em] font-black text-cyan-200">Produção / Visão executiva</p>
+      <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mt-2">
+        <div><h2 class="text-2xl md:text-3xl font-black">Meta Armazém · 15/10</h2>
+          <p class="mt-2 text-xs text-slate-200 max-w-3xl leading-relaxed">Cenário previsto por marca, série e gráfica; combinado Posigraf em separado. Para WAYS, vale a meta individual da base, não 15/10.</p></div>
+        <span class="text-[10px] font-bold rounded-full border border-white/30 px-3 py-2 text-cyan-100">V1/27 · Base PCP principal</span>
+      </div>
+    </div>
+    <div class="p-4 md:p-5 space-y-4">
+      <div class="flex flex-wrap gap-2" role="group" aria-label="Cenário de entrega">
+        <button type="button" class="ma-pill" data-ma-cenario="geral" aria-pressed="true" onclick="window.pgMACenario('geral')">Geral · sem distinção</button>
+        <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="false" onclick="window.pgMACenario('com')">Combinado Posi · separado</button>
+        <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="false" onclick="window.pgMACenario('sem')">Sem Combinado Posi</button>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500">Agrupar por
+          <select id="maAgrupar" class="ma-select mt-1" onchange="window.processarMetaArmazem()">
+            <option value="marca">Marca</option><option value="serie">Série</option><option value="grafica">Gráfica</option><option value="marcaSerie">Marca → Série</option><option value="graficaMarca">Gráfica → Marca</option>
+          </select>
+        </label>
+        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500">Marca
+          <select id="maMarca" class="ma-select mt-1" onchange="window.processarMetaArmazem()"><option value="">Todas</option></select>
+        </label>
+        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500">Série
+          <select id="maSerie" class="ma-select mt-1" onchange="window.processarMetaArmazem()"><option value="">Todas</option></select>
+        </label>
+        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500">Gráfica
+          <select id="maGrafica" class="ma-select mt-1" onchange="window.processarMetaArmazem()"><option value="">Todas</option></select>
+        </label>
+      </div>
+      <p class="text-[10px] text-slate-500">Os filtros gerais do portal continuam aplicados. Esta visão considera exclusivamente o volume do PCP principal para não duplicar material presente na PCP_ACABADORAS. Os combinados foram registrados a partir do cenário de referência, sem alterar a planilha.</p>
+    </div>
+  </div>
+  <div id="maAviso" class="hidden text-xs bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900"></div>
+  <div id="maKPIs" class="grid grid-cols-2 xl:grid-cols-4 gap-3"></div>
+  <div id="maCortes" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
+  <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
+    <div class="ma-card xl:col-span-2 p-5"><div class="flex justify-between items-start gap-3"><div><h3 class="font-black text-slate-800 text-sm">Distribuição do cenário</h3><p class="text-[10px] text-slate-500 mt-1">Até a meta, após a meta e sem previsão</p></div><span class="text-xs font-black text-indigo-700">VOLUME</span></div><div id="maBarras" class="mt-5 space-y-4"></div></div>
+    <div class="ma-card xl:col-span-3 p-5 overflow-hidden"><h3 class="font-black text-slate-800 text-sm">Matriz por série × marca</h3><p class="text-[10px] text-slate-500 mt-1 mb-3">Aderência ponderada pela tiragem; “–” significa ausência de volume.</p><div id="maMatriz" class="overflow-x-auto"></div></div>
+  </div>
+  <div class="ma-card overflow-hidden">
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por marca</h3><p class="text-[10px] text-slate-500 mt-1">Volumes brutos e percentuais, sem substituir valores ausentes por zero.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
+      <thead><tr><th>Grupo</th><th>Volume total</th><th>Até a meta</th><th>Pós meta</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>Previsto / total</th></tr></thead>
+      <tbody id="maTabela"></tbody>
+    </table></div>
+  </div>
+</section>
+<script>
+(function () {
+  'use strict';
+  // Snapshot de "Combinado_Posi" recebido em 28/09/2026. H/I/J/K = 30%/40%/50%/100%.
+  // Datas e coortes são referências do cenário executivo, não fórmulas importadas.
+  var REGRAS = [
+    'COC|ENSINO FUNDAMENTAL 1|3º ANO|ALUNO||||2026-09-04',
+    'COC|ENSINO FUNDAMENTAL 1|3º ANO|ALUNO||||2026-08-28',
+    'COC|ENSINO FUNDAMENTAL 1|4º ANO|ALUNO||||2026-09-04',
+    'COC|ENSINO FUNDAMENTAL 1|4º ANO|PROFESSOR||||2026-08-28',
+    'COC|ENSINO FUNDAMENTAL 1|5º ANO|ALUNO||||2026-09-04',
+    'COC|ENSINO FUNDAMENTAL 1|5º ANO|PROFESSOR||||2026-08-28',
+    'COC|ENSINO MEDIO|2ª SÉRIE|||||2026-10-02',
+    'COC|ENSINO MEDIO|3ª SÉRIE|||||2026-09-04',
+    'EI|ENSINO MEDIO|1ª SÉRIE|||||2026-10-02',
+    'EI|ENSINO MEDIO|2ª SÉRIE|||||2026-10-02',
+    'EI|ENSINO MEDIO|3ª SÉRIE|||||2026-10-02',
+    'SAE|ENSINO FUNDAMENTAL 1|1º ANO|||||2026-10-09',
+    'SAE|ENSINO FUNDAMENTAL 1|2º ANO|||||2026-10-09',
+    'SAE|ENSINO FUNDAMENTAL 1|3º ANO|||||2026-10-09',
+    'SAE|ENSINO FUNDAMENTAL 1|4º ANO|||||2026-10-09',
+    'SAE|ENSINO FUNDAMENTAL 1|5º ANO|||||2026-10-09',
+    'SAE|ENSINO FUNDAMENTAL 2|6º ANO|||||2026-10-09',
+    'SAE|ENSINO FUNDAMENTAL 2|8º ANO|||||2026-10-09',
+    'SAE|ENSINO MEDIO|1ª SÉRIE|||||2026-10-09',
+    'CQT|ENSINO INFANTIL|INF II||||2026-10-16|2026-11-10',
+    'CQT|ENSINO INFANTIL|INF III||||2026-10-16|2026-11-10',
+    'CQT|ENSINO INFANTIL|INF IV||||2026-10-16|2026-11-10',
+    'CQT|ENSINO INFANTIL|INF V||||2026-10-16|2026-11-10',
+    'CQT|ENSINO FUNDAMENTAL 1|1º ANO||||2026-10-20|2026-11-10',
+    'CQT|ENSINO FUNDAMENTAL 1|2º ANO||||2026-10-20|2026-11-10',
+    'CQT|ENSINO FUNDAMENTAL 1|3º ANO||||2026-10-20|2026-11-10',
+    'CQT|ENSINO FUNDAMENTAL 1|4º ANO||||2026-10-20|2026-11-10',
+    'CQT|ENSINO FUNDAMENTAL 1|5º ANO||||2026-10-20|2026-11-10',
+    'CQT|ENSINO FUNDAMENTAL 2|6º ANO||||2026-10-16|2026-11-10',
+    'CQT|ENSINO FUNDAMENTAL 2|7º ANO||||2026-10-16|2026-11-10',
+    'CQT|ENSINO FUNDAMENTAL 2|8º ANO||||2026-10-16|2026-11-10',
+    'CQT|ENSINO FUNDAMENTAL 2|9º ANO||||2026-10-16|2026-11-10',
+    'SPE|ENSINO INFANTIL|INF III|||2026-10-20||2026-11-20',
+    'SPE|ENSINO INFANTIL|INF IV|||2026-10-20||2026-11-20',
+    'SPE|ENSINO INFANTIL|INF V|||2026-10-20||2026-11-20',
+    'SPE|ENSINO FUNDAMENTAL 1|1º ANO|ALUNO|2026-10-26|||2026-11-15',
+    'SPE|ENSINO FUNDAMENTAL 1|1º ANO|PROFESSOR|2026-10-26|||2026-11-15',
+    'SPE|ENSINO FUNDAMENTAL 1|2º ANO|ALUNO|2026-10-26|||2026-11-15',
+    'SPE|ENSINO FUNDAMENTAL 1|2º ANO|PROFESSOR|2026-10-26|||2026-11-15',
+    'SPE|ENSINO FUNDAMENTAL 1|3º ANO|ALUNO|2026-10-26|||2026-11-20',
+    'SPE|ENSINO FUNDAMENTAL 1|3º ANO|PROFESSOR|2026-10-26|||2026-11-20',
+    'SPE|ENSINO FUNDAMENTAL 1|4º ANO|ALUNO|2026-10-26|||2026-11-20',
+    'SPE|ENSINO FUNDAMENTAL 1|4º ANO|PROFESSOR|2026-10-26|||2026-11-20',
+    'SPE|ENSINO FUNDAMENTAL 1|5º ANO|ALUNO|2026-10-26|||2026-11-20',
+    'SPE|ENSINO FUNDAMENTAL 1|5º ANO|PROFESSOR||2026-10-16||2026-11-10',
+    'SPE|ENSINO FUNDAMENTAL 2|6º ANO|ALUNO||2026-10-12||2026-11-10',
+    'SPE|ENSINO FUNDAMENTAL 2|6º ANO|PROFESSOR||2026-10-16||2026-11-10',
+    'SPE|ENSINO FUNDAMENTAL 2|7º ANO|ALUNO||2026-10-12||2026-11-10',
+    'SPE|ENSINO FUNDAMENTAL 2|7º ANO|PROFESSOR||2026-10-16||2026-11-10',
+    'SPE|ENSINO FUNDAMENTAL 2|8º ANO|ALUNO||2026-10-12||2026-11-10',
+    'SPE|ENSINO FUNDAMENTAL 2|8º ANO|PROFESSOR||2026-10-16||2026-11-10',
+    'SPE|ENSINO FUNDAMENTAL 2|9º ANO|ALUNO||2026-10-12||2026-11-10',
+    'SPE|ENSINO FUNDAMENTAL 2|9º ANO|PROFESSOR||2026-10-16||2026-11-10',
+    'SPE|ENSINO MEDIO|||2026-10-25|||2026-11-12'
+  ].map(function(s) {
+    var f = s.split('|');
+    if (f.length !== 8) throw new Error('Regra Combinado Posi inválida: ' + s);
+    return { marca: f[0], segmento: f[1], serie: f[2], tipo: f[3], datas: f.slice(4) };
+  });
+  var estado = {cenario:'geral'};
+  var META = '2026-10-15';
+  var SERIES = ['INF I','INF II','INF III','INF IV','INF V','1º ANO','2º ANO','3º ANO','4º ANO','5º ANO','6º ANO','7º ANO','8º ANO','9º ANO','1ª SÉRIE','2ª SÉRIE','3ª SÉRIE','PU','PV'];
+
+  function normal(v) {
+    return String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+  }
+  function serie(v) {
+    var s = normal(v).replace(/(\d+)\s*[ºª°]?\s*ANO\b/g,'$1º ANO').replace(/(\d+)\s*[ºª°]?\s*SERIE\b/g,'$1ª SERIE');
+    if (/^INF\s+[IVX]+$/.test(s)) return s;
+    return s || 'SEM SÉRIE';
+  }
+  function data(v) {
+    if (!v) return '';
+    if (typeof extrairDataISO === 'function') return extrairDataISO(v) || '';
+    if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+    var s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+    var m = s.match(/^(\d\d?)\/(\d\d?)\/(\d{4})$/);
+    return m ? m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0') : '';
+  }
+  function volume(v) {
+    if (typeof v === 'number') return isFinite(v) ? Math.max(0,v) : 0;
+    var s = String(v == null?'':v).trim();
+    if (!s || s === '-') return 0;
+    if (s.indexOf(',')>=0) s = s.replace(/\./g,'').replace(',','.');
+    var n = Number(s);
+    return isFinite(n) ? Math.max(0,n) : 0;
+  }
+  function escapeHTML(v) {
+    return String(v == null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
+  }
+  function fmt(v, temDado) {return !temDado ? '–' : new Intl.NumberFormat('pt-BR',{maximumFractionDigits:0}).format(Math.round(v || 0));}
+  function pct(v, total) {return total>0 ? new Intl.NumberFormat('pt-BR',{style:'percent',maximumFractionDigits:1}).format(v/total):'–';}
+  function posiRegra(l) {
+    var marca=normal(l.MARCA_FINAL || l.UNIDADE || l.MARCA);
+    var segmento=normal(l.SEGMENTO), s=serie(l['SÉRIE'] || l.SERIE), tipo=normal(l.TIPO);
+    var grafica=normal(l.GRAFICA_FINAL || l['GRÁFICA'] || l.GRAFICA);
+    if (grafica.indexOf('POSIGRAF')<0) return null;
+    var matches=REGRAS.filter(function(r){
+      return normal(r.marca)===marca && normal(r.segmento)===segmento &&
+        (!r.serie || serie(r.serie)===s) && (!r.tipo || normal(r.tipo)===tipo);
+    });
+    if (!matches.length) return null;
+    var spec=function(r){return (r.serie?2:0)+(r.tipo?1:0);};
+    matches.sort(function(a,b){return spec(b)-spec(a);});
+    return matches.filter(function(r){return spec(r)===spec(matches[0]);});
+  }
+  function posiPercentual(regras, alvo) {
+    var niveis=[.3,.4,.5,1], p=0;
+    regras.forEach(function(regra){regra.datas.forEach(function(dt,i){
+      if (dt && dt<=alvo) p=Math.max(p,niveis[i]);
+    });});
+    return p;
+  }
+  function dadosBase() {
+    var base=window.pgBaseGeralReportExecutiva || window.dadosGlobais || [];
+    if (typeof window.pgLinhasUnicas === 'function') base=window.pgLinhasUnicas(base);
+    return base.filter(function(l){return (l._SOURCE || 'PCP')==='PCP' &&
+      !(window.pgSolicitacaoCancelada && window.pgSolicitacaoCancelada(l));}).map(function(l){
+      var total=volume(l.TIRAGEM), marca=normal(l.MARCA_FINAL||l.UNIDADE||l.MARCA);
+      if(!total||!marca)return null;
+      var grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA)||'NÃO INFORMADA';
+      var s=serie(l['SÉRIE']||l.SERIE), regras=posiRegra(l), posi=!!regras;
+      var alvo=marca==='WAYS' ? data(l.META_ARM_POS || l['META ARMAZÉM']) : META;
+      var dtPlan=data(l['Coleta/Internalização de estoque final (re) plan'] || l.META_PCP_POS);
+      var fra=posi && alvo ? posiPercentual(regras,alvo) : null;
+      var conhecido=!!alvo && (posi || !!dtPlan);
+      var previsto=conhecido ? total*(posi?fra:(dtPlan<=alvo?1:0)) : 0;
+      var realRaw=l['TIRAGEM CONFIRMADA DENTRO DA META'];
+      var realTem=realRaw!==null && realRaw!==undefined && realRaw!=='';
+      return {
+        marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),
+        total:total,previsto:previsto,pos:conhecido?Math.max(0,total-previsto):0,
+        semData:conhecido?0:total,real:realTem?Math.min(total,volume(realRaw)):0,realTem:realTem,
+        posi:posi,alvo:alvo,dtPlan:dtPlan,cd:normal(l.CD_FINAL||l['CD DESTINO'])
+      };
+    }).filter(Boolean);
+  }
+  function soma(items) {
+    return items.reduce(function(a,l){a.total+=l.total;a.previsto+=l.previsto;a.pos+=l.pos;a.semData+=l.semData;a.real+=l.real; if(l.realTem)a.realTem=true;return a;},
+      {total:0,previsto:0,pos:0,semData:0,real:0,realTem:false});
+  }
+  function seletor(id, vals, selecionado) {
+    var el=document.getElementById(id);if(!el)return;
+    var values=Array.from(new Set(vals)).sort(function(a,b){return a.localeCompare(b,'pt-BR',{numeric:true});});
+    el.innerHTML='<option value="">Todas</option>'+values.map(function(v){return '<option value="'+escapeHTML(v)+'">'+escapeHTML(v)+'</option>';}).join('');
+    el.value=values.indexOf(selecionado)>=0?selecionado:'';
+  }
+  function card(rotulo, valor, sub, classe) {
+    return '<div class="ma-kpi '+(classe||'')+'"><p class="text-[10px] uppercase tracking-wider font-black opacity-75">'+escapeHTML(rotulo)+'</p>'+
+      '<div class="text-2xl md:text-3xl font-black tabular-nums mt-2">'+valor+'</div><p class="text-[10px] mt-2 opacity-85">'+sub+'</p></div>';
+  }
+  function barras(s, label) {
+    if(!s.total)return '<p class="text-sm text-slate-400">–</p>';
+    var ok=100*s.previsto/s.total, depois=100*s.pos/s.total, falta=100*s.semData/s.total;
+    return '<div class="flex items-center justify-between text-[11px] mb-2"><b>'+escapeHTML(label)+'</b><b>'+pct(s.previsto,s.total)+'</b></div>'+
+      '<div class="flex h-4 rounded-full overflow-hidden bg-slate-200" aria-label="Previsto '+pct(s.previsto,s.total)+'"><span style="background:#2563eb;width:'+ok+'%"></span>'+
+      '<span style="background:#f59e0b;width:'+depois+'%"></span><span style="background:#94a3b8;width:'+falta+'%"></span></div>'+
+      '<div class="text-[10px] text-slate-500 mt-1">Até: '+fmt(s.previsto,true)+' · Pós: '+fmt(s.pos,true)+' · Sem data: '+fmt(s.semData,true)+'</div>';
+  }
+  function cor(p) {
+    if(p>=.9)return 'background:#d1fae5;color:#065f46';
+    if(p>=.7)return 'background:#dbeafe;color:#1d4ed8';
+    if(p>=.45)return 'background:#fef3c7;color:#92400e';
+    return 'background:#fee2e2;color:#991b1b';
+  }
+  function matriz(items) {
+    var root=document.getElementById('maMatriz');
+    var marcas=Array.from(new Set(items.map(function(x){return x.marca;}))).sort();
+    var series=Array.from(new Set(items.map(function(x){return x.serie;}))).sort(function(a,b){
+      var ai=SERIES.indexOf(a),bi=SERIES.indexOf(b);
+      return (ai<0?100:ai)-(bi<0?100:bi)||a.localeCompare(b,'pt-BR',{numeric:true});
+    });
+    if(!items.length){root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';return;}
+    var h='<table class="border-separate border-spacing-1 text-[11px] min-w-full"><thead><tr><th class="text-left px-2 text-slate-500">Série</th>'+
+      marcas.map(function(m){return '<th class="px-2 text-center text-slate-600">'+escapeHTML(m)+'</th>';}).join('')+
+      '<th class="px-2 text-center text-slate-900">TOTAL</th></tr></thead><tbody>';
+    series.forEach(function(serieAtual){
+      var row=items.filter(function(x){return x.serie===serieAtual;});
+      h+='<tr><th class="text-left pr-3 whitespace-nowrap font-black text-slate-700">'+escapeHTML(serieAtual)+'</th>';
+      marcas.forEach(function(m){
+        var x=soma(row.filter(function(t){return t.marca===m;}));
+        h+='<td><div class="ma-heat" style="'+(x.total?cor(x.previsto/x.total):'background:#f8fafc;color:#94a3b8')+'">'+pct(x.previsto,x.total)+
+          (x.total?'<small>'+fmt(x.previsto,true)+' / '+fmt(x.total,true)+'</small>':'')+'</div></td>';
+      });
+      var x=soma(row);
+      h+='<td><div class="ma-heat" style="'+(x.total?cor(x.previsto/x.total):'background:#f8fafc;color:#94a3b8')+'">'+pct(x.previsto,x.total)+'</div></td></tr>';
+    });
+    var all=soma(items); h+='<tr class="border-t border-slate-300"><th class="text-left pr-3 font-black">TOTAL</th>';
+    marcas.forEach(function(m){var x=soma(items.filter(function(t){return t.marca===m;}));
+      h+='<td><div class="ma-heat" style="'+(x.total?cor(x.previsto/x.total):'background:#f8fafc;color:#94a3b8')+'">'+pct(x.previsto,x.total)+'</div></td>';
+    });
+    h+='<td><div class="ma-heat bg-slate-900 text-white">'+pct(all.previsto,all.total)+'</div></td></tr></tbody></table>';
+    root.innerHTML=h;
+  }
+  function grupos(items, agrupar, cenario) {
+    var por={};
+    items.forEach(function(l){
+      var nome=agrupar==='serie'?l.serie:agrupar==='grafica'?l.grafica:
+        agrupar==='marcaSerie'?l.marca+' · '+l.serie:agrupar==='graficaMarca'?l.grafica+' · '+l.marca:l.marca;
+      var grupo=cenario==='com'?(l.posi?'Combinado Posi':'Demais entregas'):'';
+      var key=grupo+'|'+nome;
+      if(!por[key])por[key]={nome:nome,grupo:grupo,itens:[]};
+      por[key].itens.push(l);
+    });
+    return Object.values(por).sort(function(a,b){return a.grupo.localeCompare(b.grupo)||a.nome.localeCompare(b.nome,'pt-BR',{numeric:true});});
+  }
+  window.pgMACenario=function(c){estado.cenario=c;window.processarMetaArmazem();};
+  window.processarMetaArmazem=function(){
+    var base=dadosBase(), aviso=document.getElementById('maAviso');
+    if(!aviso)return;
+    var selMarca=document.getElementById('maMarca'),selSerie=document.getElementById('maSerie'),selGrafica=document.getElementById('maGrafica');
+    var fm=selMarca.value,fs=selSerie.value,fg=selGrafica.value;
+    seletor('maMarca',base.map(function(x){return x.marca;}),fm);
+    seletor('maSerie',base.map(function(x){return x.serie;}),fs);
+    seletor('maGrafica',base.map(function(x){return x.grafica;}),fg);
+    fm=selMarca.value;fs=selSerie.value;fg=selGrafica.value;
+    document.querySelectorAll('[data-ma-cenario]').forEach(function(btn){btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-cenario')===estado.cenario));});
+    var items=base.filter(function(l){return (!fm||l.marca===fm)&&(!fs||l.serie===fs)&&(!fg||l.grafica===fg)&&
+      (estado.cenario!=='sem'||!l.posi);});
+    var total=soma(items), posi=soma(items.filter(function(l){return l.posi;})), geral=soma(items.filter(function(l){return !l.posi;}));
+    var missing=items.filter(function(l){return !l.alvo || (!l.posi&&!l.dtPlan);}).length;
+    aviso.classList.toggle('hidden',!missing);
+    aviso.textContent=missing?missing+' linha(s) sem data de referência ou previsão. Esse volume aparece em “Sem previsão”, sem ser apresentado como entrega pós-meta.':'';
+    document.getElementById('maKPIs').innerHTML=
+      card('Tiragem total',fmt(total.total,!!items.length),items.length+' linhas do PCP','')+
+      card('Previsto até a meta',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
+      card('Após a meta',fmt(total.pos,!!items.length),'Com data conhecida posterior à meta','warn')+
+      card('Sem previsão',fmt(total.semData,!!items.length),'Sem data de entrega utilizável','neutral');
+    document.getElementById('maCortes').innerHTML=estado.cenario==='com'?
+      '<div class="ma-card p-4 border-l-4 border-l-indigo-600"><div class="text-[10px] uppercase font-black text-indigo-700 mb-2">Combinado Posi · série/tipo</div>'+barras(posi,'Combinado Posigraf')+'</div>'+
+      '<div class="ma-card p-4 border-l-4 border-l-teal-500"><div class="text-[10px] uppercase font-black text-teal-700 mb-2">Demais entregas · PCP</div>'+barras(geral,'Sem combinado')+'</div>':'';
+    var rank=grupos(items,document.getElementById('maAgrupar').value,estado.cenario);
+    var legend='<div class="flex flex-wrap gap-3 text-[10px] mt-4"><span><i class="inline-block w-3 h-3 rounded-sm bg-blue-600 mr-1"></i> Até a meta</span><span><i class="inline-block w-3 h-3 rounded-sm bg-amber-500 mr-1"></i> Pós meta</span><span><i class="inline-block w-3 h-3 rounded-sm bg-slate-400 mr-1"></i> Sem previsão</span></div>';
+    document.getElementById('maBarras').innerHTML=rank.length?rank.slice(0,9).map(function(x){
+      var z=soma(x.itens);return barras(z,(x.grupo?x.grupo+' · ':'')+x.nome);
+    }).join('')+legend:'<p class="text-sm text-slate-400">–</p>';
+    matriz(items);
+    var atual='';var rows='';
+    rank.forEach(function(g){
+      if(estado.cenario==='com'&&g.grupo!==atual){atual=g.grupo;var x=soma(items.filter(function(l){return l.posi===(atual==='Combinado Posi');}));
+        rows+='<tr class="bg-indigo-50"><td class="font-black text-indigo-900">'+escapeHTML(atual)+'</td><td class="font-black">'+fmt(x.total,x.total>0)+'</td><td class="font-black">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td class="font-black">'+pct(x.previsto,x.total)+'</td></tr>';
+      }
+      var x=soma(g.itens);
+      rows+='<tr><td class="font-bold text-slate-700">'+escapeHTML(g.nome)+'</td><td>'+fmt(x.total,x.total>0)+'</td><td class="font-bold text-blue-700">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td><div class="flex items-center justify-end gap-2"><span class="whitespace-nowrap font-black">'+pct(x.previsto,x.total)+'</span><div class="ma-bar w-16"><b style="width:'+(x.total?100*x.previsto/x.total:0)+'%"></b></div></div></td></tr>';
+    });
+    rows+='<tr class="bg-slate-900 text-white font-black"><td>TOTAL GERAL</td><td>'+fmt(total.total,total.total>0)+'</td><td>'+fmt(total.previsto,total.total>0)+'</td><td>'+fmt(total.pos,total.total>0)+'</td><td>'+fmt(total.semData,total.total>0)+'</td><td>'+fmt(total.real,total.realTem)+'</td><td>'+pct(total.previsto,total.total)+'</td></tr>';
+    document.getElementById('maTabela').innerHTML=rows;
+    document.getElementById('maContagem').textContent=rank.length+' grupos · '+items.length+' linhas';
+    document.getElementById('maTabelaTitulo').textContent='Entregas por '+({marca:'marca',serie:'série',grafica:'gráfica',marcaSerie:'marca e série',graficaMarca:'gráfica e marca'}[document.getElementById('maAgrupar').value]);
+  };
+})();
+</script>
