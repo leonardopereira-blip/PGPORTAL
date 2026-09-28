@@ -1,5 +1,6 @@
 <section id="abaMetaArmazem" class="aba-conteudo hidden px-3 py-4 md:px-6 md:py-5 space-y-5">
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
     #abaMetaArmazem .ma-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 6px 20px rgba(15,23,42,.035)}
     #abaMetaArmazem .ma-kpi{background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:16px;padding:18px;color:#fff}
     #abaMetaArmazem .ma-kpi.alt{background:linear-gradient(135deg,#1e40af,#0f766e)}
@@ -31,6 +32,40 @@
     #abaMetaArmazem .ma-table th:first-child,#abaMetaArmazem .ma-table td:first-child{text-align:left}
     #abaMetaArmazem .ma-table td{border-bottom:1px solid #eef2f7;text-align:right;padding:10px;font-size:12px;font-variant-numeric:tabular-nums}
     #abaMetaArmazem .ma-table tr:hover td{background:#f8fafc}
+    /* Cores institucionais Arco, Manual da Marca pp.18-20. */
+    #abaMetaArmazem{--navy:#0C2340;--blue:#418EDE;--deep:#284081;--orange:#FA4616;--gold:#FCB04E;font-family:'Poppins','Segoe UI',sans-serif;color:var(--navy)}
+    #abaMetaArmazem .ma-card{border-color:#dce5f0;box-shadow:0 6px 20px rgba(12,35,64,.06)}
+    #abaMetaArmazem>.ma-card:first-of-type>div:first-child{background:linear-gradient(110deg,#0C2340,#284081 75%,#418EDE)}
+    #abaMetaArmazem .ma-kpi{background:linear-gradient(135deg,#0C2340,#284081)}
+    #abaMetaArmazem .ma-kpi.alt{background:linear-gradient(135deg,#284081,#418EDE)}
+    #abaMetaArmazem .ma-kpi.warn{background:linear-gradient(135deg,#0C2340,#284081);border-left:5px solid #FA4616}
+    #abaMetaArmazem .ma-kpi.neutral{background:linear-gradient(135deg,#0C2340,#385574)}
+    #abaMetaArmazem .ma-pill{color:#284081;border-color:#b7cbe2}
+    #abaMetaArmazem .ma-pill[aria-pressed=true]{background:#284081;border-color:#284081;box-shadow:0 4px 14px rgba(40,64,129,.2)}
+    #abaMetaArmazem .ma-select{color:#0C2340;border-color:#b7cbe2}
+    #abaMetaArmazem .ma-select:focus{outline:2px solid #418EDE}
+    #abaMetaArmazem #maPrazoResumo{background:#eaf3fc;border-color:#bbd9f3;color:#0C2340}
+    #abaMetaArmazem #maAviso{background:#fff3e7;border-color:#FCB04E;color:#0C2340}
+    #abaMetaArmazem .ma-bar{background:#e4edf7}
+    #abaMetaArmazem .ma-bar>b{background:linear-gradient(90deg,#284081,#418EDE)}
+    #abaMetaArmazem .ma-matrix-table thead th{background:#0C2340;color:white}
+    #abaMetaArmazem .ma-matrix-table thead tr:last-child th{background:#284081;color:white}
+    #abaMetaArmazem .ma-matrix-table th,#abaMetaArmazem .ma-matrix-table td{border-color:#dce5f0}
+    #abaMetaArmazem .ma-matrix-table tbody th{color:#0C2340}
+    #abaMetaArmazem .ma-matrix-table tbody tr:nth-child(even) th,#abaMetaArmazem .ma-matrix-table tbody tr:nth-child(even) td{background:#f3f8fd}
+    #abaMetaArmazem .ma-matrix-table tbody tr.ma-matrix-total th,#abaMetaArmazem .ma-matrix-table tbody tr.ma-matrix-total td{background:#dceafa;color:#0C2340}
+    #abaMetaArmazem .ma-matrix-table thead th:first-child,#abaMetaArmazem .ma-matrix-table tbody th{min-width:235px;width:235px}
+    #abaMetaArmazem .ma-matriz-label.ma-matriz-serie{max-width:25ch}
+    #abaMetaArmazem .ma-matrix-track{background:#e5eef8}
+    #abaMetaArmazem .ma-table th{background:#0C2340;color:white}
+    #abaMetaArmazem .ma-table td{border-color:#dce5f0;color:#0C2340}
+    #abaMetaArmazem .ma-table tr:hover td{background:#eaf3fc}
+    #abaMetaArmazem .ma-table tr.bg-indigo-50 td{background:#eaf3fc;color:#0C2340}
+    #abaMetaArmazem .ma-table tr.bg-slate-900 td{background:#0C2340;color:white}
+    #abaMetaArmazem .ma-table .text-blue-700{color:#284081}
+    #abaMetaArmazem .ma-table-dates{min-width:155px;max-width:270px;text-align:left;line-height:1.55;white-space:normal}
+    #abaMetaArmazem .ma-dist-dates{font-size:10px;line-height:1.6;color:#284081;overflow-wrap:anywhere;margin-top:6px}
+    #abaMetaArmazem .ma-legend-blue{background:#418EDE}#abaMetaArmazem .ma-legend-orange{background:#FA4616}#abaMetaArmazem .ma-legend-muted{background:#b8c8da}
   </style>
   <div class="ma-card overflow-hidden">
     <div class="p-5 md:p-6 bg-gradient-to-r from-slate-950 via-indigo-950 to-blue-900 text-white">
@@ -74,9 +109,9 @@
     <div class="text-xs font-black text-slate-800 mb-1">Distribuição dos volumes por prazo de entrega ao CD</div>
     <div id="maLegendaPrazos" class="text-[11px] text-slate-600 leading-relaxed mb-2"></div>
     <div class="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-600">
-      <span><i class="inline-block w-3 h-3 rounded-sm bg-blue-600 mr-1"></i> Dentro do prazo indicado</span>
-      <span><i class="inline-block w-3 h-3 rounded-sm bg-amber-500 mr-1"></i> Depois do prazo indicado</span>
-      <span><i class="inline-block w-3 h-3 rounded-sm bg-slate-400 mr-1"></i> Sem data planejada</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-blue mr-1"></i> Dentro das datas-limite</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-orange mr-1"></i> Depois das datas-limite</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-muted mr-1"></i> Sem data planejada</span>
     </div>
   </div>
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -86,13 +121,13 @@
   </div>
   <div class="ma-card p-5 overflow-hidden">
     <h3 class="font-black text-slate-800 text-sm">Matriz por série × marca</h3>
-    <p class="text-[10px] text-slate-500 mt-1 mb-3">Percentual e barra de progresso por marca, com total ponderado pela tiragem. “–” significa ausência de volume; nomes longos aparecem completos ao passar o mouse.</p>
+    <p class="text-[10px] text-slate-500 mt-1 mb-3">Percentual e barra por marca, com total ponderado pela tiragem. Série: até 25 caracteres; valores com várias indicações separadas por | ou ; aparecem como VARIOS.</p>
     <div id="maMatriz" class="overflow-x-auto max-w-full"></div>
   </div>
   <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por marca</h3><p class="text-[10px] text-slate-500 mt-1">Volumes brutos e percentuais da entrega ao CD conforme o prazo de cada cenário. ¹ Posigraf: datas combinadas por série/tipo; demais: 15/10.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por marca</h3><p class="text-[10px] text-slate-500 mt-1">Entrega CD: datas-limite explícitas para cada grupo. Posigraf: marcos por série/tipo; demais itens até 15/10/2026; WAYS até 30/11/2026 no cenário sem combinado.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
-      <thead><tr><th>Grupo</th><th>Volume total</th><th id="maThPrevisto">Até o prazo aplicável</th><th id="maThPos">Após o prazo aplicável</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>No prazo / total</th></tr></thead>
+      <thead><tr><th>Grupo</th><th>Datas-limite de entrega CD</th><th>Volume total</th><th id="maThPrevisto">Até as datas-limite</th><th id="maThPos">Após as datas-limite</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
     </table></div>
   </div>
@@ -171,8 +206,11 @@
     return String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   }
   function serie(v) {
-    var s = normal(v).replace(/(\d+)\s*[ºª°]?\s*ANO\b/g,'$1º ANO').replace(/(\d+)\s*[ºª°]?\s*SERIE\b/g,'$1ª SERIE');
-    if (/^INF\s+[IVX]+$/.test(s)) return s;
+    var bruto=String(v==null?'':v).trim();
+    // Não separar por "+" ou espaço: APROVA +, 1ºAno, SEMI e PV E são individuais.
+    var partes=bruto.split(/[|;]/).map(function(x){return x.trim();}).filter(Boolean);
+    if(partes.length>1)return 'VARIOS';
+    var s=normal(partes[0]||bruto).replace(/(\d+)\s*[ºª°]?\s*ANO\b/g,'$1º ANO').replace(/(\d+)\s*[ºª°]?\s*SERIE\b/g,'$1ª SERIE');
     return s || 'SEM SÉRIE';
   }
   function data(v) {
@@ -259,7 +297,7 @@
         total:total,previsto:previsto,pos:conhecido?Math.max(0,total-previsto):0,
         semData:conhecido?0:total,real:realTem?Math.min(total,volume(realRaw)):0,realTem:realTem,
         posi:posi,alvo:posi?parcelas.map(function(p){return p.prazo;}).sort().slice(-1)[0]:alvo,
-        dtPlan:dtPlan,cd:normal(l.CD_FINAL||l['CD DESTINO'])
+        dtPlan:dtPlan,prazos:parcelas.map(function(p){return p.prazo;}).filter(Boolean),cd:normal(l.CD_FINAL||l['CD DESTINO'])
       };
     }).filter(Boolean);
   }
@@ -277,54 +315,50 @@
     return '<div class="ma-kpi '+(classe||'')+'"><p class="text-[10px] uppercase tracking-wider font-black opacity-75">'+escapeHTML(rotulo)+'</p>'+
       '<div class="text-2xl md:text-3xl font-black tabular-nums mt-2">'+valor+'</div><p class="text-[10px] mt-2 opacity-85">'+sub+'</p></div>';
   }
-  function barras(s,label,prazo){
+  function fmtPrazo(iso){return /^\d{4}-\d{2}-\d{2}$/.test(iso)?iso.slice(8)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4):iso;}
+  function listaDatas(items){return Array.from(new Set((items||[]).reduce(function(a,l){return a.concat(l.prazos||[]);},[]).filter(Boolean))).sort();}
+  function textoDatas(items){var d=listaDatas(items);return d.length?d.map(fmtPrazo).join(' · '):'Sem data-limite cadastrada';}
+  function barras(s,label,items){
     if(!s.total)return '<p class="text-sm text-slate-400">Sem volume para esta seleção.</p>';
     var ok=100*s.previsto/s.total,depois=100*s.pos/s.total,falta=100*s.semData/s.total;
-    var ate=prazo&&prazo.ate||'Dentro dos prazos aplicáveis';
-    var apos=prazo&&prazo.apos||'Após os prazos aplicáveis';
+    var ds=listaDatas(items),texto=ds.map(fmtPrazo).join(' · '),ref=ds.length===1?fmtPrazo(ds[0]):'as datas-limite acima';
     return '<div><div class="flex items-center justify-between gap-2 text-[11px] mb-2">'+
-      '<b class="ma-dist-name" title="'+escapeHTML(label)+'">'+escapeHTML(label)+'</b>'+
-      '<b class="shrink-0">'+pct(s.previsto,s.total)+'</b></div>'+
-      '<div class="flex h-4 rounded-full overflow-hidden bg-slate-200" aria-label="'+escapeHTML(ate)+': '+pct(s.previsto,s.total)+'">'+
-      '<span style="background:#2563eb;width:'+ok+'%"></span>'+
-      '<span style="background:#f59e0b;width:'+depois+'%"></span><span style="background:#94a3b8;width:'+falta+'%"></span></div>'+
-      '<div class="text-[10px] text-slate-500 mt-1 leading-relaxed">'+escapeHTML(ate)+': <b>'+fmt(s.previsto,true)+'</b> · '+
-      escapeHTML(apos)+': <b>'+fmt(s.pos,true)+'</b> · Sem data: <b>'+fmt(s.semData,true)+'</b></div></div>';
+      '<b class="ma-dist-name" title="'+escapeHTML(label)+'">'+escapeHTML(label)+'</b><b class="shrink-0">'+pct(s.previsto,s.total)+'</b></div>'+
+      '<div class="flex h-4 rounded-full overflow-hidden" style="background:#e5eef8" aria-label="Datas-limite '+escapeHTML(texto)+'">'+
+      '<span style="background:#418EDE;width:'+ok+'%"></span><span style="background:#FA4616;width:'+depois+'%"></span>'+
+      '<span style="background:#b8c8da;width:'+falta+'%"></span></div>'+
+      '<div class="ma-dist-dates">Data'+(ds.length===1?'-limite':'s-limite')+': <b>'+escapeHTML(texto||'não cadastrada')+'</b></div>'+
+      '<div class="text-[10px] mt-1 leading-relaxed" style="color:#61738d">Até '+escapeHTML(ref)+': <b>'+fmt(s.previsto,true)+'</b> · '+
+      'Após '+escapeHTML(ref)+': <b>'+fmt(s.pos,true)+'</b> · Sem data planejada: <b>'+fmt(s.semData,true)+'</b></div></div>';
   }
   function textoPrazos(){
-    return estado.cenario==='sem'
-      ? 'Sem combinado Posigraf: todos os itens até 15/10/2026, exceto WAYS até 30/11/2026.'
-      : 'Com combinado Posigraf: séries/tipos abrangidos seguem os prazos e percentuais acordados (30%/40%/50%/100%); demais itens até 15/10/2026.';
-  }
-  function labelsPrazos(){
-    return estado.cenario==='sem'
-      ? {ate:'Até 15/10 (WAYS: 30/11)',apos:'Após 15/10 (WAYS: 30/11)'}
-      : {ate:'Até o prazo aplicável',apos:'Após o prazo aplicável'};
+    return estado.cenario==='sem'?'Sem combinado Posigraf: todos os itens até 15/10/2026, exceto WAYS até 30/11/2026.':
+      'Com combinado Posigraf: séries/tipos abrangidos seguem as datas e percentuais acordados; demais itens até 15/10/2026.';
   }
   function distribuicao(items,campo,destino){
     var el=document.getElementById(destino);if(!el)return;
-    var por=grupos(items,campo,'geral').map(function(g){return {nome:g.nome,resumo:soma(g.itens)};})
+    var por=grupos(items,campo,'geral').map(function(g){return {nome:g.nome,resumo:soma(g.itens),itens:g.itens};})
       .sort(function(a,b){return b.resumo.total-a.resumo.total||a.nome.localeCompare(b.nome,'pt-BR',{numeric:true});});
-    el.innerHTML=por.length?por.map(function(g){return barras(g.resumo,g.nome,labelsPrazos());}).join(''):
+    el.innerHTML=por.length?por.map(function(g){return barras(g.resumo,g.nome,g.itens);}).join(''):
       '<p class="text-xs text-slate-400">Sem volume para esta seleção.</p>';
   }
-  function cor(p) {
-    if(p>=.9)return 'background:#d1fae5;color:#065f46';
-    if(p>=.7)return 'background:#dbeafe;color:#1d4ed8';
-    if(p>=.45)return 'background:#fef3c7;color:#92400e';
-    return 'background:#fee2e2;color:#991b1b';
+  function cor(p){
+    if(p>=.9)return 'background:#e2f0fb;color:#0C2340';
+    if(p>=.7)return 'background:#c8e2f6;color:#284081';
+    if(p>=.45)return 'background:#fff0d9;color:#0C2340';
+    return 'background:#fee6dd;color:#0C2340';
   }
-  function rotuloMatriz(v) {
-    var nome=String(v == null ? '' : v), chars=Array.from(nome);
-    var longo=chars.length>10;
-    // Reticências contam como o décimo caractere.
-    var curto=longo?chars.slice(0,9).join('')+'…':nome;
-    return '<span class="ma-matriz-label"'+(longo?' title="'+escapeHTML(nome)+'"':'')+'>'+escapeHTML(curto)+'</span>';
+  function rotuloMatriz(v,limite){
+    var nome=String(v==null?'':v),max=limite||10,chars=Array.from(nome),longo=chars.length>max;
+    var curto=longo?chars.slice(0,max-1).join('')+'…':nome;
+    var dica=nome==='VARIOS'?'Mais de uma série ou indicação na mesma linha':nome;
+    return '<span class="ma-matriz-label'+(max===25?' ma-matriz-serie':'')+'"'+
+      (longo||nome==='VARIOS'?' title="'+escapeHTML(dica)+'"':'')+'>'+escapeHTML(curto)+'</span>';
   }
   function barraMatriz(x){
     if(!x.total)return '<span class="text-slate-400">–</span>';
     var p=Math.max(0,Math.min(100,100*x.previsto/x.total));
-    var barColor=p>=70?'#287b38':p>=40?'#f5a623':'#c42b35';
+    var barColor=p>=70?'#418EDE':p>=40?'#FCB04E':'#FA4616';
     return '<div class="ma-matrix-track" title="'+pct(x.previsto,x.total)+' · '+
       escapeHTML(fmt(x.previsto,true)+' / '+fmt(x.total,true))+'">'+
       '<span style="width:'+p+'%;background:'+barColor+'"></span></div>';
@@ -348,7 +382,7 @@
       '<th>%</th><th>Progresso</th></tr></thead><tbody>';
     series.forEach(function(serieAtual){
       var row=items.filter(function(x){return x.serie===serieAtual;});
-      h+='<tr><th>'+rotuloMatriz(serieAtual)+'</th>';
+      h+='<tr><th>'+rotuloMatriz(serieAtual,25)+'</th>';
       marcas.forEach(function(m){h+=colunasMatriz(soma(row.filter(function(t){return t.marca===m;})));});
       h+=colunasMatriz(soma(row))+'</tr>';
     });
@@ -385,23 +419,23 @@
     aviso.classList.toggle('hidden',!missing);
     aviso.textContent=missing?missing+' linha(s) sem data planejada de entrega ao CD (META_PCP_POS). Esse volume aparece em “Sem previsão”, sem ser tratado como entrega posterior ao prazo.':'';
     document.getElementById('maKPIs').innerHTML=
-      card('Tiragem total',fmt(total.total,!!items.length),items.length+' linhas do PCP','')+
+      card('Tiragem total CD',fmt(total.total,!!items.length),items.length+' linhas PCP + acabadoras (sem duplicidade)','')+
       card('Previsto dentro dos prazos',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
       card('Fora dos prazos previstos',fmt(total.pos,!!items.length),'Com data planejada posterior ao respectivo prazo','warn')+
       card('Sem previsão',fmt(total.semData,!!items.length),'Sem data de entrega utilizável','neutral');
-    document.getElementById('maPrazoResumo').innerHTML='<b>Prazo usado nesta visão:</b> '+escapeHTML(textoPrazos());
-    document.getElementById('maLegendaPrazos').textContent=textoPrazos();
-    document.getElementById('maThPrevisto').textContent=estado.cenario==='sem'?'Até 15/10 (WAYS: 30/11)':'Até o prazo aplicável¹';
-    document.getElementById('maThPos').textContent=estado.cenario==='sem'?'Após 15/10 (WAYS: 30/11)':'Após o prazo aplicável¹';
+    document.getElementById('maPrazoResumo').innerHTML='<b>Regra:</b> '+escapeHTML(textoPrazos())+'<br><b>Datas-limite desta seleção:</b> '+escapeHTML(textoDatas(items));
+    document.getElementById('maLegendaPrazos').textContent=textoPrazos()+' Datas-limite desta seleção: '+textoDatas(items)+'.';
+    document.getElementById('maThPrevisto').textContent='Até as datas-limite';
+    document.getElementById('maThPos').textContent='Após as datas-limite';
     document.getElementById('maCortes').innerHTML=estado.cenario==='com'?
       '<div class="ma-card p-4 border-l-4 border-l-indigo-600">'+
       '<div class="text-[11px] uppercase font-black text-indigo-700 mb-1">Posigraf — prazos por série e tipo</div>'+
       '<p class="text-[11px] text-slate-600 mb-3">Somente séries/tipos com acordo; cada parcela segue seu próprio prazo. Não é uma meta única para 15/10.</p>'+
-      barras(posi,'Itens com combinado Posigraf',{ate:'Até as datas combinadas',apos:'Após as datas combinadas'})+'</div>'+
+      barras(posi,'Itens com combinado Posigraf',items.filter(function(l){return l.posi;}))+'</div>'+
       '<div class="ma-card p-4 border-l-4 border-l-teal-500">'+
       '<div class="text-[11px] uppercase font-black text-teal-700 mb-1">Demais itens — prazo de 15/10/2026</div>'+
       '<p class="text-[11px] text-slate-600 mb-3">Itens sem combinado específico da Posigraf: meta até 15 de outubro.</p>'+
-      barras(geral,'Itens sem acordo específico',{ate:'Até 15/10',apos:'Após 15/10'})+'</div>':'';
+      barras(geral,'Itens sem acordo específico',items.filter(function(l){return !l.posi;}))+'</div>':'';
     var rank=grupos(items,document.getElementById('maAgrupar').value,estado.cenario);
     distribuicao(items,'grafica','maBarrasGrafica');
     distribuicao(items,'marca','maBarrasMarca');
@@ -410,12 +444,12 @@
     var atual='';var rows='';
     rank.forEach(function(g){
       if(estado.cenario==='com'&&g.grupo!==atual){atual=g.grupo;var x=soma(items.filter(function(l){return l.posi===(atual==='Posigraf — datas combinadas');}));
-        rows+='<tr class="bg-indigo-50"><td class="font-black text-indigo-900">'+escapeHTML(atual)+'</td><td class="font-black">'+fmt(x.total,x.total>0)+'</td><td class="font-black">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td class="font-black">'+pct(x.previsto,x.total)+'</td></tr>';
+        rows+='<tr class="bg-indigo-50"><td class="font-black text-indigo-900">'+escapeHTML(atual)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(items.filter(function(l){return l.posi===(atual==='Posigraf — datas combinadas');})))+'</td><td class="font-black">'+fmt(x.total,x.total>0)+'</td><td class="font-black">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td class="font-black">'+pct(x.previsto,x.total)+'</td></tr>';
       }
       var x=soma(g.itens);
-      rows+='<tr><td class="font-bold text-slate-700">'+escapeHTML(g.nome)+'</td><td>'+fmt(x.total,x.total>0)+'</td><td class="font-bold text-blue-700">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td><div class="flex items-center justify-end gap-2"><span class="whitespace-nowrap font-black">'+pct(x.previsto,x.total)+'</span><div class="ma-bar w-16"><b style="width:'+(x.total?100*x.previsto/x.total:0)+'%"></b></div></div></td></tr>';
+      rows+='<tr><td class="font-bold text-slate-700">'+escapeHTML(g.nome)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(g.itens))+'</td><td>'+fmt(x.total,x.total>0)+'</td><td class="font-bold text-blue-700">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td><div class="flex items-center justify-end gap-2"><span class="whitespace-nowrap font-black">'+pct(x.previsto,x.total)+'</span><div class="ma-bar w-16"><b style="width:'+(x.total?100*x.previsto/x.total:0)+'%"></b></div></div></td></tr>';
     });
-    rows+='<tr class="bg-slate-900 text-white font-black"><td>TOTAL GERAL</td><td>'+fmt(total.total,total.total>0)+'</td><td>'+fmt(total.previsto,total.total>0)+'</td><td>'+fmt(total.pos,total.total>0)+'</td><td>'+fmt(total.semData,total.total>0)+'</td><td>'+fmt(total.real,total.realTem)+'</td><td>'+pct(total.previsto,total.total)+'</td></tr>';
+    rows+='<tr class="bg-slate-900 text-white font-black"><td>TOTAL GERAL</td><td class="ma-table-dates">'+escapeHTML(textoDatas(items))+'</td><td>'+fmt(total.total,total.total>0)+'</td><td>'+fmt(total.previsto,total.total>0)+'</td><td>'+fmt(total.pos,total.total>0)+'</td><td>'+fmt(total.semData,total.total>0)+'</td><td>'+fmt(total.real,total.realTem)+'</td><td>'+pct(total.previsto,total.total)+'</td></tr>';
     document.getElementById('maTabela').innerHTML=rows;
     document.getElementById('maContagem').textContent=rank.length+' grupos · '+items.length+' linhas';
     document.getElementById('maTabelaTitulo').textContent='Entregas por '+({marca:'marca',serie:'série',grafica:'gráfica',marcaSerie:'marca e série',graficaMarca:'gráfica e marca'}[document.getElementById('maAgrupar').value]);
