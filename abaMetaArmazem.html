@@ -12,6 +12,7 @@
     #abaMetaArmazem .ma-bar > b{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#2563eb,#14b8a6)}
     #abaMetaArmazem .ma-heat{min-width:96px;text-align:center;border-radius:9px;padding:7px 5px;font-size:11px;font-weight:800}
     #abaMetaArmazem .ma-heat small{display:block;font-size:9px;opacity:.8;font-weight:700}
+    #abaMetaArmazem .ma-matriz-label{display:inline-block;max-width:10ch;white-space:nowrap;overflow:hidden;vertical-align:middle}
     #abaMetaArmazem .ma-table th{position:sticky;top:0;z-index:1;background:#e2e8f0;color:#334155;text-align:right;padding:11px 10px;white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.035em}
     #abaMetaArmazem .ma-table th:first-child,#abaMetaArmazem .ma-table td:first-child{text-align:left}
     #abaMetaArmazem .ma-table td{border-bottom:1px solid #eef2f7;text-align:right;padding:10px;font-size:12px;font-variant-numeric:tabular-nums}
@@ -21,8 +22,8 @@
     <div class="p-5 md:p-6 bg-gradient-to-r from-slate-950 via-indigo-950 to-blue-900 text-white">
       <p class="text-[10px] uppercase tracking-[.22em] font-black text-cyan-200">Produção / Visão executiva</p>
       <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mt-2">
-        <div><h2 class="text-2xl md:text-3xl font-black">Meta Armazém · 15/10</h2>
-          <p class="mt-2 text-xs text-slate-200 max-w-3xl leading-relaxed">Cenário previsto por marca, série e gráfica; combinado Posigraf em separado. Para WAYS, vale a meta individual da base, não 15/10.</p></div>
+        <div><h2 class="text-2xl md:text-3xl font-black">Meta Armazém · cenários de prazo</h2>
+          <p class="mt-2 text-xs text-slate-200 max-w-3xl leading-relaxed">Com combinado: prazos e percentuais acordados com a Posigraf; demais itens até 15/10. Sem combinado: todos até 15/10, exceto WAYS até 30/11.</p></div>
         <span class="text-[10px] font-bold rounded-full border border-white/30 px-3 py-2 text-cyan-100">V1/27 · Base PCP principal</span>
       </div>
     </div>
@@ -48,7 +49,7 @@
           <select id="maGrafica" class="ma-select mt-1" onchange="window.processarMetaArmazem()"><option value="">Todas</option></select>
         </label>
       </div>
-      <p class="text-[10px] text-slate-500">Os filtros gerais do portal continuam aplicados. Esta visão considera exclusivamente o volume do PCP principal para não duplicar material presente na PCP_ACABADORAS. Os combinados foram registrados a partir do cenário de referência, sem alterar a planilha.</p>
+      <p class="text-[10px] text-slate-500">Os filtros gerais do portal continuam aplicados. Esta visão considera exclusivamente o volume do PCP principal para não duplicar material presente na PCP_ACABADORAS. O cenário sem combinado mantém todos os itens, inclusive os da Posigraf; altera apenas os prazos. As datas do combinado são aplicadas às parcelas acumuladas de 30%/40%/50%/100%, sem somá-las entre si.</p>
     </div>
   </div>
   <div id="maAviso" class="hidden text-xs bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900"></div>
@@ -133,6 +134,7 @@
   });
   var estado = {cenario:'geral'};
   var META = '2026-10-15';
+  var META_WAYS_SEM_COMBINADO = '2026-11-30';
   var SERIES = ['INF I','INF II','INF III','INF IV','INF V','1º ANO','2º ANO','3º ANO','4º ANO','5º ANO','6º ANO','7º ANO','8º ANO','9º ANO','1ª SÉRIE','2ª SÉRIE','3ª SÉRIE','PU','PV'];
 
   function normal(v) {
@@ -179,12 +181,24 @@
     matches.sort(function(a,b){return spec(b)-spec(a);});
     return matches.filter(function(r){return spec(r)===spec(matches[0]);});
   }
-  function posiPercentual(regras, alvo) {
-    var niveis=[.3,.4,.5,1], p=0;
-    regras.forEach(function(regra){regra.datas.forEach(function(dt,i){
-      if (dt && dt<=alvo) p=Math.max(p,niveis[i]);
-    });});
-    return p;
+  function posiParcelas(regras) {
+    // H/I/J/K representam percentuais ACUMULADOS. Cada marco só adiciona
+    // a diferença em relação ao anterior (30%, depois +10%, +10%, +50%).
+    // Regras duplicadas de mesma coorte preservam a data mais cedo por marco.
+    var niveis=[.3,.4,.5,1], anterior=0, parcelas=[];
+    niveis.forEach(function(nivel,i){
+      var prazos=regras.map(function(r){return r.datas[i];}).filter(Boolean).sort();
+      if (!prazos.length) return;
+      parcelas.push({fracao:nivel-anterior, prazo:prazos[0]});
+      anterior=nivel;
+    });
+    return parcelas;
+  }
+  function previsaoNaMeta(total, dtPlan, parcelas) {
+    if (!dtPlan || !parcelas.length) return 0;
+    return total*parcelas.reduce(function(s,p){
+      return s+(dtPlan<=p.prazo?p.fracao:0);
+    },0);
   }
   function dadosBase() {
     var base=window.pgBaseGeralReportExecutiva || window.dadosGlobais || [];
@@ -194,19 +208,20 @@
       var total=volume(l.TIRAGEM), marca=normal(l.MARCA_FINAL||l.UNIDADE||l.MARCA);
       if(!total||!marca)return null;
       var grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA)||'NÃO INFORMADA';
-      var s=serie(l['SÉRIE']||l.SERIE), regras=posiRegra(l), posi=!!regras;
-      var alvo=marca==='WAYS' ? data(l.META_ARM_POS || l['META ARMAZÉM']) : META;
+      var s=serie(l['SÉRIE']||l.SERIE), regras=posiRegra(l);
+      var posi=estado.cenario!=='sem' && !!regras;
+      var alvo=estado.cenario==='sem' && marca==='WAYS' ? META_WAYS_SEM_COMBINADO : META;
+      var parcelas=posi ? posiParcelas(regras) : [{fracao:1,prazo:alvo}];
       var dtPlan=data(l['Coleta/Internalização de estoque final (re) plan'] || l.META_PCP_POS);
-      var fra=posi && alvo ? posiPercentual(regras,alvo) : null;
-      var conhecido=!!alvo && (posi || !!dtPlan);
-      var previsto=conhecido ? total*(posi?fra:(dtPlan<=alvo?1:0)) : 0;
+      var conhecido=!!dtPlan && parcelas.length>0;
+      var previsto=conhecido ? previsaoNaMeta(total,dtPlan,parcelas) : 0;
       var realRaw=l['TIRAGEM CONFIRMADA DENTRO DA META'];
       var realTem=realRaw!==null && realRaw!==undefined && realRaw!=='';
       return {
         marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),
         total:total,previsto:previsto,pos:conhecido?Math.max(0,total-previsto):0,
         semData:conhecido?0:total,real:realTem?Math.min(total,volume(realRaw)):0,realTem:realTem,
-        posi:posi,alvo:alvo,dtPlan:dtPlan,cd:normal(l.CD_FINAL||l['CD DESTINO'])
+        posi:posi,alvo:posi ? parcelas.map(function(p){return p.prazo;}).sort().slice(-1)[0] : alvo,dtPlan:dtPlan,cd:normal(l.CD_FINAL||l['CD DESTINO'])
       };
     }).filter(Boolean);
   }
@@ -238,6 +253,13 @@
     if(p>=.45)return 'background:#fef3c7;color:#92400e';
     return 'background:#fee2e2;color:#991b1b';
   }
+  function rotuloMatriz(v) {
+    var nome=String(v == null ? '' : v), chars=Array.from(nome);
+    var longo=chars.length>10;
+    // Reticências contam como o décimo caractere.
+    var curto=longo?chars.slice(0,9).join('')+'…':nome;
+    return '<span class="ma-matriz-label"'+(longo?' title="'+escapeHTML(nome)+'"':'')+'>'+escapeHTML(curto)+'</span>';
+  }
   function matriz(items) {
     var root=document.getElementById('maMatriz');
     var marcas=Array.from(new Set(items.map(function(x){return x.marca;}))).sort();
@@ -247,11 +269,11 @@
     });
     if(!items.length){root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';return;}
     var h='<table class="border-separate border-spacing-1 text-[11px] min-w-full"><thead><tr><th class="text-left px-2 text-slate-500">Série</th>'+
-      marcas.map(function(m){return '<th class="px-2 text-center text-slate-600">'+escapeHTML(m)+'</th>';}).join('')+
+      marcas.map(function(m){return '<th class="px-2 text-center text-slate-600">'+rotuloMatriz(m)+'</th>';}).join('')+
       '<th class="px-2 text-center text-slate-900">TOTAL</th></tr></thead><tbody>';
     series.forEach(function(serieAtual){
       var row=items.filter(function(x){return x.serie===serieAtual;});
-      h+='<tr><th class="text-left pr-3 whitespace-nowrap font-black text-slate-700">'+escapeHTML(serieAtual)+'</th>';
+      h+='<tr><th class="text-left pr-3 whitespace-nowrap font-black text-slate-700">'+rotuloMatriz(serieAtual)+'</th>';
       marcas.forEach(function(m){
         var x=soma(row.filter(function(t){return t.marca===m;}));
         h+='<td><div class="ma-heat" style="'+(x.total?cor(x.previsto/x.total):'background:#f8fafc;color:#94a3b8')+'">'+pct(x.previsto,x.total)+
@@ -290,20 +312,19 @@
     seletor('maGrafica',base.map(function(x){return x.grafica;}),fg);
     fm=selMarca.value;fs=selSerie.value;fg=selGrafica.value;
     document.querySelectorAll('[data-ma-cenario]').forEach(function(btn){btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-cenario')===estado.cenario));});
-    var items=base.filter(function(l){return (!fm||l.marca===fm)&&(!fs||l.serie===fs)&&(!fg||l.grafica===fg)&&
-      (estado.cenario!=='sem'||!l.posi);});
+    var items=base.filter(function(l){return (!fm||l.marca===fm)&&(!fs||l.serie===fs)&&(!fg||l.grafica===fg);});
     var total=soma(items), posi=soma(items.filter(function(l){return l.posi;})), geral=soma(items.filter(function(l){return !l.posi;}));
-    var missing=items.filter(function(l){return !l.alvo || (!l.posi&&!l.dtPlan);}).length;
+    var missing=items.filter(function(l){return !l.alvo || !l.dtPlan;}).length;
     aviso.classList.toggle('hidden',!missing);
     aviso.textContent=missing?missing+' linha(s) sem data de referência ou previsão. Esse volume aparece em “Sem previsão”, sem ser apresentado como entrega pós-meta.':'';
     document.getElementById('maKPIs').innerHTML=
       card('Tiragem total',fmt(total.total,!!items.length),items.length+' linhas do PCP','')+
-      card('Previsto até a meta',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
+      card('Previsto dentro dos prazos',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
       card('Após a meta',fmt(total.pos,!!items.length),'Com data conhecida posterior à meta','warn')+
       card('Sem previsão',fmt(total.semData,!!items.length),'Sem data de entrega utilizável','neutral');
     document.getElementById('maCortes').innerHTML=estado.cenario==='com'?
       '<div class="ma-card p-4 border-l-4 border-l-indigo-600"><div class="text-[10px] uppercase font-black text-indigo-700 mb-2">Combinado Posi · série/tipo</div>'+barras(posi,'Combinado Posigraf')+'</div>'+
-      '<div class="ma-card p-4 border-l-4 border-l-teal-500"><div class="text-[10px] uppercase font-black text-teal-700 mb-2">Demais entregas · PCP</div>'+barras(geral,'Sem combinado')+'</div>':'';
+      '<div class="ma-card p-4 border-l-4 border-l-teal-500"><div class="text-[10px] uppercase font-black text-teal-700 mb-2">Demais entregas · até 15/10</div>'+barras(geral,'Meta 15/10')+'</div>':'';
     var rank=grupos(items,document.getElementById('maAgrupar').value,estado.cenario);
     var legend='<div class="flex flex-wrap gap-3 text-[10px] mt-4"><span><i class="inline-block w-3 h-3 rounded-sm bg-blue-600 mr-1"></i> Até a meta</span><span><i class="inline-block w-3 h-3 rounded-sm bg-amber-500 mr-1"></i> Pós meta</span><span><i class="inline-block w-3 h-3 rounded-sm bg-slate-400 mr-1"></i> Sem previsão</span></div>';
     document.getElementById('maBarras').innerHTML=rank.length?rank.slice(0,9).map(function(x){
