@@ -13,6 +13,20 @@
     #abaMetaArmazem .ma-heat{min-width:96px;text-align:center;border-radius:9px;padding:7px 5px;font-size:11px;font-weight:800}
     #abaMetaArmazem .ma-heat small{display:block;font-size:9px;opacity:.8;font-weight:700}
     #abaMetaArmazem .ma-matriz-label{display:inline-block;max-width:10ch;white-space:nowrap;overflow:hidden;vertical-align:middle}
+    #abaMetaArmazem .ma-dist-list{max-height:470px;overflow-y:auto;padding-right:3px;scrollbar-gutter:stable}
+    #abaMetaArmazem .ma-dist-name{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #abaMetaArmazem .ma-matrix-table{width:100%;min-width:max-content;border-collapse:separate;border-spacing:0;font-size:11px;font-variant-numeric:tabular-nums}
+    #abaMetaArmazem .ma-matrix-table th,#abaMetaArmazem .ma-matrix-table td{border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:7px 8px}
+    #abaMetaArmazem .ma-matrix-table thead th{background:#255645;color:#fff;font-weight:800;text-align:center}
+    #abaMetaArmazem .ma-matrix-table thead tr:last-child th{background:#326b55}
+    #abaMetaArmazem .ma-matrix-table thead th:first-child{text-align:left;position:sticky;left:0;z-index:3}
+    #abaMetaArmazem .ma-matrix-table tbody th{background:#fff;text-align:left;font-weight:800;color:#334155;white-space:nowrap;position:sticky;left:0;z-index:2}
+    #abaMetaArmazem .ma-matrix-table tbody tr:nth-child(even) th,#abaMetaArmazem .ma-matrix-table tbody tr:nth-child(even) td{background:#f8fafc}
+    #abaMetaArmazem .ma-matrix-table tbody tr.ma-matrix-total th,#abaMetaArmazem .ma-matrix-table tbody tr.ma-matrix-total td{background:#e2e8f0;font-weight:900}
+    #abaMetaArmazem .ma-matrix-table td.ma-matrix-pct{text-align:right;min-width:64px;font-weight:750}
+    #abaMetaArmazem .ma-matrix-table td.ma-matrix-progress{min-width:126px}
+    #abaMetaArmazem .ma-matrix-track{height:22px;width:124px;background:#eef2f7;position:relative;overflow:hidden}
+    #abaMetaArmazem .ma-matrix-track span{display:block;height:100%}
     #abaMetaArmazem .ma-table th{position:sticky;top:0;z-index:1;background:#e2e8f0;color:#334155;text-align:right;padding:11px 10px;white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.035em}
     #abaMetaArmazem .ma-table th:first-child,#abaMetaArmazem .ma-table td:first-child{text-align:left}
     #abaMetaArmazem .ma-table td{border-bottom:1px solid #eef2f7;text-align:right;padding:10px;font-size:12px;font-variant-numeric:tabular-nums}
@@ -23,8 +37,8 @@
       <p class="text-[10px] uppercase tracking-[.22em] font-black text-cyan-200">Produção / Visão executiva</p>
       <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mt-2">
         <div><h2 class="text-2xl md:text-3xl font-black">Meta Armazém · cenários de prazo</h2>
-          <p class="mt-2 text-xs text-slate-200 max-w-3xl leading-relaxed">Com combinado: prazos e percentuais acordados com a Posigraf; demais itens até 15/10. Sem combinado: todos até 15/10, exceto WAYS até 30/11.</p></div>
-        <span class="text-[10px] font-bold rounded-full border border-white/30 px-3 py-2 text-cyan-100">V1/27 · Base PCP principal</span>
+          <p class="mt-2 text-xs text-slate-200 max-w-3xl leading-relaxed">Somente entregas ao CD. Com combinado: prazos e percentuais acordados com a Posigraf; demais itens até 15/10. Sem combinado: todos até 15/10, exceto WAYS até 30/11.</p></div>
+        <span class="text-[10px] font-bold rounded-full border border-white/30 px-3 py-2 text-cyan-100">V1/27 · Destino CD · PCP + Acabadoras</span>
       </div>
     </div>
     <div class="p-4 md:p-5 space-y-4">
@@ -33,8 +47,9 @@
         <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="false" onclick="window.pgMACenario('com')">Combinado Posi · separado</button>
         <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="false" onclick="window.pgMACenario('sem')">Sem Combinado Posi</button>
       </div>
+      <div id="maPrazoResumo" class="rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3 text-xs text-indigo-950 leading-relaxed"></div>
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500">Agrupar por
+        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500">Agrupar tabela por
           <select id="maAgrupar" class="ma-select mt-1" onchange="window.processarMetaArmazem()">
             <option value="marca">Marca</option><option value="serie">Série</option><option value="grafica">Gráfica</option><option value="marcaSerie">Marca → Série</option><option value="graficaMarca">Gráfica → Marca</option>
           </select>
@@ -49,20 +64,35 @@
           <select id="maGrafica" class="ma-select mt-1" onchange="window.processarMetaArmazem()"><option value="">Todas</option></select>
         </label>
       </div>
-      <p class="text-[10px] text-slate-500">Os filtros gerais do portal continuam aplicados. Esta visão considera exclusivamente o volume do PCP principal para não duplicar material presente na PCP_ACABADORAS. O cenário sem combinado mantém todos os itens, inclusive os da Posigraf; altera apenas os prazos. As datas do combinado são aplicadas às parcelas acumuladas de 30%/40%/50%/100%, sem somá-las entre si.</p>
+      <p class="text-[10px] text-slate-500">Visão exclusiva do destino CD: PCP direto ao CD + PCP_ACABADORAS oficiais, sem duplicidade pela regra do total do portal. Datas planejadas de entrega CD (META_PCP_POS). O cenário sem combinado conserva todos os itens; marcos 30%/40%/50%/100% são parcelas acumuladas.</p>
     </div>
   </div>
   <div id="maAviso" class="hidden text-xs bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900"></div>
   <div id="maKPIs" class="grid grid-cols-2 xl:grid-cols-4 gap-3"></div>
   <div id="maCortes" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
-  <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
-    <div class="ma-card xl:col-span-2 p-5"><div class="flex justify-between items-start gap-3"><div><h3 class="font-black text-slate-800 text-sm">Distribuição do cenário</h3><p class="text-[10px] text-slate-500 mt-1">Até a meta, após a meta e sem previsão</p></div><span class="text-xs font-black text-indigo-700">VOLUME</span></div><div id="maBarras" class="mt-5 space-y-4"></div></div>
-    <div class="ma-card xl:col-span-3 p-5 overflow-hidden"><h3 class="font-black text-slate-800 text-sm">Matriz por série × marca</h3><p class="text-[10px] text-slate-500 mt-1 mb-3">Aderência ponderada pela tiragem; “–” significa ausência de volume.</p><div id="maMatriz" class="overflow-x-auto"></div></div>
+  <div class="ma-card px-4 py-3">
+    <div class="text-xs font-black text-slate-800 mb-1">Distribuição dos volumes por prazo de entrega ao CD</div>
+    <div id="maLegendaPrazos" class="text-[11px] text-slate-600 leading-relaxed mb-2"></div>
+    <div class="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-600">
+      <span><i class="inline-block w-3 h-3 rounded-sm bg-blue-600 mr-1"></i> Dentro do prazo indicado</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm bg-amber-500 mr-1"></i> Depois do prazo indicado</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm bg-slate-400 mr-1"></i> Sem data planejada</span>
+    </div>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="ma-card p-4 min-w-0"><h3 class="font-black text-slate-800 text-sm">Distribuição por gráfica</h3><p class="text-[10px] text-slate-500 mt-1 mb-3">Volume e aderência ao prazo por gráfica / acabadora.</p><div id="maBarrasGrafica" class="ma-dist-list space-y-4"></div></div>
+    <div class="ma-card p-4 min-w-0"><h3 class="font-black text-slate-800 text-sm">Distribuição por marca</h3><p class="text-[10px] text-slate-500 mt-1 mb-3">Volume e aderência ao prazo por marca.</p><div id="maBarrasMarca" class="ma-dist-list space-y-4"></div></div>
+    <div class="ma-card p-4 min-w-0"><h3 class="font-black text-slate-800 text-sm">Distribuição por série</h3><p class="text-[10px] text-slate-500 mt-1 mb-3">Volume e aderência ao prazo por série.</p><div id="maBarrasSerie" class="ma-dist-list space-y-4"></div></div>
+  </div>
+  <div class="ma-card p-5 overflow-hidden">
+    <h3 class="font-black text-slate-800 text-sm">Matriz por série × marca</h3>
+    <p class="text-[10px] text-slate-500 mt-1 mb-3">Percentual e barra de progresso por marca, com total ponderado pela tiragem. “–” significa ausência de volume; nomes longos aparecem completos ao passar o mouse.</p>
+    <div id="maMatriz" class="overflow-x-auto max-w-full"></div>
   </div>
   <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por marca</h3><p class="text-[10px] text-slate-500 mt-1">Volumes brutos e percentuais, sem substituir valores ausentes por zero.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por marca</h3><p class="text-[10px] text-slate-500 mt-1">Volumes brutos e percentuais da entrega ao CD conforme o prazo de cada cenário. ¹ Posigraf: datas combinadas por série/tipo; demais: 15/10.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
-      <thead><tr><th>Grupo</th><th>Volume total</th><th>Até a meta</th><th>Pós meta</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>Previsto / total</th></tr></thead>
+      <thead><tr><th>Grupo</th><th>Volume total</th><th id="maThPrevisto">Até o prazo aplicável</th><th id="maThPos">Após o prazo aplicável</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
     </table></div>
   </div>
@@ -202,26 +232,34 @@
   }
   function dadosBase() {
     var base=window.pgBaseGeralReportExecutiva || window.dadosGlobais || [];
-    if (typeof window.pgLinhasUnicas === 'function') base=window.pgLinhasUnicas(base);
-    return base.filter(function(l){return (l._SOURCE || 'PCP')==='PCP' &&
-      !(window.pgSolicitacaoCancelada && window.pgSolicitacaoCancelada(l));}).map(function(l){
-      var total=volume(l.TIRAGEM), marca=normal(l.MARCA_FINAL||l.UNIDADE||l.MARCA);
+    base=base.filter(function(l){return !(window.pgSolicitacaoCancelada && window.pgSolicitacaoCancelada(l));});
+    if(typeof window.pgLinhasUnicas==='function')base=window.pgLinhasUnicas(base);
+    // Total CD canônico: PCP direto + PCP_ACABADORAS das acabadoras oficiais.
+    // A função troca duplicatas do fluxo pela tiragem a entregar no CD.
+    if(typeof window.pgUnirTotalSemDuplicidade!=='function'){
+      console.warn('[META ARMAZEM] Regra canônica do destino CD indisponível.');
+      return [];
+    }
+    base=window.pgUnirTotalSemDuplicidade(base);
+    return base.map(function(l){
+      var total=volume(l.TIRAGEM),marca=normal(l.MARCA_FINAL||l.UNIDADE||l.MARCA);
       if(!total||!marca)return null;
       var grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA)||'NÃO INFORMADA';
-      var s=serie(l['SÉRIE']||l.SERIE), regras=posiRegra(l);
-      var posi=estado.cenario!=='sem' && !!regras;
-      var alvo=estado.cenario==='sem' && marca==='WAYS' ? META_WAYS_SEM_COMBINADO : META;
-      var parcelas=posi ? posiParcelas(regras) : [{fracao:1,prazo:alvo}];
-      var dtPlan=data(l['Coleta/Internalização de estoque final (re) plan'] || l.META_PCP_POS);
-      var conhecido=!!dtPlan && parcelas.length>0;
-      var previsto=conhecido ? previsaoNaMeta(total,dtPlan,parcelas) : 0;
+      var s=serie(l['SÉRIE']||l.SERIE),regras=posiRegra(l);
+      var posi=estado.cenario!=='sem'&&!!regras;
+      var alvo=estado.cenario==='sem'&&marca==='WAYS'?META_WAYS_SEM_COMBINADO:META;
+      var parcelas=posi?posiParcelas(regras):[{fracao:1,prazo:alvo}];
+      var dtPlan=data(l.META_PCP_POS||(window.pgCampoColeta&&window.pgCampoColeta(l,'META_PCP_POS')));
+      var conhecido=!!dtPlan&&parcelas.length>0;
+      var previsto=conhecido?previsaoNaMeta(total,dtPlan,parcelas):0;
       var realRaw=l['TIRAGEM CONFIRMADA DENTRO DA META'];
-      var realTem=realRaw!==null && realRaw!==undefined && realRaw!=='';
+      var realTem=realRaw!==null&&realRaw!==undefined&&realRaw!=='';
       return {
         marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),
         total:total,previsto:previsto,pos:conhecido?Math.max(0,total-previsto):0,
         semData:conhecido?0:total,real:realTem?Math.min(total,volume(realRaw)):0,realTem:realTem,
-        posi:posi,alvo:posi ? parcelas.map(function(p){return p.prazo;}).sort().slice(-1)[0] : alvo,dtPlan:dtPlan,cd:normal(l.CD_FINAL||l['CD DESTINO'])
+        posi:posi,alvo:posi?parcelas.map(function(p){return p.prazo;}).sort().slice(-1)[0]:alvo,
+        dtPlan:dtPlan,cd:normal(l.CD_FINAL||l['CD DESTINO'])
       };
     }).filter(Boolean);
   }
@@ -239,13 +277,36 @@
     return '<div class="ma-kpi '+(classe||'')+'"><p class="text-[10px] uppercase tracking-wider font-black opacity-75">'+escapeHTML(rotulo)+'</p>'+
       '<div class="text-2xl md:text-3xl font-black tabular-nums mt-2">'+valor+'</div><p class="text-[10px] mt-2 opacity-85">'+sub+'</p></div>';
   }
-  function barras(s, label) {
-    if(!s.total)return '<p class="text-sm text-slate-400">–</p>';
-    var ok=100*s.previsto/s.total, depois=100*s.pos/s.total, falta=100*s.semData/s.total;
-    return '<div class="flex items-center justify-between text-[11px] mb-2"><b>'+escapeHTML(label)+'</b><b>'+pct(s.previsto,s.total)+'</b></div>'+
-      '<div class="flex h-4 rounded-full overflow-hidden bg-slate-200" aria-label="Previsto '+pct(s.previsto,s.total)+'"><span style="background:#2563eb;width:'+ok+'%"></span>'+
+  function barras(s,label,prazo){
+    if(!s.total)return '<p class="text-sm text-slate-400">Sem volume para esta seleção.</p>';
+    var ok=100*s.previsto/s.total,depois=100*s.pos/s.total,falta=100*s.semData/s.total;
+    var ate=prazo&&prazo.ate||'Dentro dos prazos aplicáveis';
+    var apos=prazo&&prazo.apos||'Após os prazos aplicáveis';
+    return '<div><div class="flex items-center justify-between gap-2 text-[11px] mb-2">'+
+      '<b class="ma-dist-name" title="'+escapeHTML(label)+'">'+escapeHTML(label)+'</b>'+
+      '<b class="shrink-0">'+pct(s.previsto,s.total)+'</b></div>'+
+      '<div class="flex h-4 rounded-full overflow-hidden bg-slate-200" aria-label="'+escapeHTML(ate)+': '+pct(s.previsto,s.total)+'">'+
+      '<span style="background:#2563eb;width:'+ok+'%"></span>'+
       '<span style="background:#f59e0b;width:'+depois+'%"></span><span style="background:#94a3b8;width:'+falta+'%"></span></div>'+
-      '<div class="text-[10px] text-slate-500 mt-1">Até: '+fmt(s.previsto,true)+' · Pós: '+fmt(s.pos,true)+' · Sem data: '+fmt(s.semData,true)+'</div>';
+      '<div class="text-[10px] text-slate-500 mt-1 leading-relaxed">'+escapeHTML(ate)+': <b>'+fmt(s.previsto,true)+'</b> · '+
+      escapeHTML(apos)+': <b>'+fmt(s.pos,true)+'</b> · Sem data: <b>'+fmt(s.semData,true)+'</b></div></div>';
+  }
+  function textoPrazos(){
+    return estado.cenario==='sem'
+      ? 'Sem combinado Posigraf: todos os itens até 15/10/2026, exceto WAYS até 30/11/2026.'
+      : 'Com combinado Posigraf: séries/tipos abrangidos seguem os prazos e percentuais acordados (30%/40%/50%/100%); demais itens até 15/10/2026.';
+  }
+  function labelsPrazos(){
+    return estado.cenario==='sem'
+      ? {ate:'Até 15/10 (WAYS: 30/11)',apos:'Após 15/10 (WAYS: 30/11)'}
+      : {ate:'Até o prazo aplicável',apos:'Após o prazo aplicável'};
+  }
+  function distribuicao(items,campo,destino){
+    var el=document.getElementById(destino);if(!el)return;
+    var por=grupos(items,campo,'geral').map(function(g){return {nome:g.nome,resumo:soma(g.itens)};})
+      .sort(function(a,b){return b.resumo.total-a.resumo.total||a.nome.localeCompare(b.nome,'pt-BR',{numeric:true});});
+    el.innerHTML=por.length?por.map(function(g){return barras(g.resumo,g.nome,labelsPrazos());}).join(''):
+      '<p class="text-xs text-slate-400">Sem volume para esta seleção.</p>';
   }
   function cor(p) {
     if(p>=.9)return 'background:#d1fae5;color:#065f46';
@@ -260,7 +321,19 @@
     var curto=longo?chars.slice(0,9).join('')+'…':nome;
     return '<span class="ma-matriz-label"'+(longo?' title="'+escapeHTML(nome)+'"':'')+'>'+escapeHTML(curto)+'</span>';
   }
-  function matriz(items) {
+  function barraMatriz(x){
+    if(!x.total)return '<span class="text-slate-400">–</span>';
+    var p=Math.max(0,Math.min(100,100*x.previsto/x.total));
+    var barColor=p>=70?'#287b38':p>=40?'#f5a623':'#c42b35';
+    return '<div class="ma-matrix-track" title="'+pct(x.previsto,x.total)+' · '+
+      escapeHTML(fmt(x.previsto,true)+' / '+fmt(x.total,true))+'">'+
+      '<span style="width:'+p+'%;background:'+barColor+'"></span></div>';
+  }
+  function colunasMatriz(x){
+    return '<td class="ma-matrix-pct">'+pct(x.previsto,x.total)+'</td>'+
+      '<td class="ma-matrix-progress">'+barraMatriz(x)+'</td>';
+  }
+  function matriz(items){
     var root=document.getElementById('maMatriz');
     var marcas=Array.from(new Set(items.map(function(x){return x.marca;}))).sort();
     var series=Array.from(new Set(items.map(function(x){return x.serie;}))).sort(function(a,b){
@@ -268,33 +341,27 @@
       return (ai<0?100:ai)-(bi<0?100:bi)||a.localeCompare(b,'pt-BR',{numeric:true});
     });
     if(!items.length){root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';return;}
-    var h='<table class="border-separate border-spacing-1 text-[11px] min-w-full"><thead><tr><th class="text-left px-2 text-slate-500">Série</th>'+
-      marcas.map(function(m){return '<th class="px-2 text-center text-slate-600">'+rotuloMatriz(m)+'</th>';}).join('')+
-      '<th class="px-2 text-center text-slate-900">TOTAL</th></tr></thead><tbody>';
+    var h='<table class="ma-matrix-table"><thead><tr><th rowspan="2">Séries</th>'+
+      marcas.map(function(m){return '<th colspan="2">'+rotuloMatriz(m)+'</th>';}).join('')+
+      '<th colspan="2">TOTAL</th></tr><tr>'+
+      marcas.map(function(){return '<th>%</th><th>Progresso</th>';}).join('')+
+      '<th>%</th><th>Progresso</th></tr></thead><tbody>';
     series.forEach(function(serieAtual){
       var row=items.filter(function(x){return x.serie===serieAtual;});
-      h+='<tr><th class="text-left pr-3 whitespace-nowrap font-black text-slate-700">'+rotuloMatriz(serieAtual)+'</th>';
-      marcas.forEach(function(m){
-        var x=soma(row.filter(function(t){return t.marca===m;}));
-        h+='<td><div class="ma-heat" style="'+(x.total?cor(x.previsto/x.total):'background:#f8fafc;color:#94a3b8')+'">'+pct(x.previsto,x.total)+
-          (x.total?'<small>'+fmt(x.previsto,true)+' / '+fmt(x.total,true)+'</small>':'')+'</div></td>';
-      });
-      var x=soma(row);
-      h+='<td><div class="ma-heat" style="'+(x.total?cor(x.previsto/x.total):'background:#f8fafc;color:#94a3b8')+'">'+pct(x.previsto,x.total)+'</div></td></tr>';
+      h+='<tr><th>'+rotuloMatriz(serieAtual)+'</th>';
+      marcas.forEach(function(m){h+=colunasMatriz(soma(row.filter(function(t){return t.marca===m;})));});
+      h+=colunasMatriz(soma(row))+'</tr>';
     });
-    var all=soma(items); h+='<tr class="border-t border-slate-300"><th class="text-left pr-3 font-black">TOTAL</th>';
-    marcas.forEach(function(m){var x=soma(items.filter(function(t){return t.marca===m;}));
-      h+='<td><div class="ma-heat" style="'+(x.total?cor(x.previsto/x.total):'background:#f8fafc;color:#94a3b8')+'">'+pct(x.previsto,x.total)+'</div></td>';
-    });
-    h+='<td><div class="ma-heat bg-slate-900 text-white">'+pct(all.previsto,all.total)+'</div></td></tr></tbody></table>';
-    root.innerHTML=h;
+    var all=soma(items);h+='<tr class="ma-matrix-total"><th>TOTAL</th>';
+    marcas.forEach(function(m){h+=colunasMatriz(soma(items.filter(function(t){return t.marca===m;})));});
+    h+=colunasMatriz(all)+'</tr></tbody></table>';root.innerHTML=h;
   }
   function grupos(items, agrupar, cenario) {
     var por={};
     items.forEach(function(l){
       var nome=agrupar==='serie'?l.serie:agrupar==='grafica'?l.grafica:
         agrupar==='marcaSerie'?l.marca+' · '+l.serie:agrupar==='graficaMarca'?l.grafica+' · '+l.marca:l.marca;
-      var grupo=cenario==='com'?(l.posi?'Combinado Posi':'Demais entregas'):'';
+      var grupo=cenario==='com'?(l.posi?'Posigraf — datas combinadas':'Demais itens — até 15/10'):'';
       var key=grupo+'|'+nome;
       if(!por[key])por[key]={nome:nome,grupo:grupo,itens:[]};
       por[key].itens.push(l);
@@ -316,24 +383,33 @@
     var total=soma(items), posi=soma(items.filter(function(l){return l.posi;})), geral=soma(items.filter(function(l){return !l.posi;}));
     var missing=items.filter(function(l){return !l.alvo || !l.dtPlan;}).length;
     aviso.classList.toggle('hidden',!missing);
-    aviso.textContent=missing?missing+' linha(s) sem data de referência ou previsão. Esse volume aparece em “Sem previsão”, sem ser apresentado como entrega pós-meta.':'';
+    aviso.textContent=missing?missing+' linha(s) sem data planejada de entrega ao CD (META_PCP_POS). Esse volume aparece em “Sem previsão”, sem ser tratado como entrega posterior ao prazo.':'';
     document.getElementById('maKPIs').innerHTML=
       card('Tiragem total',fmt(total.total,!!items.length),items.length+' linhas do PCP','')+
       card('Previsto dentro dos prazos',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
-      card('Após a meta',fmt(total.pos,!!items.length),'Com data conhecida posterior à meta','warn')+
+      card('Fora dos prazos previstos',fmt(total.pos,!!items.length),'Com data planejada posterior ao respectivo prazo','warn')+
       card('Sem previsão',fmt(total.semData,!!items.length),'Sem data de entrega utilizável','neutral');
+    document.getElementById('maPrazoResumo').innerHTML='<b>Prazo usado nesta visão:</b> '+escapeHTML(textoPrazos());
+    document.getElementById('maLegendaPrazos').textContent=textoPrazos();
+    document.getElementById('maThPrevisto').textContent=estado.cenario==='sem'?'Até 15/10 (WAYS: 30/11)':'Até o prazo aplicável¹';
+    document.getElementById('maThPos').textContent=estado.cenario==='sem'?'Após 15/10 (WAYS: 30/11)':'Após o prazo aplicável¹';
     document.getElementById('maCortes').innerHTML=estado.cenario==='com'?
-      '<div class="ma-card p-4 border-l-4 border-l-indigo-600"><div class="text-[10px] uppercase font-black text-indigo-700 mb-2">Combinado Posi · série/tipo</div>'+barras(posi,'Combinado Posigraf')+'</div>'+
-      '<div class="ma-card p-4 border-l-4 border-l-teal-500"><div class="text-[10px] uppercase font-black text-teal-700 mb-2">Demais entregas · até 15/10</div>'+barras(geral,'Meta 15/10')+'</div>':'';
+      '<div class="ma-card p-4 border-l-4 border-l-indigo-600">'+
+      '<div class="text-[11px] uppercase font-black text-indigo-700 mb-1">Posigraf — prazos por série e tipo</div>'+
+      '<p class="text-[11px] text-slate-600 mb-3">Somente séries/tipos com acordo; cada parcela segue seu próprio prazo. Não é uma meta única para 15/10.</p>'+
+      barras(posi,'Itens com combinado Posigraf',{ate:'Até as datas combinadas',apos:'Após as datas combinadas'})+'</div>'+
+      '<div class="ma-card p-4 border-l-4 border-l-teal-500">'+
+      '<div class="text-[11px] uppercase font-black text-teal-700 mb-1">Demais itens — prazo de 15/10/2026</div>'+
+      '<p class="text-[11px] text-slate-600 mb-3">Itens sem combinado específico da Posigraf: meta até 15 de outubro.</p>'+
+      barras(geral,'Itens sem acordo específico',{ate:'Até 15/10',apos:'Após 15/10'})+'</div>':'';
     var rank=grupos(items,document.getElementById('maAgrupar').value,estado.cenario);
-    var legend='<div class="flex flex-wrap gap-3 text-[10px] mt-4"><span><i class="inline-block w-3 h-3 rounded-sm bg-blue-600 mr-1"></i> Até a meta</span><span><i class="inline-block w-3 h-3 rounded-sm bg-amber-500 mr-1"></i> Pós meta</span><span><i class="inline-block w-3 h-3 rounded-sm bg-slate-400 mr-1"></i> Sem previsão</span></div>';
-    document.getElementById('maBarras').innerHTML=rank.length?rank.slice(0,9).map(function(x){
-      var z=soma(x.itens);return barras(z,(x.grupo?x.grupo+' · ':'')+x.nome);
-    }).join('')+legend:'<p class="text-sm text-slate-400">–</p>';
+    distribuicao(items,'grafica','maBarrasGrafica');
+    distribuicao(items,'marca','maBarrasMarca');
+    distribuicao(items,'serie','maBarrasSerie');
     matriz(items);
     var atual='';var rows='';
     rank.forEach(function(g){
-      if(estado.cenario==='com'&&g.grupo!==atual){atual=g.grupo;var x=soma(items.filter(function(l){return l.posi===(atual==='Combinado Posi');}));
+      if(estado.cenario==='com'&&g.grupo!==atual){atual=g.grupo;var x=soma(items.filter(function(l){return l.posi===(atual==='Posigraf — datas combinadas');}));
         rows+='<tr class="bg-indigo-50"><td class="font-black text-indigo-900">'+escapeHTML(atual)+'</td><td class="font-black">'+fmt(x.total,x.total>0)+'</td><td class="font-black">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td class="font-black">'+pct(x.previsto,x.total)+'</td></tr>';
       }
       var x=soma(g.itens);
