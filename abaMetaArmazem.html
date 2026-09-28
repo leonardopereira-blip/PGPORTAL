@@ -72,15 +72,14 @@
       <p class="text-[10px] uppercase tracking-[.22em] font-black text-cyan-200">Produção / Visão executiva</p>
       <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mt-2">
         <div><h2 class="text-2xl md:text-3xl font-black">Meta Armazém · cenários de prazo</h2>
-          <p class="mt-2 text-xs text-slate-200 max-w-3xl leading-relaxed">Somente entregas ao CD. Com combinado: prazos e percentuais acordados com a Posigraf; demais itens até 15/10. Sem combinado: todos até 15/10, exceto WAYS até 30/11.</p></div>
+          <p class="mt-2 text-xs text-slate-200 max-w-3xl leading-relaxed">Somente entregas ao CD. Meta original: 15/10/2026 (WAYS: 30/11/2026). Com combinado Posi, apenas a parcela planejada após 15/10 e coberta pelo acordo recebe prazo excepcional.</p></div>
         <span class="text-[10px] font-bold rounded-full border border-white/30 px-3 py-2 text-cyan-100">V1/27 · Destino CD · PCP + Acabadoras</span>
       </div>
     </div>
     <div class="p-4 md:p-5 space-y-4">
       <div class="flex flex-wrap gap-2" role="group" aria-label="Cenário de entrega">
-        <button type="button" class="ma-pill" data-ma-cenario="geral" aria-pressed="true" onclick="window.pgMACenario('geral')">Geral · sem distinção</button>
-        <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="false" onclick="window.pgMACenario('com')">Combinado Posi · separado</button>
-        <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="false" onclick="window.pgMACenario('sem')">Sem Combinado Posi</button>
+        <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="true" onclick="window.pgMACenario('com')">Com combinado Posi</button>
+        <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="false" onclick="window.pgMACenario('sem')">Sem combinado Posi</button>
       </div>
       <div id="maPrazoResumo" class="rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3 text-xs text-indigo-950 leading-relaxed"></div>
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -99,7 +98,7 @@
           <select id="maGrafica" class="ma-select mt-1" onchange="window.processarMetaArmazem()"><option value="">Todas</option></select>
         </label>
       </div>
-      <p class="text-[10px] text-slate-500">Visão exclusiva do destino CD: PCP direto ao CD + PCP_ACABADORAS oficiais, sem duplicidade pela regra do total do portal. Datas planejadas de entrega CD (META_PCP_POS). O cenário sem combinado conserva todos os itens; marcos 30%/40%/50%/100% são parcelas acumuladas.</p>
+      <p class="text-[10px] text-slate-500">Visão exclusiva do destino CD: PCP direto + PCP_ACABADORAS oficiais, sem duplicidade. Planejamento: META_PCP_POS. Entrega planejada antes de 15/10 mantém meta 15/10; apenas a exceção Posi válida pode prorrogar a meta.</p>
     </div>
   </div>
   <div id="maAviso" class="hidden text-xs bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900"></div>
@@ -197,9 +196,9 @@
     if (f.length !== 8) throw new Error('Regra Combinado Posi inválida: ' + s);
     return { marca: f[0], segmento: f[1], serie: f[2], tipo: f[3], datas: f.slice(4) };
   });
-  var estado = {cenario:'geral'};
+  var estado = {cenario:'com',matrizModo:'marcaSerie',matrizExpandida:false};
   var META = '2026-10-15';
-  var META_WAYS_SEM_COMBINADO = '2026-11-30';
+  var META_WAYS = '2026-11-30';
   var SERIES = ['INF I','INF II','INF III','INF IV','INF V','1º ANO','2º ANO','3º ANO','4º ANO','5º ANO','6º ANO','7º ANO','8º ANO','9º ANO','1ª SÉRIE','2ª SÉRIE','3ª SÉRIE','PU','PV'];
 
   function normal(v) {
@@ -272,41 +271,46 @@
     },0);
   }
   function dadosBase() {
-    var base=window.pgBaseGeralReportExecutiva || window.dadosGlobais || [];
-    base=base.filter(function(l){return !(window.pgSolicitacaoCancelada && window.pgSolicitacaoCancelada(l));});
+    var base=window.pgBaseGeralReportExecutiva||window.dadosGlobais||[];
+    base=base.filter(function(l){return !(window.pgSolicitacaoCancelada&&window.pgSolicitacaoCancelada(l));});
     if(typeof window.pgLinhasUnicas==='function')base=window.pgLinhasUnicas(base);
-    // Total CD canônico: PCP direto + PCP_ACABADORAS das acabadoras oficiais.
-    // A função troca duplicatas do fluxo pela tiragem a entregar no CD.
     if(typeof window.pgUnirTotalSemDuplicidade!=='function'){
-      console.warn('[META ARMAZEM] Regra canônica do destino CD indisponível.');
-      return [];
+      console.warn('[META ARMAZEM] Regra canônica de CD indisponível.');return [];
     }
     base=window.pgUnirTotalSemDuplicidade(base);
     return base.map(function(l){
       var total=volume(l.TIRAGEM),marca=normal(l.MARCA_FINAL||l.UNIDADE||l.MARCA);
       if(!total||!marca)return null;
       var grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA)||'NÃO INFORMADA';
-      var s=serie(l['SÉRIE']||l.SERIE),regras=posiRegra(l);
-      var posi=estado.cenario!=='sem'&&!!regras;
-      var alvo=estado.cenario==='sem'&&marca==='WAYS'?META_WAYS_SEM_COMBINADO:META;
-      var parcelas=posi?posiParcelas(regras):[{fracao:1,prazo:alvo}];
+      var s=serie(l['SÉRIE']||l.SERIE);
       var dtPlan=data(l.META_PCP_POS||(window.pgCampoColeta&&window.pgCampoColeta(l,'META_PCP_POS')));
-      var conhecido=!!dtPlan&&parcelas.length>0;
-      var previsto=conhecido?previsaoNaMeta(total,dtPlan,parcelas):0;
+      var alvo=marca==='WAYS'?META_WAYS:META;
+      // Curva de planejamento: corte fixo 15/10, independente do combinado.
+      var ate15=dtPlan&&dtPlan<=META?total:0,apos15=dtPlan&&dtPlan>META?total:0;
+      // Só datas acordadas APÓS 15/10 podem excepcionalmente prorrogar a meta.
+      var regras=estado.cenario==='com'&&marca!=='WAYS'&&dtPlan>META?posiRegra(l):null;
+      var parcelas=regras?posiParcelas(regras).filter(function(p){return p.prazo>META&&dtPlan<=p.prazo;}):[];
+      var excecao=parcelas.length?Math.min(total,Math.max(0,total*parcelas.reduce(function(a,p){return a+p.fracao;},0))):0;
+      var conhecido=!!dtPlan,previsto=conhecido?(dtPlan<=alvo?total:excecao):0;
       var realRaw=l['TIRAGEM CONFIRMADA DENTRO DA META'];
       var realTem=realRaw!==null&&realRaw!==undefined&&realRaw!=='';
       return {
         marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),
         total:total,previsto:previsto,pos:conhecido?Math.max(0,total-previsto):0,
         semData:conhecido?0:total,real:realTem?Math.min(total,volume(realRaw)):0,realTem:realTem,
-        posi:posi,alvo:posi?parcelas.map(function(p){return p.prazo;}).sort().slice(-1)[0]:alvo,
-        dtPlan:dtPlan,prazos:parcelas.map(function(p){return p.prazo;}).filter(Boolean),cd:normal(l.CD_FINAL||l['CD DESTINO'])
+        ate15:ate15,apos15:apos15,excecao:excecao,
+        posi:!!regras,alvo:alvo,dtPlan:dtPlan,
+        prazos:[alvo].concat(parcelas.map(function(p){return p.prazo;})),
+        cd:normal(l.CD_FINAL||l['CD DESTINO'])
       };
     }).filter(Boolean);
   }
   function soma(items) {
-    return items.reduce(function(a,l){a.total+=l.total;a.previsto+=l.previsto;a.pos+=l.pos;a.semData+=l.semData;a.real+=l.real; if(l.realTem)a.realTem=true;return a;},
-      {total:0,previsto:0,pos:0,semData:0,real:0,realTem:false});
+    return items.reduce(function(a,l){
+      a.total+=l.total;a.previsto+=l.previsto;a.pos+=l.pos;a.semData+=l.semData;
+      a.ate15+=l.ate15||0;a.apos15+=l.apos15||0;a.excecao+=l.excecao||0;
+      a.real+=l.real;if(l.realTem)a.realTem=true;return a;
+    },{total:0,previsto:0,pos:0,semData:0,ate15:0,apos15:0,excecao:0,real:0,realTem:false});
   }
   function seletor(id, vals, selecionado) {
     var el=document.getElementById(id);if(!el)return;
@@ -320,23 +324,32 @@
   }
   function fmtPrazo(iso){return /^\d{4}-\d{2}-\d{2}$/.test(iso)?iso.slice(8)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4):iso;}
   function listaDatas(items){return Array.from(new Set((items||[]).reduce(function(a,l){return a.concat(l.prazos||[]);},[]).filter(Boolean))).sort();}
-  function textoDatas(items){var d=listaDatas(items);return d.length?d.map(fmtPrazo).join(' · '):'Sem data-limite cadastrada';}
+  function textoDatas(items){
+    var ds=listaDatas(items),base=ds.filter(function(d){return d===META||d===META_WAYS;});
+    var extras=ds.filter(function(d){return d!==META&&d!==META_WAYS;});
+    return (base.map(fmtPrazo).join(' · ')||'Sem meta original')+
+      (extras.length?' | Exceção Posi: '+extras.map(fmtPrazo).join(' · '):'');
+  }
   function barras(s,label,items){
     if(!s.total)return '<p class="text-sm text-slate-400">Sem volume para esta seleção.</p>';
-    var ok=100*s.previsto/s.total,depois=100*s.pos/s.total,falta=100*s.semData/s.total;
-    var ds=listaDatas(items),texto=ds.map(fmtPrazo).join(' · '),ref=ds.length===1?fmtPrazo(ds[0]):'as datas-limite acima';
+    var ok=100*s.ate15/s.total,depois=100*s.apos15/s.total;
+    var ways=(items||[]).some(function(l){return l.marca==='WAYS';});
     return '<div><div class="flex items-center justify-between gap-2 text-[11px] mb-2">'+
-      '<b class="ma-dist-name" title="'+escapeHTML(label)+'">'+escapeHTML(label)+'</b><b class="shrink-0">'+pct(s.previsto,s.total)+'</b></div>'+
-      '<div class="flex h-4 rounded-full overflow-hidden" style="background:#e5eef8" aria-label="Datas-limite '+escapeHTML(texto)+'">'+
-      '<span style="background:#418EDE;width:'+ok+'%"></span><span style="background:#FA4616;width:'+depois+'%"></span>'+
-      '<span style="background:#b8c8da;width:'+falta+'%"></span></div>'+
-      '<div class="ma-dist-dates">Data'+(ds.length===1?'-limite':'s-limite')+': <b>'+escapeHTML(texto||'não cadastrada')+'</b></div>'+
-      '<div class="text-[10px] mt-1 leading-relaxed" style="color:#61738d">Até '+escapeHTML(ref)+': <b>'+fmt(s.previsto,true)+'</b> · '+
-      'Após '+escapeHTML(ref)+': <b>'+fmt(s.pos,true)+'</b> · Sem data planejada: <b>'+fmt(s.semData,true)+'</b></div></div>';
+      '<b class="ma-dist-name" title="'+escapeHTML(label)+'">'+escapeHTML(label)+'</b>'+
+      '<b class="shrink-0">'+pct(s.ate15,s.total)+'</b></div>'+
+      '<div class="flex h-4 rounded-full overflow-hidden" style="background:#e5eef8" aria-label="Planejado até 15/10: '+pct(s.ate15,s.total)+'">'+
+      '<span style="background:#418EDE;width:'+ok+'%"></span>'+
+      '<span style="background:#FA4616;width:'+depois+'%"></span></div>'+
+      '<div class="text-[10px] mt-1 leading-relaxed" style="color:#61738d">'+
+      'Até 15/10: <b>'+fmt(s.ate15,true)+'</b> · Pós 15/10: <b>'+fmt(s.apos15,true)+'</b>'+
+      (s.semData?' · Sem data planejada: <b>'+fmt(s.semData,true)+'</b>':'')+'</div>'+
+      (ways?'<div class="ma-dist-dates">WAYS: meta original 30/11/2026.</div>':'')+
+      (estado.cenario==='com'&&s.excecao>0?'<div class="ma-dist-dates">Parcela pós-15/10 coberta pelo combinado Posi: <b>'+fmt(s.excecao,true)+'</b></div>':'')+'</div>';
   }
   function textoPrazos(){
-    return estado.cenario==='sem'?'Sem combinado Posigraf: todos os itens até 15/10/2026, exceto WAYS até 30/11/2026.':
-      'Com combinado Posigraf: séries/tipos abrangidos seguem as datas e percentuais acordados; demais itens até 15/10/2026.';
+    return estado.cenario==='sem'
+      ? 'Meta original: 15/10/2026; WAYS: 30/11/2026. Sem exceções Posi.'
+      : 'Meta original: 15/10/2026; WAYS: 30/11/2026. Somente parcelas pós-15/10 cobertas por acordo Posi recebem prazo excepcional.';
   }
   function distribuicao(items,campo,destino){
     var el=document.getElementById(destino);if(!el)return;
@@ -398,7 +411,7 @@
     items.forEach(function(l){
       var nome=agrupar==='serie'?l.serie:agrupar==='grafica'?l.grafica:
         agrupar==='marcaSerie'?l.marca+' · '+l.serie:agrupar==='graficaMarca'?l.grafica+' · '+l.marca:l.marca;
-      var grupo=cenario==='com'?(l.posi?'Posigraf — datas combinadas':'Demais itens — até 15/10'):'';
+      var grupo=cenario==='com'?(l.posi?'Posigraf — extensão pós-15/10':'Demais itens — meta original'):'';
       var key=grupo+'|'+nome;
       if(!por[key])por[key]={nome:nome,grupo:grupo,itens:[]};
       por[key].itens.push(l);
@@ -423,21 +436,21 @@
     aviso.textContent=missing?missing+' linha(s) sem data planejada de entrega ao CD (META_PCP_POS). Esse volume aparece em “Sem previsão”, sem ser tratado como entrega posterior ao prazo.':'';
     document.getElementById('maKPIs').innerHTML=
       card('Tiragem total CD',fmt(total.total,!!items.length),items.length+' linhas PCP + acabadoras (sem duplicidade)','')+
-      card('Previsto dentro dos prazos',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
-      card('Fora dos prazos previstos',fmt(total.pos,!!items.length),'Com data planejada posterior ao respectivo prazo','warn')+
+      card('Dentro da meta',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
+      card('Fora da meta',fmt(total.pos,!!items.length),'Após 15/10, exceto prazos reconhecidos no cenário (WAYS: 30/11)','warn')+
       card('Sem previsão',fmt(total.semData,!!items.length),'Sem data de entrega utilizável','neutral');
-    document.getElementById('maPrazoResumo').innerHTML='<b>Regra:</b> '+escapeHTML(textoPrazos())+'<br><b>Datas-limite desta seleção:</b> '+escapeHTML(textoDatas(items));
-    document.getElementById('maLegendaPrazos').textContent=textoPrazos()+' Datas-limite desta seleção: '+textoDatas(items)+'.';
-    document.getElementById('maThPrevisto').textContent='Até as datas-limite';
-    document.getElementById('maThPos').textContent='Após as datas-limite';
+    document.getElementById('maPrazoResumo').innerHTML='<b>Regra:</b> '+escapeHTML(textoPrazos());
+    document.getElementById('maLegendaPrazos').textContent='Volumes planejados até 15/10/2026 e após 15/10/2026. A meta original permanece 15/10/2026 (WAYS: 30/11/2026).';
+    document.getElementById('maThPrevisto').textContent='Dentro da meta';
+    document.getElementById('maThPos').textContent='Fora da meta';
     document.getElementById('maCortes').innerHTML=estado.cenario==='com'?
       '<div class="ma-card p-4 border-l-4 border-l-indigo-600">'+
-      '<div class="text-[11px] uppercase font-black text-indigo-700 mb-1">Posigraf — prazos por série e tipo</div>'+
-      '<p class="text-[11px] text-slate-600 mb-3">Somente séries/tipos com acordo; cada parcela segue seu próprio prazo. Não é uma meta única para 15/10.</p>'+
+      '<div class="text-[11px] uppercase font-black text-indigo-700 mb-1">Posigraf — exceção para parcelas pós-15/10</div>'+
+      '<p class="text-[11px] text-slate-600 mb-3">Somente parcela posterior à meta original de 15/10 que cumpra o prazo acordado. O restante mantém 15/10.</p>'+
       barras(posi,'Itens com combinado Posigraf',items.filter(function(l){return l.posi;}))+'</div>'+
       '<div class="ma-card p-4 border-l-4 border-l-teal-500">'+
-      '<div class="text-[11px] uppercase font-black text-teal-700 mb-1">Demais itens — prazo de 15/10/2026</div>'+
-      '<p class="text-[11px] text-slate-600 mb-3">Itens sem combinado específico da Posigraf: meta até 15 de outubro.</p>'+
+      '<div class="text-[11px] uppercase font-black text-teal-700 mb-1">Demais itens — meta original de 15/10/2026</div>'+
+      '<p class="text-[11px] text-slate-600 mb-3">Itens sem exceção Posi: meta 15/10/2026, inclusive os planejados antes; WAYS: 30/11/2026.</p>'+
       barras(geral,'Itens sem acordo específico',items.filter(function(l){return !l.posi;}))+'</div>':'';
     var rank=grupos(items,document.getElementById('maAgrupar').value,estado.cenario);
     distribuicao(items,'grafica','maBarrasGrafica');
@@ -446,8 +459,8 @@
     matriz(items);
     var atual='';var rows='';
     rank.forEach(function(g){
-      if(estado.cenario==='com'&&g.grupo!==atual){atual=g.grupo;var x=soma(items.filter(function(l){return l.posi===(atual==='Posigraf — datas combinadas');}));
-        rows+='<tr class="bg-indigo-50"><td class="font-black text-indigo-900">'+escapeHTML(atual)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(items.filter(function(l){return l.posi===(atual==='Posigraf — datas combinadas');})))+'</td><td class="font-black">'+fmt(x.total,x.total>0)+'</td><td class="font-black">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td class="font-black">'+pct(x.previsto,x.total)+'</td></tr>';
+      if(estado.cenario==='com'&&g.grupo!==atual){atual=g.grupo;var x=soma(items.filter(function(l){return l.posi===(atual==='Posigraf — extensão pós-15/10');}));
+        rows+='<tr class="bg-indigo-50"><td class="font-black text-indigo-900">'+escapeHTML(atual)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(items.filter(function(l){return l.posi===(atual==='Posigraf — extensão pós-15/10');})))+'</td><td class="font-black">'+fmt(x.total,x.total>0)+'</td><td class="font-black">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td class="font-black">'+pct(x.previsto,x.total)+'</td></tr>';
       }
       var x=soma(g.itens);
       rows+='<tr><td class="font-bold text-slate-700">'+escapeHTML(g.nome)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(g.itens))+'</td><td>'+fmt(x.total,x.total>0)+'</td><td class="font-bold text-blue-700">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td><div class="flex items-center justify-end gap-2"><span class="whitespace-nowrap font-black">'+pct(x.previsto,x.total)+'</span><div class="ma-bar w-16"><b style="width:'+(x.total?100*x.previsto/x.total:0)+'%"></b></div></div></td></tr>';
