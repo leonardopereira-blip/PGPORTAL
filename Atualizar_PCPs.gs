@@ -5,9 +5,9 @@
  * ACABADORAS_PGBM  -> PCP_ACABADORAS
  *
  * REGRA DE SEGURANCA:
- * 1. Le e valida INTEGRALMENTE as duas origens, sem alterar os destinos.
- * 2. Se QUALQUER origem falhar, interrompe a execucao sem limpar NENHUM destino.
- * 3. Somente depois de ambas aprovadas, apaga TODO o conteudo dos destinos
+ * 1. Valida as chaves preenchidas (coluna A) e o volume de ambas as origens.
+ * 2. Nao bloqueia por erros temporarios em outras colunas (ex.: DN69).
+ * 3. Se ambas aprovadas, apaga TODO o conteudo dos destinos
  *    e escreve as novas bases como valores (sem copiar formulas IMPORTRANGE).
  * 4. Preserva nomes, IDs das abas e formatacao. Nao recria as abas.
  *
@@ -23,22 +23,17 @@ const CONFIG_ATUALIZAR_PCPS = {
     {
       origem: 'PCP_PGBM',
       destino: 'PCP',
-      minColunas: 136,
       minLinhasDados: 6000
     },
     {
       origem: 'ACABADORAS_PGBM',
       destino: 'PCP_ACABADORAS',
-      minColunas: 155,
       minLinhasDados: 700
     }
   ],
   // Apos uma execucao bem-sucedida, rejeita quedas superiores a 15% no
   // numero de linhas com dados da origem. Evita copiar carga parcial.
   percentualMinimoDaUltimaAtualizacao: 0.85,
-  // As primeiras 26 colunas sao o bloco principal importado nas origens.
-  colunasBase: 26,
-  percentualMinimoLinhasComBase: 0.90,
   tamanhoLote: 500,
   esperaBloqueioMs: 30000
 };
@@ -58,7 +53,7 @@ function atualizarPCPs() {
 
     SpreadsheetApp.flush();
 
-    // FASE 1: validar e guardar os dados de AMBAS as origens.
+    // FASE 1: conferir as chaves em A e guardar os dados de AMBAS as origens.
     // NENHUM destino e apagado ou alterado nesta fase.
     const pacotes = CONFIG_ATUALIZAR_PCPS.abas.map(cfg =>
       prepararEValidarOrigem_(ss, propriedades, cfg)
@@ -89,7 +84,7 @@ function atualizarPCPs() {
       propriedades.setProperty(chaveVolume_(p.origem), String(p.linhasComDados));
     });
 
-    Logger.log('SUCESSO: PCP e PCP_ACABADORAS atualizadas com valores validos.');
+    Logger.log('SUCESSO: PCP e PCP_ACABADORAS atualizadas apos validacao das linhas de origem.');
   } catch (erro) {
     if (iniciouEscrita) {
       Logger.log('ERRO DURANTE A GRAVACAO: a operacao no Sheets nao e atomica. ' +
@@ -103,7 +98,7 @@ function atualizarPCPs() {
   }
 }
 
-/** Le toda a origem, checa IMPORTRANGE, erros visiveis, volume e bloco principal. */
+/** Valida somente as linhas de origem pela coluna A (Chave) e seu volume. */
 function prepararEValidarOrigem_(ss, propriedades, cfg) {
   const origem = ss.getSheetByName(cfg.origem);
   const destino = ss.getSheetByName(cfg.destino);
@@ -115,65 +110,29 @@ function prepararEValidarOrigem_(ss, propriedades, cfg) {
 
   const linhas = origem.getLastRow();
   const colunas = origem.getLastColumn();
-  if (linhas <= 1 || colunas < cfg.minColunas) {
-    throw new Error(cfg.origem + ': vazia, incompleta ou sem as colunas esperadas. ' +
-      'Encontrado: ' + linhas + ' linhas x ' + colunas + ' colunas.');
+  if (linhas <= 1 || colunas < 1) {
+    throw new Error(cfg.origem + ': origem vazia ou ainda sem linhas de dados.');
   }
 
-  // O arquivo de referencia possui a formula IMPORTRANGE no inicio de cada aba.
-  // Impede aceitar uma origem cuja formula-base tenha sido apagada/substituida.
-  const formulas = origem.getRange(1, 1, Math.min(10, linhas),
-    Math.min(CONFIG_ATUALIZAR_PCPS.colunasBase, colunas)).getFormulas();
-  const temImportacao = formulas.some(linha =>
-    linha.some(formula => /\bIMPORTRANGE\s*\(/i.test(formula))
-  );
-  if (!temImportacao) {
-    throw new Error(cfg.origem + ': formula IMPORTRANGE nao encontrada no bloco inicial.');
-  }
-
+  // Os dados sao lidos integralmente para a copia, mas a validacao considera
+  // APENAS a chave da coluna A. Erros ou "Carregando..." em outras colunas
+  // nao causam o bloqueio da atualizacao.
   const valores = [];
   let linhasComDados = 0;
-  let linhasComBase = 0;
-  let cabecalhosPreenchidos = 0;
-  const colunasBase = Math.min(CONFIG_ATUALIZAR_PCPS.colunasBase, colunas);
-
-  // Le por lotes para nao pedir mais de um milhao de celulas numa so chamada.
-  // Guarda tudo antes de tocar nos destinos.
   for (let inicio = 1; inicio <= linhas; inicio += CONFIG_ATUALIZAR_PCPS.tamanhoLote) {
     const quantidade = Math.min(CONFIG_ATUALIZAR_PCPS.tamanhoLote, linhas - inicio + 1);
     const lote = origem.getRange(inicio, 1, quantidade, colunas).getValues();
     for (let i = 0; i < lote.length; i++) {
       const linha = lote[i];
-      const numeroLinha = inicio + i;
-      let temDados = false;
-      let temBase = false;
-
-      for (let c = 0; c < linha.length; c++) {
-        const valor = linha[c];
-        if (typeof valor === 'string' && textoDeErro_(valor)) {
-          throw new Error(cfg.origem + ': IMPORTRANGE/formula com falha em ' +
-            origem.getRange(numeroLinha, c + 1).getA1Notation() + ': ' + valor);
-        }
-        if (valor !== '' && valor !== null) {
-          temDados = true;
-          if (c < colunasBase) temBase = true;
-          if (numeroLinha === 1) cabecalhosPreenchidos++;
-        }
-      }
-
-      if (numeroLinha > 1 && temDados) {
+      if (inicio + i > 1 && chavePreenchidaPCPs_(linha[0])) {
         linhasComDados++;
-        if (temBase) linhasComBase++;
       }
       valores.push(linha);
     }
   }
 
-  // Cabecalhos e dados reais — nao basta haver formulas que retornam vazio.
-  const minimoCabecalhos = Math.ceil(cfg.minColunas * 0.40);
-  if (cabecalhosPreenchidos < minimoCabecalhos) {
-    throw new Error(cfg.origem + ': cabecalhos incompletos (' + cabecalhosPreenchidos +
-      '/' + cfg.minColunas + '). Importacao possivelmente carregando.');
+  if (!valores.length || !chavePreenchidaPCPs_(valores[0][0])) {
+    throw new Error(cfg.origem + ': cabecalho da coluna A nao carregado.');
   }
 
   const ultimaExecucao = Number(propriedades.getProperty(chaveVolume_(cfg.origem))) || 0;
@@ -182,18 +141,12 @@ function prepararEValidarOrigem_(ss, propriedades, cfg) {
     Math.ceil(ultimaExecucao * CONFIG_ATUALIZAR_PCPS.percentualMinimoDaUltimaAtualizacao)
   );
   if (linhasComDados < minimoExigido) {
-    throw new Error(cfg.origem + ': volume insuficiente (' + linhasComDados +
-      ' linhas com dados; minimo seguro: ' + minimoExigido +
-      '). Fonte vazia, parcial ou reducao fora da tolerancia.');
+    throw new Error(cfg.origem + ': apenas ' + linhasComDados +
+      ' linhas com chave na coluna A; minimo seguro: ' + minimoExigido +
+      '. Nada foi apagado nos destinos.');
   }
 
-  if (linhasComBase / linhasComDados < CONFIG_ATUALIZAR_PCPS.percentualMinimoLinhasComBase) {
-    throw new Error(cfg.origem + ': bloco principal de importacao incompleto (' +
-      linhasComBase + '/' + linhasComDados + ' linhas preenchidas nas primeiras ' +
-      colunasBase + ' colunas).');
-  }
-
-  Logger.log('%s validada: %s linhas com dados; %s colunas; minimo exigido: %s.',
+  Logger.log('%s validada: %s linhas com chave na coluna A; %s colunas; minimo exigido: %s.',
     cfg.origem, linhasComDados, colunas, minimoExigido);
 
   return {
@@ -206,12 +159,13 @@ function prepararEValidarOrigem_(ss, propriedades, cfg) {
   };
 }
 
-/** Identifica erros de celula e mensagens de carregamento nos resultados das formulas. */
-function textoDeErro_(valor) {
-  const texto = String(valor).trim();
-  return /^#(?:REF!|N\/A|VALUE!|ERROR!|NAME\?|DIV\/0!|NUM!|NULL!|SPILL!|CALC!)/i.test(texto)
-    || /^(?:carregando(?:\.{2,}| dados| importacao| importação)?|loading(?:\.{2,}| data)?|erro ao carregar)/i.test(texto)
-    || /^(?:erro de analise de formula|erro de análise de fórmula)/i.test(texto);
+/** A coluna A deve conter chaves reais, nao um erro ou indicador de carga. */
+function chavePreenchidaPCPs_(valor) {
+  if (valor === '' || valor === null || valor === undefined) return false;
+  const chave = String(valor).trim();
+  if (!chave) return false;
+  return !/^#(?:REF!|N\/A|VALUE!|ERROR!|NAME\?|DIV\/0!|NUM!|NULL!|SPILL!|CALC!)/i.test(chave)
+    && !/^(?:carregando|loading|erro ao carregar)(?:[. ]|$)/i.test(chave);
 }
 
 /** Expande a grade, se necessario. Nao remove linhas/colunas e nao recria a aba. */
