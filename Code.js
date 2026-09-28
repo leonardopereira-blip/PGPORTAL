@@ -144,6 +144,15 @@ function _processarDadosDashboardBruto() {
         if(dataPCP[i].length > 129) obj["DATA_DZ"] = safeIsoDate(dataPCP[i][129]);   // Coluna DZ (Data Coleta TP)
         if(dataPCP[i].length > 130) obj["DATA_EA"] = safeIsoDate(dataPCP[i][130]);   // Coluna EA (Data Entrega TP)
         
+        // PCP: CD_MAPA e a unica origem do CD para filtros, calculos e cruzamentos.
+        // Conserva o CD original somente para auditoria, sem usá-lo como fallback.
+        obj["CD_DESTINO_PCP_ORIGINAL"] = obj["CD DESTINO"] || "";
+        var cdMapaPCP = String(obj["CD_MAPA"] == null ? "" : obj["CD_MAPA"]).trim().toUpperCase();
+        obj["CD DESTINO"] = cdMapaPCP;
+        obj["CD_FINAL"] = cdMapaPCP;
+        obj["CD"] = cdMapaPCP;
+        obj["CK"] = cdMapaPCP; // Alias legado usado no cruzamento com o mapa.
+
         obj["TIRAGEM"] = obj["TIRAGEM"] || obj["QUANTIDADE"] || 0;
         
         if (!obj["Chave"] || obj["Chave"] === "") {
