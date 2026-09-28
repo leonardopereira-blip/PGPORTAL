@@ -776,6 +776,7 @@ window.pgAtualizarAbaProducao = function(id) {
         abaGeral: () => processarGeral(), abaFunil: () => processarFunil(),
         abaMatriz: () => { atualizarOpcoesFiltroMatriz(); processarMatriz(); },
         abaEficiencia: () => processarEficiencia(), abaMetaCD: () => processarMetaCD(),
+        abaMetaArmazem: () => window.processarMetaArmazem(),
         abaOtif: () => processarOTIF(), abaPlan: () => renderTabelaPlan(),
         abaFalhasPlan: () => processarFalhasPlan(), abaQualidade: () => processarQualidade(),
         abaColetas: () => renderizarDashColetas(), abaEvolucao: () => processarEvolucao(),
