@@ -66,6 +66,16 @@
     #abaMetaArmazem .ma-table-dates{min-width:155px;max-width:270px;text-align:left;line-height:1.55;white-space:normal}
     #abaMetaArmazem .ma-dist-dates{font-size:10px;line-height:1.6;color:#284081;overflow-wrap:anywhere;margin-top:6px}
     #abaMetaArmazem .ma-legend-blue{background:#418EDE}#abaMetaArmazem .ma-legend-orange{background:#FA4616}#abaMetaArmazem .ma-legend-muted{background:#b8c8da}
+    #abaMetaArmazem .ma-matrix-table{font-size:10px}
+    #abaMetaArmazem .ma-matrix-table th,#abaMetaArmazem .ma-matrix-table td{padding:5px 4px}
+    #abaMetaArmazem .ma-matrix-table thead th:first-child,#abaMetaArmazem .ma-matrix-table tbody th{min-width:205px;width:205px;max-width:205px}
+    #abaMetaArmazem .ma-matrix-table td.ma-matrix-pct{min-width:48px;width:48px;padding:4px;text-align:right}
+    #abaMetaArmazem .ma-matrix-table td.ma-matrix-progress{min-width:100px;width:100px;padding:4px}
+    #abaMetaArmazem .ma-matrix-track{width:92px;height:18px}
+    #abaMetaArmazem .ma-pill[aria-pressed=true]{color:#fff}
+    #abaMetaArmazem #maScreenshot{background:#FA4616}
+    #abaMetaArmazem #maScreenshot:hover{background:#e13c11}
+    #abaMetaArmazem #maOutrosToggle{border-color:#418EDE;color:#284081}
   </style>
   <div class="ma-card overflow-hidden">
     <div class="p-5 md:p-6 bg-gradient-to-r from-slate-950 via-indigo-950 to-blue-900 text-white">
@@ -105,12 +115,11 @@
   <div id="maKPIs" class="grid grid-cols-2 xl:grid-cols-4 gap-3"></div>
   <div id="maCortes" class="grid grid-cols-1 lg:grid-cols-2 gap-3"></div>
   <div class="ma-card px-4 py-3">
-    <div class="text-xs font-black text-slate-800 mb-1">Distribuição dos volumes por prazo de entrega ao CD</div>
+    <div class="text-xs font-black text-slate-800 mb-1">Distribuição do planejado de entrega ao CD · corte 15/10/2026</div>
     <div id="maLegendaPrazos" class="text-[11px] text-slate-600 leading-relaxed mb-2"></div>
     <div class="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-600">
-      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-blue mr-1"></i> Dentro das datas-limite</span>
-      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-orange mr-1"></i> Depois das datas-limite</span>
-      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-muted mr-1"></i> Sem data planejada</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-blue mr-1"></i> Até 15/10</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-orange mr-1"></i> Pós 15/10</span>
     </div>
   </div>
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -119,14 +128,25 @@
     <div class="ma-card p-4 min-w-0"><h3 class="font-black text-slate-800 text-sm">Distribuição por série</h3><p class="text-[10px] text-slate-500 mt-1 mb-3">Volume e aderência ao prazo por série.</p><div id="maBarrasSerie" class="ma-dist-list space-y-4"></div></div>
   </div>
   <div class="ma-card p-5 overflow-hidden">
-    <h3 class="font-black text-slate-800 text-sm">Matriz por série × marca</h3>
-    <p class="text-[10px] text-slate-500 mt-1 mb-3">Percentual e barra por marca, com total ponderado pela tiragem. Série: até 25 caracteres; valores com várias indicações separadas por | ou ; aparecem como VARIOS.</p>
+    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
+      <div><h3 id="maMatrizTitulo" class="font-black text-slate-800 text-sm">Matriz · Marca × Séries</h3>
+        <p class="text-[10px] text-slate-500 mt-1">Percentual e barra por marca; TOTAL ponderado pela tiragem. Série até 25 caracteres; múltiplas indicações separadas por | ou ; = VARIOS.</p></div>
+      <button type="button" id="maScreenshot" onclick="window.pgMACapturarMatriz()" class="shrink-0 rounded-xl px-4 py-3 text-xs font-black text-white shadow-sm" title="Captura a tabela inteira em PNG, inclusive o conteúdo fora da rolagem">📸 Capturar tabela completa (PNG)</button>
+    </div>
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <div class="flex flex-wrap gap-2" role="group" aria-label="Modo da matriz">
+        <button type="button" class="ma-pill" data-ma-modo="marca" aria-pressed="false" onclick="window.pgMAMatrizModo('marca')">Apenas marcas</button>
+        <button type="button" class="ma-pill" data-ma-modo="marcaSerie" aria-pressed="true" onclick="window.pgMAMatrizModo('marcaSerie')">Marca × Séries</button>
+        <button type="button" class="ma-pill" data-ma-modo="graficaMarca" aria-pressed="false" onclick="window.pgMAMatrizModo('graficaMarca')">Gráfica × Marca</button>
+      </div>
+      <button type="button" id="maOutrosToggle" class="ma-pill hidden" onclick="window.pgMAAlternarOutros()" title="Exibe individualmente as marcas menores, sem duplicar no total">Expandir Outros</button>
+    </div>
     <div id="maMatriz" class="overflow-x-auto max-w-full"></div>
   </div>
   <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por marca</h3><p class="text-[10px] text-slate-500 mt-1">Entrega CD: datas-limite explícitas para cada grupo. Posigraf: marcos por série/tipo; demais itens até 15/10/2026; WAYS até 30/11/2026 no cenário sem combinado.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por marca</h3><p class="text-[10px] text-slate-500 mt-1">Entrega CD: meta original 15/10/2026 (WAYS: 30/11/2026). Com combinado Posi, apenas a parcela pós-15/10 coberta por acordo tem prazo excepcional.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
-      <thead><tr><th>Grupo</th><th>Datas-limite de entrega CD</th><th>Volume total</th><th id="maThPrevisto">Até as datas-limite</th><th id="maThPos">Após as datas-limite</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>No prazo / total</th></tr></thead>
+      <thead><tr><th>Grupo</th><th>Meta original / exceção</th><th>Volume total</th><th id="maThPrevisto">Dentro da meta</th><th id="maThPos">Fora da meta</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
     </table></div>
   </div>
@@ -371,41 +391,136 @@
     return '<span class="ma-matriz-label'+(max===25?' ma-matriz-serie':'')+'"'+
       (longo||nome==='VARIOS'?' title="'+escapeHTML(dica)+'"':'')+'>'+escapeHTML(curto)+'</span>';
   }
-  function barraMatriz(x){
+  function barraMatriz(x) {
     if(!x.total)return '<span class="text-slate-400">–</span>';
     var p=Math.max(0,Math.min(100,100*x.previsto/x.total));
-    var barColor=p>=70?'#418EDE':p>=40?'#FCB04E':'#FA4616';
+    var corBarra=p>=70?'#418EDE':p>=40?'#FCB04E':'#FA4616';
     return '<div class="ma-matrix-track" title="'+pct(x.previsto,x.total)+' · '+
       escapeHTML(fmt(x.previsto,true)+' / '+fmt(x.total,true))+'">'+
-      '<span style="width:'+p+'%;background:'+barColor+'"></span></div>';
+      '<span style="width:'+p+'%;background:'+corBarra+'"></span></div>';
   }
-  function colunasMatriz(x){
+  function colunasMatriz(x) {
     return '<td class="ma-matrix-pct">'+pct(x.previsto,x.total)+'</td>'+
       '<td class="ma-matrix-progress">'+barraMatriz(x)+'</td>';
   }
-  function matriz(items){
-    var root=document.getElementById('maMatriz');
-    var marcas=Array.from(new Set(items.map(function(x){return x.marca;}))).sort();
-    var series=Array.from(new Set(items.map(function(x){return x.serie;}))).sort(function(a,b){
-      var ai=SERIES.indexOf(a),bi=SERIES.indexOf(b);
-      return (ai<0?100:ai)-(bi<0?100:bi)||a.localeCompare(b,'pt-BR',{numeric:true});
-    });
-    if(!items.length){root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';return;}
-    var h='<table class="ma-matrix-table"><thead><tr><th rowspan="2">Séries</th>'+
-      marcas.map(function(m){return '<th colspan="2">'+rotuloMatriz(m)+'</th>';}).join('')+
-      '<th colspan="2">TOTAL</th></tr><tr>'+
-      marcas.map(function(){return '<th>%</th><th>Progresso</th>';}).join('')+
-      '<th>%</th><th>Progresso</th></tr></thead><tbody>';
-    series.forEach(function(serieAtual){
-      var row=items.filter(function(x){return x.serie===serieAtual;});
-      h+='<tr><th>'+rotuloMatriz(serieAtual,25)+'</th>';
-      marcas.forEach(function(m){h+=colunasMatriz(soma(row.filter(function(t){return t.marca===m;})));});
-      h+=colunasMatriz(soma(row))+'</tr>';
-    });
-    var all=soma(items);h+='<tr class="ma-matrix-total"><th>TOTAL</th>';
-    marcas.forEach(function(m){h+=colunasMatriz(soma(items.filter(function(t){return t.marca===m;})));});
-    h+=colunasMatriz(all)+'</tr></tbody></table>';root.innerHTML=h;
+  function ordenarMatriz(a,b) {
+    var ai=SERIES.indexOf(a),bi=SERIES.indexOf(b);
+    return (ai<0?100:ai)-(bi<0?100:bi)||a.localeCompare(b,'pt-BR',{numeric:true});
   }
+  function modeloMatriz(items) {
+    var marcas=Array.from(new Set(items.map(function(x){return x.marca;}))).sort(function(a,b){
+      var av=soma(items.filter(function(x){return x.marca===a;})).total;
+      var bv=soma(items.filter(function(x){return x.marca===b;})).total;
+      return bv-av||a.localeCompare(b,'pt-BR',{numeric:true});
+    });
+    var principais=marcas.slice(0,6),menores=marcas.slice(6);
+    var marcasVisiveis=estado.matrizExpandida?marcas.map(function(m){return {nome:m,marcas:[m]};}):
+      principais.map(function(m){return {nome:m,marcas:[m]};}).concat(menores.length?[{nome:'OUTROS',marcas:menores}]:[]);
+    var modo=estado.matrizModo,linhas=[];
+    if(modo==='marca') {
+      linhas=marcasVisiveis.map(function(g){
+        return {nome:g.nome,itens:items.filter(function(x){return g.marcas.indexOf(x.marca)>=0;})};
+      });
+    } else {
+      var campo=modo==='graficaMarca'?'grafica':'serie';
+      var valores=Array.from(new Set(items.map(function(x){return x[campo];})));
+      valores.sort(campo==='serie'?ordenarMatriz:function(a,b){return a.localeCompare(b,'pt-BR',{numeric:true});});
+      linhas=valores.map(function(v){return {nome:v,itens:items.filter(function(x){return x[campo]===v;})};});
+    }
+    var colunas=modo==='marca'?[{nome:'TOTAL',marcas:marcas}]:marcasVisiveis.concat([{nome:'TOTAL',marcas:marcas}]);
+    var dados=linhas.map(function(l){
+      return {nome:l.nome,total:soma(l.itens),celulas:colunas.map(function(g){
+        return soma(l.itens.filter(function(x){return g.marcas.indexOf(x.marca)>=0;}));
+      })};
+    });
+    return {modo:modo,nomeModo:modo==='marca'?'Apenas marcas':modo==='graficaMarca'?'Gráfica × Marca':'Marca × Séries',
+      rotuloLinha:modo==='marca'?'Marcas':modo==='graficaMarca'?'Gráficas':'Séries',
+      colunas:colunas,linhas:dados,
+      total:colunas.map(function(g){return soma(items.filter(function(x){return g.marcas.indexOf(x.marca)>=0;}));}),
+      escondidas:menores.length,geral:soma(items)};
+  }
+  function matriz(items) {
+    window.pgMAUltimosItens=items.slice();
+    var root=document.getElementById('maMatriz'),m=modeloMatriz(items);
+    window.pgMAMatrizSnapshot=m;
+    var toggle=document.getElementById('maOutrosToggle');
+    if(toggle){
+      toggle.classList.toggle('hidden',!m.escondidas);
+      toggle.textContent=estado.matrizExpandida?'Recolher Outros':'Expandir Outros ('+m.escondidas+' marcas)';
+      toggle.setAttribute('aria-pressed',String(estado.matrizExpandida));
+    }
+    document.querySelectorAll('[data-ma-modo]').forEach(function(btn){
+      btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-modo')===estado.matrizModo));
+    });
+    document.getElementById('maMatrizTitulo').textContent='Matriz · '+m.nomeModo;
+    if(!items.length){root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';return;}
+    var cabeca='<th rowspan="2">'+m.rotuloLinha+'</th>'+
+      m.colunas.map(function(c){return '<th colspan="2"'+(c.nome==='OUTROS'?' title="Marcas de menor tiragem, agrupadas sem duplicidade"':'')+'>'+
+        rotuloMatriz(c.nome)+'</th>';}).join('');
+    var sub=m.colunas.map(function(){return '<th>%</th><th>Progresso</th>';}).join('');
+    var h='<table class="ma-matrix-table"><thead><tr>'+cabeca+'</tr><tr>'+sub+'</tr></thead><tbody>';
+    m.linhas.forEach(function(l){
+      h+='<tr><th>'+rotuloMatriz(l.nome,25)+'</th>'+
+        l.celulas.map(colunasMatriz).join('')+'</tr>';
+    });
+    h+='<tr class="ma-matrix-total"><th>TOTAL</th>'+m.total.map(colunasMatriz).join('')+'</tr></tbody></table>';
+    root.innerHTML=h;
+  }
+  window.pgMAMatrizModo=function(modo) {
+    if(['marca','marcaSerie','graficaMarca'].indexOf(modo)<0)return;
+    estado.matrizModo=modo;estado.matrizExpandida=false;
+    matriz(window.pgMAUltimosItens||[]);
+  };
+  window.pgMAAlternarOutros=function() {
+    estado.matrizExpandida=!estado.matrizExpandida;
+    matriz(window.pgMAUltimosItens||[]);
+  };
+  // PNG construído do modelo completo: inclui também as linhas e colunas fora do scroll,
+  // sem depender de bibliotecas externas e sem modificar dados da matriz.
+  window.pgMACapturarMatriz=function() {
+    var m=window.pgMAMatrizSnapshot;
+    if(!m||!m.linhas.length){window.alert('A matriz ainda não tem dados para capturar.');return;}
+    try {
+      var col=152,first=208,head=40,rowH=36,top=82,foot=42;
+      var w=first+col*m.colunas.length,h=top+head+rowH*(m.linhas.length+1)+foot;
+      var dpr=Math.min(2,window.devicePixelRatio||1),canvas=document.createElement('canvas');
+      canvas.width=Math.ceil(w*dpr);canvas.height=Math.ceil(h*dpr);
+      var ctx=canvas.getContext('2d');
+      if(!ctx)throw new Error('Canvas indisponível');
+      ctx.scale(dpr,dpr);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+      ctx.fillStyle='#0C2340';ctx.fillRect(0,0,w,top);
+      ctx.fillStyle='#fff';ctx.font='bold 17px Poppins, sans-serif';
+      ctx.fillText('META ARMAZÉM · '+m.nomeModo,16,29);
+      ctx.font='11px Poppins, sans-serif';
+      ctx.fillText('Destino CD  |  '+(estado.cenario==='com'?'Com combinado Posi':'Sem combinado Posi')+
+        '  |  15/10/2026 (WAYS 30/11/2026)',16,51);
+      ctx.fillStyle='#284081';ctx.fillRect(0,top,w,head);
+      ctx.fillStyle='#fff';ctx.font='bold 11px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,10,top+25);
+      function corta(v,max){var chars=Array.from(String(v));return chars.length>max?chars.slice(0,max-1).join('')+'…':chars.join('');}
+      m.colunas.forEach(function(c,j){ctx.fillStyle='#fff';ctx.fillText(corta(c.nome,10),first+j*col+7,top+25);});
+      var rows=m.linhas.concat([{nome:'TOTAL',celulas:m.total}]);
+      rows.forEach(function(r,i){
+        var y=top+head+i*rowH,ultimo=i===rows.length-1;
+        ctx.fillStyle=ultimo?'#dceafa':i%2?'#f3f8fd':'#fff';ctx.fillRect(0,y,w,rowH);
+        ctx.strokeStyle='#dce5f0';ctx.beginPath();ctx.moveTo(0,y+rowH-.5);ctx.lineTo(w,y+rowH-.5);ctx.stroke();
+        ctx.fillStyle='#0C2340';ctx.font=(ultimo?'bold ':'')+'11px Poppins, sans-serif';
+        ctx.fillText(corta(r.nome,25),10,y+22);
+        r.celulas.forEach(function(c,j){
+          var x=first+j*col,p=c.total?Math.max(0,Math.min(100,100*c.previsto/c.total)):0;
+          ctx.fillStyle='#0C2340';ctx.font='10px Poppins, sans-serif';ctx.fillText(pct(c.previsto,c.total),x+4,y+22);
+          ctx.fillStyle='#e5eef8';ctx.fillRect(x+56,y+10,88,17);
+          ctx.fillStyle=p>=70?'#418EDE':p>=40?'#FCB04E':'#FA4616';
+          ctx.fillRect(x+56,y+10,88*p/100,17);
+        });
+      });
+      ctx.fillStyle='#61738d';ctx.font='10px Poppins, sans-serif';
+      ctx.fillText('Fonte: PCP direto ao CD + PCP_ACABADORAS oficiais · TOTAL ponderado pela tiragem · '+
+        (estado.matrizExpandida?'Outros expandido':'Outros agrupado quando aplicável'),10,h-16);
+      var a=document.createElement('a');
+      a.download='meta-armazem-matriz-'+m.modo+'-'+(estado.cenario==='com'?'com-posi':'sem-posi')+'.png';
+      a.href=canvas.toDataURL('image/png');a.click();
+    }catch(e){console.error('[META ARMAZEM] Screenshot:',e);window.alert('Não foi possível capturar a matriz: '+e.message);}
+  };
   function grupos(items, agrupar, cenario) {
     var por={};
     items.forEach(function(l){
