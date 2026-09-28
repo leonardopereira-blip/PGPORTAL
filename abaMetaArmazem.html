@@ -139,7 +139,7 @@
         <button type="button" class="ma-pill" data-ma-modo="marcaSerie" aria-pressed="true" onclick="window.pgMAMatrizModo('marcaSerie')">Marca × Séries</button>
         <button type="button" class="ma-pill" data-ma-modo="graficaMarca" aria-pressed="false" onclick="window.pgMAMatrizModo('graficaMarca')">Gráfica × Marca</button>
       </div>
-      <button type="button" id="maOutrosToggle" class="ma-pill hidden" onclick="window.pgMAAlternarOutros()" title="Exibe individualmente as marcas menores, sem duplicar no total">Expandir Outros</button>
+      <button type="button" id="maOutrosToggle" class="ma-pill hidden" onclick="window.pgMAAlternarOutros()" title="Exibe individualmente as séries menores, sem duplicar no total">Expandir Outros</button>
     </div>
     <div id="maMatriz" class="overflow-x-auto max-w-full"></div>
   </div>
@@ -219,21 +219,36 @@
   var estado = {cenario:'com',matrizModo:'marcaSerie',matrizExpandida:false};
   var META = '2026-10-15';
   var META_WAYS = '2026-11-30';
-  var SERIES = ['INF I','INF II','INF III','INF IV','INF V','1º ANO','2º ANO','3º ANO','4º ANO','5º ANO','6º ANO','7º ANO','8º ANO','9º ANO','1ª SÉRIE','2ª SÉRIE','3ª SÉRIE','PU','PV'];
+  var SERIES = ['INF 1º ANO','INF 2 ANOS','INF 3 ANOS','INF 4 ANOS','INF 5 ANOS','1º ANO','2º ANO','3º ANO','4º ANO','5º ANO','6º ANO','7º ANO','8º ANO','9º ANO','1ª SERIE','2ª SERIE','3ª SERIE','PRE-VEST','PU','VARIOS'];
 
   function normal(v) {
     return String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
   }
   function serie(v) {
     var bruto=String(v==null?'':v).trim();
-    // Não separar por "+" ou espaço: APROVA +, 1ºAno, SEMI e PV E são individuais.
     var partes=bruto.split(/[|;]/).map(function(x){return x.trim();}).filter(Boolean);
     if(partes.length>1)return 'VARIOS';
     var s=normal(partes[0]||bruto);
-    // Somente a equivalência literal 1A SÉRIE / 1ª SÉRIE.
-    if (/^1\s*(?:A|ª)\s*SERIE$/.test(s)) return '1ª SERIE';
-    s=s.replace(/(\d+)\s*[ºª°]?\s*ANO\b/g,'$1º ANO').replace(/(\d+)\s*[ºª°]?\s*SERIE\b/g,'$1ª SERIE');
-    return s || 'SEM SÉRIE';
+    if(!s)return 'SEM SÉRIE';
+    // Valores com PV, PV E e PRE-VEST são a categoria PRE-VEST.
+    if(s.indexOf('PV')>=0||/^PRE[\s-]*VEST(?:IBULAR)?$/.test(s))return 'PRE-VEST';
+    // Infantil em romano ou número: INF II = INF 2 ANOS, etc.
+    var infRomano=s.match(/^INF\s*(I|II|III|IV|V)$/);
+    if(infRomano){
+      var n={I:1,II:2,III:3,IV:4,V:5}[infRomano[1]];
+      return n===1?'INF 1º ANO':'INF '+n+' ANOS';
+    }
+    var infNumero=s.match(/^INF\s*([1-5])\s*(?:º|ª|°|O|0|A)?\s*ANOS?$/);
+    if(infNumero){
+      var idade=Number(infNumero[1]);
+      return idade===1?'INF 1º ANO':'INF '+idade+' ANOS';
+    }
+    // 1O/10 ANO e 1º ANO são o mesmo rótulo; idem de 2 a 9.
+    var ano=s.match(/^([1-9])\s*(?:º|ª|°|O|0)?\s*ANO$/);
+    if(ano)return ano[1]+'º ANO';
+    var seriado=s.match(/^([1-3])\s*(?:A|ª|º|°|O|0)?\s*SERIE$/);
+    if(seriado)return seriado[1]+'ª SERIE';
+    return s;
   }
   function data(v) {
     if (!v) return '';
@@ -413,31 +428,43 @@
       var bv=soma(items.filter(function(x){return x.marca===b;})).total;
       return bv-av||a.localeCompare(b,'pt-BR',{numeric:true});
     });
-    var principais=marcas.slice(0,6),menores=marcas.slice(6);
-    var marcasVisiveis=estado.matrizExpandida?marcas.map(function(m){return {nome:m,marcas:[m]};}):
-      principais.map(function(m){return {nome:m,marcas:[m]};}).concat(menores.length?[{nome:'OUTROS',marcas:menores}]:[]);
-    var modo=estado.matrizModo,linhas=[];
+    var modo=estado.matrizModo,linhas=[],colunas=[],escondidas=0;
     if(modo==='marca') {
-      linhas=marcasVisiveis.map(function(g){
-        return {nome:g.nome,itens:items.filter(function(x){return g.marcas.indexOf(x.marca)>=0;})};
-      });
+      linhas=marcas.map(function(m){return {nome:m,itens:items.filter(function(x){return x.marca===m;})};});
+      colunas=[{nome:'TOTAL',campo:null,valores:[]}];
+    } else if(modo==='graficaMarca') {
+      var graficas=Array.from(new Set(items.map(function(x){return x.grafica;})))
+        .sort(function(a,b){return a.localeCompare(b,'pt-BR',{numeric:true});});
+      linhas=graficas.map(function(g){return {nome:g,itens:items.filter(function(x){return x.grafica===g;})};});
+      // Não agrupar marcas em Outros: agrupamento é somente de séries.
+      colunas=marcas.map(function(m){return {nome:m,campo:'marca',valores:[m]};});
+      colunas.push({nome:'TOTAL',campo:null,valores:[]});
     } else {
-      var campo=modo==='graficaMarca'?'grafica':'serie';
-      var valores=Array.from(new Set(items.map(function(x){return x[campo];})));
-      valores.sort(campo==='serie'?ordenarMatriz:function(a,b){return a.localeCompare(b,'pt-BR',{numeric:true});});
-      linhas=valores.map(function(v){return {nome:v,itens:items.filter(function(x){return x[campo]===v;})};});
+      // Marca x Série: marcas nas LINHAS; séries nas COLUNAS.
+      linhas=marcas.map(function(m){return {nome:m,itens:items.filter(function(x){return x.marca===m;})};});
+      var series=Array.from(new Set(items.map(function(x){return x.serie;}))).sort(function(a,b){
+        var av=soma(items.filter(function(x){return x.serie===a;})).total;
+        var bv=soma(items.filter(function(x){return x.serie===b;})).total;
+        return bv-av||ordenarMatriz(a,b);
+      });
+      var principais=series.slice(0,6),menores=series.slice(6);
+      escondidas=menores.length;
+      var grupos=estado.matrizExpandida?
+        series.map(function(v){return {nome:v,campo:'serie',valores:[v]};}):
+        principais.map(function(v){return {nome:v,campo:'serie',valores:[v]};})
+          .concat(menores.length?[{nome:'OUTROS',campo:'serie',valores:menores}]:[]);
+      colunas=grupos.concat([{nome:'TOTAL',campo:null,valores:[]}]);
     }
-    var colunas=modo==='marca'?[{nome:'TOTAL',marcas:marcas}]:marcasVisiveis.concat([{nome:'TOTAL',marcas:marcas}]);
-    var dados=linhas.map(function(l){
-      return {nome:l.nome,total:soma(l.itens),celulas:colunas.map(function(g){
-        return soma(l.itens.filter(function(x){return g.marcas.indexOf(x.marca)>=0;}));
-      })};
-    });
+    function totalColuna(base,c){
+      return c.campo?soma(base.filter(function(x){return c.valores.indexOf(x[c.campo])>=0;})):soma(base);
+    }
+    var dados=linhas.map(function(l){return {nome:l.nome,total:soma(l.itens),
+      celulas:colunas.map(function(c){return totalColuna(l.itens,c);})};});
     return {modo:modo,nomeModo:modo==='marca'?'Apenas marcas':modo==='graficaMarca'?'Gráfica × Marca':'Marca × Séries',
-      rotuloLinha:modo==='marca'?'Marcas':modo==='graficaMarca'?'Gráficas':'Séries',
+      rotuloLinha:modo==='graficaMarca'?'Gráficas':'Marcas',
       colunas:colunas,linhas:dados,
-      total:colunas.map(function(g){return soma(items.filter(function(x){return g.marcas.indexOf(x.marca)>=0;}));}),
-      escondidas:menores.length,geral:soma(items)};
+      total:colunas.map(function(c){return totalColuna(items,c);}),
+      escondidas:escondidas,geral:soma(items)};
   }
   function matriz(items) {
     window.pgMAUltimosItens=items.slice();
@@ -446,7 +473,7 @@
     var toggle=document.getElementById('maOutrosToggle');
     if(toggle){
       toggle.classList.toggle('hidden',!m.escondidas);
-      toggle.textContent=estado.matrizExpandida?'Recolher Outros':'Expandir Outros ('+m.escondidas+' marcas)';
+      toggle.textContent=estado.matrizExpandida?'Recolher Outros':'Expandir Outros ('+m.escondidas+' séries)';
       toggle.setAttribute('aria-pressed',String(estado.matrizExpandida));
     }
     document.querySelectorAll('[data-ma-modo]').forEach(function(btn){
@@ -455,7 +482,7 @@
     document.getElementById('maMatrizTitulo').textContent='Matriz · '+m.nomeModo;
     if(!items.length){root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';return;}
     var cabeca='<th rowspan="2">'+m.rotuloLinha+'</th>'+
-      m.colunas.map(function(c){return '<th colspan="2"'+(c.nome==='OUTROS'?' title="Marcas de menor tiragem, agrupadas sem duplicidade"':'')+'>'+
+      m.colunas.map(function(c){return '<th colspan="2"'+(c.nome==='OUTROS'?' title="Séries de menor tiragem, agrupadas sem duplicidade"':'')+'>'+
         rotuloMatriz(c.nome)+'</th>';}).join('');
     var sub=m.colunas.map(function(){return '<th>%</th><th>Progresso</th>';}).join('');
     var h='<table class="ma-matrix-table"><thead><tr>'+cabeca+'</tr><tr>'+sub+'</tr></thead><tbody>';
