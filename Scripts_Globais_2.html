@@ -10908,12 +10908,15 @@ window.renderReportExecutivaCurvaSemanal = function() {
 
     if (!periodos.length) return;
 
-    // A semana corrente fecha em HOJE para reconciliar com a tabela.
-    // Nas semanas futuras a meta continua avançando até o fim do período.
-    const cortePeriodo = p => p.ini <= hojeIso && hojeIso <= p.fim
+    // Planejado fecha no fim do período (30/09 para "Set - Sem Atual").
+    // Realizado segue limitado a hoje; não antecipa coletas futuras.
+    const corteRealPeriodo = p => p.ini <= hojeIso && hojeIso <= p.fim
         ? hojeIso : p.fim;
+    const cortePlanoPeriodo = p => p.fim;
     window.reCurvaPeriodos = periodos.map(p => ({
-        ...p, corte: cortePeriodo(p)
+        ...p, corte: cortePlanoPeriodo(p),
+        cortePlano: cortePlanoPeriodo(p),
+        corteReal: corteRealPeriodo(p)
     }));
 
     const acumuladoAte = (fimIso, campoData, campoVolume, limitarHoje) => {
@@ -10936,15 +10939,16 @@ window.renderReportExecutivaCurvaSemanal = function() {
             ? Math.max(0, Number(r.tiragem || 0)) : 0), 0);
 
     periodos.forEach(p => {
-        const corte = cortePeriodo(p);
-        // Histórico fica como estava; hoje bate exatamente com a tabela.
-        // AMANHÃ EM DIANTE: mesmas datas e volumes do Planejado diário.
-        const meta = corte < hojeIso
-            ? acumuladoHistorico(corte)
-            : corte === hojeIso
+        const cortePlano = cortePlanoPeriodo(p);
+        const corteReal = corteRealPeriodo(p);
+        // Histórico inalterado. A semana corrente considera também os
+        // próximos dias planejados, até o fechamento do período (30/09).
+        const meta = cortePlano < hojeIso
+            ? acumuladoHistorico(cortePlano)
+            : cortePlano === hojeIso
                 ? Math.max(0, Number(fonte.planejadoHoje || 0))
-                : acumuladoAte(corte, 'dtPlan', 'tiragem', false);
-        const real = acumuladoAte(corte, 'dtReal', 'coletada', true);
+                : acumuladoAte(cortePlano, 'dtPlan', 'tiragem', false);
+        const real = acumuladoAte(corteReal, 'dtReal', 'coletada', true);
         metaVolume.push(meta);
         realVolume.push(real);
 
@@ -10959,12 +10963,16 @@ window.renderReportExecutivaCurvaSemanal = function() {
     const indiceAtual = periodos.findIndex(p =>
         p.ini <= hojeIso && hojeIso <= p.fim);
     if (indiceAtual >= 0 && total > 0) {
+        const planoFechaHoje = cortePlanoPeriodo(periodos[indiceAtual]) === hojeIso;
         const previsto = (fonte.planejadoHoje / total) * 100;
         const realizado = (fonte.realizadoHoje / total) * 100;
-        if (Math.abs(metaPct[indiceAtual] - previsto) > 0.000001 ||
+        // Só concilia Plan com o corte de hoje quando os dois pontos têm
+        // a mesma data. Antes disso, a curva inclui corretamente o futuro.
+        if ((planoFechaHoje && Math.abs(metaPct[indiceAtual] - previsto) > 0.000001) ||
             Math.abs(realPct[indiceAtual] - realizado) > 0.000001) {
             console.warn('[REPORT V43] Curva e tabela divergentes.', {
-                metaCurva: metaPct[indiceAtual], planTabela: previsto,
+                metaCurva: metaPct[indiceAtual], planTabelaHoje: previsto,
+                cortePlano: cortePlanoPeriodo(periodos[indiceAtual]),
                 realCurva: realPct[indiceAtual], realTabela: realizado
             });
         }
@@ -11536,7 +11544,8 @@ window.reExtrairCurvaPonto = function(indice, elemento) {
     const periodo = (window.reCurvaPeriodos || [])[indice];
     const fonte = window.reCurvaFonteCDV43;
     if (!periodo || !fonte) return;
-    const corte = periodo.corte || periodo.fim;
+    const cortePlano = periodo.cortePlano || periodo.corte || periodo.fim;
+    const corteReal = periodo.corteReal || (cortePlano > fonte.hoje ? fonte.hoje : cortePlano);
     const normalizar = v => String(v ?? '').normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
     const chave = l => {
@@ -11550,13 +11559,13 @@ window.reExtrairCurvaPonto = function(indice, elemento) {
         const serie = normalizar(l?.['SÉRIE'] || l?.['Série'] || l?.SERIE);
         return [origem, marca, id, sku, grafica, cd, serie].join('|');
     };
-    const planoFonte = corte <= fonte.hoje
+    const planoFonte = cortePlano <= fonte.hoje
         ? (fonte.eventosPlanoHistorico || fonte.eventosPlano || [])
         : (fonte.eventosPlano || []);
     const planos = planoFonte.filter(r =>
-        r.dtPlan && r.dtPlan <= corte && Number(r.tiragem || 0) > 0);
+        r.dtPlan && r.dtPlan <= cortePlano && Number(r.tiragem || 0) > 0);
     const reais = (fonte.eventosReal || []).filter(r =>
-        r.dtReal && r.dtReal <= corte && Number(r.coletada || 0) > 0);
+        r.dtReal && r.dtReal <= corteReal && Number(r.coletada || 0) > 0);
     const saldos = new Map();
     reais.forEach(r => {
         const k = chave(r.linha || r.pcp);
@@ -11566,7 +11575,7 @@ window.reExtrairCurvaPonto = function(indice, elemento) {
     const criarLinha = (l, plan, real, dtPlan, dtReal, indicador) =>
         window.reLinhaExportacao(l, {
             grupo: 'Meta', indicador, cenario: 'Origem Todas / Destino CD',
-            acumuladoAte: corte, dtPlan: dtPlan || '', dtReal: dtReal || '',
+            acumuladoAte: cortePlano, dtPlan: dtPlan || '', dtReal: dtReal || '',
             volumePlan: plan, volumeReal: real, gap: Math.max(0, plan - real)
         });
     const linhas = [];
@@ -11602,7 +11611,7 @@ window.reExtrairCurvaPonto = function(indice, elemento) {
     }
     if (!linhas.length) { alert('Sem itens neste ponto.'); return; }
     window.reCriarSheets('Report_Executiva_Curva_' +
-        String(periodo.label || corte).replace(/[^A-Za-z0-9_-]+/g, '_'),
+        String(periodo.label || cortePlano).replace(/[^A-Za-z0-9_-]+/g, '_'),
         [{nome: 'Meta_Azul', cabecalho: window.reCabecalhoExportacao, linhas}], elemento);
 };
 
