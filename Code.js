@@ -347,6 +347,7 @@ function salvarObsGiro(tipo, chave, obs, contextoStr) {
       for(var i=recentes.length-1;i>=0;i--){
         var row=recentes[i];
         if(pgGiroNormalizarChave_(tipo,row[2])===chave &&
+           pgGiroTextoComparavel_(row[1])===pgGiroTextoComparavel_(email) &&
            pgGiroTextoComparavel_(row[3])===pgGiroTextoComparavel_(obs) &&
            pgGiroEhMesmoEvento_(row[0],dataAgora)){
           return {success:true,duplicate:true,data:row[0],user:row[1],obs:row[3],chave:chave,tipo:tipo};
@@ -392,7 +393,7 @@ function buscarHistoricoObsGiro() {
     for(var i=0;i<ordenadas.length;i++){
       var row=ordenadas[i].row,chave=pgGiroNormalizarChave_(tipo,row[2]);
       if(!chave||!String(row[3]||'').trim())continue;
-      var assinatura=chave+'\u0001'+pgGiroTextoComparavel_(row[3]);
+      var assinatura=chave+'\u0001'+pgGiroTextoComparavel_(row[1])+'\u0001'+pgGiroTextoComparavel_(row[3]);
       if(ultimoEvento[assinatura] && pgGiroEhMesmoEvento_(ultimoEvento[assinatura],row[0]))continue;
       ultimoEvento[assinatura]=row[0];
       if(!destino[chave])destino[chave]=[];
