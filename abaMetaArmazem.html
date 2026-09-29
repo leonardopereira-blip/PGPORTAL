@@ -246,10 +246,22 @@
     if (f.length !== 8) throw new Error('Regra Combinado Posi inválida: ' + s);
     return { marca: f[0], segmento: f[1], serie: f[2], tipo: f[3], datas: f.slice(4) };
   });
-  var estado = {cenario:'com',matrizModo:'marcaSerie',matrizExpandida:false};
+  var estado = {cenario:'com',matrizModo:'marcaSerie',matrizExpandida:false,ordemPrioridade:null};
   var META = '2026-10-15';
   var META_WAYS = '2026-11-30';
   var SERIES = ['INF 1º ANO','INF 2 ANOS','INF 3 ANOS','INF 4 ANOS','INF 5 ANOS','1º ANO','2º ANO','3º ANO','4º ANO','5º ANO','6º ANO','7º ANO','8º ANO','9º ANO','1ª SERIE','2ª SERIE','3ª SERIE','PRE-VEST','PU','VARIOS'];
+  function seriePrioritaria(s){return /^INF\b/.test(s)||/^[1-9]º ANO$/.test(s)||/^[1-3]ª SERIE$/.test(s);}
+  function ordemMatriz(){
+    if(!estado.ordemPrioridade){
+      var padrao=SERIES.filter(seriePrioritaria),salvo=[];
+      try{salvo=JSON.parse(window.localStorage.getItem('pgMAOrdemPrioridadeV1')||'[]');if(!Array.isArray(salvo))salvo=[];}catch(e){salvo=[];}
+      estado.ordemPrioridade=padrao.slice().sort(function(a,b){
+        var ia=salvo.indexOf(a),ib=salvo.indexOf(b);
+        return (ia<0?padrao.length+padrao.indexOf(a):ia)-(ib<0?padrao.length+padrao.indexOf(b):ib);
+      });
+    }
+    return estado.ordemPrioridade;
+  }
 
   function normal(v) {
     return String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
@@ -363,6 +375,8 @@
         marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),
         total:total,previsto:previsto,pos:conhecido?Math.max(0,total-previsto):0,
         semData:conhecido?0:total,real:realTem?Math.min(total,volume(realRaw)):0,realTem:realTem,
+        realCD:Math.min(total,volume(l['TIRAGEM CONFIRMADA CD'])),realCDTem:l['TIRAGEM CONFIRMADA CD']!==null&&l['TIRAGEM CONFIRMADA CD']!==undefined&&l['TIRAGEM CONFIRMADA CD']!=='',
+        metaArmDate:data(l.META_ARM_POS||l['META ARMAZÉM']),
         ate15:ate15,apos15:apos15,excecao:excecao,
         posi:!!regras,alvo:alvo,dtPlan:dtPlan,
         prazos:[alvo].concat(parcelas.map(function(p){return p.prazo;})),
@@ -374,8 +388,9 @@
     return items.reduce(function(a,l){
       a.total+=l.total;a.previsto+=l.previsto;a.pos+=l.pos;a.semData+=l.semData;
       a.ate15+=l.ate15||0;a.apos15+=l.apos15||0;a.excecao+=l.excecao||0;
-      a.real+=l.real;if(l.realTem)a.realTem=true;return a;
-    },{total:0,previsto:0,pos:0,semData:0,ate15:0,apos15:0,excecao:0,real:0,realTem:false});
+      a.real+=l.real;if(l.realTem)a.realTem=true;
+      a.realCD+=l.realCD||0;if(l.realCDTem)a.realCDTem=true;return a;
+    },{total:0,previsto:0,pos:0,semData:0,ate15:0,apos15:0,excecao:0,real:0,realTem:false,realCD:0,realCDTem:false});
   }
   function seletor(id, vals, selecionado) {
     var el=document.getElementById(id);if(!el)return;
@@ -578,6 +593,29 @@
       a.href=canvas.toDataURL('image/png');a.click();
     }catch(e){console.error('[META ARMAZEM] Screenshot:',e);window.alert('Não foi possível capturar a matriz: '+e.message);}
   };
+  function comparativoMeta(items,total){
+    var planejado=items.filter(function(x){return x.metaArmDate&&x.dtPlan&&x.dtPlan<=x.metaArmDate;})
+      .reduce(function(a,x){return a+x.total;},0);
+    var comData=items.filter(function(x){return !!x.metaArmDate;});
+    var semData=items.length-comData.length;
+    var datas=Array.from(new Set(comData.map(function(x){return x.metaArmDate;}))).sort();
+    var dataNota=datas.length===1?'Prazo META_ARM_POS: '+fmtPrazo(datas[0]):
+      datas.length>1?'Prazos META_ARM_POS de '+fmtPrazo(datas[0])+' a '+fmtPrazo(datas[datas.length-1]):'Sem datas META_ARM_POS';
+    function box(nome,n,sub,cor,disponivel){
+      var v=disponivel?fmt(n,true):'–',p=total.total&&disponivel?Math.max(0,Math.min(100,100*n/total.total)):0;
+      return '<div class="ma-compare-card"><p class="text-[10px] uppercase font-black tracking-wide text-slate-600">'+nome+'</p>'+
+        '<p class="text-xl font-black tabular-nums mt-1">'+v+'</p>'+
+        '<div class="ma-compare-bar mt-2"><span style="width:'+p+'%;background:'+cor+'"></span></div>'+
+        '<p class="text-[10px] text-slate-500 mt-2">'+sub+(disponivel&&total.total?' · '+pct(n,total.total)+' do total':'')+'</p></div>';
+    }
+    document.getElementById('maComparativo').innerHTML=
+      box('Planejado',planejado,'Entrega prevista até a META_ARM_POS de cada item','#418EDE',!!items.length)+
+      box('Realizado',total.realCD,'Tiragem confirmada no CD (todas as datas)','#0f766e',total.realCDTem)+
+      box('Meta Armazém',total.total,'Volume total esperado no CD para os itens filtrados','#FA4616',!!items.length);
+    document.getElementById('maComparativoNota').textContent=dataNota+
+      (semData?' · '+semData+' linha(s) sem META_ARM_POS; ficam no total da meta, mas não são tratadas como planejadas no prazo.':'')+
+      ' · Não duplica PCP direto e PCP_ACABADORAS.';
+  }
   function grupos(items, agrupar, cenario) {
     var por={};
     items.forEach(function(l){
@@ -615,20 +653,12 @@
     document.getElementById('maLegendaPrazos').textContent='Volumes planejados até 15/10/2026 e após 15/10/2026. A meta original permanece 15/10/2026 (WAYS: 30/11/2026).';
     document.getElementById('maThPrevisto').textContent='Dentro da meta';
     document.getElementById('maThPos').textContent='Fora da meta';
-    document.getElementById('maCortes').innerHTML=estado.cenario==='com'?
-      '<div class="ma-card p-4 border-l-4 border-l-indigo-600">'+
-      '<div class="text-[11px] uppercase font-black text-indigo-700 mb-1">Posigraf — exceção para parcelas pós-15/10</div>'+
-      '<p class="text-[11px] text-slate-600 mb-3">Somente parcela posterior à meta original de 15/10 que cumpra o prazo acordado. O restante mantém 15/10.</p>'+
-      barras(posi,'Itens com combinado Posigraf',items.filter(function(l){return l.posi;}))+'</div>'+
-      '<div class="ma-card p-4 border-l-4 border-l-teal-500">'+
-      '<div class="text-[11px] uppercase font-black text-teal-700 mb-1">Demais itens — meta original de 15/10/2026</div>'+
-      '<p class="text-[11px] text-slate-600 mb-3">Itens sem exceção Posi: meta 15/10/2026, inclusive os planejados antes; WAYS: 30/11/2026.</p>'+
-      barras(geral,'Itens sem acordo específico',items.filter(function(l){return !l.posi;}))+'</div>':'';
     var rank=grupos(items,document.getElementById('maAgrupar').value,estado.cenario);
     distribuicao(items,'grafica','maBarrasGrafica');
     distribuicao(items,'marca','maBarrasMarca');
     distribuicao(items,'serie','maBarrasSerie');
     matriz(items);
+    comparativoMeta(items,total);
     var atual='';var rows='';
     rank.forEach(function(g){
       if(estado.cenario==='com'&&g.grupo!==atual){atual=g.grupo;var x=soma(items.filter(function(l){return l.posi===(atual==='Posigraf — extensão pós-15/10');}));
