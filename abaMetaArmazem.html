@@ -88,11 +88,11 @@
     #abaMetaArmazem .ma-matrix-table tbody th{height:44px;padding:3px 5px;overflow:hidden;text-overflow:ellipsis}
     #abaMetaArmazem .ma-matrix-table tbody th .ma-matriz-label{max-width:14ch;text-overflow:ellipsis}
     #abaMetaArmazem .ma-matrix-table td.ma-matrix-cell{height:44px;padding:3px;text-align:center;vertical-align:middle}
-    #abaMetaArmazem .ma-matrix-tile{position:relative;isolation:isolate;display:flex;align-items:center;justify-content:center;width:100%;height:38px;background:#e5eef8;border-radius:5px;overflow:hidden}
+    #abaMetaArmazem .ma-matrix-tile{position:relative;isolation:isolate;display:flex;align-items:center;justify-content:center;width:100%;height:38px;background:#EDF4FB;border-radius:5px;overflow:hidden}
     #abaMetaArmazem .ma-matrix-fill{position:absolute;inset:0 auto 0 0;height:100%;border-radius:5px 0 0 5px}
     #abaMetaArmazem .ma-matrix-fill.ma-full{border-radius:5px}
     #abaMetaArmazem .ma-matrix-label-inside{position:relative;z-index:1;display:block;width:100%;font-size:11px;line-height:1;font-weight:900;font-variant-numeric:tabular-nums;text-align:center;color:#0C2340;text-shadow:0 1px 1px rgba(255,255,255,.3)}
-    #abaMetaArmazem .ma-matrix-label-inside.ma-on-blue{color:#fff;text-shadow:0 1px 2px rgba(12,35,64,.55)}
+    #abaMetaArmazem .ma-matrix-label-inside.ma-on-blue{color:#0C2340;text-shadow:0 1px 1px rgba(255,255,255,.45)}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-matrix-total-col,
     #abaMetaArmazem .ma-matrix-table td.ma-matrix-total-col{position:sticky;left:118px;z-index:2;background:#eaf3fc}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-matrix-total-col{z-index:4;background:#1a3764}
@@ -436,7 +436,7 @@
   function barraMatriz(x) {
     var hasValue=x.total>0;
     var p=hasValue?Math.max(0,Math.min(100,100*x.previsto/x.total)):0;
-    var color=p>=70?'#284081':p>=40?'#FCB04E':'#FA4616';
+    var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
     return '<div class="ma-matrix-tile" title="'+
       escapeHTML(hasValue?fmt(x.previsto,true)+' planejado no prazo / '+fmt(x.total,true)+' total':'Sem volume')+'">'+
       (hasValue?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
@@ -597,10 +597,10 @@
         r.celulas.forEach(function(c,j){
           var x=first+j*col,p=c.total?Math.max(0,Math.min(100,100*c.previsto/c.total)):0;
           // Preenchimento da célula inteira, preservando só 3px de respiro entre tiles.
-          ctx.fillStyle='#e5eef8';ctx.fillRect(x+3,y+3,col-6,rowH-6);
-          ctx.fillStyle=p>=70?'#284081':p>=40?'#FCB04E':'#FA4616';
+          ctx.fillStyle='#EDF4FB';ctx.fillRect(x+3,y+3,col-6,rowH-6);
+          ctx.fillStyle=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
           if(c.total&&p>0)ctx.fillRect(x+3,y+3,(col-6)*p/100,rowH-6);
-          ctx.fillStyle=p>=70?'#fff':'#0C2340';
+          ctx.fillStyle='#0C2340';
           ctx.font='900 11px Poppins, sans-serif';
           ctx.textAlign='center';ctx.textBaseline='middle';
           ctx.fillText(pct(c.previsto,c.total),x+col/2,y+rowH/2,col-12);
