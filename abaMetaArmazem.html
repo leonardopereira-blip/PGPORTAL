@@ -76,28 +76,31 @@
     #abaMetaArmazem #maScreenshot{background:#FA4616}
     #abaMetaArmazem #maScreenshot:hover{background:#e13c11}
     #abaMetaArmazem #maOutrosToggle{border-color:#418EDE;color:#284081}
-    /* Coluna única por série, marcas e total fixos à esquerda. */
+    /* O percentual e o preenchimento dividem o mesmo tile, com folga só entre células. */
     #abaMetaArmazem .ma-matrix-table{width:max-content;min-width:100%;table-layout:fixed;font-size:10px}
-    #abaMetaArmazem .ma-matrix-table th,#abaMetaArmazem .ma-matrix-table td{box-sizing:border-box;padding:5px 4px}
+    #abaMetaArmazem .ma-matrix-table th,#abaMetaArmazem .ma-matrix-table td{box-sizing:border-box;padding:3px}
     #abaMetaArmazem .ma-matrix-table thead th:first-child,
-    #abaMetaArmazem .ma-matrix-table tbody th{min-width:150px;width:150px;max-width:150px}
+    #abaMetaArmazem .ma-matrix-table tbody th{min-width:118px;width:118px;max-width:118px}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head,
     #abaMetaArmazem .ma-matrix-table .ma-matrix-cell{min-width:94px;width:94px;max-width:94px}
     #abaMetaArmazem .ma-matrix-table thead th{vertical-align:middle;height:51px;font-size:10px;line-height:1.3}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head .ma-matriz-label{display:block;max-width:none;white-space:normal;overflow:visible;overflow-wrap:break-word}
-    #abaMetaArmazem .ma-matrix-table .ma-matrix-cell{text-align:center;vertical-align:middle}
-    #abaMetaArmazem .ma-matrix-value{font-weight:850;font-variant-numeric:tabular-nums;line-height:15px}
-    #abaMetaArmazem .ma-matrix-track{width:76px;height:7px;border-radius:99px;margin:4px auto 0}
-    #abaMetaArmazem .ma-matrix-track span{border-radius:99px}
+    #abaMetaArmazem .ma-matrix-table tbody th{height:44px;padding:3px 5px;overflow:hidden;text-overflow:ellipsis}
+    #abaMetaArmazem .ma-matrix-table tbody th .ma-matriz-label{max-width:14ch;text-overflow:ellipsis}
+    #abaMetaArmazem .ma-matrix-table td.ma-matrix-cell{height:44px;padding:3px;text-align:center;vertical-align:middle}
+    #abaMetaArmazem .ma-matrix-tile{position:relative;isolation:isolate;display:flex;align-items:center;justify-content:center;width:100%;height:38px;background:#e5eef8;border-radius:5px;overflow:hidden}
+    #abaMetaArmazem .ma-matrix-fill{position:absolute;inset:0 auto 0 0;height:100%;border-radius:5px 0 0 5px}
+    #abaMetaArmazem .ma-matrix-fill.ma-full{border-radius:5px}
+    #abaMetaArmazem .ma-matrix-label-inside{position:relative;z-index:1;display:block;width:100%;font-size:11px;line-height:1;font-weight:900;font-variant-numeric:tabular-nums;text-align:center;color:#0C2340;text-shadow:0 1px 1px rgba(255,255,255,.3)}
+    #abaMetaArmazem .ma-matrix-label-inside.ma-on-blue{color:#fff;text-shadow:0 1px 2px rgba(12,35,64,.55)}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-matrix-total-col,
-    #abaMetaArmazem .ma-matrix-table td.ma-matrix-total-col{position:sticky;left:150px;z-index:2;background:#eaf3fc}
+    #abaMetaArmazem .ma-matrix-table td.ma-matrix-total-col{position:sticky;left:118px;z-index:2;background:#eaf3fc}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-matrix-total-col{z-index:4;background:#1a3764}
     #abaMetaArmazem .ma-matrix-table tbody tr:nth-child(even) td.ma-matrix-total-col{background:#dceafa}
     #abaMetaArmazem .ma-matrix-table tbody tr.ma-matrix-total td.ma-matrix-total-col{background:#c5ddf6}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-draggable{cursor:grab;user-select:none}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-draggable:active{cursor:grabbing}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-drag-over{outline:3px solid #FCB04E;outline-offset:-3px;background:#365992}
-    #abaMetaArmazem .ma-matrix-table tbody th .ma-matriz-label{max-width:19ch;text-overflow:ellipsis}
     #abaMetaArmazem .ma-compare-bar{height:9px;overflow:hidden;background:#e5edf7;border-radius:999px}
     #abaMetaArmazem .ma-compare-bar span{display:block;height:100%;border-radius:999px}
     #abaMetaArmazem .ma-compare-card{border:1px solid #dce5f0;border-radius:12px;padding:14px;background:#f8fbff;min-width:0}
@@ -431,17 +434,18 @@
       (longo||nome==='VARIOS'?' title="'+escapeHTML(dica)+'"':'')+'>'+escapeHTML(curto)+'</span>';
   }
   function barraMatriz(x) {
-    if(!x.total)return '<span class="text-slate-400">–</span>';
-    var p=Math.max(0,Math.min(100,100*x.previsto/x.total));
-    var corBarra=p>=70?'#418EDE':p>=40?'#FCB04E':'#FA4616';
-    return '<div class="ma-matrix-track" title="'+pct(x.previsto,x.total)+' · '+
-      escapeHTML(fmt(x.previsto,true)+' / '+fmt(x.total,true))+'">'+
-      '<span style="width:'+p+'%;background:'+corBarra+'"></span></div>';
+    var hasValue=x.total>0;
+    var p=hasValue?Math.max(0,Math.min(100,100*x.previsto/x.total)):0;
+    var color=p>=70?'#284081':p>=40?'#FCB04E':'#FA4616';
+    return '<div class="ma-matrix-tile" title="'+
+      escapeHTML(hasValue?fmt(x.previsto,true)+' planejado no prazo / '+fmt(x.total,true)+' total':'Sem volume')+'">'+
+      (hasValue?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
+      '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(x.previsto,x.total)+'</span></div>';
   }
   function colunasMatriz(x,c) {
     return '<td class="ma-matrix-cell'+(!c.campo?' ma-matrix-total-col':'')+'" title="'+
       escapeHTML(fmt(x.previsto,true)+' planejado no prazo / '+fmt(x.total,true)+' total')+'">'+
-      '<div class="ma-matrix-value">'+pct(x.previsto,x.total)+'</div>'+barraMatriz(x)+'</td>';
+      barraMatriz(x)+'</td>';
   }
   function ordenarMatriz(a,b) {
     var ai=SERIES.indexOf(a),bi=SERIES.indexOf(b);
@@ -515,7 +519,7 @@
           ' title="'+escapeHTML(c.nome+(arrastavel?' — arraste para reordenar':'')+(extra?' — séries secundárias agrupadas sem duplicidade':''))+'">'+
           '<span class="ma-matriz-label">'+escapeHTML(c.nome)+'</span></th>';
       }).join('');
-    var h='<table class="ma-matrix-table"><colgroup><col style="width:150px">'+
+    var h='<table class="ma-matrix-table"><colgroup><col style="width:118px">'+
       m.colunas.map(function(){return '<col style="width:94px">';}).join('')+
       '</colgroup><thead><tr>'+cabeca+'</tr></thead><tbody>';
     m.linhas.forEach(function(l){
@@ -566,7 +570,7 @@
     var m=window.pgMAMatrizSnapshot;
     if(!m||!m.linhas.length){window.alert('A matriz ainda não tem dados para capturar.');return;}
     try {
-      var col=100,first=160,head=48,rowH=39,top=82,foot=42;
+      var col=100,first=118,head=48,rowH=44,top=82,foot=42;
       var w=first+col*m.colunas.length,h=top+head+rowH*(m.linhas.length+1)+foot;
       var dpr=Math.min(2,window.devicePixelRatio||1),canvas=document.createElement('canvas');
       canvas.width=Math.ceil(w*dpr);canvas.height=Math.ceil(h*dpr);
@@ -589,13 +593,18 @@
         ctx.fillStyle=ultimo?'#dceafa':i%2?'#f3f8fd':'#fff';ctx.fillRect(0,y,w,rowH);
         ctx.strokeStyle='#dce5f0';ctx.beginPath();ctx.moveTo(0,y+rowH-.5);ctx.lineTo(w,y+rowH-.5);ctx.stroke();
         ctx.fillStyle='#0C2340';ctx.font=(ultimo?'bold ':'')+'11px Poppins, sans-serif';
-        ctx.fillText(corta(r.nome,25),10,y+22);
+        ctx.fillText(corta(r.nome,18),5,y+25,first-9);
         r.celulas.forEach(function(c,j){
           var x=first+j*col,p=c.total?Math.max(0,Math.min(100,100*c.previsto/c.total)):0;
-          ctx.fillStyle='#0C2340';ctx.font='bold 10px Poppins, sans-serif';ctx.fillText(pct(c.previsto,c.total),x+5,y+17);
-          ctx.fillStyle='#e5eef8';ctx.fillRect(x+6,y+24,86,7);
-          ctx.fillStyle=p>=70?'#418EDE':p>=40?'#FCB04E':'#FA4616';
-          ctx.fillRect(x+6,y+24,86*p/100,7);
+          // Preenchimento da célula inteira, preservando só 3px de respiro entre tiles.
+          ctx.fillStyle='#e5eef8';ctx.fillRect(x+3,y+3,col-6,rowH-6);
+          ctx.fillStyle=p>=70?'#284081':p>=40?'#FCB04E':'#FA4616';
+          if(c.total&&p>0)ctx.fillRect(x+3,y+3,(col-6)*p/100,rowH-6);
+          ctx.fillStyle=p>=70?'#fff':'#0C2340';
+          ctx.font='900 11px Poppins, sans-serif';
+          ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText(pct(c.previsto,c.total),x+col/2,y+rowH/2,col-12);
+          ctx.textAlign='start';ctx.textBaseline='alphabetic';
         });
       });
       ctx.fillStyle='#61738d';ctx.font='10px Poppins, sans-serif';
