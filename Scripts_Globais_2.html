@@ -8395,6 +8395,25 @@ function parseValidDate(val) {
     return isNaN(d.getTime()) ? null : d;
 }
 
+// Chaves estáveis: sem tiragem, status, origem Principal/Congelados ou linha do PCP.
+window.pgGiroChaveObs = function(tipo, chave) {
+    const partes=String(chave == null ? '' : chave).split('|').map(v =>
+        String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+            .replace(/\s+/g,' ').trim().toUpperCase());
+    // Migração da chave anterior: gráfica|marca|SKU|tiragem|envio|CD.
+    if (tipo==='SKU' && partes.length===6 && /^\d[\d.,]*$/.test(partes[3])) partes.splice(3,1);
+    return partes.join('|');
+};
+window.pgGiroEscaparChaveObs = function(chave) {
+    return String(chave).replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+        .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+        .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+};
+// Codifica a chave inteira para evitar colisão entre IDs antes truncados em 40 caracteres.
+window.pgGiroIdCampoObs = function(prefixo,chave,sufixo) {
+    return prefixo+'_'+Array.from(String(chave)).map(c => c.codePointAt(0).toString(16)).join('_')+
+        (sufixo == null ? '' : '_'+sufixo);
+};
 // VARIÁVEIS GLOBAIS PARA AS OBSERVAÇÕES
 window.HISTORICO_OBS_GIRO = { master: {}, sku: {} };
 window.CONTEXTOS_TEMP = {};
@@ -8620,8 +8639,8 @@ window.salvarObsFront = function(tipo, chave, inputEl) {
             }
             const mapa = res.tipo === 'SKU' ? window.HISTORICO_OBS_GIRO.sku : window.HISTORICO_OBS_GIRO.master;
             if (!mapa[res.chave]) mapa[res.chave] = [];
-            mapa[res.chave].unshift({data:res.data, user:res.user, obs:res.obs});
-            if (typeof showToast === 'function') showToast('Observação registrada na PCPs.');
+            if(!res.duplicate) mapa[res.chave].unshift({data:res.data, user:res.user, obs:res.obs});
+            if (typeof showToast === 'function') showToast(res.duplicate?'Observação já registrada.':'Observação registrada na PCPs.');
             window.reFiltrarTabelaGiro();
         })
         .withFailureHandler(function(err) {
@@ -8942,7 +8961,7 @@ window.reFiltrarTabelaGiro = function() {
         let tiragemExibida = ehLinhaColeta ? saldoColeta : tiragemBase;
 
         // CHAVE DE AGRUPAMENTO 100% BLINDADA (Identidade Absoluta)
-        let chaveGrupo = `${grafica}|${marca}|${serie}|${envio}|${cd}`;
+        let chaveGrupo = window.pgGiroChaveObs('MASTER', `${grafica}|${marca}|${serie}|${envio}|${cd}`);
 
         if (!grupos[chaveGrupo]) {
             grupos[chaveGrupo] = { 
@@ -8981,7 +9000,7 @@ window.reFiltrarTabelaGiro = function() {
         if (escalaSlider < grupos[chaveGrupo].piorEscala && statusFinalStr === 'Em Aberto') grupos[chaveGrupo].piorEscala = escalaSlider;
 
         // CHAVE DO SKU BLINDADA
-        let superChaveSku = `${grafica}|${marca}|${sku}|${tiragemBase}|${envio}|${cd}`;
+        let superChaveSku = window.pgGiroChaveObs('SKU', `${grafica}|${marca}|${sku}|${envio}|${cd}`);
 
         grupos[chaveGrupo].skus.push({
             chaveUnica: superChaveSku,
@@ -9043,7 +9062,7 @@ let arrGrupos = Object.values(grupos);
     const maxDiasObs = obsDiasMaxFiltro === "" ? null : parseInt(obsDiasMaxFiltro);
 
     arrGrupos = arrGrupos.filter(g => {
-        let chaveMaster = `${g.grafica}|${g.marca}|${g.serie}|${g.envio}|${g.cd}`;
+        let chaveMaster = window.pgGiroChaveObs('MASTER', `${g.grafica}|${g.marca}|${g.serie}|${g.envio}|${g.cd}`);
         let histMaster = (window.HISTORICO_OBS_GIRO && window.HISTORICO_OBS_GIRO.master && window.HISTORICO_OBS_GIRO.master[chaveMaster]) ? window.HISTORICO_OBS_GIRO.master[chaveMaster] : [];
         let ultimaObsObj = histMaster.length > 0 ? histMaster[0] : null;
         let tempoObs = window.calcularTempoObs(ultimaObsObj ? ultimaObsObj.data : null);
@@ -9126,9 +9145,9 @@ let arrGrupos = Object.values(grupos);
         }
 
         // CHAVE 100% BLINDADA PARA A LINHA MASTER (Exclusiva ao item)
-        let chaveMaster = `${g.grafica}|${g.marca}|${g.serie}|${g.envio}|${g.cd}`;
-        let safeChaveMaster = chaveMaster.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-        let idInputMaster = "inpm_" + chaveMaster.replace(/[^a-zA-Z0-9]/g, '').substring(0, 40);
+        let chaveMaster = window.pgGiroChaveObs('MASTER', `${g.grafica}|${g.marca}|${g.serie}|${g.envio}|${g.cd}`);
+        let safeChaveMaster = window.pgGiroEscaparChaveObs(chaveMaster);
+        let idInputMaster = window.pgGiroIdCampoObs('inpm',chaveMaster);
 
         window.CONTEXTOS_TEMP[chaveMaster] = JSON.stringify({grafica: g.grafica, marca: g.marca, serie: g.serie, envio: g.envio, cd: g.cd, status: g.statusGrupo, tiragem: g.tiragemTotal, pendencias: Array.from(g.pendencias), skus: g.skus.map(x => ({sku:x.sku, grafica:x.grafica, cd:x.cd, tiragem:x.tiragem, pendencia:x.pendencia}))});
 
@@ -9187,16 +9206,19 @@ let arrGrupos = Object.values(grupos);
         <tbody class="divide-y divide-slate-100 text-slate-600">
         `;
 
-        g.skus.forEach(item => {
+        const skuObsRenderizados = new Set();
+        g.skus.forEach((item,indiceSku) => {
         let corStatusSku =
             item.statusLinha === 'Concluído' ? 'text-emerald-600' :
             item.statusLinha === 'Cancelado' ? 'text-slate-400 line-through' :
             item.statusLinha === 'Coletado a menos' ? 'text-rose-600' :
             'text-indigo-600';
 
-        let chaveSku = item.chaveUnica;
-            let safeChaveSku = chaveSku.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-            let idInputSku = "inps_" + chaveSku.replace(/[^a-zA-Z0-9]/g, '').substring(0, 40);
+        let chaveSku = window.pgGiroChaveObs('SKU',item.chaveUnica);
+            let safeChaveSku = window.pgGiroEscaparChaveObs(chaveSku);
+            let idInputSku = window.pgGiroIdCampoObs('inps',chaveSku,indiceSku);
+            const primeiraObsSku = !skuObsRenderizados.has(chaveSku);
+            skuObsRenderizados.add(chaveSku);
 
             window.CONTEXTOS_TEMP[chaveSku] = JSON.stringify({grafica: item.grafica, marca: g.marca, serie: g.serie, envio: g.envio, cd: item.cd, sku: item.sku, desc: item.descricao, status: item.statusLinha, pendencia: item.pendencia, tiragem: item.tiragem});
 
@@ -9219,8 +9241,8 @@ let arrGrupos = Object.values(grupos);
             <td class="p-1.5 text-right font-bold border-r border-slate-100">${window.formatarBR ? window.formatarBR(item.tiragem) : item.tiragem}</td>
             <td class="p-1.5">
             <div class="flex items-center w-full">
-            <input type="text" id="${idInputSku}" name="${idInputSku}" autocomplete="off" value="${ultimaObsSku}" class="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1.5 outline-none focus:border-indigo-400 focus:bg-white text-[10px] transition-all text-slate-700 font-semibold shadow-inner" placeholder="Nova observação (Enter)..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('SKU', '${safeChaveSku}', this)" />
-            ${btnHistSku}
+            ${primeiraObsSku ? `<input type="text" id="${idInputSku}" name="${idInputSku}" autocomplete="off" value="${ultimaObsSku}" class="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1.5 outline-none focus:border-indigo-400 focus:bg-white text-[10px] transition-all text-slate-700 font-semibold shadow-inner" placeholder="Nova observação (Enter)..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('SKU', '${safeChaveSku}', this)" />` : '<span class="text-[9px] text-slate-500" title="Observação compartilhada pelo mesmo SKU e destino">Observação unificada com o mesmo SKU/CD</span>'}
+            ${primeiraObsSku ? btnHistSku : ''}
             </div>
             </td>
             </tr>
