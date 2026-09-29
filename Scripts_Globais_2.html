@@ -8402,15 +8402,6 @@ window.OBS_GIRO_CARREGADO = false;
 
 window.renderizarPontosAtencaoGiro = function(dados) {
     window.GIRO_DADOS_RAW = dados || [];
-    if (!document.getElementById('btnExportarJSONGiroV41')) {
-        const botao = document.createElement('button');
-        botao.id = 'btnExportarJSONGiroV41'; botao.type = 'button';
-        botao.className = 'bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold ml-2';
-        botao.textContent = 'Baixar observações (JSON)';
-        botao.onclick = () => window.pgGiroBaixarJSONV41();
-        const ancora = document.getElementById('btnExportarFiltrados');
-        if (ancora) ancora.insertAdjacentElement('afterend', botao);
-    }
     if (window.GIRO_ETAPAS_SELECIONADAS.size === 0) {
         ETAPAS_MAPA.forEach(f => window.GIRO_ETAPAS_SELECIONADAS.add(f.nome));
         window.construirBotoesEtapasGiro();
@@ -8606,51 +8597,38 @@ window.abrirModalHistorico = function(tipo, chave) {
 };
 
 window.salvarObsFront = function(tipo, chave, inputEl) {
-    let obs = inputEl.value.trim();
-    let dictCheck = (tipo === 'SKU') ? window.HISTORICO_OBS_GIRO.sku : window.HISTORICO_OBS_GIRO.master;
-    let lastObs = (dictCheck[chave] && dictCheck[chave].length > 0) ? dictCheck[chave][0].obs : "";
-    if (!obs || obs === lastObs) return;
+    const obs = inputEl.value.trim();
+    const historico = tipo === 'SKU' ? window.HISTORICO_OBS_GIRO.sku : window.HISTORICO_OBS_GIRO.master;
+    const anterior = historico[chave]?.[0]?.obs || '';
+    if (!obs || obs === anterior || inputEl.disabled) return;
 
     inputEl.disabled = true;
     inputEl.classList.add('opacity-50', 'bg-slate-100');
-    let placeholderOriginal = inputEl.placeholder;
-    inputEl.placeholder = "Salvando...";
-
-    let contexto = window.CONTEXTOS_TEMP[chave] || "{}";
-    const eventoId = window.pgGiroRascunhoV41(tipo, chave, inputEl);
-
+    const placeholder = inputEl.placeholder;
+    inputEl.placeholder = 'Salvando na PCPs...';
+    const finalizar = () => {
+        inputEl.disabled = false;
+        inputEl.classList.remove('opacity-50', 'bg-slate-100');
+        inputEl.placeholder = placeholder;
+    };
     google.script.run
         .withSuccessHandler(function(res) {
-            inputEl.disabled = false;
-            inputEl.classList.remove('opacity-50', 'bg-slate-100');
-            inputEl.placeholder = placeholderOriginal;
-
-            if(res && res.success) {
-                if(typeof showToast === 'function') showToast("Observação salva com sucesso no histórico!");
-                let dict = (res.tipo === 'SKU') ? window.HISTORICO_OBS_GIRO.sku : window.HISTORICO_OBS_GIRO.master;
-                if(!dict[res.chave]) dict[res.chave] = [];
-                dict[res.chave].unshift({ data: res.data, user: res.user, obs: res.obs });
-                
-                const local = window.PG_GIRO_RASCUNHOS_JSON_V41[eventoId];
-                if (local) {
-                    window.PG_GIRO_REGISTROS_JSON_V41.push({
-                        ...local, estado:res.jsonSaved ? 'registrado' : 'historico_salvo_json_pendente',
-                        registradoEm:new Date().toISOString(), usuario:res.user || ''
-                    });
-                    delete window.PG_GIRO_RASCUNHOS_JSON_V41[eventoId];
-                }
-                inputEl.dataset.pgGiroEventoV41 = '';
-                if (res.jsonSaved === false) {
-                    alert('Histórico salvo, mas o JSON no Drive falhou: ' +
-                        (res.jsonError || 'erro desconhecido') +
-                        '. Use Baixar observações (JSON) para o registro local.');
-                }
-                window.reFiltrarTabelaGiro();
-            } else {
-                alert("Erro ao salvar observação: " + (res ? res.error : "Erro desconhecido"));
+            finalizar();
+            if (!res || !res.success) {
+                alert('Não foi possível salvar a observação na PCPs: ' + (res?.error || 'Erro desconhecido'));
+                return;
             }
+            const mapa = res.tipo === 'SKU' ? window.HISTORICO_OBS_GIRO.sku : window.HISTORICO_OBS_GIRO.master;
+            if (!mapa[res.chave]) mapa[res.chave] = [];
+            mapa[res.chave].unshift({data:res.data, user:res.user, obs:res.obs});
+            if (typeof showToast === 'function') showToast('Observação registrada na PCPs.');
+            window.reFiltrarTabelaGiro();
         })
-        .salvarObsGiroComJSONV41(tipo, chave, obs, contexto, eventoId);
+        .withFailureHandler(function(err) {
+            finalizar();
+            alert('Não foi possível salvar a observação na PCPs: ' + (err?.message || err || 'Erro desconhecido'));
+        })
+        .salvarObsGiro(tipo, chave, obs, window.CONTEXTOS_TEMP[chave] || '{}');
 };
 
 window.exportarPendenciasGiroVisiveis = function() {
@@ -8669,7 +8647,7 @@ window.exportarPendenciasGiroVisiveis = function() {
     }).withFailureHandler(falha).gerarPlanilhaGiroFiltrado(itens);
 };
 
-// PG_GIRO_PRAZOS_JSON_V41
+// PG_GIRO_PRAZOS_V41
 // TIRAGEM VENCIDA / A_Vencer e Coleta_TP. Sem usar Coleta Inicial/Final do PCP.
 window.pgGiroSaldoPrazosV41 = function(linha, hoje) {
     const p = window.pgPrazoLinhaV35(linha, hoje);
@@ -8710,52 +8688,6 @@ window.pgGiroSaldoPrazosV41 = function(linha, hoje) {
         .reduce((s, e) => s + e.volume, 0);
     return { temCampos, eventos, vencido, futuro, semData,
         totalPendente: vencido + futuro + semData, coletaTP: p.dtColeta || '' };
-};
-
-// Gera o JSON de rascunho enquanto o usuário digita; só persiste no Drive
-// quando ele confirma com Enter ou sai do campo (onchange).
-window.PG_GIRO_RASCUNHOS_JSON_V41 = window.PG_GIRO_RASCUNHOS_JSON_V41 || {};
-window.PG_GIRO_REGISTROS_JSON_V41 = window.PG_GIRO_REGISTROS_JSON_V41 || [];
-window.pgGiroRascunhoV41 = function(tipo, chave, input) {
-    if (!input.dataset.pgGiroEventoV41) {
-        input.dataset.pgGiroEventoV41 = 'giro-' + Date.now() + '-' +
-            Math.random().toString(36).slice(2);
-    }
-    let contexto = {};
-    try { contexto = JSON.parse(window.CONTEXTOS_TEMP[chave] || '{}'); }
-    catch (_) { contexto = {}; }
-    const id = input.dataset.pgGiroEventoV41;
-    window.PG_GIRO_RASCUNHOS_JSON_V41[id] = {
-        id, tipo, chave, contexto, texto: input.value,
-        registradoEm: new Date().toISOString(), estado: 'rascunho'
-    };
-    return id;
-};
-window.pgGiroBaixarJSONV41 = function() {
-    const baixar = doc => {
-        const blob = new Blob([JSON.stringify(doc, null, 2)],
-            {type: 'application/json;charset=utf-8'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'Giro_Diario_Observacoes.json';
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
-    };
-    const fallback = err => {
-        const locais = window.PG_GIRO_REGISTROS_JSON_V41 || [];
-        const rascunhos = Object.values(window.PG_GIRO_RASCUNHOS_JSON_V41 || {});
-        if (!locais.length && !rascunhos.length) {
-            alert('Não foi possível consultar o JSON no Drive: ' + err); return;
-        }
-        alert('Não foi possível consultar o Drive. Baixando somente os registros desta sessão.');
-        baixar({schema:'pgportal.giro.observacoes.v1', fonte:'sessao-local',
-            registros:locais, rascunhos});
-    };
-    google.script.run.withSuccessHandler(res => {
-        if (!res || !res.success) { fallback(res?.error || 'Falha desconhecida'); return; }
-        baixar(res.documento);
-    }).withFailureHandler(err => fallback(String(err?.message || err)))
-        .obterJSONGiroV41();
 };
 
 window.reFiltrarTabelaGiro = function() {
@@ -9230,7 +9162,7 @@ let arrGrupos = Object.values(grupos);
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemTotal) : g.tiragemTotal}</td>
         <td class="p-2">
         <div class="flex items-center w-full">
-        <input type="text" id="${idInputMaster}" name="${idInputMaster}" autocomplete="off" value="${ultimaObsMaster}" placeholder="Ação / Motivo (Aperte Enter)..." oninput="window.pgGiroRascunhoV41('MASTER', '${safeChaveMaster}', this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('MASTER', '${safeChaveMaster}', this)" class="w-full text-[11px] p-2 border border-slate-300 hover:border-indigo-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg bg-white outline-none transition-all text-slate-700 font-semibold shadow-inner" />
+        <input type="text" id="${idInputMaster}" name="${idInputMaster}" autocomplete="off" value="${ultimaObsMaster}" placeholder="Ação / Motivo (Aperte Enter)..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('MASTER', '${safeChaveMaster}', this)" class="w-full text-[11px] p-2 border border-slate-300 hover:border-indigo-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg bg-white outline-none transition-all text-slate-700 font-semibold shadow-inner" />
         ${btnHistMaster}
         ${badgeTempoMaster}
         </div>
@@ -9287,7 +9219,7 @@ let arrGrupos = Object.values(grupos);
             <td class="p-1.5 text-right font-bold border-r border-slate-100">${window.formatarBR ? window.formatarBR(item.tiragem) : item.tiragem}</td>
             <td class="p-1.5">
             <div class="flex items-center w-full">
-            <input type="text" id="${idInputSku}" name="${idInputSku}" autocomplete="off" value="${ultimaObsSku}" class="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1.5 outline-none focus:border-indigo-400 focus:bg-white text-[10px] transition-all text-slate-700 font-semibold shadow-inner" placeholder="Nova observação (Enter)..." oninput="window.pgGiroRascunhoV41('SKU', '${safeChaveSku}', this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('SKU', '${safeChaveSku}', this)" />
+            <input type="text" id="${idInputSku}" name="${idInputSku}" autocomplete="off" value="${ultimaObsSku}" class="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1.5 outline-none focus:border-indigo-400 focus:bg-white text-[10px] transition-all text-slate-700 font-semibold shadow-inner" placeholder="Nova observação (Enter)..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('SKU', '${safeChaveSku}', this)" />
             ${btnHistSku}
             </div>
             </td>
