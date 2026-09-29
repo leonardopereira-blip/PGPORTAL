@@ -125,7 +125,7 @@
         <button type="button" class="ma-pill" data-ma-metodo="posi" aria-pressed="false" onclick="window.pgMAMetodo('posi')">% Posi</button>
       </div>
       <div id="maPrazoResumo" class="rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3 text-xs text-indigo-950 leading-relaxed"></div>
-      <p class="text-[10px] text-slate-500">Visão exclusiva do destino CD: PCP direto + PCP_ACABADORAS oficiais, sem duplicidade. Planejamento: META_PCP_POS. A meta original é preservada; ambos os métodos usam somente as datas já registradas no combinado.</p>
+      <p class="text-[10px] text-slate-500">Destino CD · PCP e acabadoras, sem duplicidade.</p>
     </div>
   </div>
   <div id="maAviso" class="hidden text-xs bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900"></div>
@@ -328,10 +328,13 @@
     return {inicio:inicio,fim:fim,dias:dias,antes:antes,fracao:antes/dias};
   }
   function intervaloCombinadoBoss(regras,meta){
-    // Usar exclusivamente os marcos H/I/J/K já registrados no Combinado_Posi.
-    var marcos=posiParcelas(regras).map(function(p){return p.prazo;}).filter(Boolean).sort();
-    // Um só marco não informa um intervalo: não assumir datas ausentes.
-    if(marcos.length<2)return null;
+    // Usar exclusivamente datas do Combinado_Posi. Marco único = data de entrega.
+    var marcos=Array.from(new Set(posiParcelas(regras).map(function(p){return p.prazo;}).filter(Boolean))).sort();
+    if(!marcos.length)return null;
+    if(marcos.length===1){
+      var dentro=marcos[0]<=meta;
+      return {inicio:marcos[0],fim:marcos[0],dias:1,antes:dentro?1:0,fracao:dentro?1:0,entregaUnica:true};
+    }
     return rateioDiasUteisPosi(marcos[0],marcos[marcos.length-1],meta);
   }
   function posiRegra(l) {
@@ -397,7 +400,7 @@
           previsto=Math.min(total,Math.max(0,total*bossIntervalo.fracao));
           excecao=previsto;
         }else{
-          // Sem duas datas registradas, não atribuir intervalo ou percentual fictício.
+          // Sem qualquer data válida, aplicar apenas a regra original.
           bossIndeterminado=true;
           previsto=dtPlan<=alvo?total:0;
           excecao=0;
@@ -456,9 +459,9 @@
       (estado.cenario==='com'&&s.excecao>0?'<div class="ma-dist-dates">Parcela pós-15/10 pelo método '+(estado.metodo==='boss'?'Boss':'% Posi')+': <b>'+fmt(s.excecao,true)+'</b></div>':'')+'</div>';
   }
   function textoPrazos(){
-    if(estado.cenario==='sem')return 'Meta original: 15/10/2026; WAYS: 30/11/2026. Sem exceções Posi.';
-    if(estado.metodo==='boss')return 'Boss: período entre primeira e última data informadas nos marcos H/I/J/K do Combinado_Posi; a tiragem é dividida igualmente pelos dias úteis e a fração até a meta inclui o próprio dia 15/10. Uma data isolada não define intervalo. Desconta fins de semana e feriados nacionais. WAYS mantém 30/11.';
-    return '% Posi: marcos acumulados de 30%, 40%, 50% e 100%, conforme combinado original. Meta geral 15/10; WAYS 30/11.';
+    if(estado.cenario==='sem')return 'Meta original: 15/10 (WAYS: 30/11).';
+    if(estado.metodo==='boss')return 'Dias úteis do combinado até 15/10; data única = entrega naquela data.';
+    return 'Marcos acumulados de 30%, 40%, 50% e 100% do combinado.';
   }
   function distribuicao(items,campo,destino){
     var el=document.getElementById(destino);if(!el)return;
@@ -709,16 +712,16 @@
     var total=soma(items);
     var missing=items.filter(function(l){return !l.alvo || !l.dtPlan;}).length;
     aviso.classList.toggle('hidden',!missing);
-    aviso.textContent=(missing?missing+' linha(s) sem data planejada de entrega ao CD (META_PCP_POS). Esse volume aparece em “Sem previsão”. ':'')+
+    aviso.textContent=(missing?missing+' itens sem data planejada. ':'')+
       (estado.cenario==='com'&&estado.metodo==='boss'&&total.bossIndeterminado?
-        total.bossIndeterminado+' linha(s) do combinado sem duas datas registradas: Boss não inventa período nem percentual.':'');
+        total.bossIndeterminado+' itens sem data no combinado.':'');
     aviso.classList.toggle('hidden',!aviso.textContent);
     document.getElementById('maKPIs').innerHTML=
       card('Tiragem total CD',fmt(total.total,!!items.length),items.length+' linhas PCP + acabadoras (sem duplicidade)','')+
       card('Dentro da meta',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
       card('Fora da meta',fmt(total.pos,!!items.length),'Após 15/10, conforme o método selecionado (WAYS: 30/11)','warn')+
       card('Sem previsão',fmt(total.semData,!!items.length),'Sem data de entrega utilizável','neutral');
-    document.getElementById('maPrazoResumo').innerHTML='<b>Regra · '+(estado.cenario==='sem'?'Meta original':estado.metodo==='boss'?'Boss':'% Posi')+':</b> '+escapeHTML(textoPrazos());
+    document.getElementById('maPrazoResumo').innerHTML='<b>'+(estado.cenario==='sem'?'Meta original':estado.metodo==='boss'?'Boss':'% Posi')+':</b> '+escapeHTML(textoPrazos());
     document.getElementById('maLegendaPrazos').textContent='Volumes planejados até 15/10/2026 e após 15/10/2026. A meta original permanece 15/10/2026 (WAYS: 30/11/2026).';
     document.getElementById('maThPrevisto').textContent='Dentro da meta';
     document.getElementById('maThPos').textContent='Fora da meta';
