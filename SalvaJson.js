@@ -408,7 +408,7 @@ function getDadosMapaSaida_Cache() {
     return {};
   }
 }
-function buscarHistoricoObsGiro_Cache() { return JSON.parse(lerJSONDoDrive("cache_observacoes.json")); }
+function buscarHistoricoObsGiro_Cache() { return buscarHistoricoObsGiro(); }
 function getDadosPPM_Cache() { return JSON.parse(lerJSONDoDrive("cache_ppm.json")); }
 function getDadosPreProducao_Cache() { return JSON.parse(lerJSONDoDrive("cache_pre_producao.json")); }
 function getDadosQualidade_Cache() { return JSON.parse(lerJSONDoDrive("cache_qualidade.json")); }
