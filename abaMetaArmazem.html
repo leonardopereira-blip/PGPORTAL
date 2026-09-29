@@ -116,8 +116,8 @@
     </div>
     <div class="p-4 md:p-5 space-y-4">
       <div class="flex flex-wrap gap-2" role="group" aria-label="Cenário de entrega">
-        <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="true" onclick="window.pgMACenario('com')">Combinado Posi Fere a Meta</button>
-        <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="false" onclick="window.pgMACenario('sem')">Combinado Posi não fere a meta</button>
+        <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="false" onclick="window.pgMACenario('sem')">Combinado Posi Fere a Meta</button>
+        <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="true" onclick="window.pgMACenario('com')">Combinado Posi não fere a meta</button>
       </div>
       <div id="maMetodoWrap" class="flex flex-wrap items-center gap-2" role="group" aria-label="Método de cálculo da Posigraf">
         <span class="text-[10px] uppercase font-black tracking-wide text-slate-500 mr-1">Cálculo Posigraf</span>
@@ -631,7 +631,7 @@
       ctx.fillStyle='#fff';ctx.font='bold 17px Poppins, sans-serif';
       ctx.fillText('META ARMAZÉM · '+m.nomeModo,16,29);
       ctx.font='11px Poppins, sans-serif';
-      ctx.fillText('Destino CD  |  '+(estado.cenario==='com'?'Combinado Posi Fere a Meta · '+(estado.metodo==='boss'?'Boss':'% Posi'):'Combinado Posi não fere a meta')+
+      ctx.fillText('Destino CD  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta · '+(estado.metodo==='boss'?'Boss':'% Posi'):'Combinado Posi Fere a Meta')+
         '  |  15/10/2026 (WAYS 30/11/2026)',16,51);
       ctx.fillStyle='#284081';ctx.fillRect(0,top,w,head);
       ctx.fillStyle='#fff';ctx.font='bold 12px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,5,top+27,first-9);
@@ -661,7 +661,7 @@
       ctx.fillText('Fonte: PCP direto ao CD + PCP_ACABADORAS oficiais · TOTAL ponderado pela tiragem · '+
         (estado.matrizExpandida?'Outros expandido':'Outros agrupado quando aplicável'),10,h-16);
       var a=document.createElement('a');
-      a.download='meta-armazem-matriz-'+m.modo+'-'+(estado.cenario==='com'?'com-posi':'sem-posi')+'.png';
+      a.download='meta-armazem-matriz-'+m.modo+'-'+(estado.cenario==='com'?'posi-nao-fere-meta':'posi-fere-meta')+'.png';
       a.href=canvas.toDataURL('image/png');a.click();
     }catch(e){console.error('[META ARMAZEM] Screenshot:',e);window.alert('Não foi possível capturar a matriz: '+e.message);}
   };
