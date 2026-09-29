@@ -467,19 +467,17 @@ window.exportarSkusFiltradosSheets = function() {
         <svg id="ic-prod" class="w-4 h-4 transition-transform duration-200 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
     </button>
     <div id="sub-prod" class="hidden flex-col gap-1 pl-3 ml-2 border-l border-neutral-800 mt-1 pb-2">
-        <!-- Botão NOVO que reabilita a abaGeral (Onde fica a Curva S) -->
+        <!-- Navegação de Produção: funil, report e entregas em sequência -->
+        <button onclick="abrirGrafico('abaFunil', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🔽 Funil de Produção</button>
+        <button onclick="abrirGrafico('abaReportExecutiva', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📊 Report executiva</button>
+        <button onclick="abrirGrafico('abaMetaArmazem', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📦 Entregas Meta Armazém</button>
         <button onclick="abrirGrafico('abaGeral', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📈 Ritmo e Curva S</button>
         <button onclick="abrirGrafico('abaOnePage', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📄 One Page</button>
-        <button onclick="abrirGrafico('abaReportExecutiva', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📊 Report executiva</button>
-        
-        <!-- Botões Reabilitados e Padronizados -->
-        <button onclick="abrirGrafico('abaFunil', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🔽 Funil de Produção</button>
         <button onclick="abrirGrafico('abaMatriz', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🔀 Status WIP & Cascata</button>
         <button onclick="abrirGrafico('abaGiroSemanal', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🌪️ Giro Diario (Backlogs)</button>
         <button onclick="abrirGrafico('abaEficiencia', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">⏱️ Eficiência & Lead Time</button>
         <button onclick="navegarView('viewCockpit', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded-lg text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">✈️ Cockpit</button>
         <button onclick="abrirGrafico('abaMetaCD', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🎯 Risco Meta Armazém</button>
-        <button onclick="abrirGrafico('abaMetaArmazem', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📊 Entregas Meta Armazém</button>
         <button onclick="abrirGrafico('abaOtif', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🏆 OTIF (Entregas CD)</button>
         <button onclick="abrirGrafico('abaOKRQ2', this); setTimeout(window.iniciarAbaOKRQ2, 100);" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🎯 Aderência de Metas</button>
         <button onclick="abrirGrafico('abaPlan', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📅 Backlog & Pipeline</button>
