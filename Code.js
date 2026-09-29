@@ -379,11 +379,18 @@ function buscarHistoricoObsGiro() {
     var first=linhas.length &&
       /^data(?: e hora)?$/i.test(String(linhas[0][0]||'').trim()) &&
       /^(obs|observação)$/i.test(String(linhas[0][3]||'').trim()) ? 1 : 0;
-    var ultimoEvento={};
-    // Começa pelo mais novo para manter a nota recente e suprimir somente
-    // duplicações do mesmo texto/chave num intervalo de dois minutos.
-    for(var i=linhas.length-1;i>=first;i--){
-      var row=linhas[i],chave=pgGiroNormalizarChave_(tipo,row[2]);
+    var ultimoEvento=Object.create(null);
+    // Data, não posição física da linha, determina qual nota é a mais recente.
+    // Isso protege históricos importados ou reorganizados entre abas.
+    var ordenadas=linhas.slice(first).map(function(row,i){
+      return {row:row,indice:i,data:pgGiroMomento_(row[0])};
+    }).sort(function(a,b){
+      var av=Number.isFinite(a.data)?a.data:-Infinity;
+      var bv=Number.isFinite(b.data)?b.data:-Infinity;
+      return bv-av||b.indice-a.indice;
+    });
+    for(var i=0;i<ordenadas.length;i++){
+      var row=ordenadas[i].row,chave=pgGiroNormalizarChave_(tipo,row[2]);
       if(!chave||!String(row[3]||'').trim())continue;
       var assinatura=chave+'\u0001'+pgGiroTextoComparavel_(row[3]);
       if(ultimoEvento[assinatura] && pgGiroEhMesmoEvento_(ultimoEvento[assinatura],row[0]))continue;
