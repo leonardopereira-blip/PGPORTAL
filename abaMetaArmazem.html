@@ -387,25 +387,30 @@
       var alvo=marca==='WAYS'?META_WAYS:META;
       // Curva de planejamento: corte fixo 15/10, independente do combinado.
       var ate15=dtPlan&&dtPlan<=META?total:0,apos15=dtPlan&&dtPlan>META?total:0;
-      // Conserva o mesmo casamento por marca/segmento/série/tipo e a mesma elegibilidade.
-      var regras=estado.cenario==='com'&&marca!=='WAYS'&&dtPlan>META?posiRegra(l):null;
+      // Os dois cenários consultam exatamente o mesmo combinado e o método escolhido.
+      // "Fere": mantém o atingimento original; "não fere": reconhece a extensão.
+      var regras=marca!=='WAYS'&&dtPlan>META?posiRegra(l):null;
       var parcelas=regras?posiParcelas(regras).filter(function(p){return p.prazo>META&&dtPlan<=p.prazo;}):[];
-      // % Posi: cálculo original preservado.
-      var excecao=parcelas.length?Math.min(total,Math.max(0,total*parcelas.reduce(function(a,p){return a+p.fracao;},0))):0;
-      var conhecido=!!dtPlan,previsto=conhecido?(dtPlan<=alvo?total:excecao):0;
+      // Preservar a fórmula original de % Posi e o rateio original do Boss.
+      var excecaoCom=parcelas.length?Math.min(total,Math.max(0,total*parcelas.reduce(function(a,p){return a+p.fracao;},0))):0;
+      var conhecido=!!dtPlan,previstoOriginal=conhecido&&dtPlan<=alvo?total:0;
+      var previstoCom=conhecido?(dtPlan<=alvo?total:excecaoCom):0;
       var bossIntervalo=null,bossIndeterminado=false;
-      if(estado.cenario==='com'&&estado.metodo==='boss'&&regras){
+      if(estado.metodo==='boss'&&regras){
         bossIntervalo=intervaloCombinadoBoss(regras,alvo);
         if(bossIntervalo){
-          previsto=Math.min(total,Math.max(0,total*bossIntervalo.fracao));
-          excecao=previsto;
+          previstoCom=Math.min(total,Math.max(0,total*bossIntervalo.fracao));
+          excecaoCom=previstoCom;
         }else{
-          // Sem qualquer data válida, aplicar apenas a regra original.
+          // Sem data no combinado, permanece o prazo original.
           bossIndeterminado=true;
-          previsto=dtPlan<=alvo?total:0;
-          excecao=0;
+          previstoCom=previstoOriginal;
+          excecaoCom=0;
         }
       }
+      var combinadoAdicional=Math.max(0,previstoCom-previstoOriginal);
+      var previsto=estado.cenario==='com'?previstoCom:previstoOriginal;
+      var excecao=estado.cenario==='com'?combinadoAdicional:0;
       var realRaw=l['TIRAGEM CONFIRMADA DENTRO DA META'];
       var realTem=realRaw!==null&&realRaw!==undefined&&realRaw!=='';
       return {
@@ -416,6 +421,7 @@
         metaArmDate:data(l.META_ARM_POS||l['META ARMAZÉM']),
         ate15:ate15,apos15:apos15,excecao:excecao,
         posi:!!regras,alvo:alvo,dtPlan:dtPlan,bossIntervalo:bossIntervalo,bossIndeterminado:bossIndeterminado,
+        combinadoAdicional:combinadoAdicional,
         prazos:[alvo].concat(estado.metodo==='posi'?parcelas.map(function(p){return p.prazo;}):[]),
         cd:normal(l.CD_FINAL||l['CD DESTINO'])
       };
@@ -425,10 +431,11 @@
     return items.reduce(function(a,l){
       a.total+=l.total;a.previsto+=l.previsto;a.pos+=l.pos;a.semData+=l.semData;
       a.ate15+=l.ate15||0;a.apos15+=l.apos15||0;a.excecao+=l.excecao||0;
+      a.combinadoAdicional+=l.combinadoAdicional||0;
       a.real+=l.real;if(l.realTem)a.realTem=true;
       a.realCD+=l.realCD||0;if(l.realCDTem)a.realCDTem=true;
       if(l.bossIndeterminado)a.bossIndeterminado++;return a;
-    },{total:0,previsto:0,pos:0,semData:0,ate15:0,apos15:0,excecao:0,real:0,realTem:false,realCD:0,realCDTem:false,bossIndeterminado:0});
+    },{total:0,previsto:0,pos:0,semData:0,ate15:0,apos15:0,excecao:0,real:0,realTem:false,realCD:0,realCDTem:false,bossIndeterminado:0,combinadoAdicional:0});
   }
   function card(rotulo, valor, sub, classe) {
     return '<div class="ma-kpi '+(classe||'')+'"><p class="text-[10px] uppercase tracking-wider font-black opacity-75">'+escapeHTML(rotulo)+'</p>'+
@@ -459,7 +466,6 @@
       (estado.cenario==='com'&&s.excecao>0?'<div class="ma-dist-dates">Parcela pós-15/10 pelo método '+(estado.metodo==='boss'?'Boss':'% Posi')+': <b>'+fmt(s.excecao,true)+'</b></div>':'')+'</div>';
   }
   function textoPrazos(){
-    if(estado.cenario==='sem')return 'Meta original: 15/10 (WAYS: 30/11).';
     if(estado.metodo==='boss')return 'Dias úteis do combinado até 15/10; data única = entrega naquela data.';
     return 'Marcos acumulados de 30%, 40%, 50% e 100% do combinado.';
   }
@@ -707,13 +713,13 @@
     // Marca, série e gráfica seguem exclusivamente os filtros gerais do portal.
     document.querySelectorAll('[data-ma-cenario]').forEach(function(btn){btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-cenario')===estado.cenario));});
     document.querySelectorAll('[data-ma-metodo]').forEach(function(btn){btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-metodo')===estado.metodo));});
-    document.getElementById('maMetodoWrap').classList.toggle('hidden',estado.cenario!=='com');
+    document.getElementById('maMetodoWrap').classList.remove('hidden');
     var items=base;
     var total=soma(items);
     var missing=items.filter(function(l){return !l.alvo || !l.dtPlan;}).length;
     aviso.classList.toggle('hidden',!missing);
     aviso.textContent=(missing?missing+' itens sem data planejada. ':'')+
-      (estado.cenario==='com'&&estado.metodo==='boss'&&total.bossIndeterminado?
+      (estado.metodo==='boss'&&total.bossIndeterminado?
         total.bossIndeterminado+' itens sem data no combinado.':'');
     aviso.classList.toggle('hidden',!aviso.textContent);
     document.getElementById('maKPIs').innerHTML=
@@ -721,7 +727,9 @@
       card('Dentro da meta',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
       card('Fora da meta',fmt(total.pos,!!items.length),'Após 15/10, conforme o método selecionado (WAYS: 30/11)','warn')+
       card('Sem previsão',fmt(total.semData,!!items.length),'Sem data de entrega utilizável','neutral');
-    document.getElementById('maPrazoResumo').innerHTML='<b>'+(estado.cenario==='sem'?'Meta original':estado.metodo==='boss'?'Boss':'% Posi')+':</b> '+escapeHTML(textoPrazos());
+    document.getElementById('maPrazoResumo').innerHTML='<b>'+(estado.metodo==='boss'?'Boss':'% Posi')+':</b> '+
+      escapeHTML(textoPrazos())+' · '+escapeHTML('Extensão: '+fmt(total.combinadoAdicional,true)+
+      (estado.cenario==='com'?' considerada no atingimento.':' não considerada no atingimento.'));
     document.getElementById('maLegendaPrazos').textContent='Volumes planejados até 15/10/2026 e após 15/10/2026. A meta original permanece 15/10/2026 (WAYS: 30/11/2026).';
     document.getElementById('maThPrevisto').textContent='Dentro da meta';
     document.getElementById('maThPos').textContent='Fora da meta';
