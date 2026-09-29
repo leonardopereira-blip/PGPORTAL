@@ -282,60 +282,75 @@ function atualizar_PCP_Funil_e_Atrasos() {
   }
 }
 
+// As duas abas de observações já existem no arquivo PCPs; manter as chaves
+// MASTER/SKU e as cinco colunas históricas, sem gravar no workbook da PGBM.
+function pgArquivoObservacoesGiro_() {
+  if (typeof PG_ARQUIVO_PCPS === 'undefined' || !PG_ARQUIVO_PCPS) {
+    throw new Error('ID da planilha PCPs indisponível.');
+  }
+  return SpreadsheetApp.openById(PG_ARQUIVO_PCPS);
+}
+
 function salvarObsGiro(tipo, chave, obs, contextoStr) {
+  var lock = LockService.getScriptLock();
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (tipo !== 'MASTER' && tipo !== 'SKU') throw new Error('Tipo de observação inválido.');
+    chave = String(chave || '').trim();
+    obs = String(obs || '').trim();
+    if (!chave || !obs) throw new Error('Chave e observação são obrigatórias.');
+    lock.waitLock(30000);
+    var ss = pgArquivoObservacoesGiro_();
     var nomeAba = tipo === 'SKU' ? 'Obs_Cockpit_sku' : 'Obs_Cockpit';
     var sheet = ss.getSheetByName(nomeAba);
-    
     if (!sheet) {
       sheet = ss.insertSheet(nomeAba);
-      sheet.appendRow(["Data e Hora", "Usuário", "Chave de Ligação", "Observação", "Contexto Físico (JSON)"]);
-      sheet.getRange("A1:E1").setFontWeight("bold").setBackground("#4f46e5").setFontColor("white");
+      sheet.appendRow(['Data e Hora', 'Usuário', 'Chave de Ligação', 'Observação', 'Contexto Físico (JSON)']);
+      sheet.getRange('A1:E1').setFontWeight('bold').setBackground('#284081').setFontColor('white');
       sheet.setFrozenRows(1);
     }
-    
-    var email = "Modo Desenvolvedor / Desconhecido";
-    try { email = Session.getActiveUser().getEmail() || "Anônimo"; } catch(e){}
+    var email = 'Modo Desenvolvedor / Desconhecido';
+    try { email = Session.getActiveUser().getEmail() || 'Anônimo'; } catch (e) {}
     var agora = new Date();
-    
-    sheet.appendRow([agora, email, chave, obs, contextoStr]);
-   
-    var dataFormatada = Utilities.formatDate(agora, "GMT-3", "dd/MM/yyyy HH:mm");
-    return { success: true, data: dataFormatada, user: email, obs: obs, chave: chave, tipo: tipo };
-   
-  } catch(e) {
-    return { success: false, error: e.toString() };
+    // Mesma ordem dos registros antigos da PCPs: data, usuário, chave, texto, contexto.
+    sheet.appendRow([agora, email, chave, obs, String(contextoStr || '{}')]);
+    SpreadsheetApp.flush();
+    return {
+      success:true,
+      data:Utilities.formatDate(agora, 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm'),
+      user:email, obs:obs, chave:chave, tipo:tipo
+    };
+  } catch (e) {
+    console.error('[Giro] Falha ao salvar observação na PCPs: ' + e);
+    return {success:false, error:String(e.message || e)};
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
   }
 }
 
 function buscarHistoricoObsGiro() {
-  try {
-    var result = { master: {}, sku: {} };
-    
-    function lerAba(nomeAba, destinoMap) {
-      var data = pgLerAbaCache_(nomeAba, 4, true, true);
-      if (!data) return;
-      for (var i = 1; i < data.length; i++) {
-        var dt = data[i][0];
-        var usr = data[i][1];
-        var chave = data[i][2];
-        var obs = data[i][3];
-       
-        if (!chave) continue;
-        if (!destinoMap[chave]) destinoMap[chave] = [];
-       
-        destinoMap[chave].unshift({ data: dt, user: usr, obs: obs });
-      }
+  // Lê diretamente a PCPs, para que os novos registros apareçam no próximo
+  // carregamento sem depender de republicar/atualizar cache_observacoes.json.
+  var ss = pgArquivoObservacoesGiro_();
+  var result = {master:{}, sku:{}};
+  function lerAba(nomeAba, destino) {
+    var sheet = ss.getSheetByName(nomeAba);
+    if (!sheet || sheet.getLastRow() < 1) return;
+    var linhas = sheet.getRange(1, 1, sheet.getLastRow(), 4).getDisplayValues();
+    // Obs_Cockpit tem cabeçalho. Obs_Cockpit_sku começou sem cabeçalho:
+    // preservar a primeira observação em vez de descartar a linha 1.
+    var first = linhas.length &&
+      /^data(?: e hora)?$/i.test(String(linhas[0][0] || '').trim()) &&
+      /^(obs|observação)$/i.test(String(linhas[0][3] || '').trim()) ? 1 : 0;
+    for (var i = first; i < linhas.length; i++) {
+      var row = linhas[i],chave=String(row[2] || '').trim();
+      if (!chave) continue;
+      if (!destino[chave]) destino[chave] = [];
+      destino[chave].unshift({data:row[0], user:row[1], obs:row[3]});
     }
-    
-    lerAba('Obs_Cockpit', result.master);
-    lerAba('Obs_Cockpit_sku', result.sku);
-    return result;
-  } catch(e) {
-    if (e.cacheLeitura) throw e;
-    return { master: {}, sku: {} };
   }
+  lerAba('Obs_Cockpit', result.master);
+  lerAba('Obs_Cockpit_sku', result.sku);
+  return result;
 }
 
 function getDadosCockpit() {
