@@ -459,9 +459,10 @@
       escapeHTML(fmt(x.previsto,true)+' / '+fmt(x.total,true))+'">'+
       '<span style="width:'+p+'%;background:'+corBarra+'"></span></div>';
   }
-  function colunasMatriz(x) {
-    return '<td class="ma-matrix-pct">'+pct(x.previsto,x.total)+'</td>'+
-      '<td class="ma-matrix-progress">'+barraMatriz(x)+'</td>';
+  function colunasMatriz(x,c) {
+    return '<td class="ma-matrix-cell'+(!c.campo?' ma-matrix-total-col':'')+'" title="'+
+      escapeHTML(fmt(x.previsto,true)+' planejado no prazo / '+fmt(x.total,true)+' total')+'">'+
+      '<div class="ma-matrix-value">'+pct(x.previsto,x.total)+'</div>'+barraMatriz(x)+'</td>';
   }
   function ordenarMatriz(a,b) {
     var ai=SERIES.indexOf(a),bi=SERIES.indexOf(b);
@@ -474,31 +475,32 @@
       return bv-av||a.localeCompare(b,'pt-BR',{numeric:true});
     });
     var modo=estado.matrizModo,linhas=[],colunas=[],escondidas=0;
+    var geral={nome:'TOTAL GERAL',campo:null,valores:[],prioritaria:false};
     if(modo==='marca') {
       linhas=marcas.map(function(m){return {nome:m,itens:items.filter(function(x){return x.marca===m;})};});
-      colunas=[{nome:'TOTAL',campo:null,valores:[]}];
+      colunas=[geral];
     } else if(modo==='graficaMarca') {
       var graficas=Array.from(new Set(items.map(function(x){return x.grafica;})))
         .sort(function(a,b){return a.localeCompare(b,'pt-BR',{numeric:true});});
       linhas=graficas.map(function(g){return {nome:g,itens:items.filter(function(x){return x.grafica===g;})};});
-      // Não agrupar marcas em Outros: agrupamento é somente de séries.
-      colunas=marcas.map(function(m){return {nome:m,campo:'marca',valores:[m]};});
-      colunas.push({nome:'TOTAL',campo:null,valores:[]});
+      colunas=[geral].concat(marcas.map(function(m){return {nome:m,campo:'marca',valores:[m],prioritaria:false};}));
     } else {
-      // Marca x Série: marcas nas LINHAS; séries nas COLUNAS.
+      // Marcas nas linhas. O total precede INF, anos e séries.
       linhas=marcas.map(function(m){return {nome:m,itens:items.filter(function(x){return x.marca===m;})};});
-      var series=Array.from(new Set(items.map(function(x){return x.serie;}))).sort(function(a,b){
-        var av=soma(items.filter(function(x){return x.serie===a;})).total;
-        var bv=soma(items.filter(function(x){return x.serie===b;})).total;
-        return bv-av||ordenarMatriz(a,b);
+      var series=Array.from(new Set(items.map(function(x){return x.serie;})));
+      var prioridade=series.filter(seriePrioritaria).sort(function(a,b){
+        return ordemMatriz().indexOf(a)-ordemMatriz().indexOf(b);
       });
-      var principais=series.slice(0,6),menores=series.slice(6);
-      escondidas=menores.length;
-      var grupos=estado.matrizExpandida?
-        series.map(function(v){return {nome:v,campo:'serie',valores:[v]};}):
-        principais.map(function(v){return {nome:v,campo:'serie',valores:[v]};})
-          .concat(menores.length?[{nome:'OUTROS',campo:'serie',valores:menores}]:[]);
-      colunas=grupos.concat([{nome:'TOTAL',campo:null,valores:[]}]);
+      var outras=series.filter(function(x){return !seriePrioritaria(x)&&x!=='VARIOS';})
+        .sort(function(a,b){
+          return soma(items.filter(function(x){return x.serie===b;})).total-
+            soma(items.filter(function(x){return x.serie===a;})).total||ordenarMatriz(a,b);
+        });
+      escondidas=outras.length;
+      var mostrar=estado.matrizExpandida?outras.map(function(v){return {nome:v,campo:'serie',valores:[v],prioritaria:false};}):
+        outras.length?[{nome:'OUTROS',campo:'serie',valores:outras,prioritaria:false}]:[];
+      colunas=[geral].concat(prioridade.map(function(v){return {nome:v,campo:'serie',valores:[v],prioritaria:true};}))
+        .concat(mostrar).concat(series.indexOf('VARIOS')>=0?[{nome:'VARIOS',campo:'serie',valores:['VARIOS'],prioritaria:false}]:[]);
     }
     function totalColuna(base,c){
       return c.campo?soma(base.filter(function(x){return c.valores.indexOf(x[c.campo])>=0;})):soma(base);
@@ -517,7 +519,7 @@
     window.pgMAMatrizSnapshot=m;
     var toggle=document.getElementById('maOutrosToggle');
     if(toggle){
-      toggle.classList.toggle('hidden',!m.escondidas);
+      toggle.classList.toggle('hidden',!m.escondidas||m.modo!=='marcaSerie');
       toggle.textContent=estado.matrizExpandida?'Recolher Outros':'Expandir Outros ('+m.escondidas+' séries)';
       toggle.setAttribute('aria-pressed',String(estado.matrizExpandida));
     }
@@ -526,18 +528,50 @@
     });
     document.getElementById('maMatrizTitulo').textContent='Matriz · '+m.nomeModo;
     if(!items.length){root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';return;}
-    var cabeca='<th rowspan="2">'+m.rotuloLinha+'</th>'+
-      m.colunas.map(function(c){return '<th colspan="2"'+(c.nome==='OUTROS'?' title="Séries de menor tiragem, agrupadas sem duplicidade"':'')+'>'+
-        rotuloMatriz(c.nome)+'</th>';}).join('');
-    var sub=m.colunas.map(function(){return '<th>%</th><th>Progresso</th>';}).join('');
-    var h='<table class="ma-matrix-table"><thead><tr>'+cabeca+'</tr><tr>'+sub+'</tr></thead><tbody>';
+    var cabeca='<th>'+m.rotuloLinha+'</th>'+
+      m.colunas.map(function(c){
+        var arrastavel=c.prioritaria,extra=c.nome==='OUTROS';
+        return '<th class="ma-matrix-col-head'+(!c.campo?' ma-matrix-total-col':'')+
+          (arrastavel?' ma-draggable':'')+'"'+(arrastavel?' draggable="true" data-ma-prioridade="1" data-ma-col="'+escapeHTML(c.nome)+'"':'')+
+          ' title="'+escapeHTML(c.nome+(arrastavel?' — arraste para reordenar':'')+(extra?' — séries secundárias agrupadas sem duplicidade':''))+'">'+
+          '<span class="ma-matriz-label">'+escapeHTML(c.nome)+'</span></th>';
+      }).join('');
+    var h='<table class="ma-matrix-table"><colgroup><col style="width:150px">'+
+      m.colunas.map(function(){return '<col style="width:94px">';}).join('')+
+      '</colgroup><thead><tr>'+cabeca+'</tr></thead><tbody>';
     m.linhas.forEach(function(l){
       h+='<tr><th>'+rotuloMatriz(l.nome,25)+'</th>'+
-        l.celulas.map(colunasMatriz).join('')+'</tr>';
+        l.celulas.map(function(x,i){return colunasMatriz(x,m.colunas[i]);}).join('')+'</tr>';
     });
-    h+='<tr class="ma-matrix-total"><th>TOTAL</th>'+m.total.map(colunasMatriz).join('')+'</tr></tbody></table>';
+    h+='<tr class="ma-matrix-total"><th>TOTAL GERAL</th>'+
+      m.total.map(function(x,i){return colunasMatriz(x,m.colunas[i]);}).join('')+'</tr></tbody></table>';
     root.innerHTML=h;
+    var origem='';
+    root.querySelectorAll('th[data-ma-prioridade="1"]').forEach(function(th){
+      th.addEventListener('dragstart',function(ev){
+        origem=th.getAttribute('data-ma-col');
+        ev.dataTransfer.effectAllowed='move';
+        ev.dataTransfer.setData('text/plain',origem);
+      });
+      th.addEventListener('dragover',function(ev){ev.preventDefault();ev.dataTransfer.dropEffect='move';th.classList.add('ma-drag-over');});
+      th.addEventListener('dragleave',function(){th.classList.remove('ma-drag-over');});
+      th.addEventListener('dragend',function(){root.querySelectorAll('.ma-drag-over').forEach(function(x){x.classList.remove('ma-drag-over');});});
+      th.addEventListener('drop',function(ev){
+        ev.preventDefault();th.classList.remove('ma-drag-over');
+        window.pgMAReordenarMatriz(ev.dataTransfer.getData('text/plain')||origem,th.getAttribute('data-ma-col'));
+      });
+    });
   }
+  window.pgMAReordenarMatriz=function(de,para){
+    var ordem=ordemMatriz().slice(),deIdx=ordem.indexOf(de),paraIdx=ordem.indexOf(para);
+    if(deIdx<0||paraIdx<0||deIdx===paraIdx)return;
+    ordem.splice(deIdx,1);ordem.splice(paraIdx,0,de);
+    estado.ordemPrioridade=ordem;
+    try{window.localStorage.setItem('pgMAOrdemPrioridadeV1',JSON.stringify(ordem));}catch(e){}
+    var root=document.getElementById('maMatriz'),pos=root?root.scrollLeft:0;
+    matriz(window.pgMAUltimosItens||[]);
+    if(root)root.scrollLeft=pos;
+  };
   window.pgMAMatrizModo=function(modo) {
     if(['marca','marcaSerie','graficaMarca'].indexOf(modo)<0)return;
     estado.matrizModo=modo;estado.matrizExpandida=false;
