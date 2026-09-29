@@ -83,9 +83,9 @@
     #abaMetaArmazem .ma-matrix-table tbody th{min-width:118px;width:118px;max-width:118px}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head,
     #abaMetaArmazem .ma-matrix-table .ma-matrix-cell{min-width:94px;width:94px;max-width:94px}
-    #abaMetaArmazem .ma-matrix-table thead th{vertical-align:middle;height:51px;font-size:10px;line-height:1.3}
+    #abaMetaArmazem .ma-matrix-table thead th{vertical-align:middle;height:51px;font-size:11.5px;line-height:1.25}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head .ma-matriz-label{display:block;max-width:none;white-space:normal;overflow:visible;overflow-wrap:break-word}
-    #abaMetaArmazem .ma-matrix-table tbody th{height:44px;padding:3px 5px;overflow:hidden;text-overflow:ellipsis}
+    #abaMetaArmazem .ma-matrix-table tbody th{height:44px;padding:3px 5px;overflow:hidden;text-overflow:ellipsis;font-size:12px;line-height:1.25}
     #abaMetaArmazem .ma-matrix-table tbody th .ma-matriz-label{max-width:14ch;text-overflow:ellipsis}
     #abaMetaArmazem .ma-matrix-table td.ma-matrix-cell{height:44px;padding:3px;text-align:center;vertical-align:middle}
     #abaMetaArmazem .ma-matrix-tile{position:relative;isolation:isolate;display:flex;align-items:center;justify-content:center;width:100%;height:38px;background:#EDF4FB;border-radius:5px;overflow:hidden}
@@ -116,8 +116,8 @@
     </div>
     <div class="p-4 md:p-5 space-y-4">
       <div class="flex flex-wrap gap-2" role="group" aria-label="Cenário de entrega">
-        <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="true" onclick="window.pgMACenario('com')">Com combinado Posi</button>
-        <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="false" onclick="window.pgMACenario('sem')">Sem combinado Posi</button>
+        <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="true" onclick="window.pgMACenario('com')">Combinado Posi Fere a Meta</button>
+        <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="false" onclick="window.pgMACenario('sem')">Combinado Posi não fere a meta</button>
       </div>
       <div id="maMetodoWrap" class="flex flex-wrap items-center gap-2" role="group" aria-label="Método de cálculo da Posigraf">
         <span class="text-[10px] uppercase font-black tracking-wide text-slate-500 mr-1">Cálculo Posigraf</span>
@@ -631,7 +631,7 @@
       ctx.fillText('Destino CD  |  '+(estado.cenario==='com'?'Com combinado Posi · '+(estado.metodo==='boss'?'Boss':'% Posi'):'Sem combinado Posi')+
         '  |  15/10/2026 (WAYS 30/11/2026)',16,51);
       ctx.fillStyle='#284081';ctx.fillRect(0,top,w,head);
-      ctx.fillStyle='#fff';ctx.font='bold 11px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,10,top+25);
+      ctx.fillStyle='#fff';ctx.font='bold 12px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,5,top+27,first-9);
       function corta(v,max){var chars=Array.from(String(v));return chars.length>max?chars.slice(0,max-1).join('')+'…':chars.join('');}
       m.colunas.forEach(function(c,j){ctx.fillStyle='#fff';ctx.fillText(corta(c.nome,13),first+j*col+4,top+27,col-8);});
       var rows=m.linhas.concat([{nome:'TOTAL GERAL',celulas:m.total}]);
@@ -639,7 +639,7 @@
         var y=top+head+i*rowH,ultimo=i===rows.length-1;
         ctx.fillStyle=ultimo?'#dceafa':i%2?'#f3f8fd':'#fff';ctx.fillRect(0,y,w,rowH);
         ctx.strokeStyle='#dce5f0';ctx.beginPath();ctx.moveTo(0,y+rowH-.5);ctx.lineTo(w,y+rowH-.5);ctx.stroke();
-        ctx.fillStyle='#0C2340';ctx.font=(ultimo?'bold ':'')+'11px Poppins, sans-serif';
+        ctx.fillStyle='#0C2340';ctx.font=(ultimo?'bold ':'')+'12px Poppins, sans-serif';
         ctx.fillText(corta(r.nome,18),5,y+25,first-9);
         r.celulas.forEach(function(c,j){
           var x=first+j*col,p=c.total?Math.max(0,Math.min(100,100*c.previsto/c.total)):0;
