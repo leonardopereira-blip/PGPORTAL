@@ -10603,7 +10603,9 @@ window.processarReportExecutiva = function() {
 
     window.reCurvaFonteCDV43 = {
         total: entCD.total.den,
-        planejadoHoje: entCD.total.plan,
+        // O planejado da curva usa a mesma fonte consolidada do gráfico diário:
+        // PCP direto + acabadoras oficiais, sem duplicação.
+        planejadoHoje: somaDiaAte(hojeIso),
         realizadoHoje: entCD.total.real,
         eventosPlano: eventosCDDia,
         eventosPlanoHistorico: entCD.eventosPlano,
