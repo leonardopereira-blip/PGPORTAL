@@ -53,14 +53,37 @@
         return 'bg-rose-500 text-white';
     }
 
+    // Cache escalar: datas se repetem milhares de vezes entre abas/fases.
+    // Mantém exatamente o mesmo parser; apenas evita refazer o trabalho.
+    const pgCacheExtrairDataISO = new Map();
+
     function extrairDataISO(str) {
         if (!str || String(str).trim() === "") return null;
+
+        const chaveCache = typeof str + '\u0001' + String(str);
+        if (pgCacheExtrairDataISO.has(chaveCache)) {
+            return pgCacheExtrairDataISO.get(chaveCache);
+        }
+
         let s = String(str).trim();
-        if (s.length < 6 || s.toLowerCase().includes("não") || s.toLowerCase().includes("n/a") || s === "-") return null;
-        if (s.includes('T')) s = s.split('T')[0]; if (s.includes(' ')) s = s.split(' ')[0];
-        if (s.includes('/')) { let pts = s.split('/'); if(pts.length === 3) return `${pts[2]}-${pts[1].padStart(2,'0')}-${pts[0].padStart(2,'0')}`; }
-        if (s.includes('-')) { let pts = s.split('-'); if(pts.length === 3 && pts[0].length === 4) return `${pts[0]}-${pts[1].padStart(2,'0')}-${pts[2].padStart(2,'0')}`; }
-        return null; 
+        let resultado = null;
+
+        if (!(s.length < 6 || s.toLowerCase().includes("não") || s.toLowerCase().includes("n/a") || s === "-")) {
+            if (s.includes('T')) s = s.split('T')[0];
+            if (s.includes(' ')) s = s.split(' ')[0];
+
+            if (s.includes('/')) {
+                const pts = s.split('/');
+                if (pts.length === 3) resultado = `${pts[2]}-${pts[1].padStart(2,'0')}-${pts[0].padStart(2,'0')}`;
+            } else if (s.includes('-')) {
+                const pts = s.split('-');
+                if (pts.length === 3 && pts[0].length === 4) resultado = `${pts[0]}-${pts[1].padStart(2,'0')}-${pts[2].padStart(2,'0')}`;
+            }
+        }
+
+        if (pgCacheExtrairDataISO.size >= 4096) pgCacheExtrairDataISO.clear();
+        pgCacheExtrairDataISO.set(chaveCache, resultado);
+        return resultado;
     }
 
     function formatarDataBR(isoStr) {
@@ -121,14 +144,14 @@
     };
 
     function getKey(l) {
-        window.pgCorrigirChaveMarcaSasWays(l);
+        if (pgChavesLinhas.has(l)) return pgChavesLinhas.get(l);
 
-        if (!pgChavesLinhas.has(l)) {
-            const fonte = l._SOURCE || l.BASE || l._base || 'PCP';
-            const chave = l._ROW_ID || JSON.stringify(Object.keys(l).sort().map(k => [k, l[k]]));
-            pgChavesLinhas.set(l, fonte + '|' + chave);
-        }
-        return pgChavesLinhas.get(l);
+        window.pgCorrigirChaveMarcaSasWays(l);
+        const fonte = l._SOURCE || l.BASE || l._base || 'PCP';
+        const chave = l._ROW_ID || JSON.stringify(Object.keys(l).sort().map(k => [k, l[k]]));
+        const valor = fonte + '|' + chave;
+        pgChavesLinhas.set(l, valor);
+        return valor;
     }
 
     window.pgLinhasUnicas = function(linhas) {
@@ -154,7 +177,7 @@
         return bases.filtradas.has(l);
     };
 
-    function belongsToPhase(linha, fId) {
+    function pgBelongsToPhaseSemCache(linha, fId) {
     // FORMAÇÃO DE KIT em TODAS + TODOS:
     // soma literalmente PCP + PCP_ACABADORAS, independente do roteamento.
     if (
@@ -200,6 +223,39 @@
     }
     return true;
 }
+
+
+    let pgBelongsCacheChave = '';
+    let pgBelongsCache = new WeakMap();
+
+    function belongsToPhase(linha, fId) {
+        if (!linha || typeof linha !== 'object') {
+            return pgBelongsToPhaseSemCache(linha, fId);
+        }
+
+        const chaveAtual = [
+            window.pgVersaoFiltros || 0,
+            window.pgOrigemAtivaPortal || '',
+            window.pgDestinoAtivoPortal || ''
+        ].join('|');
+
+        if (chaveAtual !== pgBelongsCacheChave) {
+            pgBelongsCacheChave = chaveAtual;
+            pgBelongsCache = new WeakMap();
+        }
+
+        let porFase = pgBelongsCache.get(linha);
+        if (!porFase) {
+            porFase = new Map();
+            pgBelongsCache.set(linha, porFase);
+        }
+
+        if (porFase.has(fId)) return porFase.get(fId);
+
+        const resultado = pgBelongsToPhaseSemCache(linha, fId);
+        porFase.set(fId, resultado);
+        return resultado;
+    }
 
 const FASES = [
     { id: 'env', nome: 'Env. Arq', colPlan: 'ENV ARQUIVO PLAN', colReal: 'ENV ARQUIVO REAL', colBase: 'ENV ARQUIVO PLAN', colIniReal: null, corLinha: '#0f172a' },
@@ -252,13 +308,29 @@ window.pgEstadoColetaMapa = function(l) {
         concluida: total > 0 && saldo === 0 && !pendenteAY,
         parcial: !volumeConcluido && (ay.includes('COLETADO A MENOS') || (coletada > 0 && saldo > 0)) };
 };
+const pgCacheNormalizarDataColeta = new Map();
+
 window.pgNormalizarDataColeta = function(v, hoje = dtHojeISO) {
     if (v === null || v === undefined || String(v).trim() === '' || Number(v) === 0) return null;
+
+    const hojeRef = String(hoje || dtHojeISO);
+    const chaveCache = hojeRef + '\u0001' + typeof v + '\u0001' + String(v);
+
+    if (pgCacheNormalizarDataColeta.has(chaveCache)) {
+        return pgCacheNormalizarDataColeta.get(chaveCache);
+    }
+
     let iso;
     if (typeof v === 'number') {
-        if (!Number.isFinite(v) || v <= 0) return null;
+        if (!Number.isFinite(v) || v <= 0) {
+            pgCacheNormalizarDataColeta.set(chaveCache, null);
+            return null;
+        }
         const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 86400000);
-        if (!Number.isFinite(d.getTime())) return null;
+        if (!Number.isFinite(d.getTime())) {
+            pgCacheNormalizarDataColeta.set(chaveCache, null);
+            return null;
+        }
         iso = d.toISOString().slice(0, 10);
     } else {
         const s = String(v).trim();
@@ -269,18 +341,28 @@ window.pgNormalizarDataColeta = function(v, hoje = dtHojeISO) {
             if (m) iso = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
         }
     }
-    if (!iso) return null;
-    const d = new Date(iso + 'T00:00:00Z');
-    if (!Number.isFinite(d.getTime()) || d.getTime() <= 0 || d.toISOString().slice(0, 10) !== iso) return null;
 
-    // Blindagem da visão mensal: algumas células numéricas sem data real estavam sendo
-    // interpretadas como serial de data e criavam meses de 1986/1987/1988.
-    // O projeto corrente só considera datas dentro de uma janela operacional plausível.
-    const anoRef = Number(String(hoje || dtHojeISO).slice(0, 4));
-    const ano = Number(iso.slice(0, 4));
-    if (Number.isFinite(anoRef) && (ano < anoRef - 2 || ano > anoRef + 3)) return null;
+    let resultado = iso || null;
 
-    return iso;
+    if (resultado) {
+        const d = new Date(resultado + 'T00:00:00Z');
+        if (!Number.isFinite(d.getTime()) || d.getTime() <= 0 || d.toISOString().slice(0, 10) !== resultado) {
+            resultado = null;
+        }
+    }
+
+    if (resultado) {
+        // Blindagem da visão mensal preservada integralmente.
+        const anoRef = Number(hojeRef.slice(0, 4));
+        const ano = Number(resultado.slice(0, 4));
+        if (Number.isFinite(anoRef) && (ano < anoRef - 2 || ano > anoRef + 3)) {
+            resultado = null;
+        }
+    }
+
+    if (pgCacheNormalizarDataColeta.size >= 4096) pgCacheNormalizarDataColeta.clear();
+    pgCacheNormalizarDataColeta.set(chaveCache, resultado);
+    return resultado;
 };
 
 window.pgValorPlanoColetaLinha = function(l) {
@@ -313,20 +395,36 @@ window.pgDataPlanoColetaLinha = function(l) {
 
 // Fonte única para Mapa, Coleta TP, Entrega TP e curva diária.
 // Não usa DATA_EA, Data_Coleta_Mapa nem valores sem a data operacional.
+const pgCacheVolumesColetaV37 = new WeakMap();
+
 window.pgVolumesColetaUnificadosV37 = function(linha, corte = dtHojeISO) {
-    const n = nome => window.pgNumeroPrazoV35(window.pgCampoPrazoV35(linha, nome));
-    const d = nome => window.pgNormalizarDataColeta(
-        window.pgCampoPrazoV35(linha, nome), dtHojeISO
-    );
-    const bruto = n('TIRAGEM COLETADA');
-    const coletaTP = d('Coleta_TP');
-    const entregaTP = d('Entrega_TP');
+    let base = linha && typeof linha === 'object'
+        ? pgCacheVolumesColetaV37.get(linha)
+        : null;
+
+    if (!base) {
+        const n = nome => window.pgNumeroPrazoV35(window.pgCampoPrazoV35(linha, nome));
+        const d = nome => window.pgNormalizarDataColeta(
+            window.pgCampoPrazoV35(linha, nome), dtHojeISO
+        );
+
+        base = {
+            bruto: n('TIRAGEM COLETADA'),
+            coletaTP: d('Coleta_TP'),
+            entregaTP: d('Entrega_TP')
+        };
+
+        if (linha && typeof linha === 'object') {
+            pgCacheVolumesColetaV37.set(linha, base);
+        }
+    }
+
     return {
-        mapa: bruto,
-        coleta: coletaTP && coletaTP <= corte ? bruto : 0,
-        entrega: entregaTP && entregaTP <= corte ? bruto : 0,
-        coletaTP,
-        entregaTP
+        mapa: base.bruto,
+        coleta: base.coletaTP && base.coletaTP <= corte ? base.bruto : 0,
+        entrega: base.entregaTP && base.entregaTP <= corte ? base.bruto : 0,
+        coletaTP: base.coletaTP,
+        entregaTP: base.entregaTP
     };
 };
 window.pgTiragemColetadaBruta = function(linha) {
@@ -1351,14 +1449,32 @@ window.pgObterResumoColeta = function() {
 };
 
 // V35: leitura explícita dos novos campos, sem confundir TRIAGEM com TIRAGEM.
+const pgIndicesPrazoV35 = new WeakMap();
+const pgNomesPrazoV35 = new Map();
+const pgNormPrazoV35 = nome => {
+    if (!pgNomesPrazoV35.has(nome)) {
+        pgNomesPrazoV35.set(nome, String(nome ?? '').normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '').replace(/_/g, ' ')
+            .trim().replace(/\s+/g, ' ').toUpperCase());
+    }
+    return pgNomesPrazoV35.get(nome);
+};
+
 window.pgCampoPrazoV35 = function(linha, nome) {
     if (!linha || typeof linha !== 'object') return '';
     if (Object.prototype.hasOwnProperty.call(linha, nome)) return linha[nome] ?? '';
-    const norm = v => String(v ?? '').normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '').replace(/_/g, ' ')
-        .trim().replace(/\s+/g, ' ').toUpperCase();
-    const alvo = norm(nome);
-    const chave = Object.keys(linha).find(k => norm(k) === alvo);
+
+    let indice = pgIndicesPrazoV35.get(linha);
+    if (!indice) {
+        indice = new Map();
+        Object.keys(linha).forEach(k => {
+            const normalizado = pgNormPrazoV35(k);
+            if (!indice.has(normalizado)) indice.set(normalizado, k);
+        });
+        pgIndicesPrazoV35.set(linha, indice);
+    }
+
+    const chave = indice.get(pgNormPrazoV35(nome));
     return chave === undefined ? '' : (linha[chave] ?? '');
 };
 window.pgNumeroPrazoV35 = function(v) {
@@ -9522,21 +9638,42 @@ window.exportarDivergenciasColetas = function() {
             .replace(/'/g, '&#39;');
     }
 
+    const pgMetaLinhaCache = new WeakMap();
+
+    function pgMetaLinha(l) {
+        if (!l || typeof l !== 'object') {
+            return { grafica: '', cd: '', rota: '', fonteAcabadora: false };
+        }
+
+        let meta = pgMetaLinhaCache.get(l);
+        if (meta) return meta;
+
+        meta = {
+            grafica: pgNorm(l['GRAFICA_FINAL'] || l['GRÁFICA'] || l['GRAFICA'] || l['BQ'] || ''),
+            cd: pgNorm(l['CD_FINAL'] || l['CD DESTINO'] || l['CD'] || l['CK'] || ''),
+            rota: pgNorm(l['CD DESTINO'] || l['CD_FINAL'] || l['CD'] || l['CK'] || ''),
+            fonteAcabadora: [l._SOURCE, l.BASE, l._base].some(v => pgNorm(v).includes('ACAB'))
+        };
+
+        pgMetaLinhaCache.set(l, meta);
+        return meta;
+    }
+
     function pgGraficaLinha(l) {
-        return pgNorm(l['GRAFICA_FINAL'] || l['GRÁFICA'] || l['GRAFICA'] || l['BQ'] || '');
+        return pgMetaLinha(l).grafica;
     }
 
     function pgCdLinha(l) {
-        return pgNorm(l['CD_FINAL'] || l['CD DESTINO'] || l['CD'] || l['CK'] || '');
+        return pgMetaLinha(l).cd;
     }
 
     // Para decidir o ROTEAMENTO PCP -> acabadora, a coluna soberana é CD DESTINO.
     // CD_FINAL pode já representar o CD final e esconder KN ACABADORA / RAÍZES ACABADORA.
     function pgCdDestinoRoteamento(l) {
-        return pgNorm(l['CD DESTINO'] || l['CD_FINAL'] || l['CD'] || l['CK'] || '');
+        return pgMetaLinha(l).rota;
     }
 
-    window.pgEhFonteAcabadora = l => [l._SOURCE, l.BASE, l._base].some(v => pgNorm(v).includes('ACAB'));
+    window.pgEhFonteAcabadora = l => pgMetaLinha(l).fonteAcabadora;
 
     // Lista fechada para Todas/Gráfica. ATHOS, KN e RAÍZES são destino CD.
     function pgEhAcabadora(l) {
@@ -10318,15 +10455,23 @@ window.processarReportExecutiva = function() {
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .trim().replace(/\s+/g, ' ').toUpperCase();
 
-    const marcaLinha = l => norm(l['MARCA_FINAL'] || l['UNIDADE'] || l['MARCA'] || 'N/A') || 'N/A';
-    const graficaLinha = l => norm(l['GRAFICA_FINAL'] || l['GRÁFICA'] || l['GRAFICA'] || l['BQ'] || '');
-    const serieLinha = l => norm(l['SÉRIE'] || l['Série'] || l.SERIE || l['SÉRIES'] || 'N/A') || 'N/A';
+    const infoLinhaRECache = new WeakMap();
+    const infoLinhaRE = l => {
+        let info = infoLinhaRECache.get(l);
+        if (info) return info;
+
+        info = {
+            grafica: norm(l['GRAFICA_FINAL'] || l['GRÁFICA'] || l['GRAFICA'] || l['BQ'] || '') || 'N/A',
+            marca: norm(l['MARCA_FINAL'] || l['UNIDADE'] || l['MARCA'] || 'N/A') || 'N/A',
+            serie: norm(l['SÉRIE'] || l['Série'] || l.SERIE || l['SÉRIES'] || 'N/A') || 'N/A'
+        };
+        infoLinhaRECache.set(l, info);
+        return info;
+    };
+    const marcaLinha = l => infoLinhaRE(l).marca;
+    const graficaLinha = l => infoLinhaRE(l).grafica === 'N/A' ? '' : infoLinhaRE(l).grafica;
+    const serieLinha = l => infoLinhaRE(l).serie;
     const infoGruposRE = new Map();
-    const infoLinhaRE = l => ({
-        grafica: graficaLinha(l) || 'N/A',
-        marca: marcaLinha(l),
-        serie: serieLinha(l)
-    });
     const chaveLinha = l => {
         const info = infoLinhaRE(l);
         const chave = colunasRE.length
@@ -10355,13 +10500,27 @@ window.processarReportExecutiva = function() {
         return Number.isFinite(n) ? n : 0;
     };
 
-    const tiragem = l => Math.max(0, numero(l['TIRAGEM'] ?? l['QUANTIDADE'] ?? 0));
-    const tiragemColetada = l => Math.max(0, numero(
-        window.pgCampoColeta(l, 'TIRAGEM COLETADA') ??
-        l['VOLUME_AZ'] ??
-        l['GIRO_COLETADA_AZ'] ??
-        0
-    ));
+    const tiragemRECache = new WeakMap();
+    const tiragemColetadaRECache = new WeakMap();
+
+    const tiragem = l => {
+        if (tiragemRECache.has(l)) return tiragemRECache.get(l);
+        const valor = Math.max(0, numero(l['TIRAGEM'] ?? l['QUANTIDADE'] ?? 0));
+        tiragemRECache.set(l, valor);
+        return valor;
+    };
+
+    const tiragemColetada = l => {
+        if (tiragemColetadaRECache.has(l)) return tiragemColetadaRECache.get(l);
+        const valor = Math.max(0, numero(
+            window.pgCampoColeta(l, 'TIRAGEM COLETADA') ??
+            l['VOLUME_AZ'] ??
+            l['GIRO_COLETADA_AZ'] ??
+            0
+        ));
+        tiragemColetadaRECache.set(l, valor);
+        return valor;
+    };
 
     const pct = (n, d) => {
         if (!(d > 0)) return 0;
@@ -10474,10 +10633,17 @@ window.processarReportExecutiva = function() {
     if (thAcab) thAcab.title = 'Somente nesta tabela: para nao-SAS, contabiliza o maior volume entre acabamento real registrado e Coleta TP real e datada, limitado a tiragem da linha. Coleta parcial nao reduz acabamento registrado. SAS e Funil sem alteracoes.';
 
     // 2) ENTREGAS — cenários fixos pedidos na Report.
-    const baseOrigemTodas = baseGeral.filter(l => window.pgLinhaDaOrigem(l, 'TODOS'));
+    // TODAS sempre aceita toda a base; não há necessidade de filtrar linha a linha.
+    const baseOrigemTodas = baseGeral;
     const baseOrigemGrafica = baseGeral.filter(l => window.pgLinhaDaOrigem(l, 'GRAFICA'));
+    const baseCanonicaCenarioCache = new Map();
 
     const baseCanonicaCenario = (origemCenario, destino) => {
+        const chaveCache = origemCenario + '|' + destino;
+        if (baseCanonicaCenarioCache.has(chaveCache)) {
+            return baseCanonicaCenarioCache.get(chaveCache);
+        }
+
         const baseOrigemCenario = origemCenario === 'GRAFICA'
             ? baseOrigemGrafica
             : baseOrigemTodas;
@@ -10493,7 +10659,9 @@ window.processarReportExecutiva = function() {
             });
         }
 
-        return window.pgLinhasUnicas(linhas);
+        const unicas = window.pgLinhasUnicas(linhas);
+        baseCanonicaCenarioCache.set(chaveCache, unicas);
+        return unicas;
     };
 
     const calcularEntrega = (origemCenario, destino) => {
@@ -10502,8 +10670,9 @@ window.processarReportExecutiva = function() {
         // Os próprios registros da tabela alimentam a curva semanal.
         const eventosPlano = [];
         const eventosReal = [];
+        const baseCenario = baseCanonicaCenario(origemCenario, destino);
 
-        baseCanonicaCenario(origemCenario, destino).forEach(l => {
+        baseCenario.forEach(l => {
             const volume = tiragem(l);
             if (volume <= 0) return;
             const m = chaveLinha(l);
@@ -10513,7 +10682,7 @@ window.processarReportExecutiva = function() {
 
         // V42C - numerador Real da MESMA base usada no denominador.
         // Mantém o Planejado original integralmente.
-        const baseReal = baseCanonicaCenario(origemCenario, destino);
+        const baseReal = baseCenario;
         baseReal.forEach(l => {
             const real = typeof window.pgVolumesColetaUnificadosV37 === 'function'
                 ? window.pgVolumesColetaUnificadosV37(l, hojeIso).coleta
@@ -10533,9 +10702,9 @@ window.processarReportExecutiva = function() {
         });
 
         // Planejado preservado: mesma fonte, mesmas datas e mesma fórmula.
-        let pcp = baseGeral.filter(l => !window.pgEhFonteAcabadora(l));
+        let pcp = baseOrigemGrafica;
         if (destino !== 'TODOS') {
-            pcp = pcp.filter(l => window.pgLinhaDoDestino(l, destino, 'GRAFICA'));
+            pcp = baseOrigemGrafica.filter(l => window.pgLinhaDoDestino(l, destino, 'GRAFICA'));
         }
         const fEnt = FASES.find(f => f.id === 'ent_tp');
         pcp.forEach(l => {
