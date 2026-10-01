@@ -10923,7 +10923,7 @@ window.renderReportExecutivaCurvaSemanal = function() {
 
     const labelPeriodo = (ini, fim, atual = false) => {
         const mes = nomesMes[ini.getMonth()];
-        if (atual) return `${mes} - Sem Atual`;
+        if (atual) return `${mes} - ${fmtDiaMes(ini)} a ${fmtDiaMes(fim)}`;
         return `${mes} - ${String(ini.getDate()).padStart(2, '0')} a ${fmtDiaMes(fim)}`;
     };
 
