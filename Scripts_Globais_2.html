@@ -75,7 +75,8 @@
             if (s.includes('/')) {
                 const pts = s.split('/');
                 if (pts.length === 3) resultado = `${pts[2]}-${pts[1].padStart(2,'0')}-${pts[0].padStart(2,'0')}`;
-            } else if (s.includes('-')) {
+            }
+            if (resultado === null && s.includes('-')) {
                 const pts = s.split('-');
                 if (pts.length === 3 && pts[0].length === 4) resultado = `${pts[0]}-${pts[1].padStart(2,'0')}-${pts[2].padStart(2,'0')}`;
             }
@@ -144,14 +145,14 @@
     };
 
     function getKey(l) {
-        if (pgChavesLinhas.has(l)) return pgChavesLinhas.get(l);
-
         window.pgCorrigirChaveMarcaSasWays(l);
-        const fonte = l._SOURCE || l.BASE || l._base || 'PCP';
-        const chave = l._ROW_ID || JSON.stringify(Object.keys(l).sort().map(k => [k, l[k]]));
-        const valor = fonte + '|' + chave;
-        pgChavesLinhas.set(l, valor);
-        return valor;
+
+        if (!pgChavesLinhas.has(l)) {
+            const fonte = l._SOURCE || l.BASE || l._base || 'PCP';
+            const chave = l._ROW_ID || JSON.stringify(Object.keys(l).sort().map(k => [k, l[k]]));
+            pgChavesLinhas.set(l, fonte + '|' + chave);
+        }
+        return pgChavesLinhas.get(l);
     }
 
     window.pgLinhasUnicas = function(linhas) {
@@ -10460,8 +10461,10 @@ window.processarReportExecutiva = function() {
         let info = infoLinhaRECache.get(l);
         if (info) return info;
 
+        const graficaRaw = norm(l['GRAFICA_FINAL'] || l['GRÁFICA'] || l['GRAFICA'] || l['BQ'] || '');
         info = {
-            grafica: norm(l['GRAFICA_FINAL'] || l['GRÁFICA'] || l['GRAFICA'] || l['BQ'] || '') || 'N/A',
+            graficaRaw,
+            grafica: graficaRaw || 'N/A',
             marca: norm(l['MARCA_FINAL'] || l['UNIDADE'] || l['MARCA'] || 'N/A') || 'N/A',
             serie: norm(l['SÉRIE'] || l['Série'] || l.SERIE || l['SÉRIES'] || 'N/A') || 'N/A'
         };
@@ -10469,7 +10472,7 @@ window.processarReportExecutiva = function() {
         return info;
     };
     const marcaLinha = l => infoLinhaRE(l).marca;
-    const graficaLinha = l => infoLinhaRE(l).grafica === 'N/A' ? '' : infoLinhaRE(l).grafica;
+    const graficaLinha = l => infoLinhaRE(l).graficaRaw;
     const serieLinha = l => infoLinhaRE(l).serie;
     const infoGruposRE = new Map();
     const chaveLinha = l => {
