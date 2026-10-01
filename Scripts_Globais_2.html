@@ -10608,7 +10608,9 @@ window.processarReportExecutiva = function() {
         planejadoHoje: somaDiaAte(hojeIso),
         realizadoHoje: entCD.total.real,
         eventosPlano: eventosCDDia,
-        eventosPlanoHistorico: entCD.eventosPlano,
+        // Histórico usa a mesma base consolidada do gráfico diário para que
+        // pontos fechados (ex.: 30/09 após virar 01/10) não voltem ao cálculo antigo.
+        eventosPlanoHistorico: eventosCDDia,
         eventosReal: entCD.eventosReal,
         registros: [...eventosCDDia, ...entCD.eventosReal],
         hoje: hojeIso
