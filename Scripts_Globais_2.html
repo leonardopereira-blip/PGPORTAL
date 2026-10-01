@@ -10921,10 +10921,9 @@ window.renderReportExecutivaCurvaSemanal = function() {
     const nomesMes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     const fmtDiaMes = d => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 
-    const labelPeriodo = (ini, fim, atual = false) => {
+    const labelPeriodo = (ini, fim) => {
         const mes = nomesMes[ini.getMonth()];
-        if (atual) return `${mes} - ${fmtDiaMes(ini)} a ${fmtDiaMes(fim)}`;
-        return `${mes} - ${String(ini.getDate()).padStart(2, '0')} a ${fmtDiaMes(fim)}`;
+        return `${mes} - ${fmtDiaMes(ini)} a ${fmtDiaMes(fim)}`;
     };
 
     const datas = [];
@@ -10953,20 +10952,23 @@ window.renderReportExecutivaCurvaSemanal = function() {
         const semanaFim = fimSemanaSabado(semanaIni);
         const fimDoMes = fimMes(semanaIni);
         const parte1Fim = semanaFim < fimDoMes ? semanaFim : fimDoMes;
-        const semanaAtual = hoje >= semanaIni && hoje <= semanaFim;
+        const parte1Atual = hoje >= semanaIni && hoje <= parte1Fim;
 
         periodos.push({
             ini: toIso(semanaIni),
             fim: toIso(parte1Fim),
-            label: labelPeriodo(semanaIni, parte1Fim, semanaAtual)
+            atual: parte1Atual,
+            label: labelPeriodo(semanaIni, parte1Fim)
         });
 
         if (parte1Fim < semanaFim) {
             const parte2Ini = addDias(parte1Fim, 1);
+            const parte2Atual = hoje >= parte2Ini && hoje <= semanaFim;
             periodos.push({
                 ini: toIso(parte2Ini),
                 fim: toIso(semanaFim),
-                label: labelPeriodo(parte2Ini, semanaFim, false)
+                atual: parte2Atual,
+                label: labelPeriodo(parte2Ini, semanaFim)
             });
         }
 
@@ -11027,8 +11029,7 @@ window.renderReportExecutivaCurvaSemanal = function() {
         );
     });
 
-    const indiceAtual = periodos.findIndex(p =>
-        p.ini <= hojeIso && hojeIso <= p.fim);
+    const indiceAtual = periodos.findIndex(p => p.atual);
     if (indiceAtual >= 0 && total > 0) {
         const planoFechaHoje = cortePlanoPeriodo(periodos[indiceAtual]) === hojeIso;
         const previsto = (fonte.planejadoHoje / total) * 100;
@@ -11049,6 +11050,149 @@ window.renderReportExecutivaCurvaSemanal = function() {
         try { window.reCurvaEntregasChart.destroy(); } catch (e) {}
         window.reCurvaEntregasChart = null;
     }
+
+    const indiceSemanaAtual = periodos.findIndex(p => p.atual);
+
+    const pluginSemanaAtual = {
+        id: 'reCurvaSemanaAtual',
+        beforeDatasetsDraw(chart) {
+            if (indiceSemanaAtual < 0) return;
+
+            const { ctx, chartArea, scales } = chart;
+            const x = scales.x;
+            if (!x || !chartArea) return;
+
+            const totalPontos = periodos.length;
+            const centro = x.getPixelForTick(indiceSemanaAtual);
+
+            let esquerda;
+            let direita;
+
+            if (totalPontos <= 1) {
+                esquerda = chartArea.left;
+                direita = chartArea.right;
+            } else {
+                const anterior = indiceSemanaAtual > 0
+                    ? x.getPixelForTick(indiceSemanaAtual - 1)
+                    : null;
+                const proximo = indiceSemanaAtual < totalPontos - 1
+                    ? x.getPixelForTick(indiceSemanaAtual + 1)
+                    : null;
+
+                esquerda = anterior !== null
+                    ? (anterior + centro) / 2
+                    : centro - (proximo - centro) / 2;
+
+                direita = proximo !== null
+                    ? (centro + proximo) / 2
+                    : centro + (centro - anterior) / 2;
+            }
+
+            esquerda = Math.max(chartArea.left + 1, esquerda + 2);
+            direita = Math.min(chartArea.right - 1, direita - 2);
+
+            ctx.save();
+            ctx.fillStyle = 'rgba(37, 99, 235, 0.055)';
+            ctx.fillRect(
+                esquerda,
+                chartArea.top + 1,
+                Math.max(0, direita - esquerda),
+                Math.max(0, chartArea.bottom - chartArea.top - 1)
+            );
+            ctx.restore();
+        },
+        afterDraw(chart) {
+            if (indiceSemanaAtual < 0) return;
+
+            const { ctx, chartArea, scales } = chart;
+            const x = scales.x;
+            if (!x || !chartArea) return;
+
+            const totalPontos = periodos.length;
+            const centro = x.getPixelForTick(indiceSemanaAtual);
+
+            let esquerda;
+            let direita;
+
+            if (totalPontos <= 1) {
+                esquerda = chartArea.left;
+                direita = chartArea.right;
+            } else {
+                const anterior = indiceSemanaAtual > 0
+                    ? x.getPixelForTick(indiceSemanaAtual - 1)
+                    : null;
+                const proximo = indiceSemanaAtual < totalPontos - 1
+                    ? x.getPixelForTick(indiceSemanaAtual + 1)
+                    : null;
+
+                esquerda = anterior !== null
+                    ? (anterior + centro) / 2
+                    : centro - (proximo - centro) / 2;
+
+                direita = proximo !== null
+                    ? (centro + proximo) / 2
+                    : centro + (centro - anterior) / 2;
+            }
+
+            esquerda = Math.max(chartArea.left + 1, esquerda + 2);
+            direita = Math.min(chartArea.right - 1, direita - 2);
+
+            // Inclui o rótulo vertical da semana, mas preserva o título do eixo.
+            const topo = chartArea.top + 2;
+            const fundo = Math.min(chart.height - 30, (x.bottom || chart.height) - 24);
+            const largura = Math.max(0, direita - esquerda);
+            const altura = Math.max(0, fundo - topo);
+            const raio = 10;
+
+            const roundRect = (cx, cy, w, h, r) => {
+                const rr = Math.min(r, w / 2, h / 2);
+                ctx.beginPath();
+                ctx.moveTo(cx + rr, cy);
+                ctx.lineTo(cx + w - rr, cy);
+                ctx.quadraticCurveTo(cx + w, cy, cx + w, cy + rr);
+                ctx.lineTo(cx + w, cy + h - rr);
+                ctx.quadraticCurveTo(cx + w, cy + h, cx + w - rr, cy + h);
+                ctx.lineTo(cx + rr, cy + h);
+                ctx.quadraticCurveTo(cx, cy + h, cx, cy + h - rr);
+                ctx.lineTo(cx, cy + rr);
+                ctx.quadraticCurveTo(cx, cy, cx + rr, cy);
+                ctx.closePath();
+            };
+
+            ctx.save();
+
+            roundRect(esquerda, topo, largura, altura, raio);
+            ctx.strokeStyle = 'rgba(37, 99, 235, 0.82)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            const texto = 'Semana atual';
+            ctx.font = 'bold 11px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const paddingX = 9;
+            const pillH = 22;
+            const pillW = Math.min(
+                Math.max(ctx.measureText(texto).width + paddingX * 2, 82),
+                Math.max(82, largura - 8)
+            );
+            const pillX = centro - pillW / 2;
+            const pillY = topo + 7;
+
+            roundRect(pillX, pillY, pillW, pillH, 11);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(37, 99, 235, 0.82)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.fillStyle = '#1d4ed8';
+            ctx.fillText(texto, centro, pillY + pillH / 2 + 0.5);
+
+            ctx.restore();
+        }
+    };
 
     const pluginLabels = {
         id: 'reCurvaEntregasLabels',
@@ -11110,7 +11254,7 @@ window.renderReportExecutivaCurvaSemanal = function() {
                 }
             ]
         },
-        plugins: [pluginLabels],
+        plugins: [pluginSemanaAtual, pluginLabels],
         options: {
             responsive: true,
             maintainAspectRatio: false,
