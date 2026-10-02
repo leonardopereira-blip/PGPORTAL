@@ -330,7 +330,10 @@
       dias++;
       if(iso<=meta)antes++;
     }
-    if(!dias||limite<=0)return null;
+    if(limite<=0)return null;
+    // Data final válida continua sendo uma previsão quando não há DU para ratear.
+    if(!dias)return {inicio:fim,fim:fim,dias:0,antes:0,fracao:fim<=meta?1:0,
+      entregaUnica:true,motivo:'sem-dias-uteis'};
     return {inicio:inicio,fim:fim,dias:dias,antes:antes,fracao:antes/dias};
   }
   function posiRegra(l) {
@@ -453,7 +456,9 @@
       var sla=typeof window.pgDiasSLALinha==='function'?window.pgDiasSLALinha(l):null;
       var origem=preenchido(fimRaw)?'Replanejado':preenchido(baseRaw)?'Baseline':'Sem data';
       var r=i.rateioAplicado,porDU=!!r&&!r.entregaUnica;
-      var regra=i.posiPropria?(i.inicioAusente?'Entrega única na data final (início vazio)':'Rateio Posi por dias úteis'):'Entrega única na data final';
+      var semDU=!!r&&r.motivo==='sem-dias-uteis';
+      var regra=i.posiPropria?(i.inicioAusente?'Entrega única na data final (início vazio)':
+        semDU?'Entrega única na data final (intervalo sem dias úteis)':'Rateio Posi por dias úteis'):'Entrega única na data final';
       var situacao=i.semData>0?'Sem previsão':i.previsto>0&&i.pos>0?'Parcialmente dentro da meta':i.pos>0?'Fora da meta':'Dentro da meta';
       var notas=[];
       if(!coletaFim)notas.push('Data de coleta final ausente ou inválida; replanejado preenchido não é substituído pela baseline.');
@@ -461,6 +466,7 @@
       if(i.posiPropria&&!i.inicioAusente&&!i.inicioColeta)notas.push('Data de início planejada inválida.');
       if(i.posiPropria&&coletaFim&&sla!==null&&i.inicioColeta&&!r)notas.push('Intervalo de entrega invertido, sem dias úteis ou inválido.');
       if(i.posiPropria&&i.inicioAusente)notas.push('Início planejado vazio: tiragem concentrada na data final.');
+      if(semDU)notas.push('Intervalo planejado sem dias úteis: tiragem integral considerada na data final de entrega.');
       if(origem==='Baseline')notas.push('Replanejado vazio: utilizada a baseline.');
       if(l._PG_TOTAL_HIBRIDO)notas.push('Volume da PCP_ACABADORAS: TIRAGEM A ENTREGAR (total por CD).');
       return [String(campo('KIT')??''),String(l.SKU_REAL||campo('SKU')||''),
@@ -468,7 +474,7 @@
         i.marca,i.serie,i.grafica,i.cd,String(l.ENVIO||l.Envio||''),String(campo('OP')??''),
         i.total,i.previsto,i.pos,i.semData,i.total?i.previsto/i.total:0,
         dataFonte(inicioRaw),dataFonte(fimRaw),dataFonte(baseRaw),coletaFim,origem,sla===null?'':sla,
-        i.posiPropria?(i.inicioAusente?i.dtPlan||'':i.inicioPlan||''):i.dtPlan||'',i.dtPlan||'',
+        i.posiPropria?(r&&r.entregaUnica?i.dtPlan||'':i.inicioPlan||''):i.dtPlan||'',i.dtPlan||'',
         i.alvo,i.dataAcordada||'',i.metaAplicada,
         porDU?r.dias:'',porDU?r.antes:'',porDU?r.dias-r.antes:'',porDU?i.total/r.dias:'',
         regra,situacao,notas.join(' '),String(l._SOURCE||'PCP'),String(l.ID??l._ROW_ID??''),
