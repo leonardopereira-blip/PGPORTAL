@@ -28,22 +28,23 @@
     }
 
     #abaReportExecutiva .re-table {
-        width: 100%;
-        min-width: 1220px;
+        width: 98%;
+        min-width: 1160px;
+        margin: 0 auto;
         border-collapse: collapse;
         table-layout: fixed;
-        font-size: 14px;
+        font-size: 13px;
         color: #111827;
         background: #ffffff;
     }
 
     #abaReportExecutiva .re-table thead th {
-        height: 27px;
-        padding: 4px 5px;
+        height: 26px;
+        padding: 3px 4px;
         box-sizing: border-box;
         background: #48659a;
         color: #ffffff;
-        font-size: 13px;
+        font-size: 12px;
         line-height: 1.05;
         font-weight: 700;
         text-align: center;
@@ -55,10 +56,10 @@
     #abaReportExecutiva .re-table tbody tr:nth-child(even) { background: #f4f4fb; }
 
     #abaReportExecutiva .re-table tbody td {
-        height: 27px;
-        padding: 4px 5px;
+        height: 26px;
+        padding: 3px 4px;
         box-sizing: border-box;
-        font-size: 14px;
+        font-size: 13px;
         line-height: 1.1;
         text-align: center;
         border-bottom: 1px solid #ececf2;
@@ -164,16 +165,19 @@
     <div class="re-scroll">
         <table class="re-table">
             <colgroup>
-                <col style="width:8.5%">
+                <col style="width:8%">
+                <col style="width:11%">
                 <col style="width:12%">
-                <col style="width:13.5%">
-                <col style="width:2.5%">
-                <col style="width:15.5%">
-                <col style="width:17.5%">
-                <col style="width:2.5%">
-                <col style="width:12%">
-                <col style="width:14%">
-                <col style="width:2.5%">
+                <col style="width:2.2%">
+                <col class="re-group-kit" style="width:11%">
+                <col class="re-group-kit" style="width:12%">
+                <col class="re-group-kit" style="width:2.2%">
+                <col class="re-group-enttodos" style="width:14%">
+                <col class="re-group-enttodos" style="width:15%">
+                <col class="re-group-enttodos" style="width:2.2%">
+                <col style="width:11%">
+                <col style="width:12.5%">
+                <col style="width:2.2%">
             </colgroup>
             <thead>
                 <tr>
@@ -181,16 +185,19 @@
                     <th>Mat. Acabado (Real)</th>
                     <th id="reThAcabPlan">Mat. Acabado (Plan.)</th>
                     <th></th>
-                    <th>Entregues (Real) - CD + Acab.</th>
-                    <th id="reThEntTodosPlan">Entregues (Plan.) - CD + Acab.</th>
-                    <th></th>
+                    <th class="re-group-kit">Form. Kit (Real)</th>
+                    <th class="re-group-kit" id="reThKitPlan">Form. Kit (Plan.)</th>
+                    <th class="re-group-kit"></th>
+                    <th class="re-group-enttodos">Entregues (Real) - CD + Acab.</th>
+                    <th class="re-group-enttodos" id="reThEntTodosPlan">Entregues (Plan.) - CD + Acab.</th>
+                    <th class="re-group-enttodos"></th>
                     <th>Entregues (Real) - CD</th>
                     <th id="reThEntCDPlan">Entregues (Plan.) - CD</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody id="reTabelaMarcas">
-                <tr><td colspan="10" class="re-empty">Carregando...</td></tr>
+                <tr><td colspan="13" class="re-empty">Carregando...</td></tr>
             </tbody>
         </table>
     </div>
