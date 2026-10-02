@@ -10856,28 +10856,23 @@ window.processarReportExecutiva = function() {
         }));
     const somaDiaAte = data => eventosCDDia.reduce((soma, r) =>
         soma + (r.dtPlan <= data ? r.tiragem : 0), 0);
-
-    // V59 - UMA ÚNICA FONTE para "Entregues (Plan.) - CD" e para o ponto
-    // atual da curva. A tabela não mantém mais um cálculo paralelo.
-    Object.values(entCD.porMarca).forEach(a => { a.plan = 0; });
-    entCD.total.plan = 0;
-
-    eventosCDDia.forEach(r => {
-        if (!r.dtPlan || r.dtPlan > hojeIso) return;
-        const volume = Math.max(0, Number(r.tiragem || 0));
-        if (!(volume > 0)) return;
-
-        const grupo = chaveLinha(r.linha || r.pcp);
-        if (entCD.porMarca[grupo]) entCD.porMarca[grupo].plan += volume;
-        entCD.total.plan += volume;
-    });
-
-    const planejadoCDHoje = entCD.total.plan;
+    // O total da tabela (denominador) continua sendo a referência.
+    // O ponto futuro utiliza o volume bruto do gráfico diário, sem ajuste
+    // por percentual, truncamento de semana ou antecipação de dias.
+    if (filtroCDAtual) {
+        const diarioHoje = somaDiaAte(hojeIso);
+        if (Math.abs(diarioHoje - entCD.total.plan) > 0.01) {
+            console.info('[V44] Planejados diferentes no corte de hoje:', {
+                report: entCD.total.plan, diario: diarioHoje
+            });
+        }
+    }
 
     window.reCurvaFonteCDV43 = {
         total: entCD.total.den,
-        // Mesma variável exibida na coluna Plan. da tabela.
-        planejadoHoje: planejadoCDHoje,
+        // O planejado da curva usa a mesma fonte consolidada do gráfico diário:
+        // PCP direto + acabadoras oficiais, sem duplicação.
+        planejadoHoje: somaDiaAte(hojeIso),
         realizadoHoje: entCD.total.real,
         eventosPlano: eventosCDDia,
         // Histórico usa a mesma base consolidada do gráfico diário para que
@@ -11087,13 +11082,11 @@ window.renderReportExecutivaCurvaSemanal = function() {
 
     if (!periodos.length) return;
 
-    // V59 - o período atual usa EXATAMENTE o mesmo corte da tabela (Hoje/D-1).
-    // Períodos já fechados usam o fim do período; períodos futuros continuam
-    // projetados até o próprio fim. Assim quadro e curva não podem divergir
-    // apenas porque a semana atual ainda não terminou.
-    const periodoContemCorte = p => p.ini <= hojeIso && hojeIso <= p.fim;
-    const corteRealPeriodo = p => periodoContemCorte(p) ? hojeIso : p.fim;
-    const cortePlanoPeriodo = p => periodoContemCorte(p) ? hojeIso : p.fim;
+    // Planejado fecha no fim do período (30/09 para "Set - Sem Atual").
+    // Realizado segue limitado a hoje; não antecipa coletas futuras.
+    const corteRealPeriodo = p => p.ini <= hojeIso && hojeIso <= p.fim
+        ? hojeIso : p.fim;
+    const cortePlanoPeriodo = p => p.fim;
     window.reCurvaPeriodos = periodos.map(p => ({
         ...p, corte: cortePlanoPeriodo(p),
         cortePlano: cortePlanoPeriodo(p),
@@ -11126,8 +11119,8 @@ window.renderReportExecutivaCurvaSemanal = function() {
     periodos.forEach(p => {
         const cortePlano = cortePlanoPeriodo(p);
         const corteReal = corteRealPeriodo(p);
-        // Histórico usa o fechamento do período. A semana corrente usa
-        // exatamente o mesmo corte Hoje/D-1 mostrado no quadro.
+        // Histórico inalterado. A semana corrente considera também os
+        // próximos dias planejados, até o fechamento do período (30/09).
         const metaCalculada = cortePlano < hojeIso
             ? acumuladoHistorico(cortePlano)
             : cortePlano === hojeIso
