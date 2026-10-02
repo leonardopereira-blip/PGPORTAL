@@ -122,9 +122,8 @@
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-t border-slate-200 pt-3">
         <div><h3 class="text-xs font-black">Base auditável</h3><p class="text-[10px] text-slate-500 mt-1">Kit, SKU, descrição, marca, série e todas as datas do cálculo. Segue os filtros e o cenário desta visão.</p></div>
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" id="maExportarAuditoria" class="ma-pill" onclick="window.pgMAExportarAuditoria(this)">Abrir base em planilha</button>
+          <button type="button" id="maExportarAuditoria" class="ma-pill" onclick="window.pgMAExportarAuditoria(this)">Baixar Excel (.xlsx)</button>
           <button type="button" class="ma-pill" onclick="window.pgMABaixarAuditoriaCSV()">Baixar CSV</button>
-          <a id="maLinkAuditoria" class="text-xs font-bold text-blue-700 underline" href="#" target="_blank" rel="noopener" hidden>Abrir base gerada</a>
         </div>
       </div>
     </div>
@@ -434,7 +433,7 @@
   function fmtPrazo(iso){return /^\d{4}-\d{2}-\d{2}$/.test(iso)?iso.slice(8)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4):iso;}
   // Cada registro vem da própria linha que alimenta a visão, sem reagrupar por SKU.
   window.pgMAObterAuditoria=function(){
-    window.processarMetaArmazem();
+    if(!Array.isArray(window.pgMAUltimosItens))window.processarMetaArmazem();
     var cenario=estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
     var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio','OP',
       'Tiragem total','Dentro da meta','Fora da meta','Sem previsão','% dentro da meta',
@@ -491,24 +490,23 @@
     a.download='Meta_Armazem_Base_Auditavel_'+(estado.cenario==='com'?'posi-nao-fere':'posi-fere')+'.csv';a.click();
     setTimeout(function(){URL.revokeObjectURL(url);},1000);
   };
-  window.pgMAExportarAuditoria=function(botao){
+  window.pgMAExportarAuditoria=async function(botao){
     if(window.pgMAExportandoAuditoria)return;
-    var base=window.pgMAObterAuditoria();
-    if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
     window.pgMAExportandoAuditoria=true;
-    var novaAba=window.open('about:blank','_blank');
     var anterior=botao?botao.textContent:'';
     if(botao){botao.disabled=true;botao.textContent='Gerando base…';}
-    var finalizar=function(){window.pgMAExportandoAuditoria=false;if(botao){botao.disabled=false;botao.textContent=anterior;}};
-    var falhar=function(e){finalizar();if(novaAba)novaAba.close();window.alert('Não foi possível gerar a planilha: '+(e&&e.message||e)+'. Você pode usar Baixar CSV.');};
-    base.usuarioEmail=typeof window.reUsuarioEmail==='function'?window.reUsuarioEmail():String(window.PG_USER_EMAIL||'');
-    google.script.run.withSuccessHandler(function(res){
-      if(!res||!res.success){falhar(res&&res.error||'Erro desconhecido');return;}
-      finalizar();
-      if(novaAba)novaAba.location.href=res.url;
-      var link=document.getElementById('maLinkAuditoria');link.href=res.url;link.hidden=false;link.title=base.cenario;
-      if(res.warning)window.alert('A base foi criada: '+res.warning);
-    }).withFailureHandler(falhar).gerarPlanilhaMetaArmazemAuditavel(base);
+    try{
+      // Permite pintar o estado do botão antes de preparar a base completa.
+      await new Promise(function(resolve){setTimeout(resolve,0);});
+      var base=window.pgMAObterAuditoria();
+      if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
+      if(typeof window.pgGerarExcelAuditoria!=='function')throw new Error('Atualize a página para carregar o exportador Excel');
+      var arquivo=window.pgGerarExcelAuditoria(base);
+      var url=URL.createObjectURL(arquivo),a=document.createElement('a');
+      a.href=url;a.download='Meta_Armazem_Base_Auditavel_'+(estado.cenario==='com'?'posi-nao-fere':'posi-fere')+'.xlsx';a.click();
+      setTimeout(function(){URL.revokeObjectURL(url);},10000);
+    }catch(e){window.alert('Não foi possível baixar o Excel: '+(e&&e.message||e)+'. Você pode usar Baixar CSV.');}
+    finally{window.pgMAExportandoAuditoria=false;if(botao){botao.disabled=false;botao.textContent=anterior;}}
   };
   function listaDatas(items){return Array.from(new Set((items||[]).reduce(function(a,l){return a.concat(l.prazos||[]);},[]).filter(Boolean))).sort();}
   function textoDatas(items){

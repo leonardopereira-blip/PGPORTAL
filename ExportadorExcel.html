@@ -1,0 +1,148 @@
+<script>
+(function () {
+  'use strict';
+  // OOXML gerado no navegador: a base não é enviada a outro serviço.
+  var MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  var NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  var XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  var crcTabela = new Uint32Array(256);
+  for (var i = 0; i < 256; i++) {
+    var c = i;
+    for (var b = 0; b < 8; b++) c = (c & 1) ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    crcTabela[i] = c >>> 0;
+  }
+  function crc32(bytes) {
+    var crc = 0xFFFFFFFF;
+    for (var n = 0; n < bytes.length; n++) crc = crcTabela[(crc ^ bytes[n]) & 255] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zip(arquivos) {
+    var encoder = new TextEncoder(), partes = [], central = [], offset = 0, tamanhoCentral = 0;
+    var agora = new Date(), ano = Math.max(1980, Math.min(2107, agora.getFullYear()));
+    var data = ((ano - 1980) << 9) | ((agora.getMonth() + 1) << 5) | agora.getDate();
+    var hora = (agora.getHours() << 11) | (agora.getMinutes() << 5) | (agora.getSeconds() >> 1);
+    arquivos.forEach(function (arquivo) {
+      var nome = encoder.encode(arquivo[0]), bytes = encoder.encode(arquivo[1]), crc = crc32(bytes);
+      var local = new Uint8Array(30 + nome.length), lv = new DataView(local.buffer);
+      lv.setUint32(0, 0x04034B50, true); lv.setUint16(4, 20, true);
+      lv.setUint16(6, 0x0800, true); lv.setUint16(10, hora, true); lv.setUint16(12, data, true);
+      lv.setUint32(14, crc, true); lv.setUint32(18, bytes.length, true); lv.setUint32(22, bytes.length, true);
+      lv.setUint16(26, nome.length, true); local.set(nome, 30);
+      partes.push(local, bytes);
+      var cab = new Uint8Array(46 + nome.length), cv = new DataView(cab.buffer);
+      cv.setUint32(0, 0x02014B50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0x0800, true); cv.setUint16(12, hora, true); cv.setUint16(14, data, true);
+      cv.setUint32(16, crc, true); cv.setUint32(20, bytes.length, true); cv.setUint32(24, bytes.length, true);
+      cv.setUint16(28, nome.length, true); cv.setUint32(42, offset, true); cab.set(nome, 46);
+      central.push(cab); tamanhoCentral += cab.length; offset += local.length + bytes.length;
+    });
+    var fim = new Uint8Array(22), fv = new DataView(fim.buffer);
+    fv.setUint32(0, 0x06054B50, true); fv.setUint16(8, arquivos.length, true); fv.setUint16(10, arquivos.length, true);
+    fv.setUint32(12, tamanhoCentral, true); fv.setUint32(16, offset, true);
+    return new Blob(partes.concat(central, [fim]), {type: MIME});
+  }
+  function textoXML(valor) {
+    return String(valor == null ? '' : valor)
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
+      .replace(/_x[0-9a-fA-F]{4}_/g, function (v) { return '_x005F_' + v.slice(1); })
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+  function coluna(n) {
+    var s = '';
+    while (n > 0) { n--; s = String.fromCharCode(65 + n % 26) + s; n = Math.floor(n / 26); }
+    return s;
+  }
+  function dataExcel(v) {
+    if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+    var ano = Number(v.slice(0, 4)), mes = Number(v.slice(5, 7)), dia = Number(v.slice(8, 10));
+    if (ano < 1900 || ano > 9999) return null;
+    var d = new Date(Date.UTC(ano, mes - 1, dia));
+    if (d.getUTCFullYear() !== ano || d.getUTCMonth() !== mes - 1 || d.getUTCDate() !== dia) return null;
+    var serial = Math.round(d.getTime() / 86400000 + 25569);
+    return serial < 61 ? serial - 1 : serial;
+  }
+  var DATAS = new Set(['Coleta início (re)plan', 'Coleta fim (re)plan', 'Coleta fim baseline',
+    'Coleta fim usada', 'Entrega início usada', 'Entrega fim prevista', 'Meta original', 'Prazo combinado Posi', 'Meta aplicada']);
+  var VOLUMES = new Set(['Tiragem total', 'Dentro da meta', 'Fora da meta', 'Sem previsão', 'Tiragem por DU']);
+  var INTEIROS = new Set(['SLA (dias corridos)', 'DU totais', 'DU dentro da meta', 'DU fora da meta']);
+  function tipo(nome) {
+    return DATAS.has(nome) ? 3 : VOLUMES.has(nome) ? 4 : nome === '% dentro da meta' ? 5 : INTEIROS.has(nome) ? 6 : 2;
+  }
+  function largura(nome) {
+    if (nome === 'Descrição' || nome === 'Motivo / observação') return 48;
+    if (nome === 'Kit' || nome === 'SKU') return 20;
+    if (DATAS.has(nome)) return 15;
+    if (VOLUMES.has(nome)) return 18;
+    if (nome === 'Regra aplicada' || nome === 'Cenário') return 40;
+    if (nome === 'Origem da data de coleta' || nome === 'Situação') return 26;
+    if (nome === 'Chave') return 32;
+    return 18;
+  }
+  function celula(ref, valor, estilo) {
+    if (valor === '' || valor == null) return '';
+    if (estilo === 3) {
+      var serial = dataExcel(valor);
+      if (serial !== null) return '<c r="' + ref + '" s="3"><v>' + serial + '</v></c>';
+    } else if (estilo >= 4 && typeof valor === 'number' && Number.isFinite(valor)) {
+      return '<c r="' + ref + '" s="' + estilo + '"><v>' + valor + '</v></c>';
+    }
+    return '<c r="' + ref + '" s="' + (estilo === 1 ? 1 : 2) + '" t="inlineStr"><is><t xml:space="preserve">' + textoXML(valor) + '</t></is></c>';
+  }
+  var ESTILOS = XML + '<styleSheet xmlns="' + NS + '">' +
+    '<numFmts count="4"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="#,##0.000"/>' +
+    '<numFmt numFmtId="166" formatCode="0.0%"/><numFmt numFmtId="167" formatCode="0"/></numFmts>' +
+    '<fonts count="2"><font><sz val="11"/><color rgb="FF172B4D"/><name val="Calibri"/></font>' +
+    '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>' +
+    '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
+    '<fill><patternFill patternType="solid"><fgColor rgb="FF18365D"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+    '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="top" wrapText="1"/></xf>' +
+    '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>' +
+    '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+    '<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+    '<xf numFmtId="167" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  window.pgGerarExcelAuditoria = function (base) {
+    if (!base || !Array.isArray(base.cabecalho) || !base.cabecalho.length || !Array.isArray(base.linhas)) throw new Error('Base auditável inválida.');
+    if (base.linhas.length > 1048575 || base.cabecalho.length > 16384) throw new Error('A seleção ultrapassa o limite de linhas ou colunas do Excel.');
+    var nomes = base.cabecalho, letras = nomes.map(function (_, j) { return coluna(j + 1); });
+    var estilos = nomes.map(tipo), larguras = nomes.map(largura), ultima = letras[letras.length - 1] + (base.linhas.length + 1);
+    var rows = ['<row r="1" ht="48" customHeight="1">' + nomes.map(function (n, j) { return celula(letras[j] + '1', n, 1); }).join('') + '</row>'];
+    for (var r = 0; r < base.linhas.length; r++) {
+      var linha = base.linhas[r], numero = r + 2, cells = new Array(nomes.length), linhasVisuais = 1;
+      for (var j = 0; j < nomes.length; j++) {
+        cells[j] = celula(letras[j] + numero, linha[j], estilos[j]);
+        if (estilos[j] === 2 && linha[j] != null) {
+          var segmentos = String(linha[j]).split(/\r\n|\r|\n/), visuais = 0;
+          for (var k = 0; k < segmentos.length; k++) visuais += Math.max(1, Math.ceil(segmentos[k].length / (larguras[j] - 2)));
+          linhasVisuais = Math.max(linhasVisuais, visuais);
+        }
+      }
+      rows.push('<row r="' + numero + '" ht="' + Math.min(150, Math.max(30, linhasVisuais * 15 + 4)) + '" customHeight="1">' + cells.join('') + '</row>');
+    }
+    var sheet = XML + '<worksheet xmlns="' + NS + '"><dimension ref="A1:' + ultima + '"/>' +
+      '<sheetViews><sheetView workbookViewId="0"><pane xSplit="2" ySplit="1" topLeftCell="C2" activePane="bottomRight" state="frozen"/>' +
+      '<selection pane="bottomRight" activeCell="C2" sqref="C2"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="30"/>' +
+      '<cols>' + nomes.map(function (n, j) { return '<col min="' + (j + 1) + '" max="' + (j + 1) + '" width="' + larguras[j] + '" customWidth="1"/>'; }).join('') +
+      '</cols><sheetData>' + rows.join('') + '</sheetData><autoFilter ref="A1:' + ultima + '"/>' +
+      '<pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.3" footer="0.3"/></worksheet>';
+    var rel = 'http://schemas.openxmlformats.org/package/2006/relationships';
+    var docRel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    return zip([
+      ['[Content_Types].xml', XML + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+      ['_rels/.rels', XML + '<Relationships xmlns="' + rel + '"><Relationship Id="rId1" Type="' + docRel + '/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+      ['xl/workbook.xml', XML + '<workbook xmlns="' + NS + '" xmlns:r="' + docRel + '"><bookViews><workbookView/></bookViews><sheets><sheet name="Base auditável" sheetId="1" r:id="rId1"/></sheets></workbook>'],
+      ['xl/_rels/workbook.xml.rels', XML + '<Relationships xmlns="' + rel + '"><Relationship Id="rId1" Type="' + docRel + '/worksheet" Target="worksheets/sheet1.xml"/>' +
+        '<Relationship Id="rId2" Type="' + docRel + '/styles" Target="styles.xml"/></Relationships>'],
+      ['xl/styles.xml', ESTILOS], ['xl/worksheets/sheet1.xml', sheet]
+    ]);
+  };
+})();
+</script>
