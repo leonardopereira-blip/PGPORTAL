@@ -394,6 +394,44 @@ window.pgDataPlanoColetaLinha = function(l) {
     );
 };
 
+// Planejamento de Entrega TP: coleta planejada + dias da rota na Matriz_SLA.
+// Zero é um prazo válido; rota ausente não recebe prazo inventado.
+window.pgDataPlanoEntregaSLA = function(l) {
+    const coleta = window.pgDataPlanoColetaLinha(l);
+    const matriz = window.PG_MATRIZ_SLA;
+    if (!coleta || !Array.isArray(matriz)) return null;
+    const norm = v => String(v ?? '').normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
+    if (window.pgMatrizSLAReferencia !== matriz) {
+        const rotas = new Map();
+        const cabecalho = matriz.findIndex(r => norm(r[0]) === 'FORNECEDOR');
+        if (cabecalho >= 0) {
+            const destinos = matriz[cabecalho].map(norm);
+            matriz.slice(cabecalho + 1).forEach(r => {
+                const fornecedor = norm(r[0]);
+                if (!fornecedor) return;
+                destinos.slice(1).forEach((destino, i) => {
+                    const valor = r[i + 1];
+                    if (!destino || valor == null || String(valor).trim() === '') return;
+                    const dias = Number(String(valor).replace(',', '.'));
+                    if (Number.isInteger(dias) && dias >= 0) {
+                        rotas.set(fornecedor + '\u001f' + destino, dias);
+                    }
+                });
+            });
+        }
+        window.pgMatrizSLARotas = rotas;
+        window.pgMatrizSLAReferencia = matriz;
+    }
+    const fornecedor = norm(l.GRAFICA_FINAL || window.pgCampoColeta(l, 'GRÁFICA') || l.GRAFICA);
+    const destino = norm(l.CD_FINAL || window.pgCampoColeta(l, 'CD DESTINO') || l.CD);
+    const dias = window.pgMatrizSLARotas.get(fornecedor + '\u001f' + destino);
+    if (dias === undefined) return null;
+    const entrega = new Date(coleta + 'T12:00:00Z');
+    entrega.setUTCDate(entrega.getUTCDate() + dias);
+    return entrega.toISOString().slice(0, 10);
+};
+
 // Fonte única para Mapa, Coleta TP, Entrega TP e curva diária.
 // Não usa DATA_EA, Data_Coleta_Mapa nem valores sem a data operacional.
 const pgCacheVolumesColetaV37 = new WeakMap();
@@ -10814,7 +10852,9 @@ window.processarReportExecutiva = function() {
         pcp.forEach(l => {
             const m = chaveLinha(l);
             if (fEnt) {
-                const dtPlan = window.pgDataPlanoFaseFunil(l, fEnt, tRef);
+                const dtPlan = tipoReal === 'entrega'
+                    ? window.pgDataPlanoEntregaSLA(l)
+                    : window.pgDataPlanoFaseFunil(l, fEnt, tRef);
                 const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
                 const volumePlan = tiragem(l);
                 // Inclui o futuro na curva, sem antecipá-lo no total da tabela.
@@ -10833,7 +10873,7 @@ window.processarReportExecutiva = function() {
 
     const entTodos = calcularEntrega('GRAFICA', 'TODOS');
     const entCD = calcularEntrega('TODOS', 'CD');
-    // Entrega TP usa a mesma base CD e o mesmo plano, com realizado datado em Entrega_TP.
+    // Entrega TP usa a base CD, plano de coleta + Matriz_SLA e real datado em Entrega_TP.
     const entTP = calcularEntrega('TODOS', 'CD', 'entrega');
 
     // Fonte única: as porcentagens do gráfico são as mesmas colunas
@@ -11819,7 +11859,9 @@ window.rePendenciasEntrega = function(marca, destino, tipoReal = 'coleta') {
         const volumePlan = window.reTiragemLinha(l);
         if (volumePlan <= 0) return;
 
-        const dtPlan = window.pgDataPlanoFaseFunil(l, f, tRef);
+        const dtPlan = tipoReal === 'entrega'
+            ? window.pgDataPlanoEntregaSLA(l)
+            : window.pgDataPlanoFaseFunil(l, f, tRef);
         const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
         if (!(dtPlan && dias !== null && dias >= 0)) return;
 

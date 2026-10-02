@@ -68,6 +68,14 @@ function include(filename) {
   return HtmlService.createTemplateFromFile(filename).evaluate().getContent();
 } 
 
+function getMatrizSLAPortal() {
+  var id = SpreadsheetApp.getActiveSpreadsheet().getId();
+  var resposta = Sheets.Spreadsheets.Values.get(id, "'Matriz_SLA'!A1:K", {
+    valueRenderOption: 'UNFORMATTED_VALUE'
+  });
+  return resposta.values || [];
+}
+
 // ======================================================
 // 2. DADOS DO DASHBOARD (INDEX) - COM CACHE ATIVADO
 // ======================================================
