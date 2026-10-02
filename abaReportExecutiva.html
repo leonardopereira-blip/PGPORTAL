@@ -29,7 +29,7 @@
 
     #abaReportExecutiva .re-table {
         width: 98%;
-        min-width: 1160px;
+        min-width: 1040px;
         margin: 0 auto;
         border-collapse: collapse;
         table-layout: fixed;
@@ -39,16 +39,16 @@
     }
 
     #abaReportExecutiva .re-table thead th {
-        height: 26px;
-        padding: 3px 4px;
+        height: 30px;
+        padding: 3px;
         box-sizing: border-box;
         background: #48659a;
         color: #ffffff;
         font-size: 12px;
-        line-height: 1.05;
+        line-height: 1.15;
         font-weight: 700;
         text-align: center;
-        white-space: nowrap;
+        white-space: normal;
         border-right: 1px solid rgba(255,255,255,.15);
     }
 
@@ -57,7 +57,7 @@
 
     #abaReportExecutiva .re-table tbody td {
         height: 26px;
-        padding: 3px 4px;
+        padding: 3px;
         box-sizing: border-box;
         font-size: 13px;
         line-height: 1.1;
@@ -178,6 +178,9 @@
                 <col style="width:11%">
                 <col style="width:12.5%">
                 <col style="width:2.2%">
+                <col class="re-group-enttp" style="width:11%">
+                <col class="re-group-enttp" style="width:12.5%">
+                <col class="re-group-enttp" style="width:2.2%">
             </colgroup>
             <thead>
                 <tr>
@@ -188,16 +191,19 @@
                     <th class="re-group-kit">Form. Kit (Real)</th>
                     <th class="re-group-kit" id="reThKitPlan">Form. Kit (Plan.)</th>
                     <th class="re-group-kit"></th>
-                    <th class="re-group-enttodos">Entregues (Real) - CD + Acab.</th>
-                    <th class="re-group-enttodos" id="reThEntTodosPlan">Entregues (Plan.) - CD + Acab.</th>
+                    <th class="re-group-enttodos">Coletados (Real) - CD + Acab.</th>
+                    <th class="re-group-enttodos" id="reThEntTodosPlan">Coletados (Plan.) - CD + Acab.</th>
                     <th class="re-group-enttodos"></th>
-                    <th>Entregues (Real) - CD</th>
-                    <th id="reThEntCDPlan">Entregues (Plan.) - CD</th>
+                    <th>Coletados (Real) - CD</th>
+                    <th id="reThEntCDPlan">Coletados (Plan.) - CD</th>
                     <th></th>
+                    <th class="re-group-enttp">Entrega TP (Real) - CD</th>
+                    <th class="re-group-enttp" id="reThEntTPPlan">Entrega TP (Plan.) - CD</th>
+                    <th class="re-group-enttp"></th>
                 </tr>
             </thead>
             <tbody id="reTabelaMarcas">
-                <tr><td colspan="13" class="re-empty">Carregando...</td></tr>
+                <tr><td colspan="16" class="re-empty">Carregando...</td></tr>
             </tbody>
         </table>
     </div>

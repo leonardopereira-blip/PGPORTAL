@@ -10332,7 +10332,7 @@ window.processarReportExecutiva = function() {
     // V58 - grupos opcionais da tabela executiva. A escolha vale para a sessão
     // e altera somente a apresentação; nenhum cálculo é refeito ao recolher/abrir.
     if (!window.pgREGruposV58) {
-        window.pgREGruposV58 = { entTodos: true, kit: false };
+        window.pgREGruposV58 = { entTodos: true, kit: false, entTP: false };
     }
 
     let gruposReV58 = painelRE.querySelector('[data-pg-re-grupos-v58]');
@@ -10346,7 +10346,9 @@ window.processarReportExecutiva = function() {
             '<label class="inline-flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2 py-1 cursor-pointer">' +
                 '<input type="checkbox" data-re-grupo-v58="entTodos"> CD + Acab.</label>' +
             '<label class="inline-flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2 py-1 cursor-pointer">' +
-                '<input type="checkbox" data-re-grupo-v58="kit"> Form. Kit</label>';
+                '<input type="checkbox" data-re-grupo-v58="kit"> Form. Kit</label>' +
+            '<label class="inline-flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2 py-1 cursor-pointer">' +
+                '<input type="checkbox" data-re-grupo-v58="entTP"> Entrega TP - CD</label>';
         painelRE.appendChild(gruposReV58);
 
         gruposReV58.querySelectorAll('input[data-re-grupo-v58]').forEach(cb => {
@@ -10363,10 +10365,11 @@ window.processarReportExecutiva = function() {
     window.pgREAplicarVisibilidadeV58 = function() {
         const tabela = document.querySelector('#abaReportExecutiva .re-table');
         if (!tabela) return;
-        const estado = window.pgREGruposV58 || { entTodos: true, kit: false };
+        const estado = window.pgREGruposV58 || { entTodos: true, kit: false, entTP: false };
         [
             ['kit', !!estado.kit],
-            ['enttodos', !!estado.entTodos]
+            ['enttodos', !!estado.entTodos],
+            ['enttp', !!estado.entTP]
         ].forEach(([grupo, visivel]) => {
             tabela.querySelectorAll('.re-group-' + grupo).forEach(el => {
                 el.style.display = visivel ? '' : 'none';
@@ -10605,10 +10608,12 @@ window.processarReportExecutiva = function() {
     const thKit = document.getElementById('reThKitPlan');
     const thEntTodos = document.getElementById('reThEntTodosPlan');
     const thEntCD = document.getElementById('reThEntCDPlan');
+    const thEntTP = document.getElementById('reThEntTPPlan');
     if (thAcab) thAcab.textContent = `Mat. Acabado (Plan. ${fmtData(hojeIso)})`;
     if (thKit) thKit.textContent = `Form. Kit (Plan. ${fmtData(hojeIso)})`;
-    if (thEntTodos) thEntTodos.textContent = `Entregues (Plan. ${fmtData(hojeIso)}) - CD + Acab.`;
-    if (thEntCD) thEntCD.textContent = `Entregues (Plan. ${fmtData(hojeIso)}) - CD`;
+    if (thEntTodos) thEntTodos.textContent = `Coletados (Plan. ${fmtData(hojeIso)}) - CD + Acab.`;
+    if (thEntCD) thEntCD.textContent = `Coletados (Plan. ${fmtData(hojeIso)}) - CD`;
+    if (thEntTP) thEntTP.textContent = `Entrega TP (Plan. ${fmtData(hojeIso)}) - CD`;
 
     const novoAgg = () => ({ den: 0, real: 0, plan: 0 });
     const add = (map, marca, campo, valor) => {
@@ -10762,7 +10767,8 @@ window.processarReportExecutiva = function() {
         return unicas;
     };
 
-    const calcularEntrega = (origemCenario, destino) => {
+    const calcularEntrega = (origemCenario, destino, tipoReal = 'coleta') => {
+        const campoReal = tipoReal === 'entrega' ? 'Entrega_TP' : 'Coleta_TP';
         const porMarca = {};
         const total = novoAgg();
         // Os próprios registros da tabela alimentam a curva semanal.
@@ -10783,15 +10789,15 @@ window.processarReportExecutiva = function() {
         const baseReal = baseCenario;
         baseReal.forEach(l => {
             const real = typeof window.pgVolumesColetaUnificadosV37 === 'function'
-                ? window.pgVolumesColetaUnificadosV37(l, hojeIso).coleta
+                ? window.pgVolumesColetaUnificadosV37(l, hojeIso)[tipoReal]
                 : (() => {
                     const dt = window.pgNormalizarDataColeta(
-                        window.pgCampoColeta(l, 'Coleta_TP'), hojeIso);
+                        window.pgCampoColeta(l, campoReal), hojeIso);
                     return dt && dt <= hojeIso ? tiragemColetada(l) : 0;
                   })();
             if (!(real > 0)) return;
             const dataReal = window.pgNormalizarDataColeta(
-                window.pgCampoColeta(l, 'Coleta_TP'), hojeIso);
+                window.pgCampoColeta(l, campoReal), hojeIso);
             if (!dataReal || dataReal > hojeIso) return;
             eventosReal.push({ linha: l, pcp: l, dtReal: dataReal, coletada: real });
             const m = chaveLinha(l);
@@ -10827,9 +10833,11 @@ window.processarReportExecutiva = function() {
 
     const entTodos = calcularEntrega('GRAFICA', 'TODOS');
     const entCD = calcularEntrega('TODOS', 'CD');
+    // Entrega TP usa a mesma base CD e o mesmo plano, com realizado datado em Entrega_TP.
+    const entTP = calcularEntrega('TODOS', 'CD', 'entrega');
 
     // Fonte única: as porcentagens do gráfico são as mesmas colunas
-    // Entregues (Plan/Real) - CD do TOTAL GERAL da tabela.
+    // Coletados (Plan/Real) - CD do TOTAL GERAL da tabela.
     // V44: projeção posterior a hoje = mesma agenda do gráfico diário.
     // O universo CD é independente do seletor Origem/Destino da aba Report.
     // Reproduz a seleção PCP direto + acabadoras oficiais da base TP.
@@ -10909,11 +10917,12 @@ window.processarReportExecutiva = function() {
 
     const dot = cor => `<span class="re-dot re-dot-${cor}"></span>`;
 
-    const linhaHtml = (marca, a, k, et, ec, total = false) => {
+    const linhaHtml = (marca, a, k, et, ec, tp, total = false) => {
         a = a || novoAgg();
         k = k || novoAgg();
         et = et || novoAgg();
         ec = ec || novoAgg();
+        tp = tp || novoAgg();
 
         const acabReal = pct(a.real, a.den);
         const acabPlan = pct(a.plan, a.den);
@@ -10923,6 +10932,8 @@ window.processarReportExecutiva = function() {
         const entTodosPlan = pct(et.plan, et.den);
         const entCDReal = pct(ec.real, ec.den);
         const entCDPlan = pct(ec.plan, ec.den);
+        const entTPReal = pct(tp.real, tp.den);
+        const entTPPlan = pct(tp.plan, tp.den);
 
         const info = infoGruposRE.get(marca) || {};
         const exibir = colunasRE.length ? colunasRE : ['agrupamento'];
@@ -10949,18 +10960,21 @@ window.processarReportExecutiva = function() {
                 <td>${pctTxt(entCDReal)}</td>
                 <td>${pctTxt(entCDPlan)}</td>
                 <td class="re-status-cell" data-re-indicador="entCD">${dot(status(entCDReal, entCDPlan))}</td>
+                <td class="re-group-enttp">${pctTxt(entTPReal)}</td>
+                <td class="re-group-enttp">${pctTxt(entTPPlan)}</td>
+                <td class="re-status-cell re-group-enttp" data-re-indicador="entTP">${dot(status(entTPReal, entTPPlan))}</td>
             </tr>`;
     };
 
     let html = '';
     marcasOrdenadas.forEach(m => {
         html += linhaHtml(m, acabPorMarca[m], kitPorMarca[m],
-            entTodos.porMarca[m], entCD.porMarca[m], false);
+            entTodos.porMarca[m], entCD.porMarca[m], entTP.porMarca[m], false);
     });
 
     html += linhaHtml('TOTAL GERAL', acabTotal, kitTotal,
-        entTodos.total, entCD.total, true);
-    tbody.innerHTML = html || `<tr><td colspan="${12 + Math.max(1, colunasRE.length)}" class="re-empty">Sem dados para os filtros atuais.</td></tr>`;
+        entTodos.total, entCD.total, entTP.total, true);
+    tbody.innerHTML = html || `<tr><td colspan="${15 + Math.max(1, colunasRE.length)}" class="re-empty">Sem dados para os filtros atuais.</td></tr>`;
 
     window.pgREAplicarVisibilidadeV58();
     window.reAtivarCliquesTabela();
@@ -11782,7 +11796,7 @@ window.rePendenciasKit = function(marca) {
     return saida;
 };
 
-window.rePendenciasEntrega = function(marca, destino) {
+window.rePendenciasEntrega = function(marca, destino, tipoReal = 'coleta') {
     const baseGeral = window.pgBaseGeralReportExecutiva || [];
     const hojeIso = window.pgREDataCorteV57 ||
         ((typeof dtHojeISO !== 'undefined' && dtHojeISO)
@@ -11792,7 +11806,7 @@ window.rePendenciasEntrega = function(marca, destino) {
     const todas = marca === 'TOTAL GERAL';
     if (!f) return [];
 
-    let pcp = baseGeral.filter(l => !window.pgEhFonteAcabadora(l));
+    let pcp = baseGeral.filter(l => window.pgLinhaDaOrigem(l, 'GRAFICA'));
     if (destino !== 'TODOS') {
         pcp = pcp.filter(l => window.pgLinhaDoDestino(l, destino, 'GRAFICA'));
     }
@@ -11809,19 +11823,19 @@ window.rePendenciasEntrega = function(marca, destino) {
         const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
         if (!(dtPlan && dias !== null && dias >= 0)) return;
 
-        const dtReal = extrairDataISO(
-            window.pgCampoColeta(l, 'Entrega_TP')
+        const campoReal = tipoReal === 'entrega' ? 'Entrega_TP' : 'Coleta_TP';
+        const dtReal = window.pgNormalizarDataColeta(
+            window.pgCampoColeta(l, campoReal), hojeIso
         );
-
-        const volumeReal = dtReal && dtReal <= hojeIso ? window.reTiragemColetadaLinha(l) : 0;
+        const volumeReal = window.pgVolumesColetaUnificadosV37(l, hojeIso)[tipoReal];
         const gap = Math.max(0, volumePlan - volumeReal);
         if (gap <= 0) return;
 
         saida.push(window.reLinhaExportacao(l, {
             grupo: 'Gap',
-            indicador: destino === 'TODOS'
-                ? 'Entregues - CD + Acab.'
-                : 'Entregues - CD',
+            indicador: tipoReal === 'entrega'
+                ? 'Entrega TP - CD'
+                : destino === 'TODOS' ? 'Coletados - CD + Acab.' : 'Coletados - CD',
             cenario: destino === 'TODOS'
                 ? 'Origem Gráfica / Destino Todos'
                 : 'Origem Todas / Destino CD',
@@ -11848,11 +11862,14 @@ window.reExtrairPendenciasTabela = function(tipo, marca, elemento) {
         indicador = 'Formacao_Kit';
         linhas = window.rePendenciasKit(marca);
     } else if (tipo === 'entTodos') {
-        indicador = 'Entregas_CD_Acab';
+        indicador = 'Coletados_CD_Acab';
         linhas = window.rePendenciasEntrega(marca, 'TODOS');
     } else if (tipo === 'entCD') {
-        indicador = 'Entregas_CD';
+        indicador = 'Coletados_CD';
         linhas = window.rePendenciasEntrega(marca, 'CD');
+    } else if (tipo === 'entTP') {
+        indicador = 'Entrega_TP_CD';
+        linhas = window.rePendenciasEntrega(marca, 'CD', 'entrega');
     }
 
     const marcaNome = String(marca || 'TOTAL').replace(/[^A-Za-z0-9_-]+/g, '_');
