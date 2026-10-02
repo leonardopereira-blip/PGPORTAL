@@ -111,18 +111,13 @@
       <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mt-2">
         <div><h2 class="text-2xl md:text-3xl font-black">Meta Armazém · cenários de prazo</h2>
           </div>
-        <span class="text-[10px] font-bold rounded-full border border-white/30 px-3 py-2 text-cyan-100">V1/27 · Destino CD · PCP + Acabadoras</span>
+        <span class="text-[10px] font-bold rounded-full border border-white/30 px-3 py-2 text-cyan-100">V1/27 · Entrega prevista · PCP + Acabadoras</span>
       </div>
     </div>
     <div class="p-4 md:p-5 space-y-4">
       <div class="flex flex-wrap gap-2" role="group" aria-label="Cenário de entrega">
         <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="true" onclick="window.pgMACenario('sem')">Combinado Posi Fere a Meta</button>
         <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="false" onclick="window.pgMACenario('com')">Combinado Posi não fere a meta</button>
-      </div>
-      <div id="maMetodoWrap" class="flex flex-wrap items-center gap-2" role="group" aria-label="Método de cálculo da Posigraf">
-        <span class="text-[10px] uppercase font-black tracking-wide text-slate-500 mr-1">Cálculo Posigraf</span>
-        <button type="button" class="ma-pill" data-ma-metodo="boss" aria-pressed="false" onclick="window.pgMAMetodo('boss')">Boss</button>
-        <button type="button" class="ma-pill" data-ma-metodo="posi" aria-pressed="true" onclick="window.pgMAMetodo('posi')">% Posi</button>
       </div>
     </div>
   </div>
@@ -145,11 +140,11 @@
     <div id="maMatriz" class="overflow-x-auto max-w-full" aria-label="Matriz com rolagem horizontal"></div>
   </div>
   <div class="ma-card px-4 py-3">
-    <div class="text-xs font-black text-slate-800 mb-1">Distribuição do planejado de entrega ao CD · corte 15/10/2026</div>
+    <div class="text-xs font-black text-slate-800 mb-1">Distribuição da entrega prevista · meta original de cada marca</div>
     <div id="maLegendaPrazos" class="text-[11px] text-slate-600 leading-relaxed mb-2"></div>
     <div class="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-600">
-      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-blue mr-1"></i> Até 15/10</span>
-      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-orange mr-1"></i> Pós 15/10</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-blue mr-1"></i> Dentro da meta original</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-orange mr-1"></i> Fora da meta original</span>
     </div>
   </div>
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -164,7 +159,7 @@
     <p id="maComparativoNota" class="text-[10px] text-slate-500 mt-2"></p>
   </div>
 <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Entrega CD: meta original 15/10/2026 (WAYS: 30/11/2026). Com combinado Posi, apenas a parcela pós-15/10 coberta por acordo tem prazo excepcional.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Entrega prevista: coleta planejada + SLA da rota. Posi → Posi: tiragem distribuída por dia útil entre início e fim planejados.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
       <thead><tr><th>Grupo</th><th>Meta original / exceção</th><th>Volume total</th><th id="maThPrevisto">Dentro da meta</th><th id="maThPos">Fora da meta</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
@@ -174,8 +169,8 @@
 <script>
 (function () {
   'use strict';
-  // Snapshot de "Combinado_Posi" recebido em 28/09/2026. H/I/J/K = 30%/40%/50%/100%.
-  // Datas e coortes são referências do cenário executivo, não fórmulas importadas.
+  // Datas e coortes do "Combinado_Posi" recebido em 28/09/2026.
+  // Usar apenas a data final acordada como exceção; o volume segue o rateio por DU.
   var REGRAS = [
     'COC|ENSINO FUNDAMENTAL 1|3º ANO|ALUNO||||2026-09-04',
     'COC|ENSINO FUNDAMENTAL 1|3º ANO|ALUNO||||2026-08-28',
@@ -236,9 +231,16 @@
     if (f.length !== 8) throw new Error('Regra Combinado Posi inválida: ' + s);
     return { marca: f[0], segmento: f[1], serie: f[2], tipo: f[3], datas: f.slice(4) };
   });
-  var estado = {cenario:'sem',metodo:'posi',matrizModo:'marcaSerie',matrizExpandida:false,ordemPrioridade:null};
+  var estado = {cenario:'sem',matrizModo:'marcaSerie',matrizExpandida:false,ordemPrioridade:null};
   var META = '2026-10-15';
   var META_WAYS = '2026-11-30';
+  var META_GEE = '2026-11-12';
+  var META_SAS_BRADESCO = '2026-10-26';
+  function metaOriginal(marca){
+    if(marca==='GEE'||marca==='GEEKIE')return META_GEE;
+    if(/^SAS[\s_-]*BRADESCO$/.test(marca))return META_SAS_BRADESCO;
+    return marca==='WAYS'?META_WAYS:META;
+  }
   var SERIES = ['INF 1º ANO','INF 2 ANOS','INF 3 ANOS','INF 4 ANOS','INF 5 ANOS','1º ANO','2º ANO','3º ANO','4º ANO','5º ANO','6º ANO','7º ANO','8º ANO','9º ANO','1ª SERIE','2ª SERIE','3ª SERIE','PRE-VEST','PU','VARIOS'];
   function seriePrioritaria(s){return /^INF\b/.test(s)||/^[1-9]º ANO$/.test(s)||/^[1-3]ª SERIE$/.test(s);}
   function ordemMatriz(){
@@ -324,16 +326,6 @@
     if(!dias||limite<=0)return null;
     return {inicio:inicio,fim:fim,dias:dias,antes:antes,fracao:antes/dias};
   }
-  function intervaloCombinadoBoss(regras,meta){
-    // Usar exclusivamente datas do Combinado_Posi. Marco único = data de entrega.
-    var marcos=Array.from(new Set(posiParcelas(regras).map(function(p){return p.prazo;}).filter(Boolean))).sort();
-    if(!marcos.length)return null;
-    if(marcos.length===1){
-      var dentro=marcos[0]<=meta;
-      return {inicio:marcos[0],fim:marcos[0],dias:1,antes:dentro?1:0,fracao:dentro?1:0,entregaUnica:true};
-    }
-    return rateioDiasUteisPosi(marcos[0],marcos[marcos.length-1],meta);
-  }
   function posiRegra(l) {
     var marca=normal(l.MARCA_FINAL || l.UNIDADE || l.MARCA);
     var segmento=normal(l.SEGMENTO), s=serie(l['SÉRIE'] || l.SERIE), tipo=normal(l.TIPO);
@@ -348,24 +340,13 @@
     matches.sort(function(a,b){return spec(b)-spec(a);});
     return matches.filter(function(r){return spec(r)===spec(matches[0]);});
   }
-  function posiParcelas(regras) {
-    // H/I/J/K representam percentuais ACUMULADOS. Cada marco só adiciona
-    // a diferença em relação ao anterior (30%, depois +10%, +10%, +50%).
-    // Regras duplicadas de mesma coorte preservam a data mais cedo por marco.
-    var niveis=[.3,.4,.5,1], anterior=0, parcelas=[];
-    niveis.forEach(function(nivel,i){
-      var prazos=regras.map(function(r){return r.datas[i];}).filter(Boolean).sort();
-      if (!prazos.length) return;
-      parcelas.push({fracao:nivel-anterior, prazo:prazos[0]});
-      anterior=nivel;
-    });
-    return parcelas;
-  }
-  function previsaoNaMeta(total, dtPlan, parcelas) {
-    if (!dtPlan || !parcelas.length) return 0;
-    return total*parcelas.reduce(function(s,p){
-      return s+(dtPlan<=p.prazo?p.fracao:0);
-    },0);
+  function rateioPlanejado(l,inicio,fim,meta,inicioAusente){
+    if(!fim)return null;
+    if(inicioAusente){
+      var dentro=fim<=meta;
+      return {inicio:fim,fim:fim,dias:1,antes:dentro?1:0,fracao:dentro?1:0,entregaUnica:true};
+    }
+    return rateioDiasUteisPosi(inicio,fim,meta);
   }
   function dadosBase() {
     var base=window.pgBaseGeralReportExecutiva||window.dadosGlobais||[];
@@ -380,30 +361,30 @@
       if(!total||!marca)return null;
       var grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA)||'NÃO INFORMADA';
       var s=serie(l['SÉRIE']||l.SERIE);
-      var dtPlan=data(l.META_PCP_POS||(window.pgCampoColeta&&window.pgCampoColeta(l,'META_PCP_POS')));
-      var alvo=marca==='WAYS'?META_WAYS:META;
-      // Curva de planejamento: corte fixo 15/10, independente do combinado.
-      var ate15=dtPlan&&dtPlan<=META?total:0,apos15=dtPlan&&dtPlan>META?total:0;
-      // Fere: parcela até 15/10 pelo método; não fere: a nova meta é a data acordada.
-      var regras=marca!=='WAYS'&&dtPlan>META?posiRegra(l):null;
-      var todasParcelas=regras?posiParcelas(regras):[];
-      var dataAcordada=todasParcelas.reduce(function(ultima,p){return p.prazo>ultima?p.prazo:ultima;},'');
-      var elegivel=!!regras&&!!dataAcordada&&!!dtPlan&&dtPlan<=dataAcordada;
-      var conhecido=!!dtPlan,previstoOriginal=conhecido&&dtPlan<=alvo?total:0;
+      var dtPlan=typeof window.pgDataPlanoEntregaSLA==='function'?window.pgDataPlanoEntregaSLA(l):null;
+      var alvo=metaOriginal(marca),cd=normal(l.CD_FINAL||l['CD DESTINO']);
+      var posiPropria=grafica==='POSIGRAF'&&cd==='POSIGRAF';
+      var regras=posiPropria?posiRegra(l):null;
+      var dataAcordada=(regras||[]).reduce(function(ultima,r){
+        return r.datas.reduce(function(a,d){return d>a?d:a;},ultima);
+      },'');
+      var elegivel=!!regras&&dataAcordada>alvo;
+      var inicioRaw=window.pgCampoColeta?window.pgCampoColeta(l,'Coleta/Internalização de estoque inicial (re) plan'):
+        l['Coleta/Internalização de estoque inicial (re) plan'];
+      var inicioAusente=inicioRaw==null||String(inicioRaw).trim()==='';
+      var inicioColeta=inicioAusente?null:
+        (window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(inicioRaw):data(inicioRaw));
+      var inicioPlan=inicioColeta&&window.pgDataPlanoEntregaSLA(l,inicioColeta);
+      var rateio=posiPropria?rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioAusente):null;
+      var conhecido=!!dtPlan&&(!posiPropria||!!rateio);
+      var previstoOriginal=conhecido?(posiPropria?total*rateio.fracao:dtPlan<=alvo?total:0):0;
       var previstoFere=previstoOriginal,previstoNaoFere=previstoOriginal;
-      var bossIntervalo=null,bossIndeterminado=false;
-      if(elegivel){
-        if(estado.metodo==='boss'){
-          bossIntervalo=intervaloCombinadoBoss(regras,alvo);
-          if(bossIntervalo)previstoFere=total*Math.max(0,Math.min(1,bossIntervalo.fracao));
-          else bossIndeterminado=true;
-        }else{
-          previstoFere=total*Math.max(0,Math.min(1,todasParcelas.reduce(function(ac,p){
-            return ac+(p.prazo<=alvo?p.fracao:0);
-          },0)));
-        }
-        previstoNaoFere=total;
+      if(elegivel&&conhecido){
+        var rateioAcordo=rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,inicioAusente);
+        previstoNaoFere=rateioAcordo?total*rateioAcordo.fracao:0;
       }
+      // Distribuição pela meta original da marca, independente do cenário escolhido.
+      var ate15=previstoOriginal,apos15=conhecido?Math.max(0,total-previstoOriginal):0;
       var previsto=estado.cenario==='sem'?previstoFere:previstoNaoFere;
       var combinadoAdicional=Math.max(0,previstoNaoFere-previstoFere);
       var excecao=estado.cenario==='com'?Math.max(0,previstoNaoFere-previstoOriginal):0;
@@ -414,12 +395,13 @@
         total:total,previsto:previsto,pos:conhecido?Math.max(0,total-previsto):0,
         semData:conhecido?0:total,real:realTem?Math.min(total,volume(realRaw)):0,realTem:realTem,
         realCD:Math.min(total,volume(l['TIRAGEM CONFIRMADA CD'])),realCDTem:l['TIRAGEM CONFIRMADA CD']!==null&&l['TIRAGEM CONFIRMADA CD']!==undefined&&l['TIRAGEM CONFIRMADA CD']!=='',
-        metaArmDate:data(l.META_ARM_POS||l['META ARMAZÉM']),
+        metaArmDate:alvo,
         ate15:ate15,apos15:apos15,excecao:excecao,
-        posi:elegivel,alvo:alvo,dtPlan:dtPlan,bossIntervalo:bossIntervalo,bossIndeterminado:bossIndeterminado,
+        posi:elegivel,alvo:alvo,dtPlan:dtPlan,rateio:rateio,
+        rateioDia:rateio&&!rateio.entregaUnica?total/rateio.dias:null,
         combinadoAdicional:combinadoAdicional,
-        prazos:[alvo].concat(elegivel?todasParcelas.map(function(p){return p.prazo;}):[]),
-        cd:normal(l.CD_FINAL||l['CD DESTINO'])
+        prazos:[alvo].concat(elegivel?[dataAcordada]:[]),
+        cd:cd
       };
     }).filter(Boolean);
   }
@@ -430,8 +412,8 @@
       a.combinadoAdicional+=l.combinadoAdicional||0;
       a.real+=l.real;if(l.realTem)a.realTem=true;
       a.realCD+=l.realCD||0;if(l.realCDTem)a.realCDTem=true;
-      if(l.bossIndeterminado)a.bossIndeterminado++;return a;
-    },{total:0,previsto:0,pos:0,semData:0,ate15:0,apos15:0,excecao:0,real:0,realTem:false,realCD:0,realCDTem:false,bossIndeterminado:0,combinadoAdicional:0});
+      return a;
+    },{total:0,previsto:0,pos:0,semData:0,ate15:0,apos15:0,excecao:0,real:0,realTem:false,realCD:0,realCDTem:false,combinadoAdicional:0});
   }
   function card(rotulo, valor, sub, classe) {
     return '<div class="ma-kpi '+(classe||'')+'"><p class="text-[10px] uppercase tracking-wider font-black opacity-75">'+escapeHTML(rotulo)+'</p>'+
@@ -440,8 +422,9 @@
   function fmtPrazo(iso){return /^\d{4}-\d{2}-\d{2}$/.test(iso)?iso.slice(8)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4):iso;}
   function listaDatas(items){return Array.from(new Set((items||[]).reduce(function(a,l){return a.concat(l.prazos||[]);},[]).filter(Boolean))).sort();}
   function textoDatas(items){
-    var ds=listaDatas(items),base=ds.filter(function(d){return d===META||d===META_WAYS;});
-    var extras=ds.filter(function(d){return d!==META&&d!==META_WAYS;});
+    var ds=listaDatas(items),originais=Array.from(new Set((items||[]).map(function(l){return l.alvo;})));
+    var base=ds.filter(function(d){return originais.indexOf(d)>=0;});
+    var extras=ds.filter(function(d){return originais.indexOf(d)<0;});
     return (base.map(fmtPrazo).join(' · ')||'Sem meta original')+
       (extras.length?' | Exceção Posi: '+extras.map(fmtPrazo).join(' · '):'');
   }
@@ -452,14 +435,14 @@
     return '<div><div class="flex items-center justify-between gap-2 text-[11px] mb-2">'+
       '<b class="ma-dist-name" title="'+escapeHTML(label)+'">'+escapeHTML(label)+'</b>'+
       '<b class="shrink-0">'+pct(s.ate15,s.total)+'</b></div>'+
-      '<div class="flex h-4 rounded-full overflow-hidden" style="background:#e5eef8" aria-label="Planejado até 15/10: '+pct(s.ate15,s.total)+'">'+
+      '<div class="flex h-4 rounded-full overflow-hidden" style="background:#e5eef8" aria-label="Dentro da meta original: '+pct(s.ate15,s.total)+'">'+
       '<span style="background:#418EDE;width:'+ok+'%"></span>'+
       '<span style="background:#FA4616;width:'+depois+'%"></span></div>'+
       '<div class="text-[10px] mt-1 leading-relaxed" style="color:#61738d">'+
-      'Até 15/10: <b>'+fmt(s.ate15,true)+'</b> · Pós 15/10: <b>'+fmt(s.apos15,true)+'</b>'+
+      'Dentro da meta original: <b>'+fmt(s.ate15,true)+'</b> · Fora: <b>'+fmt(s.apos15,true)+'</b>'+
       (s.semData?' · Sem data planejada: <b>'+fmt(s.semData,true)+'</b>':'')+'</div>'+
       (ways?'<div class="ma-dist-dates">WAYS: meta original 30/11/2026.</div>':'')+
-      (estado.cenario==='com'&&s.excecao>0?'<div class="ma-dist-dates">Parcela pós-15/10 pelo método '+(estado.metodo==='boss'?'Boss':'% Posi')+': <b>'+fmt(s.excecao,true)+'</b></div>':'')+'</div>';
+      (estado.cenario==='com'&&s.excecao>0?'<div class="ma-dist-dates">Dentro do prazo combinado: <b>'+fmt(s.excecao,true)+'</b></div>':'')+'</div>';
   }
   function distribuicao(items,campo,destino){
     var el=document.getElementById(destino);if(!el)return;
@@ -629,8 +612,8 @@
       ctx.fillStyle='#fff';ctx.font='bold 17px Poppins, sans-serif';
       ctx.fillText('META ARMAZÉM · '+m.nomeModo,16,29);
       ctx.font='11px Poppins, sans-serif';
-      ctx.fillText('Destino CD  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta · '+(estado.metodo==='boss'?'Boss':'% Posi'):'Combinado Posi Fere a Meta')+
-        '  |  15/10/2026 (WAYS 30/11/2026)',16,51);
+      ctx.fillText('Entrega prevista  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta')+
+        '  |  15/10 · SAS Bradesco 26/10 · GEE 12/11 · WAYS 30/11',16,51);
       ctx.fillStyle='#284081';ctx.fillRect(0,top,w,head);
       ctx.fillStyle='#fff';ctx.font='bold 12px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,5,top+27,first-9);
       function corta(v,max){var chars=Array.from(String(v));return chars.length>max?chars.slice(0,max-1).join('')+'…':chars.join('');}
@@ -668,8 +651,8 @@
     var comData=items.filter(function(x){return !!x.metaArmDate;});
     var semData=items.length-comData.length;
     var datas=Array.from(new Set(comData.map(function(x){return x.metaArmDate;}))).sort();
-    var dataNota=datas.length===1?'Prazo META_ARM_POS: '+fmtPrazo(datas[0]):
-      datas.length>1?'Prazos META_ARM_POS de '+fmtPrazo(datas[0])+' a '+fmtPrazo(datas[datas.length-1]):'Sem datas META_ARM_POS';
+    var dataNota=datas.length===1?'Meta original: '+fmtPrazo(datas[0]):
+      datas.length>1?'Metas originais de '+fmtPrazo(datas[0])+' a '+fmtPrazo(datas[datas.length-1]):'Sem data de meta';
     function box(nome,n,sub,cor,disponivel){
       var v=disponivel?fmt(n,true):'–',p=total.total&&disponivel?Math.max(0,Math.min(100,100*n/total.total)):0;
       return '<div class="ma-compare-card"><p class="text-[10px] uppercase font-black tracking-wide text-slate-600">'+nome+'</p>'+
@@ -678,11 +661,11 @@
         '<p class="text-[10px] text-slate-500 mt-2">'+sub+(disponivel&&total.total?' · '+pct(n,total.total)+' do total':'')+'</p></div>';
     }
     document.getElementById('maComparativo').innerHTML=
-      box('Planejado',planejado,'Volume no prazo pelo método '+(estado.cenario==='sem'?'meta original':estado.metodo==='boss'?'Boss':'% Posi'),'#418EDE',!!items.length)+
+      box('Planejado',planejado,'Entrega prevista dentro da '+(estado.cenario==='sem'?'meta original':'meta acordada'),'#418EDE',!!items.length)+
       box('Realizado',total.realCD,'Tiragem confirmada no CD (todas as datas)','#0f766e',total.realCDTem)+
       box('Meta Armazém',total.total,'Volume total esperado no CD para os itens filtrados','#FA4616',!!items.length);
     document.getElementById('maComparativoNota').textContent=dataNota+
-      (semData?' · '+semData+' linha(s) sem META_ARM_POS; ficam no total da meta, mas não são tratadas como planejadas no prazo.':'')+
+      (semData?' · '+semData+' linha(s) sem data de meta.':'')+
       ' · Não duplica PCP direto e PCP_ACABADORAS.';
   }
   function grupos(items, agrupar, cenario) {
@@ -690,7 +673,7 @@
     items.forEach(function(l){
       var nome=agrupar==='serie'?l.serie:agrupar==='grafica'?l.grafica:
         agrupar==='marcaSerie'?l.marca+' · '+l.serie:agrupar==='graficaMarca'?l.grafica+' · '+l.marca:l.marca;
-      var grupo=cenario==='com'?(l.posi?'Posigraf — extensão pós-15/10':'Demais itens — meta original'):'';
+      var grupo=cenario==='com'?(l.posi?'Posigraf — prazo combinado':'Demais itens — meta original'):'';
       var key=grupo+'|'+nome;
       if(!por[key])por[key]={nome:nome,grupo:grupo,itens:[]};
       por[key].itens.push(l);
@@ -698,26 +681,21 @@
     return Object.values(por).sort(function(a,b){return a.grupo.localeCompare(b.grupo)||a.nome.localeCompare(b.nome,'pt-BR',{numeric:true});});
   }
   window.pgMACenario=function(c){if(c!=='com'&&c!=='sem')return;estado.cenario=c;window.processarMetaArmazem();};
-  window.pgMAMetodo=function(m){if(m!=='boss'&&m!=='posi')return;estado.metodo=m;window.processarMetaArmazem();};
   window.processarMetaArmazem=function(){
     var base=dadosBase(), aviso=document.getElementById('maAviso');
     if(!aviso)return;
     // Marca, série e gráfica seguem exclusivamente os filtros gerais do portal.
     document.querySelectorAll('[data-ma-cenario]').forEach(function(btn){btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-cenario')===estado.cenario));});
-    document.querySelectorAll('[data-ma-metodo]').forEach(function(btn){btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-metodo')===estado.metodo));});
-    document.getElementById('maMetodoWrap').classList.remove('hidden');
     var items=base;
     var total=soma(items);
-    var missing=items.filter(function(l){return !l.alvo || !l.dtPlan;}).length;
+    var missing=items.filter(function(l){return l.semData>0;}).length;
     aviso.classList.toggle('hidden',!missing);
-    aviso.textContent=(missing?missing+' itens sem data planejada. ':'')+
-      (estado.metodo==='boss'&&total.bossIndeterminado?
-        total.bossIndeterminado+' itens sem data no combinado.':'');
+    aviso.textContent=missing?missing+' itens sem previsão válida de entrega (data, SLA ou intervalo).':'';
     aviso.classList.toggle('hidden',!aviso.textContent);
     document.getElementById('maKPIs').innerHTML=
       card('Tiragem total CD',fmt(total.total,!!items.length),items.length+' linhas PCP + acabadoras (sem duplicidade)','')+
       card('Dentro da meta',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
-      card('Fora da meta',fmt(total.pos,!!items.length),'Após 15/10, conforme o método selecionado (WAYS: 30/11)','warn')+
+      card('Fora da meta',fmt(total.pos,!!items.length),'Após a meta aplicável à marca e ao cenário','warn')+
       card('Sem previsão',fmt(total.semData,!!items.length),'Sem data de entrega utilizável','neutral');
     document.getElementById('maThPrevisto').textContent='Dentro da meta';
     document.getElementById('maThPos').textContent='Fora da meta';
@@ -729,8 +707,8 @@
     comparativoMeta(items,total);
     var atual='';var rows='';
     rank.forEach(function(g){
-      if(estado.cenario==='com'&&g.grupo!==atual){atual=g.grupo;var x=soma(items.filter(function(l){return l.posi===(atual==='Posigraf — extensão pós-15/10');}));
-        rows+='<tr class="bg-indigo-50"><td class="font-black text-indigo-900">'+escapeHTML(atual)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(items.filter(function(l){return l.posi===(atual==='Posigraf — extensão pós-15/10');})))+'</td><td class="font-black">'+fmt(x.total,x.total>0)+'</td><td class="font-black">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td class="font-black">'+pct(x.previsto,x.total)+'</td></tr>';
+      if(estado.cenario==='com'&&g.grupo!==atual){atual=g.grupo;var x=soma(items.filter(function(l){return l.posi===(atual==='Posigraf — prazo combinado');}));
+        rows+='<tr class="bg-indigo-50"><td class="font-black text-indigo-900">'+escapeHTML(atual)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(items.filter(function(l){return l.posi===(atual==='Posigraf — prazo combinado');})))+'</td><td class="font-black">'+fmt(x.total,x.total>0)+'</td><td class="font-black">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td class="font-black">'+pct(x.previsto,x.total)+'</td></tr>';
       }
       var x=soma(g.itens);
       rows+='<tr><td class="font-bold text-slate-700">'+escapeHTML(g.nome)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(g.itens))+'</td><td>'+fmt(x.total,x.total>0)+'</td><td class="font-bold text-blue-700">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td><div class="flex items-center justify-end gap-2"><span class="whitespace-nowrap font-black">'+pct(x.previsto,x.total)+'</span><div class="ma-bar w-16"><b style="width:'+(x.total?100*x.previsto/x.total:0)+'%"></b></div></div></td></tr>';

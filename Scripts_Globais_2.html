@@ -396,8 +396,8 @@ window.pgDataPlanoColetaLinha = function(l) {
 
 // Planejamento de Entrega TP: coleta planejada + dias da rota na Matriz_SLA.
 // Zero é um prazo válido; rota ausente não recebe prazo inventado.
-window.pgDataPlanoEntregaSLA = function(l) {
-    const coleta = window.pgDataPlanoColetaLinha(l);
+window.pgDataPlanoEntregaSLA = function(l, coletaPlanejada = window.pgDataPlanoColetaLinha(l)) {
+    const coleta = coletaPlanejada;
     const matriz = window.PG_MATRIZ_SLA;
     if (!coleta || !Array.isArray(matriz)) return null;
     const norm = v => String(v ?? '').normalize('NFD')

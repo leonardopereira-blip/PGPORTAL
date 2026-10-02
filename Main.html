@@ -760,9 +760,13 @@ window.exportarSkusFiltradosSheets = function() {
                     window[chave] = valor;
                     // O dashboard guarda copia local por fatia dentro de carregarDashboardPorMes.
                     if (chave === 'DADOS_COCKPIT_INICIAL' && typeof renderCockpit === 'function') renderCockpit(valor);
-                    if (chave === 'PG_MATRIZ_SLA' && window.dadosGlobais &&
-                        typeof window.processarReportExecutiva === 'function') {
-                        window.processarReportExecutiva();
+                    if (chave === 'PG_MATRIZ_SLA' && window.dadosGlobais) {
+                        if (typeof window.processarReportExecutiva === 'function') {
+                            window.processarReportExecutiva();
+                        }
+                        if (typeof window.processarMetaArmazem === 'function') {
+                            window.processarMetaArmazem();
+                        }
                     }
                     if (chave === 'PG_FORECAST_COLETA' && typeof window.renderColetaFinalFunil === 'function') {
                         // Atualiza Meta CD publicada nas duas curvas sem recarregar o portal inteiro.
