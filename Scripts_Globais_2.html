@@ -11007,16 +11007,25 @@ window.renderReportExecutivaCurvaSemanal = function() {
         soma + (r.dtPlan && r.dtPlan <= corte
             ? Math.max(0, Number(r.tiragem || 0)) : 0), 0);
 
+    // Ajuste executivo da curva: a partir da semana de 16 a 21/11/2026,
+    // o Forecast exibido passa a representar 100% da base.
+    const forecast100Desde = '2026-11-16';
+
     periodos.forEach(p => {
         const cortePlano = cortePlanoPeriodo(p);
         const corteReal = corteRealPeriodo(p);
         // Histórico inalterado. A semana corrente considera também os
         // próximos dias planejados, até o fechamento do período (30/09).
-        const meta = cortePlano < hojeIso
+        const metaCalculada = cortePlano < hojeIso
             ? acumuladoHistorico(cortePlano)
             : cortePlano === hojeIso
                 ? Math.max(0, Number(fonte.planejadoHoje || 0))
                 : acumuladoAte(cortePlano, 'dtPlan', 'tiragem', false);
+
+        const meta = p.ini >= forecast100Desde && total > 0
+            ? total
+            : metaCalculada;
+
         const real = acumuladoAte(corteReal, 'dtReal', 'coletada', true);
         metaVolume.push(meta);
         realVolume.push(real);
