@@ -10329,6 +10329,55 @@ window.processarReportExecutiva = function() {
             cb.addEventListener('change', () => window.processarReportExecutiva());
         });
     }
+    // V58 - grupos opcionais da tabela executiva. A escolha vale para a sessão
+    // e altera somente a apresentação; nenhum cálculo é refeito ao recolher/abrir.
+    if (!window.pgREGruposV58) {
+        window.pgREGruposV58 = { entTodos: true, kit: false };
+    }
+
+    let gruposReV58 = painelRE.querySelector('[data-pg-re-grupos-v58]');
+    if (!gruposReV58) {
+        gruposReV58 = document.createElement('div');
+        gruposReV58.dataset.pgReGruposV58 = '1';
+        gruposReV58.className =
+            'inline-flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1';
+        gruposReV58.innerHTML =
+            '<span class="text-[10px] font-black uppercase text-slate-600">Indicadores</span>' +
+            '<label class="inline-flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2 py-1 cursor-pointer">' +
+                '<input type="checkbox" data-re-grupo-v58="entTodos"> CD + Acab.</label>' +
+            '<label class="inline-flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2 py-1 cursor-pointer">' +
+                '<input type="checkbox" data-re-grupo-v58="kit"> Form. Kit</label>';
+        painelRE.appendChild(gruposReV58);
+
+        gruposReV58.querySelectorAll('input[data-re-grupo-v58]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const id = cb.dataset.reGrupoV58;
+                window.pgREGruposV58[id] = cb.checked;
+                if (typeof window.pgREAplicarVisibilidadeV58 === 'function') {
+                    window.pgREAplicarVisibilidadeV58();
+                }
+            });
+        });
+    }
+
+    window.pgREAplicarVisibilidadeV58 = function() {
+        const tabela = document.querySelector('#abaReportExecutiva .re-table');
+        if (!tabela) return;
+        const estado = window.pgREGruposV58 || { entTodos: true, kit: false };
+        [
+            ['kit', !!estado.kit],
+            ['enttodos', !!estado.entTodos]
+        ].forEach(([grupo, visivel]) => {
+            tabela.querySelectorAll('.re-group-' + grupo).forEach(el => {
+                el.style.display = visivel ? '' : 'none';
+            });
+        });
+    };
+
+    gruposReV58.querySelectorAll('input[data-re-grupo-v58]').forEach(cb => {
+        cb.checked = !!window.pgREGruposV58[cb.dataset.reGrupoV58];
+    });
+
     const opcoesRE = ['grafica', 'marca', 'serie'];
     const nomesRE = {grafica:'Gráfica', marca:'Marca', serie:'Série'};
     const colunasRE = opcoesRE.filter(id =>
@@ -10553,9 +10602,11 @@ window.processarReportExecutiva = function() {
     };
 
     const thAcab = document.getElementById('reThAcabPlan');
+    const thKit = document.getElementById('reThKitPlan');
     const thEntTodos = document.getElementById('reThEntTodosPlan');
     const thEntCD = document.getElementById('reThEntCDPlan');
     if (thAcab) thAcab.textContent = `Mat. Acabado (Plan. ${fmtData(hojeIso)})`;
+    if (thKit) thKit.textContent = `Form. Kit (Plan. ${fmtData(hojeIso)})`;
     if (thEntTodos) thEntTodos.textContent = `Entregues (Plan. ${fmtData(hojeIso)}) - CD + Acab.`;
     if (thEntCD) thEntCD.textContent = `Entregues (Plan. ${fmtData(hojeIso)}) - CD`;
 
@@ -10634,6 +10685,50 @@ window.processarReportExecutiva = function() {
     });
     window.pgAuditoriaAcabamentoReportV50 = auditoriaAcabReportV50;
     if (thAcab) thAcab.title = 'Somente nesta tabela: para nao-SAS, contabiliza o maior volume entre acabamento real registrado e Coleta TP real e datada, limitado a tiragem da linha. Coleta parcial nao reduz acabamento registrado. SAS e Funil sem alteracoes.';
+
+    // V58 - Formação de Kit na Report.
+    // Mantém a regra operacional do portal: PCP direto ao CD + PCP_ACABADORAS
+    // oficiais para o que passa por acabadora, sem empilhar a transferência.
+    const faseKitReportV58 = FASES.find(f => f.id === 'kit');
+    const baseKitReportV58 = faseKitReportV58
+        ? window.pgLinhasUnicas([
+            ...baseGeral.filter(l =>
+                !window.pgEhFonteAcabadora(l) &&
+                !window.pgEhDestinoAcabadora(l)
+            ),
+            ...baseGeral.filter(l =>
+                window.pgEhFonteAcabadora(l) &&
+                window.pgAcabadoraDaLista(l)
+            )
+        ])
+        : [];
+
+    const kitPorMarca = {};
+    const kitTotal = novoAgg();
+
+    if (faseKitReportV58) {
+        baseKitReportV58.forEach(l => {
+            const volume = tiragem(l);
+            if (!(volume > 0)) return;
+
+            const grupo = chaveLinha(l);
+            add(kitPorMarca, grupo, 'den', volume);
+            kitTotal.den += volume;
+
+            const dtReal = window.pgDataRealFaseFunil(l, faseKitReportV58);
+            if (dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, faseKitReportV58)) {
+                add(kitPorMarca, grupo, 'real', volume);
+                kitTotal.real += volume;
+            }
+
+            const dtPlan = window.pgDataPlanoFaseFunil(l, faseKitReportV58, tRef);
+            const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
+            if (dtPlan && dias !== null && dias >= 3) {
+                add(kitPorMarca, grupo, 'plan', volume);
+                kitTotal.plan += volume;
+            }
+        });
+    }
 
     // 2) ENTREGAS — cenários fixos pedidos na Report.
     // TODAS sempre aceita toda a base; não há necessidade de filtrar linha a linha.
@@ -10790,6 +10885,7 @@ window.processarReportExecutiva = function() {
 
     const marcas = new Set([
         ...Object.keys(acabPorMarca),
+        ...Object.keys(kitPorMarca),
         ...Object.keys(entTodos.porMarca),
         ...Object.keys(entCD.porMarca)
     ]);
@@ -10813,13 +10909,16 @@ window.processarReportExecutiva = function() {
 
     const dot = cor => `<span class="re-dot re-dot-${cor}"></span>`;
 
-    const linhaHtml = (marca, a, et, ec, total = false) => {
+    const linhaHtml = (marca, a, k, et, ec, total = false) => {
         a = a || novoAgg();
+        k = k || novoAgg();
         et = et || novoAgg();
         ec = ec || novoAgg();
 
         const acabReal = pct(a.real, a.den);
         const acabPlan = pct(a.plan, a.den);
+        const kitReal = pct(k.real, k.den);
+        const kitPlan = pct(k.plan, k.den);
         const entTodosReal = pct(et.real, et.den);
         const entTodosPlan = pct(et.plan, et.den);
         const entCDReal = pct(ec.real, ec.den);
@@ -10840,24 +10939,30 @@ window.processarReportExecutiva = function() {
                 ${celulas}
                 <td>${pctTxt(acabReal)}</td>
                 <td>${pctTxt(acabPlan)}</td>
-                <td class="re-status-cell">${dot(status(acabReal, acabPlan))}</td>
-                <td>${pctTxt(entTodosReal)}</td>
-                <td>${pctTxt(entTodosPlan)}</td>
-                <td class="re-status-cell">${dot(status(entTodosReal, entTodosPlan))}</td>
+                <td class="re-status-cell" data-re-indicador="acab">${dot(status(acabReal, acabPlan))}</td>
+                <td class="re-group-kit">${pctTxt(kitReal)}</td>
+                <td class="re-group-kit">${pctTxt(kitPlan)}</td>
+                <td class="re-status-cell re-group-kit" data-re-indicador="kit">${dot(status(kitReal, kitPlan))}</td>
+                <td class="re-group-enttodos">${pctTxt(entTodosReal)}</td>
+                <td class="re-group-enttodos">${pctTxt(entTodosPlan)}</td>
+                <td class="re-status-cell re-group-enttodos" data-re-indicador="entTodos">${dot(status(entTodosReal, entTodosPlan))}</td>
                 <td>${pctTxt(entCDReal)}</td>
                 <td>${pctTxt(entCDPlan)}</td>
-                <td class="re-status-cell">${dot(status(entCDReal, entCDPlan))}</td>
+                <td class="re-status-cell" data-re-indicador="entCD">${dot(status(entCDReal, entCDPlan))}</td>
             </tr>`;
     };
 
     let html = '';
     marcasOrdenadas.forEach(m => {
-        html += linhaHtml(m, acabPorMarca[m], entTodos.porMarca[m], entCD.porMarca[m], false);
+        html += linhaHtml(m, acabPorMarca[m], kitPorMarca[m],
+            entTodos.porMarca[m], entCD.porMarca[m], false);
     });
 
-    html += linhaHtml('TOTAL GERAL', acabTotal, entTodos.total, entCD.total, true);
-    tbody.innerHTML = html || '<tr><td colspan="${9 + Math.max(1, colunasRE.length)}" class="re-empty">Sem dados para os filtros atuais.</td></tr>';
+    html += linhaHtml('TOTAL GERAL', acabTotal, kitTotal,
+        entTodos.total, entCD.total, true);
+    tbody.innerHTML = html || `<tr><td colspan="${12 + Math.max(1, colunasRE.length)}" class="re-empty">Sem dados para os filtros atuais.</td></tr>`;
 
+    window.pgREAplicarVisibilidadeV58();
     window.reAtivarCliquesTabela();
     window.renderReportExecutivaCurvaSemanal();
 };
@@ -11622,6 +11727,61 @@ window.rePendenciasAcabamento = function(marca) {
     return saida;
 };
 
+window.rePendenciasKit = function(marca) {
+    const baseGeral = window.pgBaseGeralReportExecutiva || [];
+    const hojeIso = window.pgREDataCorteV57 ||
+        ((typeof dtHojeISO !== 'undefined' && dtHojeISO)
+            ? dtHojeISO : new Date().toISOString().slice(0, 10));
+    const tRef = document.getElementById('filtroReferencia')?.value || 'replan';
+    const f = FASES.find(x => x.id === 'kit');
+    const todas = marca === 'TOTAL GERAL';
+    if (!f) return [];
+
+    const base = window.pgLinhasUnicas([
+        ...baseGeral.filter(l =>
+            !window.pgEhFonteAcabadora(l) &&
+            !window.pgEhDestinoAcabadora(l)
+        ),
+        ...baseGeral.filter(l =>
+            window.pgEhFonteAcabadora(l) &&
+            window.pgAcabadoraDaLista(l)
+        )
+    ]);
+
+    const saida = [];
+
+    base.forEach(l => {
+        if (!todas && !window.reLinhaNoGrupoV42(l, marca)) return;
+
+        const volume = window.reTiragemLinha(l);
+        if (!(volume > 0)) return;
+
+        const dtPlan = window.pgDataPlanoFaseFunil(l, f, tRef);
+        const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
+        if (!(dtPlan && dias !== null && dias >= 3)) return;
+
+        const dtReal = window.pgDataRealFaseFunil(l, f);
+        const volumeReal = dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, f)
+            ? volume : 0;
+        const gap = Math.max(0, volume - volumeReal);
+        if (!(gap > 0)) return;
+
+        saida.push(window.reLinhaExportacao(l, {
+            grupo: 'Gap',
+            indicador: 'Form. Kit',
+            cenario: 'PCP direto ao CD + PCP_ACABADORAS oficiais',
+            acumuladoAte: hojeIso,
+            dtPlan,
+            dtReal: dtReal || '',
+            volumePlan: volume,
+            volumeReal,
+            gap
+        }));
+    });
+
+    return saida;
+};
+
 window.rePendenciasEntrega = function(marca, destino) {
     const baseGeral = window.pgBaseGeralReportExecutiva || [];
     const hojeIso = window.pgREDataCorteV57 ||
@@ -11684,6 +11844,9 @@ window.reExtrairPendenciasTabela = function(tipo, marca, elemento) {
     if (tipo === 'acab') {
         indicador = 'Mat_Acabado';
         linhas = window.rePendenciasAcabamento(marca);
+    } else if (tipo === 'kit') {
+        indicador = 'Formacao_Kit';
+        linhas = window.rePendenciasKit(marca);
     } else if (tipo === 'entTodos') {
         indicador = 'Entregas_CD_Acab';
         linhas = window.rePendenciasEntrega(marca, 'TODOS');
@@ -11715,8 +11878,7 @@ window.reAtivarCliquesTabela = function() {
         if (!td || !tr) return;
 
         const marca = decodeURIComponent(tr.dataset.reChave || '');
-        const ordem = Array.from(tr.querySelectorAll('.re-status-cell')).indexOf(td);
-        const tipo = ['acab', 'entTodos', 'entCD'][ordem] || '';
+        const tipo = td.dataset.reIndicador || '';
 
         if (!tipo) return;
 
