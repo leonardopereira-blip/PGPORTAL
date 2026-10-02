@@ -394,12 +394,11 @@ window.pgDataPlanoColetaLinha = function(l) {
     );
 };
 
-// Planejamento de Entrega TP: coleta planejada + dias da rota na Matriz_SLA.
+// Prazo único da rota, compartilhado pelo planejamento e sua base auditável.
 // Zero é um prazo válido; rota ausente não recebe prazo inventado.
-window.pgDataPlanoEntregaSLA = function(l, coletaPlanejada = window.pgDataPlanoColetaLinha(l)) {
-    const coleta = coletaPlanejada;
+window.pgDiasSLALinha = function(l) {
     const matriz = window.PG_MATRIZ_SLA;
-    if (!coleta || !Array.isArray(matriz)) return null;
+    if (!Array.isArray(matriz)) return null;
     const norm = v => String(v ?? '').normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
     if (window.pgMatrizSLAReferencia !== matriz) {
@@ -426,7 +425,15 @@ window.pgDataPlanoEntregaSLA = function(l, coletaPlanejada = window.pgDataPlanoC
     const fornecedor = norm(l.GRAFICA_FINAL || window.pgCampoColeta(l, 'GRÁFICA') || l.GRAFICA);
     const destino = norm(l.CD_FINAL || window.pgCampoColeta(l, 'CD DESTINO') || l.CD);
     const dias = window.pgMatrizSLARotas.get(fornecedor + '\u001f' + destino);
-    if (dias === undefined) return null;
+    return dias === undefined ? null : dias;
+};
+
+// Planejamento de Entrega TP: coleta planejada + dias da rota na Matriz_SLA.
+window.pgDataPlanoEntregaSLA = function(l, coletaPlanejada = window.pgDataPlanoColetaLinha(l)) {
+    const coleta = coletaPlanejada;
+    if (!coleta) return null;
+    const dias = window.pgDiasSLALinha(l);
+    if (dias === null) return null;
     const entrega = new Date(coleta + 'T12:00:00Z');
     entrega.setUTCDate(entrega.getUTCDate() + dias);
     return entrega.toISOString().slice(0, 10);
