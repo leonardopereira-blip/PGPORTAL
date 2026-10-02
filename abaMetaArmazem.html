@@ -166,7 +166,7 @@
     <p id="maComparativoNota" class="text-[10px] text-slate-500 mt-2"></p>
   </div>
 <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Entrega prevista: coleta planejada + SLA da rota. Posi → Posi: tiragem distribuída por dia útil entre início e fim planejados.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Entrega prevista: coleta planejada + SLA da rota. Todas as gráficas e acabadoras: tiragem distribuída por dia útil entre início e fim planejados.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
       <thead><tr><th>Grupo</th><th>Meta original / exceção</th><th>Volume total</th><th id="maThPrevisto">Dentro da meta</th><th id="maThPos">Fora da meta</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
@@ -314,11 +314,11 @@
   function fmt(v, temDado) {return !temDado ? '–' : new Intl.NumberFormat('pt-BR',{maximumFractionDigits:0}).format(Math.round(v || 0));}
   function pct(v, total) {return total>0 ? new Intl.NumberFormat('pt-BR',{style:'percent',maximumFractionDigits:1}).format(v/total):'–';}
   // Calendário nacional de 2026; não inferir feriados locais ou pontos facultativos.
-  var FERIADOS_POSI_2026=new Set([
+  var FERIADOS_2026=new Set([
     '2026-01-01','2026-04-03','2026-04-21','2026-05-01','2026-09-07',
     '2026-10-12','2026-11-02','2026-11-15','2026-11-20','2026-12-25'
   ]);
-  function rateioDiasUteisPosi(inicio,fim,meta){
+  function rateioDiasUteis(inicio,fim,meta){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(inicio)||!/^\d{4}-\d{2}-\d{2}$/.test(fim))return null;
     var a=new Date(inicio+'T12:00:00Z'),b=new Date(fim+'T12:00:00Z');
     if(!isFinite(a.getTime())||!isFinite(b.getTime())||a.toISOString().slice(0,10)!==inicio||
@@ -326,7 +326,7 @@
     var dias=0,antes=0,limite=740;
     for(var d=new Date(a.getTime());d<=b&&limite-->0;d.setUTCDate(d.getUTCDate()+1)){
       var n=d.getUTCDay(),iso=d.toISOString().slice(0,10);
-      if(n===0||n===6||FERIADOS_POSI_2026.has(iso))continue;
+      if(n===0||n===6||FERIADOS_2026.has(iso))continue;
       dias++;
       if(iso<=meta)antes++;
     }
@@ -356,7 +356,7 @@
       var dentro=fim<=meta;
       return {inicio:fim,fim:fim,dias:1,antes:dentro?1:0,fracao:dentro?1:0,entregaUnica:true};
     }
-    return rateioDiasUteisPosi(inicio,fim,meta);
+    return rateioDiasUteis(inicio,fim,meta);
   }
   function dadosBase() {
     var base=window.pgBaseGeralReportExecutiva||window.dadosGlobais||[];
@@ -385,16 +385,16 @@
       var inicioColeta=inicioAusente?null:
         (window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(inicioRaw):data(inicioRaw));
       var inicioPlan=inicioColeta&&window.pgDataPlanoEntregaSLA(l,inicioColeta);
-      var rateio=posiPropria?rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioAusente):null;
-      var conhecido=!!dtPlan&&(!posiPropria||!!rateio);
-      var previstoOriginal=conhecido?(posiPropria?total*rateio.fracao:dtPlan<=alvo?total:0):0;
+      var rateio=rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioAusente);
+      var conhecido=!!dtPlan&&!!rateio;
+      var previstoOriginal=conhecido?total*rateio.fracao:0;
       var previstoFere=previstoOriginal,previstoNaoFere=previstoOriginal;
       if(elegivel&&conhecido){
         var rateioAcordo=rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,inicioAusente);
         previstoNaoFere=rateioAcordo?total*rateioAcordo.fracao:0;
       }
       var metaAplicada=estado.cenario==='com'&&elegivel?dataAcordada:alvo;
-      var rateioAplicado=posiPropria&&conhecido?rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioAusente):null;
+      var rateioAplicado=conhecido?rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioAusente):null;
       // Distribuição pela meta original da marca, independente do cenário escolhido.
       var ate15=previstoOriginal,apos15=conhecido?Math.max(0,total-previstoOriginal):0;
       var previsto=estado.cenario==='sem'?previstoFere:previstoNaoFere;
@@ -457,15 +457,15 @@
       var origem=preenchido(fimRaw)?'Replanejado':preenchido(baseRaw)?'Baseline':'Sem data';
       var r=i.rateioAplicado,porDU=!!r&&!r.entregaUnica;
       var semDU=!!r&&r.motivo==='sem-dias-uteis';
-      var regra=i.posiPropria?(i.inicioAusente?'Entrega única na data final (início vazio)':
-        semDU?'Entrega única na data final (intervalo sem dias úteis)':'Rateio Posi por dias úteis'):'Entrega única na data final';
+      var regra=i.inicioAusente?'Entrega única na data final (início vazio)':
+        semDU?'Entrega única na data final (intervalo sem dias úteis)':'Rateio por dias úteis';
       var situacao=i.semData>0?'Sem previsão':i.previsto>0&&i.pos>0?'Parcialmente dentro da meta':i.pos>0?'Fora da meta':'Dentro da meta';
       var notas=[];
       if(!coletaFim)notas.push('Data de coleta final ausente ou inválida; replanejado preenchido não é substituído pela baseline.');
       if(sla===null)notas.push(Array.isArray(window.PG_MATRIZ_SLA)?'Rota sem SLA válido na Matriz_SLA.':'Matriz_SLA ainda indisponível.');
-      if(i.posiPropria&&!i.inicioAusente&&!i.inicioColeta)notas.push('Data de início planejada inválida.');
-      if(i.posiPropria&&coletaFim&&sla!==null&&i.inicioColeta&&!r)notas.push('Intervalo de entrega invertido, sem dias úteis ou inválido.');
-      if(i.posiPropria&&i.inicioAusente)notas.push('Início planejado vazio: tiragem concentrada na data final.');
+      if(!i.inicioAusente&&!i.inicioColeta)notas.push('Data de início planejada inválida.');
+      if(coletaFim&&sla!==null&&i.inicioColeta&&!r)notas.push('Intervalo de entrega invertido ou inválido.');
+      if(i.inicioAusente)notas.push('Início planejado vazio: tiragem concentrada na data final.');
       if(semDU)notas.push('Intervalo planejado sem dias úteis: tiragem integral considerada na data final de entrega.');
       if(origem==='Baseline')notas.push('Replanejado vazio: utilizada a baseline.');
       if(l._PG_TOTAL_HIBRIDO)notas.push('Volume da PCP_ACABADORAS: TIRAGEM A ENTREGAR (total por CD).');
@@ -474,7 +474,7 @@
         i.marca,i.serie,i.grafica,i.cd,String(l.ENVIO||l.Envio||''),String(campo('OP')??''),
         i.total,i.previsto,i.pos,i.semData,i.total?i.previsto/i.total:0,
         dataFonte(inicioRaw),dataFonte(fimRaw),dataFonte(baseRaw),coletaFim,origem,sla===null?'':sla,
-        i.posiPropria?(r&&r.entregaUnica?i.dtPlan||'':i.inicioPlan||''):i.dtPlan||'',i.dtPlan||'',
+        r&&r.entregaUnica?i.dtPlan||'':i.inicioPlan||'',i.dtPlan||'',
         i.alvo,i.dataAcordada||'',i.metaAplicada,
         porDU?r.dias:'',porDU?r.antes:'',porDU?r.dias-r.antes:'',porDU?i.total/r.dias:'',
         regra,situacao,notas.join(' '),String(l._SOURCE||'PCP'),String(l.ID??l._ROW_ID??''),

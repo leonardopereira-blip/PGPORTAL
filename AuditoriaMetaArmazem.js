@@ -128,7 +128,7 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
     sheet.getRange(2, 1, n, colunas.length).setValues(normalizadas);
     sheet.getRange(1, indice_('Tiragem total')).setNote('Os volumes mantêm três casas decimais para permitir a conciliação do rateio por dias úteis.');
     sheet.getRange(1, indice_('Entrega fim prevista')).setNote('Data de coleta final usada + SLA em dias corridos. A coleta usa o replanejado; quando vazio, usa a baseline.');
-    sheet.getRange(1, indice_('DU totais')).setNote('Rateio Posi → Posi entre início e fim, inclusive; exclui fins de semana e os feriados nacionais usados na visão. Sem início, usa a data final.');
+    sheet.getRange(1, indice_('DU totais')).setNote('Rateio para todas as gráficas e acabadoras entre início e fim, inclusive; exclui fins de semana e os feriados nacionais usados na visão. Sem início, usa a data final.');
     SpreadsheetApp.flush();
   } catch (erroFormato) {
     avisos.push('A base foi criada; alguns ajustes de apresentação não foram aplicados: ' +
