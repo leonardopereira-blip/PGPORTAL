@@ -482,11 +482,24 @@
     });
     return {nome:'Meta_Armazem_Base_Auditavel',cenario:cenario,cabecalho:cabecalho,linhas:linhas};
   };
+  function auditoriaArredondada(){
+    var base=window.pgMAObterAuditoria(),h=base.cabecalho;
+    var total=h.indexOf('Tiragem total'),dentro=h.indexOf('Dentro da meta'),fora=h.indexOf('Fora da meta');
+    var sem=h.indexOf('Sem previsão'),percentual=h.indexOf('% dentro da meta'),porDU=h.indexOf('Tiragem por DU');
+    base.linhas.forEach(function(l){
+      [total,dentro,sem,porDU].forEach(function(j){if(typeof l[j]==='number')l[j]=Math.round(l[j]);});
+      // Fora é o saldo, para o arredondamento preservar a tiragem de cada linha.
+      l[fora]=l[total]-l[dentro]-l[sem];
+      l[percentual]=l[total]?Math.round(100*l[dentro]/l[total])/100:0;
+    });
+    return base;
+  }
   window.pgMABaixarAuditoriaCSV=function(){
-    var base=window.pgMAObterAuditoria();
+    var base=auditoriaArredondada();
     if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
     var csv=function(v,j){
-      var txt=typeof v==='number'?String(v).replace('.',','):String(v??'');
+      var txt=typeof v==='number'?
+        (base.cabecalho[j]==='% dentro da meta'?Math.round(v*100)+'%':String(v).replace('.',',')):String(v??'');
       if(j>=14&&j<=24&&/^\d{4}-\d{2}-\d{2}$/.test(txt))txt=fmtPrazo(txt);
       if(typeof v==='string'&&/^[\s]*[=+@-]/.test(txt))txt="'"+txt;
       return '"'+txt.replace(/"/g,'""')+'"';
@@ -504,7 +517,7 @@
     try{
       // Permite pintar o estado do botão antes de preparar a base completa.
       await new Promise(function(resolve){setTimeout(resolve,0);});
-      var base=window.pgMAObterAuditoria();
+      var base=auditoriaArredondada();
       if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
       if(typeof window.pgGerarExcelAuditoria!=='function')throw new Error('Atualize a página para carregar o exportador Excel');
       var arquivo=window.pgGerarExcelAuditoria(base);

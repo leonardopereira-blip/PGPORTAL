@@ -63,17 +63,23 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
       if (!Array.isArray(linha) || linha.length !== colunas.length) {
         throw new Error('A linha ' + (i + 1) + ' da base auditável possui colunas incompletas.');
       }
-      return linha.map(function(valor, j) {
+      var normalizada = linha.map(function(valor, j) {
         var nome = colunas[j];
         if (datas.indexOf(nome) >= 0) return dataNativa_(valor);
         if (quantidades.indexOf(nome) >= 0 || inteiros.indexOf(nome) >= 0 || percentuais.indexOf(nome) >= 0) {
           if (valor === '' || valor == null) return '';
           var numero = Number(valor);
           if (!isFinite(numero)) throw new Error('Número inválido na linha ' + (i + 1) + ', coluna ' + nome + '.');
-          return numero;
+          return quantidades.indexOf(nome) >= 0 ? Math.round(numero) : numero;
         }
         return textoSeguro_(valor);
       });
+      normalizada[indice_('Fora da meta') - 1] = normalizada[indice_('Tiragem total') - 1] -
+        normalizada[indice_('Dentro da meta') - 1] - normalizada[indice_('Sem previsão') - 1];
+      var total = normalizada[indice_('Tiragem total') - 1];
+      normalizada[indice_('% dentro da meta') - 1] = total ?
+        Math.round(100 * normalizada[indice_('Dentro da meta') - 1] / total) / 100 : 0;
+      return normalizada;
     });
     resultado = gerarPlanilhaReportExecutiva({
       nome: payload.nome || 'Meta_Armazem_Base_Auditavel',
@@ -118,15 +124,15 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
       sheet.getRange(2, indice_(nome), n, 1).setWrap(true);
     });
     formato_(sheet, datas, 'dd/MM/yyyy', n);
-    formato_(sheet, quantidades, '#,##0.000', n);
+    formato_(sheet, quantidades, '#,##0', n);
     formato_(sheet, inteiros, '#,##0', n);
-    formato_(sheet, percentuais, '0.0%', n);
+    formato_(sheet, percentuais, '0%', n);
     // Identificadores são texto: preservar zeros iniciais de kit, SKU, OP e chave.
     sheet.getRange(2, 1, n, 9).setNumberFormat('@');
     sheet.getRange(2, 19, n, 1).setNumberFormat('@');
     sheet.getRange(2, 30, n, 7).setNumberFormat('@');
     sheet.getRange(2, 1, n, colunas.length).setValues(normalizadas);
-    sheet.getRange(1, indice_('Tiragem total')).setNote('Os volumes mantêm três casas decimais para permitir a conciliação do rateio por dias úteis.');
+    sheet.getRange(1, indice_('Tiragem total')).setNote('Volumes arredondados para unidades inteiras. Fora da meta é o saldo de total menos dentro e sem previsão; o percentual usa os volumes exportados.');
     sheet.getRange(1, indice_('Entrega fim prevista')).setNote('Data de coleta final usada + SLA em dias corridos. A coleta usa o replanejado; quando vazio, usa a baseline.');
     sheet.getRange(1, indice_('DU totais')).setNote('Rateio para todas as gráficas e acabadoras entre início e fim, inclusive; exclui fins de semana e os feriados nacionais usados na visão. Sem início, usa a data final.');
     SpreadsheetApp.flush();
