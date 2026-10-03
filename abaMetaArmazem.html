@@ -166,7 +166,7 @@
     <p id="maComparativoNota" class="text-[10px] text-slate-500 mt-2"></p>
   </div>
 <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Entrega prevista: coleta planejada + SLA da rota. Todas as gráficas e acabadoras: tiragem distribuída por dia útil entre início e fim planejados.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Entrega prevista: coleta planejada + SLA da rota. Rateio por dias úteis para todas as gráficas e acabadoras quando o fim é posterior ao início. No mesmo dia, entrega integral nessa data.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
       <thead><tr><th>Grupo</th><th>Meta original / exceção</th><th>Volume total</th><th id="maThPrevisto">Dentro da meta</th><th id="maThPos">Fora da meta</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
@@ -323,6 +323,9 @@
     var a=new Date(inicio+'T12:00:00Z'),b=new Date(fim+'T12:00:00Z');
     if(!isFinite(a.getTime())||!isFinite(b.getTime())||a.toISOString().slice(0,10)!==inicio||
        b.toISOString().slice(0,10)!==fim||a>b)return null;
+    // Um único dia é entrega integral; só há rateio quando o fim é posterior.
+    if(inicio===fim)return {inicio:fim,fim:fim,dias:0,antes:0,fracao:fim<=meta?1:0,
+      entregaUnica:true,motivo:'mesmo-dia'};
     var dias=0,antes=0,limite=740;
     for(var d=new Date(a.getTime());d<=b&&limite-->0;d.setUTCDate(d.getUTCDate()+1)){
       var n=d.getUTCDay(),iso=d.toISOString().slice(0,10);
@@ -457,7 +460,9 @@
       var origem=preenchido(fimRaw)?'Replanejado':preenchido(baseRaw)?'Baseline':'Sem data';
       var r=i.rateioAplicado,porDU=!!r&&!r.entregaUnica;
       var semDU=!!r&&r.motivo==='sem-dias-uteis';
+      var mesmoDia=!!r&&r.motivo==='mesmo-dia';
       var regra=i.inicioAusente?'Entrega única na data final (início vazio)':
+        mesmoDia?'Entrega única na data final (início e fim no mesmo dia)':
         semDU?'Entrega única na data final (intervalo sem dias úteis)':'Rateio por dias úteis';
       var situacao=i.semData>0?'Sem previsão':i.previsto>0&&i.pos>0?'Parcialmente dentro da meta':i.pos>0?'Fora da meta':'Dentro da meta';
       var notas=[];
@@ -466,6 +471,7 @@
       if(!i.inicioAusente&&!i.inicioColeta)notas.push('Data de início planejada inválida.');
       if(coletaFim&&sla!==null&&i.inicioColeta&&!r)notas.push('Intervalo de entrega invertido ou inválido.');
       if(i.inicioAusente)notas.push('Início planejado vazio: tiragem concentrada na data final.');
+      if(mesmoDia)notas.push('Início e fim planejados no mesmo dia: tiragem integral considerada nessa data, sem rateio.');
       if(semDU)notas.push('Intervalo planejado sem dias úteis: tiragem integral considerada na data final de entrega.');
       if(origem==='Baseline')notas.push('Replanejado vazio: utilizada a baseline.');
       if(l._PG_TOTAL_HIBRIDO)notas.push('Volume da PCP_ACABADORAS: TIRAGEM A ENTREGAR (total por CD).');
