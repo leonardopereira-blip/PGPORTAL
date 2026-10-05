@@ -673,7 +673,9 @@ window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar) {
     
     // 1. RENDERIZA OS CHECKBOXES DA CURVA S (Mantive o comportamento original aqui)
     let checkCurva = "";
-    let fasesDefaultCurva = ['imp', 'col', 'ent_cd']; 
+    let fasesDefaultCurva = FASES
+        .filter(f => !['col_mapa', 'ent_cd', 'int_cd'].includes(f.id))
+        .map(f => f.id); 
     FASES.forEach((f) => { 
         let chk = fasesDefaultCurva.includes(f.id) ? 'checked' : '';
         checkCurva += `<label class="flex items-center gap-1 cursor-pointer bg-slate-50 px-2 py-1 rounded border border-slate-200 hover:bg-slate-100 transition-colors"><input type="checkbox" class="chk-fase-curva" value="${f.id}" onchange="renderCurvaAcumulada()" ${chk}> <span style="color:${f.corLinha}">${f.nome}</span></label>`; 
@@ -1078,7 +1080,7 @@ function aplicarFiltros() {
     );
 
     const basePCPDiretoTP = basePCP.filter(l =>
-        !window.pgEhDestinoAcabadora(l)
+        window.pgEhDestinoCD(l)
     );
 
     if (origem === 'TODOS') {
@@ -1205,6 +1207,12 @@ function aplicarFiltros() {
             }
         });
     });
+
+        if (ritmo.col && ritmo.col_tp && met.col && met.col_tp) {
+            ritmo.col.baseAtHoje = ritmo.col_tp.baseAtHoje;
+            ritmo.col.planAtHoje = ritmo.col_tp.planAtHoje;
+            met.col.volPlan = met.col_tp.volPlan;
+        }
         
         let tTir = 0; let sGer = new Set();
         Object.values(mapTotal).forEach(o => { tTir += o.t; if(o.s) sGer.add(o.s); });
@@ -1566,52 +1574,6 @@ window.pgSaldoPrazoV35 = function(r, limite, hoje = dtHojeISO) {
     return { vencido, semData, coletada, devido: vencidaDatada + aVencerDatada };
 };
 
-// V56: backlog operacional considera somente obrigações com data válida.
-// "Sem data" permanece separado e não pode criar backlog nem fornecer
-// coleta excedente para abater obrigações datadas de outras linhas.
-// Entre linhas datadas, o backlog continua líquido.
-window.pgComposicaoBacklogDatadoV56 = function(prazos, limite, hoje = dtHojeISO) {
-    const corte = limite > hoje ? hoje : limite;
-    let devido = 0;
-    let coletado = 0;
-    let semData = 0;
-    const itens = [];
-
-    (prazos || []).forEach(r => {
-        if (!r) return;
-        const vencidaDatada = r.dtVencida && r.dtVencida <= corte
-            ? Math.max(0, Number(r.vencida || 0)) : 0;
-        const aVencerDatada = r.dtAVencer && r.dtAVencer <= corte
-            ? Math.max(0, Number(r.aVencer || 0)) : 0;
-        const devidoLinha = vencidaDatada + aVencerDatada;
-        const coletadoLinha = devidoLinha > 0 && r.dtColeta && r.dtColeta <= corte
-            ? Math.max(0, Number(r.coletadaBruta || 0)) : 0;
-
-        const saldoSeparado = window.pgSaldoPrazoV35(r, corte, hoje);
-        semData += Math.max(0, Number(saldoSeparado.semData || 0));
-
-        if (devidoLinha <= 0 && coletadoLinha <= 0) return;
-        devido += devidoLinha;
-        coletado += coletadoLinha;
-        itens.push({
-            prazo: r,
-            devido: devidoLinha,
-            coletado: coletadoLinha,
-            saldoLiquido: devidoLinha - coletadoLinha
-        });
-    });
-
-    return {
-        corte,
-        devido,
-        coletado,
-        backlog: Math.max(0, devido - coletado),
-        saldoLiquido: devido - coletado,
-        semData,
-        itens
-    };
-};
-
 window.pgCalcularColetaFunil = function(base, hoje) {
     const norm = v => String(v ?? '')
         .normalize('NFD')
@@ -1888,14 +1850,6 @@ window.pgCalcularColetaFunil = function(base, hoje) {
         }
     });
 
-    const backlogDatadoV56 = window.pgComposicaoBacklogDatadoV56(
-        out.prazosRegistros,
-        hoje,
-        hoje
-    );
-    out.backlogAtual = backlogDatadoV56.backlog;
-    out.backlogSemData = backlogDatadoV56.semData;
-
     window.pgItensColetaDia(
         out,
         hoje,
@@ -1914,10 +1868,6 @@ window.pgCalcularColetaFunil = function(base, hoje) {
             );
         }
     });
-
-    // Em qualquer visão que consome o resumo de Coleta Final, o vencido
-    // deve ser o mesmo backlog datado exibido no gráfico/resumo.
-    out.pendenteVencido = backlogDatadoV56.backlog;
 
     // Contagem e volume já apurados a partir dos novos campos.
     return out;
@@ -2422,12 +2372,24 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     //
     // Nunca considera planejado futuro como vencido.
 
-    const backlogAte = limite =>
-        window.pgComposicaoBacklogDatadoV56(
-            prazos,
-            limite,
-            dtHojeISO
-        ).backlog;
+    const backlogAte = limite => {
+
+        const corte =
+            limite > dtHojeISO
+                ? dtHojeISO
+                : limite;
+
+        const planejado =
+            somaAte('esperado', corte);
+
+        const realizado =
+            somaAte('real', corte);
+
+        return Math.max(
+            0,
+            planejado - realizado
+        );
+    };
 
     const semDataAte = limite => prazos.reduce((s, r) =>
         s + window.pgSaldoPrazoV35(r, limite, dtHojeISO).semData, 0);
@@ -2459,9 +2421,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     }));
     const planejadoVisao = comparativoVisao.map(p => p.plan);
     const realizadoVisao = comparativoVisao.map(p => p.real);
-    const backlogVisao = pontos.map((d, i) =>
-        acumulado ? backlogAte(d) : comparativoVisao[i].gap
-    );
+    const backlogVisao = comparativoVisao.map(p => p.gap);
     const percentualVisao = comparativoVisao.map(p => p.percentual);
     const agendadoVisao = pontos.map((d, i) =>
         acumulado ? somaAte('agendado', d) : agendadoDia[i]
@@ -3866,14 +3826,16 @@ let tRef = document.getElementById('filtroReferencia').value;
         const elsCb = document.querySelectorAll('.chk-fase-curva:checked');
         const cbFases = elsCb.length > 0
             ? Array.from(elsCb).map(cb => cb.value)
-            : ['imp', 'col'];
+            : FASES.filter(f => !['col_mapa', 'ent_cd', 'int_cd'].includes(f.id)).map(f => f.id);
+        const fasesCalculo = new Set(cbFases);
+        if (fasesCalculo.has('col')) fasesCalculo.add('col_tp');
 
         const tRef = document.getElementById('filtroReferencia').value;
         const hojeISO = dtHojeISO;
         const unifiedDates = new Set();
         const dataSeries = {};
 
-        cbFases.forEach(fId => {
+        Array.from(fasesCalculo).forEach(fId => {
             dataSeries[fId] = { plan: {}, real: {}, total: 0 };
         });
 
@@ -3881,7 +3843,7 @@ let tRef = document.getElementById('filtroReferencia').value;
             const tBase = window.arredondar(l['TIRAGEM'] || l['QUANTIDADE']);
             if (tBase <= 0) return;
 
-            cbFases.forEach(fId => {
+            Array.from(fasesCalculo).forEach(fId => {
                 const fObj = FASES.find(f => f.id === fId);
                 if (!fObj) return;
 
@@ -3915,6 +3877,11 @@ let tRef = document.getElementById('filtroReferencia').value;
                 }
             });
         });
+
+        if (dataSeries.col && dataSeries.col_tp) {
+            dataSeries.col.plan = { ...dataSeries.col_tp.plan };
+            dataSeries.col.total = dataSeries.col_tp.total;
+        }
 
         const dtOrd = Array.from(unifiedDates).sort();
         const cvS = document.getElementById('graficoCurvaS');
@@ -9741,6 +9708,15 @@ window.exportarDivergenciasColetas = function() {
         }
     };
 
+    const PG_DESTINOS_CD_EXCECAO = new Set(['POSIGRAF', 'ATHOS', 'KN', 'RAIZES']);
+    const PG_DESTINOS_GRAFICA_NAO_CD = new Set(
+        Object.values(PG_PESSOAS)
+            .flatMap(p => p.graficas || [])
+            .map(pgNorm)
+            .filter(n => n && !PG_DESTINOS_CD_EXCECAO.has(n))
+    );
+    const PG_DESTINOS_VAZIOS = new Set(['', '-', 'N/A', 'NA', '(VAZIO)', 'VAZIO', 'SEM CD', 'SEM DESTINO']);
+
     const PG_GESTORES = {
         'camila.pagliuca@arcoeducacao.com.br': 'CAMILA',
         'jaqueline.melo@arcoeducacao.com.br': 'JAQUELINE'
@@ -9806,12 +9782,25 @@ window.exportarDivergenciasColetas = function() {
 
     window.pgEhFonteAcabadora = l => pgMetaLinha(l).fonteAcabadora;
 
-    // Lista fechada para Todas/Gráfica. ATHOS, KN e RAÍZES são destino CD.
+    // Roteamento operacional:
+    // - destino vazio/N/A nunca é CD;
+    // - nomes de fornecedor/gráfica na coluna CD DESTINO (ex.: WALPRINT, REPROSET)
+    //   são tratados como rota de acabadora, não como CD;
+    // - POSIGRAF, ATHOS, KN e RAÍZES preservam a classificação histórica de destino CD.
+    function pgDestinoVazio(l) {
+        return PG_DESTINOS_VAZIOS.has(pgCdDestinoRoteamento(l));
+    }
     function pgEhAcabadora(l) {
-        return !window.pgEhFonteAcabadora(l) && PG_ACABADORAS.includes(pgCdDestinoRoteamento(l));
+        if (window.pgEhFonteAcabadora(l)) return false;
+        const rota = pgCdDestinoRoteamento(l);
+        if (pgDestinoVazio(l)) return false;
+        return PG_ACABADORAS.includes(rota) ||
+            PG_DESTINOS_GRAFICA_NAO_CD.has(rota) ||
+            rota.includes('ACABADORA');
     }
     window.pgEhDestinoAcabadora = pgEhAcabadora;
-    window.pgEhDestinoCD = l => !pgEhAcabadora(l);
+    window.pgEhDestinoCD = l => !window.pgEhFonteAcabadora(l) && !pgDestinoVazio(l) && !pgEhAcabadora(l);
+    window.pgDestinoOperacionalValido = l => window.pgEhFonteAcabadora(l) || !pgDestinoVazio(l);
     window.pgAcabadoraDaLista = l => PG_ACABADORAS.includes(pgGraficaLinha(l));
 
     // EXCLUSIVO do filtro Origem = Gráfica + Destino = Acabadora.
@@ -9837,7 +9826,9 @@ window.exportarDivergenciasColetas = function() {
     };
     window.pgLinhaDoDestino = function(l, destino, origem) {
         if (origem === 'ACABADORA') return window.pgEhFonteAcabadora(l);
-        return destino === 'TODOS' || (destino === 'ACAB' ? pgEhAcabadora(l) : !pgEhAcabadora(l));
+        if (destino === 'TODOS') return true;
+        if (destino === 'ACAB') return pgEhAcabadora(l);
+        return window.pgEhDestinoCD(l);
     };
     // TOTAL BASE — regra exclusiva para ORIGEM = TODAS.
     // Não compensa volume, não tenta parear PCP x PCP_ACABADORAS e não altera fases.
@@ -11759,9 +11750,9 @@ window.pgExportarVisaoCompletaV37 = function(dataCorte, titulo, elemento, resumo
 };
 
 
+
 window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia') {
     if (!visao || visao.tipo === 'entrega') return null;
-
     const resumo = visao.resumo || {};
     const registros = Array.isArray(resumo.registros) ? resumo.registros : [];
     const hoje = String(typeof dtHojeISO !== 'undefined' ? dtHojeISO : new Date().toISOString().slice(0, 10));
@@ -11778,302 +11769,122 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
         return Number(s) || 0;
     };
     const campo = (l, n) => window.pgCampoColeta ? window.pgCampoColeta(l, n) : l?.[n];
-    const fonte = l => {
-        const f = norm(l?._SOURCE || l?.BASE || l?._base || 'PCP');
-        return f.includes('ACAB') ? 'PCP_ACABADORAS' : 'PCP_GRÁFICAS';
+    const fonte = l => norm(l?._SOURCE || l?.BASE || l?._base || 'PCP').includes('ACAB') ? 'PCP_ACABADORAS' : 'PCP_GRÁFICAS';
+    const grafica = l => String(l?.GRAFICA_FINAL || campo(l,'GRÁFICA') || l?.GRAFICA || l?.BQ || '').trim();
+    const unidade = l => String(l?.MARCA_FINAL || l?.UNIDADE || l?.MARCA || '').trim();
+    const rawCd = l => String(l?.CD_FINAL || campo(l,'CD DESTINO') || l?.CD || l?.CK || '').trim();
+    const rawRota = l => String(campo(l,'CD DESTINO') || l?.CD_FINAL || l?.CD || l?.CK || '').trim();
+    const vazio = v => ['', '-', 'N/A', 'NA', '(VAZIO)', 'VAZIO', 'SEM CD', 'SEM DESTINO'].includes(norm(v));
+    const rotaAuditoria = l => {
+        if (fonte(l) === 'PCP_ACABADORAS') return {acabadora:grafica(l),cd:vazio(rawCd(l))?'':rawCd(l)};
+        if (window.pgEhDestinoAcabadora?.(l)) return {acabadora:rawRota(l),cd:''};
+        return {acabadora:'',cd:vazio(rawCd(l))?'':rawCd(l)};
     };
-    const grafica = l => String(l?.GRAFICA_FINAL || campo(l,'GRÁFICA') || l?.GRAFICA || l?.BQ || 'N/A').trim() || 'N/A';
-    const unidade = l => String(l?.MARCA_FINAL || l?.UNIDADE || l?.MARCA || 'N/A').trim() || 'N/A';
-    const cd = l => String(l?.CD_FINAL || campo(l,'CD DESTINO') || l?.CD || l?.CK || 'N/A').trim() || 'N/A';
-    const volumeBase = l => {
-        const acab = fonte(l) === 'PCP_ACABADORAS';
-        return Math.max(0, num(acab ? campo(l,'TIRAGEM A ENTREGAR (total por CD)') : campo(l,'TIRAGEM')));
-    };
+    const volumeBase = l => Math.max(0, num(fonte(l)==='PCP_ACABADORAS' ? campo(l,'TIRAGEM A ENTREGAR (total por CD)') : campo(l,'TIRAGEM')));
+    const isoCampo = (l,n) => window.pgNormalizarDataColeta ? (window.pgNormalizarDataColeta(campo(l,n),hoje)||'') : '';
 
-    let titulo = '';
-    let descricao = '';
-    let usarPlan = false, usarReal = false, usarAgenda = false, usarBase = false, usarSemData = false, mostrarBacklog = false;
-    let cortePlan = null, corteReal = null, dataAgendaIni = null, dataAgendaFim = null;
-    let planDia = false, realDia = false, agendaDia = false;
-    let backlogFuturoZero = false;
-    let backlogDatado = false;
+    let titulo='',descricao='';
+    let usarPlan=false,usarReal=false,usarAgenda=false,usarBase=false,usarSemData=false,mostrarBacklog=false;
+    let cortePlan=null,corteReal=null,dataAgendaIni=null,dataAgendaFim=null;
+    let planDia=false,realDia=false,agendaDia=false,backlogFuturoZero=false;
 
-    if (tipo === 'base') {
-        titulo = 'Base do filtro atual';
-        descricao = 'Mesmo conjunto de linhas usado pelo portal para formar a base desta visão.';
-        usarBase = true;
-    } else if (tipo === 'planPeriodo') {
-        cortePlan = visao.fim <= hoje ? visao.fim : hoje;
-        titulo = 'Planejado acumulado até ' + fmtData(cortePlan);
-        descricao = 'Coleta final planejada: (re)plan preenchido; quando vazio, fallback para baseline.';
-        usarPlan = true;
-    } else if (tipo === 'forecastFim') {
-        cortePlan = visao.fim;
-        titulo = 'Forecast acumulado até ' + fmtData(cortePlan);
-        descricao = 'Planejamento acumulado até o fim do período selecionado, com a mesma regra do gráfico.';
-        usarPlan = true;
-    } else if (tipo === 'realTotal' || tipo === 'realPeriodo') {
-        corteReal = visao.fim <= hoje ? visao.fim : hoje;
-        titulo = 'Coletado acumulado até ' + fmtData(corteReal);
-        descricao = 'TIRAGEM COLETADA entra como realizado somente quando existe Coleta_TP válida até o corte.';
-        usarReal = true;
-    } else if (tipo === 'agendadoPeriodo') {
-        usarAgenda = true;
-        if (acumulado) {
-            dataAgendaFim = visao.fim;
-            titulo = 'Mapa agendado acumulado até ' + fmtData(visao.fim);
-        } else {
-            dataAgendaIni = visao.inicio;
-            dataAgendaFim = visao.fim;
-            titulo = 'Mapa agendado no período';
-        }
-        descricao = 'Compromissos de Mapa_Agendado ainda sem Coleta_TP, exatamente como usados pelo portal.';
-    } else if (tipo === 'backlogAtual') {
-        cortePlan = hoje;
-        corteReal = hoje;
-        mostrarBacklog = true;
-        backlogDatado = true;
-        titulo = 'Backlog líquido datado em ' + fmtData(hoje);
-        descricao = 'Somente obrigações com data válida entram no backlog. Linhas sem data ficam separadas e não aumentam nem reduzem o backlog. Dentro do universo datado, excedentes podem compensar faltas.';
-    } else if (tipo === 'semData') {
-        usarSemData = true;
-        titulo = 'Sem data em ' + fmtData(hoje);
-        descricao = 'Volume que a regra de prazo do portal mantém separado do backlog datado.';
-    } else {
-        const futuro = ponto > hoje;
-        if (tipo === 'agendado') {
-            usarAgenda = true;
-            if (acumulado) dataAgendaFim = ponto;
-            else agendaDia = true;
-            titulo = (acumulado ? 'Mapa agendado acumulado até ' : 'Mapa agendado em ') + fmtData(ponto);
-            descricao = 'Mesmo compromisso futuro exibido na coluna roxa do gráfico.';
-        } else {
-            usarPlan = tipo === 'plan' || tipo === 'backlog' || tipo === 'dia';
-            usarReal = tipo === 'real' || tipo === 'backlog' || tipo === 'dia';
-            mostrarBacklog = tipo === 'backlog' || tipo === 'dia';
-            if (acumulado && mostrarBacklog) {
-                backlogDatado = true;
-                usarPlan = false;
-                usarReal = false;
-            }
-            if (acumulado) {
-                cortePlan = (mostrarBacklog && futuro) ? hoje : ponto;
-                corteReal = ponto <= hoje ? ponto : hoje;
-            } else {
-                planDia = usarPlan;
-                realDia = usarReal;
-                if (mostrarBacklog && futuro) backlogFuturoZero = true;
-            }
-            const nome = tipo === 'plan' ? 'Planejado' : tipo === 'real' ? 'Coletado' : tipo === 'backlog' ? 'Backlog' : 'Composição';
-            titulo = nome + (acumulado ? ' acumulado · ' : ' do dia · ') + fmtData(ponto);
-            descricao = mostrarBacklog
-                ? 'Abertura do mesmo Plan, Real e saldo líquido usados no ponto do gráfico.'
-                : 'Abertura das linhas que compõem exatamente este ponto do gráfico.';
+    if(tipo==='base'){titulo='Base do filtro atual';descricao='Mesmo conjunto de linhas usado pelo portal para formar a base desta visão.';usarBase=true;}
+    else if(tipo==='planPeriodo'){cortePlan=visao.fim<=hoje?visao.fim:hoje;titulo='Planejado acumulado até '+fmtData(cortePlan);descricao='(Re)plan preenchido; quando vazio, fallback para baseline.';usarPlan=true;}
+    else if(tipo==='forecastFim'){cortePlan=visao.fim;titulo='Forecast acumulado até '+fmtData(cortePlan);descricao='Planejamento acumulado até o fim do período selecionado.';usarPlan=true;}
+    else if(tipo==='realTotal'||tipo==='realPeriodo'){corteReal=visao.fim<=hoje?visao.fim:hoje;titulo='Coletado acumulado até '+fmtData(corteReal);descricao='TIRAGEM COLETADA com Coleta_TP válida até o corte.';usarReal=true;}
+    else if(tipo==='agendadoPeriodo'){usarAgenda=true;if(acumulado){dataAgendaFim=visao.fim;titulo='Mapa agendado acumulado até '+fmtData(visao.fim);}else{dataAgendaIni=visao.inicio;dataAgendaFim=visao.fim;titulo='Mapa agendado no período';}descricao='Mesmo compromisso usado pelo portal.';}
+    else if(tipo==='backlogAtual'){cortePlan=hoje;corteReal=hoje;usarPlan=usarReal=mostrarBacklog=true;titulo='Backlog líquido em '+fmtData(hoje);descricao='Regra histórica do portal: Planejado acumulado - Coletado acumulado.';}
+    else if(tipo==='semData'){usarSemData=true;titulo='Sem data em '+fmtData(hoje);descricao='Volume mantido separado pela regra do portal.';}
+    else{
+        const futuro=ponto>hoje;
+        if(tipo==='agendado'){usarAgenda=true;if(acumulado)dataAgendaFim=ponto;else agendaDia=true;titulo=(acumulado?'Mapa agendado acumulado até ':'Mapa agendado em ')+fmtData(ponto);descricao='Mesmo compromisso exibido no gráfico.';}
+        else{
+            usarPlan=tipo==='plan'||tipo==='backlog'||tipo==='dia';
+            usarReal=tipo==='real'||tipo==='backlog'||tipo==='dia';
+            mostrarBacklog=tipo==='backlog'||tipo==='dia';
+            if(acumulado){cortePlan=(mostrarBacklog&&futuro)?hoje:ponto;corteReal=ponto<=hoje?ponto:hoje;}
+            else{planDia=usarPlan;realDia=usarReal;if(mostrarBacklog&&futuro)backlogFuturoZero=true;}
+            const nome=tipo==='plan'?'Planejado':tipo==='real'?'Coletado':tipo==='backlog'?'Backlog':'Composição';
+            titulo=nome+(acumulado?' acumulado · ':' do dia · ')+fmtData(ponto);
+            descricao=mostrarBacklog?'Abertura do mesmo Plan, Real e saldo usados no gráfico.':'Linhas que compõem exatamente este ponto do gráfico.';
         }
     }
 
-    const grupos = new Map();
-    const garantir = l => {
-        const src = fonte(l), g = grafica(l), u = unidade(l), destino = cd(l);
-        const chave = [src,g,u,destino].join('\u001f');
-        if (!grupos.has(chave)) grupos.set(chave, {fonte:src,grafica:g,unidade:u,cd:destino,base:0,plan:0,real:0,agenda:0,semData:0});
-        return grupos.get(chave);
+    const grupos=new Map(),detalhes=[];
+    const garantir=(l,rota)=>{
+        const key=[fonte(l),grafica(l),unidade(l),rota.acabadora,rota.cd].join('\u001f');
+        if(!grupos.has(key))grupos.set(key,{fonte:fonte(l),grafica:grafica(l),unidade:unidade(l),acabadora:rota.acabadora,cd:rota.cd,base:0,plan:0,real:0,agenda:0,semData:0});
+        return grupos.get(key);
     };
 
-    registros.forEach(r => {
-        const l = r.linha || r.pcp;
-        if (!l) return;
-        const g = garantir(l);
+    registros.forEach(r=>{
+        const l=r.linha||r.pcp;if(!l)return;
+        const rota=rotaAuditoria(l);
+        if(!rota.cd&&!rota.acabadora)return;
 
-        if (usarBase) g.base += volumeBase(l);
+        let baseV=0,planV=0,realV=0,agendaV=0,semDataV=0;
+        if(usarBase)baseV=volumeBase(l);
+        if(usarPlan){const entra=planDia?r.dtPlan===ponto:(r.dtPlan&&cortePlan&&r.dtPlan<=cortePlan);if(entra)planV=Math.max(0,Number(r.tiragem||0));}
+        if(usarReal){const entra=realDia?r.dtReal===ponto:(r.dtReal&&corteReal&&r.dtReal<=corteReal);if(entra)realV=Math.max(0,Number(r.coletada||0));}
+        if(usarAgenda){const d=r.dtMapaAgendado;const entra=agendaDia?d===ponto:d&&(!dataAgendaIni||d>=dataAgendaIni)&&(!dataAgendaFim||d<=dataAgendaFim);if(entra)agendaV=Math.max(0,Number(r.volumeMapaAgendado||0));}
+        if(usarSemData){const p=r.prazo||(window.pgPrazoLinhaV35?window.pgPrazoLinhaV35(l,hoje):null);if(p&&window.pgSaldoPrazoV35)semDataV=Math.max(0,Number(window.pgSaldoPrazoV35(p,hoje,hoje).semData||0));}
+        if(!(baseV||planV||realV||agendaV||semDataV))return;
 
-        if (backlogDatado) {
-            const p = r.prazo || (window.pgPrazoLinhaV35 ? window.pgPrazoLinhaV35(l, hoje) : null);
-            if (p) {
-                const corte = (cortePlan || ponto || hoje) > hoje ? hoje : (cortePlan || ponto || hoje);
-                const vencidaDatada = p.dtVencida && p.dtVencida <= corte ? Math.max(0, Number(p.vencida || 0)) : 0;
-                const aVencerDatada = p.dtAVencer && p.dtAVencer <= corte ? Math.max(0, Number(p.aVencer || 0)) : 0;
-                const devidoDatado = vencidaDatada + aVencerDatada;
-                if (devidoDatado > 0) {
-                    g.plan += devidoDatado;
-                    if (p.dtColeta && p.dtColeta <= corte) {
-                        g.real += Math.max(0, Number(p.coletadaBruta || 0));
-                    }
-                }
-            }
-        }
-
-        if (usarPlan) {
-            const entra = planDia ? r.dtPlan === ponto : (r.dtPlan && cortePlan && r.dtPlan <= cortePlan);
-            if (entra) g.plan += Math.max(0, Number(r.tiragem || 0));
-        }
-
-        if (usarReal) {
-            const entra = realDia ? r.dtReal === ponto : (r.dtReal && corteReal && r.dtReal <= corteReal);
-            if (entra) g.real += Math.max(0, Number(r.coletada || 0));
-        }
-
-        if (usarAgenda) {
-            const d = r.dtMapaAgendado;
-            const entra = agendaDia ? d === ponto
-                : d && (!dataAgendaIni || d >= dataAgendaIni) && (!dataAgendaFim || d <= dataAgendaFim);
-            if (entra) g.agenda += Math.max(0, Number(r.volumeMapaAgendado || 0));
-        }
-
-        if (usarSemData) {
-            const p = r.prazo || (window.pgPrazoLinhaV35 ? window.pgPrazoLinhaV35(l, hoje) : null);
-            if (p && window.pgSaldoPrazoV35) {
-                g.semData += Math.max(0, Number(window.pgSaldoPrazoV35(p, hoje, hoje).semData || 0));
-            }
-        }
+        const g=garantir(l,rota);g.base+=baseV;g.plan+=planV;g.real+=realV;g.agenda+=agendaV;g.semData+=semDataV;
+        const p=r.prazo||(window.pgPrazoLinhaV35?window.pgPrazoLinhaV35(l,hoje):{});
+        const backlogV=mostrarBacklog?(backlogFuturoZero?0:planV-realV):0;
+        detalhes.push({
+            fonte:fonte(l),grafica:grafica(l),unidade:unidade(l),acabadora:rota.acabadora,cd:rota.cd,
+            kit:String(campo(l,'KIT')||campo(l,'Kit')||''),sku:String(l?.SKU_REAL||campo(l,'SKU')||l?.SKU||''),
+            descricao:String(l?.DESC_REAL||campo(l,'DESCRIÇÃO')||l?.DESCRICAO||l?.PRODUTO||''),
+            replan:isoCampo(l,'Coleta/Internalização de estoque final (re) plan'),
+            baseline:isoCampo(l,'COLETA/INTERNALIZAÇÃO FIM BASELINE'),
+            dtPlan:r.dtPlan||'',dtVencida:p?.dtVencida||'',dtAVencer:p?.dtAVencer||'',
+            coletaTP:p?.dtColeta||r.dtReal||'',mapaAgendado:p?.dtMapaAgendado||r.dtMapaAgendado||'',
+            tiragemVencida:Number(p?.vencida||0),aVencer:Number(p?.aVencer||0),tiragemColetada:Number(p?.coletadaBruta||r.coletada||0),
+            base:baseV,plan:planV,real:realV,agenda:agendaV,semData:semDataV,backlog:backlogV
+        });
     });
 
-    let linhas = Array.from(grupos.values()).filter(g =>
-        g.base || g.plan || g.real || g.agenda || g.semData
-    );
+    let linhas=Array.from(grupos.values()).filter(g=>g.base||g.plan||g.real||g.agenda||g.semData);
+    if(mostrarBacklog)linhas.forEach(g=>g.backlog=backlogFuturoZero?0:g.plan-g.real);
+    linhas.sort((a,b)=>a.fonte.localeCompare(b.fonte,'pt-BR')||a.grafica.localeCompare(b.grafica,'pt-BR',{numeric:true})||a.unidade.localeCompare(b.unidade,'pt-BR',{numeric:true})||a.acabadora.localeCompare(b.acabadora,'pt-BR',{numeric:true})||a.cd.localeCompare(b.cd,'pt-BR',{numeric:true}));
+    detalhes.sort((a,b)=>a.fonte.localeCompare(b.fonte,'pt-BR')||a.grafica.localeCompare(b.grafica,'pt-BR',{numeric:true})||a.unidade.localeCompare(b.unidade,'pt-BR',{numeric:true})||a.cd.localeCompare(b.cd,'pt-BR',{numeric:true})||a.sku.localeCompare(b.sku,'pt-BR',{numeric:true}));
 
-    if (mostrarBacklog) {
-        linhas.forEach(g => g.backlog = backlogFuturoZero ? 0 : g.plan - g.real);
-    }
-
-    linhas.sort((a,b) =>
-        a.fonte.localeCompare(b.fonte,'pt-BR') ||
-        a.grafica.localeCompare(b.grafica,'pt-BR',{numeric:true}) ||
-        a.unidade.localeCompare(b.unidade,'pt-BR',{numeric:true}) ||
-        a.cd.localeCompare(b.cd,'pt-BR',{numeric:true})
-    );
-
-    const totais = linhas.reduce((t,g) => {
-        t.base += g.base; t.plan += g.plan; t.real += g.real; t.agenda += g.agenda; t.semData += g.semData;
-        if (mostrarBacklog) t.backlogBruto += g.backlog;
-        return t;
-    }, {base:0,plan:0,real:0,agenda:0,semData:0,backlogBruto:0});
-
-    totais.backlog = mostrarBacklog ? Math.max(0, totais.backlogBruto) : 0;
-
-    return {
-        tipo, titulo, descricao, ponto, acumulado, linhas, totais,
-        colunas: {base:usarBase,plan:usarPlan,real:usarReal,agenda:usarAgenda,semData:usarSemData,backlog:mostrarBacklog}
-    };
+    const totais=linhas.reduce((t,g)=>{t.base+=g.base;t.plan+=g.plan;t.real+=g.real;t.agenda+=g.agenda;t.semData+=g.semData;if(mostrarBacklog)t.backlogBruto+=g.backlog;return t;},{base:0,plan:0,real:0,agenda:0,semData:0,backlogBruto:0});
+    totais.backlog=mostrarBacklog?Math.max(0,totais.backlogBruto):0;
+    return{tipo,titulo,descricao,ponto,acumulado,linhas,detalhes,totais,colunas:{base:usarBase,plan:usarPlan,real:usarReal,agenda:usarAgenda,semData:usarSemData,backlog:mostrarBacklog}};
 };
 
-window.pgFecharAuditoriaPontoColetaV56 = function() {
-    document.getElementById('pgAuditoriaPontoColetaV56')?.remove();
+window.pgFecharAuditoriaPontoColetaV56=function(){document.getElementById('pgAuditoriaPontoColetaV56')?.remove();};
+
+window.pgBaixarAuditoriaPontoColetaV56=function(){
+    const a=window.pgAuditoriaPontoColetaAtualV56;if(!a)return;
+    const cols=['Origem','Gráfica','Unidade/Marca','Acabadora','CD Destino','Kit','SKU','Descrição','Data (Re)Plan','Data Baseline','Data Plan usada','DT Vencido','DT a vencer','Coleta TP','Mapa Agendado','Tiragem Vencida','A Vencer','Tiragem Coletada'];
+    if(a.colunas.base)cols.push('Base');if(a.colunas.plan)cols.push('Planejado');if(a.colunas.real)cols.push('Coletado');if(a.colunas.agenda)cols.push('Mapa Agendado Volume');if(a.colunas.semData)cols.push('Sem Data');if(a.colunas.backlog)cols.push('Backlog');
+    const linhas=(a.detalhes||[]).map(d=>{const r=[d.fonte,d.grafica,d.unidade,d.acabadora,d.cd,d.kit,d.sku,d.descricao,d.replan,d.baseline,d.dtPlan,d.dtVencida,d.dtAVencer,d.coletaTP,d.mapaAgendado,Math.round(d.tiragemVencida),Math.round(d.aVencer),Math.round(d.tiragemColetada)];if(a.colunas.base)r.push(Math.round(d.base));if(a.colunas.plan)r.push(Math.round(d.plan));if(a.colunas.real)r.push(Math.round(d.real));if(a.colunas.agenda)r.push(Math.round(d.agenda));if(a.colunas.semData)r.push(Math.round(d.semData));if(a.colunas.backlog)r.push(Math.round(d.backlog));return r;});
+    const cell=v=>{let s=String(v??'');if(/^[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+    const csv='\uFEFF'+[cols,...linhas].map(r=>r.map(cell).join(';')).join('\r\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='Auditoria_Linha_a_Linha_'+String(a.tipo||'visao').replace(/[^A-Za-z0-9_-]+/g,'_')+'_'+String(a.ponto||dtHojeISO).replaceAll('-','')+'.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
 
-window.pgBaixarAuditoriaPontoColetaV56 = function() {
-    const a = window.pgAuditoriaPontoColetaAtualV56;
-    if (!a) return;
-    const colunas = ['Origem','Gráfica','Unidade','CD Destino'];
-    if (a.colunas.base) colunas.push('Base');
-    if (a.colunas.plan) colunas.push('Planejado');
-    if (a.colunas.real) colunas.push('Coletado');
-    if (a.colunas.agenda) colunas.push('Mapa Agendado');
-    if (a.colunas.semData) colunas.push('Sem Data');
-    if (a.colunas.backlog) colunas.push('Backlog');
-    const linhas = a.linhas.map(g => {
-        const r = [g.fonte,g.grafica,g.unidade,g.cd];
-        if (a.colunas.base) r.push(Math.round(g.base));
-        if (a.colunas.plan) r.push(Math.round(g.plan));
-        if (a.colunas.real) r.push(Math.round(g.real));
-        if (a.colunas.agenda) r.push(Math.round(g.agenda));
-        if (a.colunas.semData) r.push(Math.round(g.semData));
-        if (a.colunas.backlog) r.push(Math.round(g.backlog));
-        return r;
-    });
-    const total = ['TOTAL','','',''];
-    if (a.colunas.base) total.push(Math.round(a.totais.base));
-    if (a.colunas.plan) total.push(Math.round(a.totais.plan));
-    if (a.colunas.real) total.push(Math.round(a.totais.real));
-    if (a.colunas.agenda) total.push(Math.round(a.totais.agenda));
-    if (a.colunas.semData) total.push(Math.round(a.totais.semData));
-    if (a.colunas.backlog) total.push(Math.round(a.totais.backlog));
-    const csvCell = v => {
-        let s = String(v ?? '');
-        if (/^[=+@-]/.test(s)) s = "'" + s;
-        return '"' + s.replace(/"/g,'""') + '"';
-    };
-    const csv = '\uFEFF' + [colunas,...linhas,total].map(r => r.map(csvCell).join(';')).join('\r\n');
-    const url = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'Auditoria_Portal_' + String(a.tipo || 'visao').replace(/[^A-Za-z0-9_-]+/g,'_') + '_' + String(a.ponto || dtHojeISO).replaceAll('-','') + '.csv';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
+window.pgAbrirAuditoriaPontoColetaV56=function(visao,indice=0,tipo='dia'){
+    const a=window.pgMontarAuditoriaPontoColetaV56(visao,indice,tipo);if(!a)return;window.pgAuditoriaPontoColetaAtualV56=a;window.pgFecharAuditoriaPontoColetaV56();
+    const fmt=n=>Math.round(Number(n||0)).toLocaleString('pt-BR');const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));const cel=(n,cls='')=>'<td class="px-3 py-2 text-right whitespace-nowrap '+cls+'">'+fmt(n)+'</td>';const th=txt=>'<th class="px-3 py-2 text-left whitespace-nowrap">'+txt+'</th>';
+    const cab=[th('GRÁFICA'),th('UNIDADE'),th('ACABADORA'),th('CD DESTINO')];if(a.colunas.base)cab.push('<th class="px-3 py-2 text-right">Base</th>');if(a.colunas.plan)cab.push('<th class="px-3 py-2 text-right">Planejado</th>');if(a.colunas.real)cab.push('<th class="px-3 py-2 text-right">Coletado</th>');if(a.colunas.agenda)cab.push('<th class="px-3 py-2 text-right">Mapa agendado</th>');if(a.colunas.semData)cab.push('<th class="px-3 py-2 text-right">Sem data</th>');if(a.colunas.backlog)cab.push('<th class="px-3 py-2 text-right">Backlog</th>');
+    const porFonte=new Map();a.linhas.forEach(g=>{if(!porFonte.has(g.fonte))porFonte.set(g.fonte,[]);porFonte.get(g.fonte).push(g);});
+    const tabelas=Array.from(porFonte.entries()).map(([fonte,linhas])=>{const body=linhas.map(g=>{let html='<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="px-3 py-2 font-semibold">'+esc(g.grafica)+'</td><td class="px-3 py-2">'+esc(g.unidade)+'</td><td class="px-3 py-2">'+esc(g.acabadora||'—')+'</td><td class="px-3 py-2">'+esc(g.cd||'—')+'</td>';if(a.colunas.base)html+=cel(g.base);if(a.colunas.plan)html+=cel(g.plan);if(a.colunas.real)html+=cel(g.real);if(a.colunas.agenda)html+=cel(g.agenda);if(a.colunas.semData)html+=cel(g.semData,'text-amber-700');if(a.colunas.backlog)html+=cel(g.backlog,g.backlog>0?'text-red-700 font-semibold':g.backlog<0?'text-emerald-700':'');return html+'</tr>';}).join('');
+        const subtotal=linhas.reduce((t,g)=>{t.base+=g.base;t.plan+=g.plan;t.real+=g.real;t.agenda+=g.agenda;t.semData+=g.semData;t.backlog+=Number(g.backlog||0);return t;},{base:0,plan:0,real:0,agenda:0,semData:0,backlog:0});
+        let foot='<tr class="bg-slate-100 font-black"><td class="px-3 py-2" colspan="4">'+esc(fonte)+' Total</td>';if(a.colunas.base)foot+=cel(subtotal.base);if(a.colunas.plan)foot+=cel(subtotal.plan);if(a.colunas.real)foot+=cel(subtotal.real);if(a.colunas.agenda)foot+=cel(subtotal.agenda);if(a.colunas.semData)foot+=cel(subtotal.semData);if(a.colunas.backlog)foot+=cel(subtotal.backlog);foot+='</tr>';
+        return '<section class="mb-5"><div class="mb-2 text-xs font-black uppercase tracking-wide text-slate-600">'+esc(fonte.replace('_',' '))+'</div><div class="overflow-x-auto rounded-lg border border-slate-200"><table class="min-w-full text-xs"><thead class="bg-slate-800 text-white"><tr>'+cab.join('')+'</tr></thead><tbody>'+body+foot+'</tbody></table></div></section>';}).join('');
 
-window.pgAbrirAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia') {
-    const a = window.pgMontarAuditoriaPontoColetaV56(visao, indice, tipo);
-    if (!a) return;
-    window.pgAuditoriaPontoColetaAtualV56 = a;
-    window.pgFecharAuditoriaPontoColetaV56();
+    const dh=['Origem','Gráfica','Unidade','Acabadora','CD Destino','Kit','SKU','Descrição','(Re)Plan','Baseline','Plan usado','DT Vencido','DT a vencer','Coleta TP'];if(a.colunas.plan)dh.push('Planejado');if(a.colunas.real)dh.push('Coletado');if(a.colunas.backlog)dh.push('Backlog');
+    const dr=(a.detalhes||[]).map(d=>{let vals=[d.fonte,d.grafica,d.unidade,d.acabadora,d.cd,d.kit,d.sku,d.descricao,d.replan,d.baseline,d.dtPlan,d.dtVencida,d.dtAVencer,d.coletaTP];if(a.colunas.plan)vals.push(fmt(d.plan));if(a.colunas.real)vals.push(fmt(d.real));if(a.colunas.backlog)vals.push(fmt(d.backlog));return '<tr class="border-b border-slate-100">'+vals.map((v,i)=>'<td class="px-2 py-1.5 whitespace-nowrap '+(i===7?'max-w-[340px] truncate':'')+'" title="'+esc(v)+'">'+esc(v||'—')+'</td>').join('')+'</tr>';}).join('');
+    const detalhe='<section class="mt-6"><div class="flex items-end justify-between gap-3 mb-2"><div><h4 class="text-sm font-black text-slate-800">Base linha a linha</h4><p class="text-[10px] text-slate-500">Concilia exatamente com o número clicado. DT Vencido e DT a vencer ficam separados.</p></div><span class="text-[10px] font-bold text-slate-500">'+fmt((a.detalhes||[]).length)+' linhas</span></div><div class="overflow-auto max-h-[42vh] rounded-lg border border-slate-200"><table class="min-w-max text-[10px]"><thead class="sticky top-0 bg-slate-800 text-white z-10"><tr>'+dh.map(x=>'<th class="px-2 py-2 text-left whitespace-nowrap">'+esc(x)+'</th>').join('')+'</tr></thead><tbody>'+dr+'</tbody></table></div></section>';
 
-    const fmt = n => Math.round(Number(n || 0)).toLocaleString('pt-BR');
-    const cel = (n, cls='') => '<td class="px-3 py-2 text-right whitespace-nowrap ' + cls + '">' + fmt(n) + '</td>';
-    const th = txt => '<th class="px-3 py-2 text-left whitespace-nowrap">' + txt + '</th>';
-    const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-
-    const cab = [th('GRÁFICA'),th('UNIDADE'),th('CD DESTINO')];
-    if (a.colunas.base) cab.push('<th class="px-3 py-2 text-right">Base</th>');
-    if (a.colunas.plan) cab.push('<th class="px-3 py-2 text-right">Planejado</th>');
-    if (a.colunas.real) cab.push('<th class="px-3 py-2 text-right">Coletado</th>');
-    if (a.colunas.agenda) cab.push('<th class="px-3 py-2 text-right">Mapa agendado</th>');
-    if (a.colunas.semData) cab.push('<th class="px-3 py-2 text-right">Sem data</th>');
-    if (a.colunas.backlog) cab.push('<th class="px-3 py-2 text-right">Backlog</th>');
-
-    const porFonte = new Map();
-    a.linhas.forEach(g => {
-        if (!porFonte.has(g.fonte)) porFonte.set(g.fonte, []);
-        porFonte.get(g.fonte).push(g);
-    });
-
-    const tabelas = Array.from(porFonte.entries()).map(([fonte, linhas]) => {
-        const body = linhas.map(g => {
-            let html = '<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="px-3 py-2 font-semibold">' + esc(g.grafica) + '</td><td class="px-3 py-2">' + esc(g.unidade) + '</td><td class="px-3 py-2">' + esc(g.cd) + '</td>';
-            if (a.colunas.base) html += cel(g.base);
-            if (a.colunas.plan) html += cel(g.plan);
-            if (a.colunas.real) html += cel(g.real);
-            if (a.colunas.agenda) html += cel(g.agenda);
-            if (a.colunas.semData) html += cel(g.semData,'text-amber-700');
-            if (a.colunas.backlog) html += cel(g.backlog, g.backlog > 0 ? 'text-red-700 font-semibold' : g.backlog < 0 ? 'text-emerald-700' : '');
-            return html + '</tr>';
-        }).join('');
-
-        const subtotal = linhas.reduce((t,g) => {
-            t.base+=g.base;t.plan+=g.plan;t.real+=g.real;t.agenda+=g.agenda;t.semData+=g.semData;t.backlog+=Number(g.backlog||0);return t;
-        },{base:0,plan:0,real:0,agenda:0,semData:0,backlog:0});
-
-        let foot = '<tr class="bg-slate-100 font-black"><td class="px-3 py-2" colspan="3">' + esc(fonte) + ' Total</td>';
-        if (a.colunas.base) foot += cel(subtotal.base);
-        if (a.colunas.plan) foot += cel(subtotal.plan);
-        if (a.colunas.real) foot += cel(subtotal.real);
-        if (a.colunas.agenda) foot += cel(subtotal.agenda);
-        if (a.colunas.semData) foot += cel(subtotal.semData);
-        if (a.colunas.backlog) foot += cel(subtotal.backlog);
-        foot += '</tr>';
-
-        return '<section class="mb-5"><div class="mb-2 text-xs font-black uppercase tracking-wide text-slate-600">' + esc(fonte.replace('_',' ')) + '</div><div class="overflow-x-auto rounded-lg border border-slate-200"><table class="min-w-full text-xs"><thead class="bg-slate-800 text-white"><tr>' + cab.join('') + '</tr></thead><tbody>' + body + foot + '</tbody></table></div></section>';
-    }).join('');
-
-    let totalCards = '';
-    if (a.colunas.base) totalCards += '<div><span>Base</span><b>' + fmt(a.totais.base) + '</b></div>';
-    if (a.colunas.plan) totalCards += '<div><span>Planejado</span><b>' + fmt(a.totais.plan) + '</b></div>';
-    if (a.colunas.real) totalCards += '<div><span>Coletado</span><b>' + fmt(a.totais.real) + '</b></div>';
-    if (a.colunas.agenda) totalCards += '<div><span>Mapa agendado</span><b>' + fmt(a.totais.agenda) + '</b></div>';
-    if (a.colunas.semData) totalCards += '<div><span>Sem data</span><b>' + fmt(a.totais.semData) + '</b></div>';
-    if (a.colunas.backlog) totalCards += '<div><span>Backlog datado</span><b>' + fmt(a.totais.backlog) + '</b></div>';
-
-    const modal = document.createElement('div');
-    modal.id = 'pgAuditoriaPontoColetaV56';
-    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4';
-    modal.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-[min(1500px,96vw)] max-h-[92vh] flex flex-col">' +
-        '<div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4"><div><div class="text-[10px] font-black uppercase tracking-[.18em] text-blue-700">Auditoria do número do portal</div><h3 class="text-xl font-black text-slate-900 mt-1">' + esc(a.titulo) + '</h3><p class="text-xs text-slate-500 mt-1">' + esc(a.descricao) + '</p></div><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="text-slate-500 hover:text-slate-900 text-2xl leading-none">×</button></div>' +
-        '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 px-5 py-3 bg-slate-50 [&>div]:rounded-lg [&>div]:border [&>div]:border-slate-200 [&>div]:bg-white [&>div]:px-3 [&>div]:py-2 [&_span]:block [&_span]:text-[9px] [&_span]:font-bold [&_span]:uppercase [&_span]:text-slate-500 [&_b]:text-base [&_b]:text-slate-900">' + totalCards + '</div>' +
-        '<div class="overflow-y-auto px-5 py-4 flex-1">' + (tabelas || '<div class="p-8 text-center text-sm text-slate-500">Nenhuma linha compõe este número.</div>') + '</div>' +
-        '<div class="flex flex-wrap justify-between items-center gap-3 border-t border-slate-200 px-5 py-3"><p class="text-[10px] text-slate-500">A tabela respeita os filtros ativos e a regra atual do portal. Valores negativos no backlog por grupo representam coleta excedente dentro do universo datado. Registros sem data ficam fora desta conta.</p><div class="flex gap-2"><button type="button" onclick="pgBaixarAuditoriaPontoColetaV56()" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Baixar CSV</button><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Fechar</button></div></div>' +
-        '</div>';
-    modal.addEventListener('click', e => { if (e.target === modal) window.pgFecharAuditoriaPontoColetaV56(); });
-    document.body.appendChild(modal);
+    let cards='';if(a.colunas.base)cards+='<div><span>Base</span><b>'+fmt(a.totais.base)+'</b></div>';if(a.colunas.plan)cards+='<div><span>Planejado</span><b>'+fmt(a.totais.plan)+'</b></div>';if(a.colunas.real)cards+='<div><span>Coletado</span><b>'+fmt(a.totais.real)+'</b></div>';if(a.colunas.agenda)cards+='<div><span>Mapa agendado</span><b>'+fmt(a.totais.agenda)+'</b></div>';if(a.colunas.semData)cards+='<div><span>Sem data</span><b>'+fmt(a.totais.semData)+'</b></div>';if(a.colunas.backlog)cards+='<div><span>Backlog portal</span><b>'+fmt(a.totais.backlog)+'</b></div>';
+    const modal=document.createElement('div');modal.id='pgAuditoriaPontoColetaV56';modal.className='fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4';modal.innerHTML='<div class="bg-white rounded-2xl shadow-2xl w-[min(1700px,98vw)] max-h-[94vh] flex flex-col"><div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4"><div><div class="text-[10px] font-black uppercase tracking-[.18em] text-blue-700">Auditoria do número do portal</div><h3 class="text-xl font-black text-slate-900 mt-1">'+esc(a.titulo)+'</h3><p class="text-xs text-slate-500 mt-1">'+esc(a.descricao)+'</p></div><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="text-slate-500 hover:text-slate-900 text-2xl leading-none">×</button></div><div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 px-5 py-3 bg-slate-50 [&>div]:rounded-lg [&>div]:border [&>div]:border-slate-200 [&>div]:bg-white [&>div]:px-3 [&>div]:py-2 [&_span]:block [&_span]:text-[9px] [&_span]:font-bold [&_span]:uppercase [&_span]:text-slate-500 [&_b]:text-base [&_b]:text-slate-900">'+cards+'</div><div class="overflow-y-auto px-5 py-4 flex-1">'+(tabelas||'<div class="p-8 text-center text-sm text-slate-500">Nenhuma linha compõe este número.</div>')+detalhe+'</div><div class="flex flex-wrap justify-between items-center gap-3 border-t border-slate-200 px-5 py-3"><p class="text-[10px] text-slate-500">CD vazio/N/A não entra na visão de CD. Destinos que são nomes de fornecedores/gráficas ficam classificados como acabadora.</p><div class="flex gap-2"><button type="button" onclick="pgBaixarAuditoriaPontoColetaV56()" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Baixar CSV linha a linha</button><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Fechar</button></div></div></div>';
+    modal.addEventListener('click',e=>{if(e.target===modal)window.pgFecharAuditoriaPontoColetaV56();});document.body.appendChild(modal);
 };
 
 window.pgExtrairPontoColetaV35 = function(sufixo = '', indice = 0, tipo = 'dia', elemento) {
