@@ -450,10 +450,50 @@
     window.dropdownAbertoPre = null; 
     camposFiltro.forEach(c => selecoesFiltrosPre[c] = (c === 'envio' ? ['1'] : []));
 
+    function prepararDadosPreProd(dadosNovos) {
+        if (typeof dadosNovos === "string") {
+            try { dadosNovos = JSON.parse(dadosNovos); } catch(e) { return []; }
+        }
+        if (!Array.isArray(dadosNovos) || dadosNovos.length === 0 || dadosNovos[0]?.erro) return [];
+
+        const preparados = dadosNovos.map(item => {
+            camposFiltro.forEach(f => {
+                if (f !== 'statusAtual' && item[f] !== undefined && item[f] !== null && item[f] !== '') {
+                    item[f] = String(item[f]).trim().toUpperCase();
+                }
+            });
+            item.paginas = window.arredondar(item.paginas);
+            return processarDatasPreProd(item);
+        });
+
+        // O filtro padrão é V1, hoje representado por "1" na CAL. EDIT.
+        // Só mantém seleções que realmente existem na base recém-carregada.
+        const enviosValidos = new Set(preparados.map(d => d.envio).filter(Boolean));
+        selecoesFiltrosPre.envio = (selecoesFiltrosPre.envio || []).filter(v => enviosValidos.has(v));
+        if (selecoesFiltrosPre.envio.length === 0 && enviosValidos.has('1')) {
+            selecoesFiltrosPre.envio = ['1'];
+        }
+        return preparados;
+    }
+
+    window.receberDadosPreProd = function(dadosNovos, visaoAlvo = visaoAtualPre) {
+        const preparados = prepararDadosPreProd(dadosNovos);
+        if (!preparados.length) return false;
+        dadosPreProdBrutos = preparados;
+        alternarVisaoPreProd(visaoAlvo);
+        return true;
+    };
+
     window.chamarTelaPreProd = function(visao) {
         visaoAtualPre = visao;
-        if (!dadosPreProdBrutos || dadosPreProdBrutos.length === 0) recarregarDadosPreProd(visao, false);
-        else alternarVisaoPreProd(visao);
+        if (dadosPreProdBrutos && dadosPreProdBrutos.length > 0) {
+            alternarVisaoPreProd(visao);
+            return;
+        }
+        if (window.DADOS_PREPROD_CACHE && window.receberDadosPreProd(window.DADOS_PREPROD_CACHE, visao)) {
+            return;
+        }
+        recarregarDadosPreProd(visao, false);
     };
 
     function recarregarDadosPreProd(visaoAlvo = visaoAtualPre, silencioso = false) {
@@ -468,7 +508,7 @@
             if(ctPrin) ctPrin.classList.add('hidden');
         }
 
-        google.script.run.withSuccessHandler(function(dadosNovos) { try { if(typeof dadosNovos === "string" && (dadosNovos.trim().startsWith("[") || dadosNovos.trim().startsWith("{"))) dadosNovos = JSON.parse(dadosNovos); if(typeof dadosNovos === "string") dadosNovos = JSON.parse(dadosNovos); } catch(e){} 
+        google.script.run.withSuccessHandler(function(dadosNovos) {
             if(!silencioso) {
                 if(window.setLoading) window.setLoading(false);
                 let loaderLocal = document.getElementById('loadingPreProd');
@@ -480,16 +520,15 @@
                 if(ctPrin) ctPrin.classList.remove('hidden');
             }
 
-            if (!dadosNovos || dadosNovos.length === 0 || dadosNovos[0].erro) {
+            const preparados = prepararDadosPreProd(dadosNovos);
+            if (!preparados.length) {
                 if(!silencioso) alert("Erro ao buscar base ou base vazia.");
                 return;
             }
 
-            dadosPreProdBrutos = dadosNovos.map(item => {
-                camposFiltro.forEach(f => { if(f !== 'statusAtual' && item[f]) item[f] = String(item[f]).trim().toUpperCase(); });
-                item.paginas = window.arredondar(item.paginas);
-                return processarDatasPreProd(item);
-            });
+            dadosPreProdBrutos = preparados;
+            // Mantém o cache da sessão sincronizado com a leitura direta da PGBM.
+            window.DADOS_PREPROD_CACHE = dadosNovos;
 
             if(!silencioso) {
                 alternarVisaoPreProd(visaoAlvo);
@@ -498,6 +537,17 @@
                 window.opcoesFiltrosPre = {};
             }
 
+        }).withFailureHandler(function(erro) {
+            if(window.setLoading) window.setLoading(false);
+            let loaderLocal = document.getElementById('loadingPreProd');
+            if(loaderLocal) {
+                loaderLocal.classList.add('hidden');
+                loaderLocal.classList.remove('flex');
+            }
+            let ctPrin = document.getElementById('conteinerPrincipalPre');
+            if(ctPrin) ctPrin.classList.remove('hidden');
+            console.error('[PRÉ-PRODUÇÃO] Falha ao ler CAL. EDIT.:', erro);
+            if(!silencioso) alert("Não foi possível carregar a Pré-Produção.");
         }).getDadosPreProducao();
     }
 
