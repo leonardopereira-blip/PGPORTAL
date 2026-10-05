@@ -924,6 +924,7 @@ window.pgAtualizarAbaProducao = function(id) {
         abaOtif: () => processarOTIF(), abaPlan: () => renderTabelaPlan(),
         abaFalhasPlan: () => processarFalhasPlan(), abaQualidade: () => processarQualidade(),
         abaColetas: () => renderizarDashColetas(), abaEvolucao: () => processarEvolucao(),
+        abaEntregasCD: () => window.processarEntregasCD(),
         abaGiroSemanal: () => window.processarGiroSemanal(), abaOnePage: () => window.processarOnePage(),
         abaReportExecutiva: () => window.processarReportExecutiva(),
         abaOKRQ2: () => window.processarOKRQ2()
@@ -2165,6 +2166,8 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     const chaveGrafico = 'coletaFinalFunil' + sufixo;
     const canvas = elemento('grafColetaFinalFunil');
     if (!canvas) return;
+    const contextoEntrega = window.pgContextosEntregasCD?.[sufixo];
+    const entregaCD = !!contextoEntrega;
 
 
     // V40B - Filtro exclusivo do Funil.
@@ -2176,7 +2179,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     let filtroStatus =
         document.getElementById(filtroId);
 
-    if (!filtroStatus) {
+    if (!filtroStatus && !entregaCD) {
 
         const wrapper =
             document.createElement('div');
@@ -2219,12 +2222,12 @@ window.renderColetaFinalFunil = function(sufixo = '') {
             document.getElementById(filtroId);
     }
 
-    filtroStatus.onchange = () => {
+    if (filtroStatus) filtroStatus.onchange = () => {
         window.renderColetaFinalFunil(sufixo);
     };
 
     const statusSelecionado =
-        filtroStatus.value;
+        filtroStatus?.value || 'TODOS';
 
     const normalizarStatus = valor =>
         String(valor ?? '')
@@ -2235,6 +2238,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
             .toUpperCase();
 
     const baseOriginal =
+        contextoEntrega?.base ||
         window.dadosBaseForecastColeta ||
         window.dadosTotalCanonico ||
         [];
@@ -2257,15 +2261,16 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     // Fonte filtrada apenas para este gráfico.
     // O cache global permanece intacto.
 
-    const resumo =
-        statusSelecionado === 'TODOS'
+    const resumo = entregaCD
+        ? window.pgCalcularEntregaCDFunil(baseStatus, dtHojeISO)
+        : statusSelecionado === 'TODOS'
             ? window.pgObterResumoColeta()
             : window.pgCalcularColetaFunil(
                 baseStatus,
                 dtHojeISO
             );
 
-    window.pgResumoColetaFunil = resumo;
+    if (!entregaCD) window.pgResumoColetaFunil = resumo;
 
     const modo = document.querySelector(`input[name="visaoColetaFunil${sufixo}"]:checked`)?.value || 'mes';
     const acumulado = !!elemento('acumuladaColetaFunil')?.checked;
@@ -2285,7 +2290,9 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     const labelData = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
     const origemAtual = document.getElementById('pgFiltroOrigem')?.value || 'TODOS';
     const destinoAtual = document.getElementById('pgFiltroDestino')?.value || 'TODOS';
-    const nomeBase = destinoAtual === 'CD' ? 'Destino CD' : origemAtual === 'ACABADORA' ? 'Acabadora' : origemAtual === 'TODOS' ? 'filtro atual' : 'PCP';
+    const nomeBase = entregaCD ? contextoEntrega.cd : destinoAtual === 'CD' ? 'Destino CD' : origemAtual === 'ACABADORA' ? 'Acabadora' : origemAtual === 'TODOS' ? 'filtro atual' : 'PCP';
+    const nomeAgendado = entregaCD ? 'Entrega agendada' : 'Mapa agendado';
+    const nomeAgendadoAcumulado = nomeAgendado + (entregaCD ? ' acumulada' : ' acumulado');
 
     if (inputMes && !inputMes.value) inputMes.value = dtHojeISO.slice(0, 7);
     if (blocoMes) blocoMes.classList.toggle('hidden', modo !== 'mes');
@@ -2415,10 +2422,12 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     const demandaVisao = planejadoVisao.slice();
 
     const totalAgendadoPeriodo = agendadoDia.reduce((a, b) => a + b, 0);
-    const chaveMeta = window.pgChaveForecastColeta();
-    const chaveView = sufixo || 'FUNIL';
-    window.PG_FORECAST_VIEW[chaveView] = { chave: chaveMeta, pontos: pontos.slice(), total: resumo.total, modo, inicio, fim };
-    window.pgAtualizarBotaoForecastColeta(sufixo);
+    if (!entregaCD) {
+        const chaveMeta = window.pgChaveForecastColeta();
+        const chaveView = sufixo || 'FUNIL';
+        window.PG_FORECAST_VIEW[chaveView] = { chave: chaveMeta, pontos: pontos.slice(), total: resumo.total, modo, inicio, fim };
+        window.pgAtualizarBotaoForecastColeta(sufixo);
+    }
 
     // V39: planejado acumulado até hoje, igual ao tooltip.
     // Não inclui datas futuras, mesmo quando o filtro vai até o fim do mês.
@@ -2428,12 +2437,15 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     // PG_RESUMO_FORECAST_FIM_V53_20260925: o forecast e acumulado ate o fim do filtro.
     const forecastFim = somaAte('esperado', fim);
     const tituloForecastFim = `Forecast acumulado até ${labelData(fim)}`;
+    const corteRealResumo = fim <= dtHojeISO ? fim : dtHojeISO;
+    const realizadoResumo = somaAte('real', corteRealResumo);
+    const tituloRealizado = `${entregaCD ? 'Entregue' : 'Coletado'} acumulado até ${labelData(corteRealResumo)}`;
     elemento('resumoColetaFinalFunil').innerHTML =
         `<span>Base ${nomeBase}: <b>${fmt(resumo.total)}</b></span>` +
         `<span>${tituloPlanejado}: <b>${fmt(planoNoPonto)} (${pctBase(planoNoPonto)})</b></span>` +
-        `<span>Coletado total: <b>${fmt(resumo.realizado)} (${pctBase(resumo.realizado)})</b></span>` +
+        `<span>${tituloRealizado}: <b>${fmt(realizadoResumo)} (${pctBase(realizadoResumo)})</b></span>` +
         `<span>${tituloForecastFim}: <b>${fmt(forecastFim)} (${pctBase(forecastFim)})</b></span>` +
-        `<span>${acumulado ? 'Mapa agendado acumulado até ' + labelData(fim) : 'Mapa agendado no período'}: <b>${fmt(acumulado ? somaAte('agendado', fim) : totalAgendadoPeriodo)}</b></span>` +
+        `<span>${acumulado ? nomeAgendadoAcumulado + ' até ' + labelData(fim) : nomeAgendado + ' no período'}: <b>${fmt(acumulado ? somaAte('agendado', fim) : totalAgendadoPeriodo)}</b></span>` +
         `<span>Backlog líquido: <b>${fmt(backlogAtual)}</b></span>`;
 
     // Números-resumo também extraem seu próprio período com o mesmo formato.
@@ -2478,7 +2490,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     }
     const visivelSemData = window.pgMostrarSemDataV35[chaveSemData];
     painelSemData.innerHTML =
-        `<button type="button" data-pg-sem-extrair class="rounded border border-amber-200 bg-amber-50 px-2 py-1 font-semibold text-amber-900" title="Extrair itens vencidos sem DT_Vencida">Sem data: ${visivelSemData ? fmt(qtdSemData) : '•••'}</button>` +
+        `<button type="button" data-pg-sem-extrair class="rounded border border-amber-200 bg-amber-50 px-2 py-1 font-semibold text-amber-900" title="${entregaCD ? 'Extrair itens sem previsão válida de entrega' : 'Extrair itens vencidos sem DT_Vencida'}">${entregaCD ? 'Sem previsão' : 'Sem data'}: ${visivelSemData ? fmt(qtdSemData) : '•••'}</button>` +
         `<button type="button" data-pg-sem-alternar class="rounded border border-slate-200 px-2 py-1 text-slate-600">${visivelSemData ? 'Ocultar sem data' : 'Mostrar sem data'}</button>`;
     painelSemData.querySelector('[data-pg-sem-alternar]').onclick = () => {
         window.pgMostrarSemDataV35[chaveSemData] = !visivelSemData;
@@ -2516,7 +2528,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
             ${bot('plan', 'Plan' + (acumulado ? ' acum.' : '') + ' ' + fmt(planejadoVisao[idx]), 'text-[10px] text-blue-700')}
             ${bot('backlog', (acumulado ? 'Backlog acum. ' : 'Gap do dia ') + fmt(backlogVisao[idx]), 'text-[10px] text-red-600')}
             ${d <= dtHojeISO ? bot('real', 'Real' + (acumulado ? ' acum.' : '') + ' ' + fmt(realizadoVisao[idx]), 'text-[10px] text-emerald-700') : ''}
-            ${agendadoVisao[idx] > 0 ? bot('agendado', 'Mapa agendado' + (acumulado ? ' acum.' : '') + ' ' + fmt(agendadoVisao[idx]), 'text-[10px] font-bold text-violet-700') : ''}
+            ${agendadoVisao[idx] > 0 ? bot('agendado', nomeAgendado + (acumulado ? ' acum.' : '') + ' ' + fmt(agendadoVisao[idx]), 'text-[10px] font-bold text-violet-700') : ''}
             ${d <= dtHojeISO ? bot('dia', perc === null ? '—' : perc.toFixed(0) + '%', 'text-[10px] font-black ' + (perc === null ? 'text-slate-400' : perc >= 100 ? 'text-emerald-700' : 'text-amber-700')) : ''}
         </div>`;
     }).join('');
@@ -2530,7 +2542,8 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     // O mesmo recorte e o mesmo livro de linhas alimentam gráfico e Sheets.
     window.pgExtracaoColetaV35 = window.pgExtracaoColetaV35 || {};
     window.pgExtracaoColetaV35[sufixo || 'FUNIL'] = {
-        pontos: pontos.slice(), acumulado, resumo, inicio, fim
+        pontos: pontos.slice(), acumulado, resumo, inicio, fim, corteRealResumo,
+        tipo: entregaCD ? 'entrega' : 'coleta', cd: contextoEntrega?.cd || ''
     };
     const labels = pontos.map(d => labelData(d));
 
@@ -2727,7 +2740,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
                     // Terceira coluna, separada do Plan e do Real.
                     // Mapa_Agendado é compromisso futuro, nunca coleta realizada.
                     type: 'bar',
-                    label: acumulado ? 'Mapa agendado acumulado' : 'Mapa agendado',
+                    label: acumulado ? nomeAgendadoAcumulado : nomeAgendado,
                     data: pontos.map((d, i) =>
                         d >= dtHojeISO && agendadoVisao[i] > 0
                             ? agendadoVisao[i]
@@ -2789,7 +2802,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
                             }
 
                             if (c.datasetIndex === 3) {
-                                return (acumulado ? 'Mapa agendado acumulado: ' : 'Mapa agendado no dia: ') +
+                                return (acumulado ? nomeAgendadoAcumulado + ': ' : nomeAgendado + ' no dia: ') +
                                     fmt(agendadoVisao[idx]) + ' (' + pctBase(agendadoVisao[idx]) + ')';
                             }
                             if (pontos[idx] > dtHojeISO) return null;
@@ -2814,7 +2827,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
 
                                 (acumulado ? 'Saldo de backlog acumulado: ' : 'Gap do dia: ') +
                                     fmt(backlogVisao[idx]) + ' (' + pctBase(backlogVisao[idx]) + ')',
-                                'Mapa agendado: ' + fmt(agendadoVisao[idx]) + ' (' + pctBase(agendadoVisao[idx]) + ')'
+                                nomeAgendado + ': ' + fmt(agendadoVisao[idx]) + ' (' + pctBase(agendadoVisao[idx]) + ')'
                             ];
                         }
                     }
@@ -11678,8 +11691,13 @@ window.pgExtrairPontoColetaV35 = function(sufixo = '', indice = 0, tipo = 'dia',
     if (!visao) return;
     const tiposResumo = ['base','planPeriodo','realTotal','realPeriodo',
                          'forecastFim','agendadoPeriodo','backlogAtual','semData'];
-    const data = tiposResumo.includes(tipo) ? visao.fim : visao.pontos[indice];
+    const data = tipo === 'realTotal' ? visao.corteRealResumo || visao.fim
+        : tiposResumo.includes(tipo) ? visao.fim : visao.pontos[indice];
     if (!data) return;
+    if (visao.tipo === 'entrega') {
+        window.pgExportarVisaoEntregaCD(data, 'Entregas ' + visao.cd, elemento, visao.resumo);
+        return;
+    }
     window.pgExportarVisaoCompletaV37(data,
         'Funil de Coleta', elemento, visao.resumo);
 };

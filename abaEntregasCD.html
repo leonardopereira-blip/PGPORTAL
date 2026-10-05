@@ -1,0 +1,213 @@
+<div id="abaEntregasCD" class="aba-conteudo hidden h-full flex flex-col">
+    <div class="bg-white p-4 shadow-sm border-b border-slate-200 flex-shrink-0">
+        <h2 class="text-xl font-black text-slate-800 tracking-tight">Entregas por CD</h2>
+    </div>
+    <div class="flex-1 overflow-y-auto p-2 scroller bg-neutral-100">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-4">
+            <div class="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="mes" checked onchange="window.pgAtualizarPeriodoEntregasCD()"> Mês</label>
+                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="30d" onchange="window.pgAtualizarPeriodoEntregasCD()"> Próximos 30 dias</label>
+                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="7d" onchange="window.pgAtualizarPeriodoEntregasCD()"> Próximos 7 dias</label>
+                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="semana" onchange="window.pgAtualizarPeriodoEntregasCD()"> Semana atual</label>
+                <label class="border border-violet-200 bg-violet-50 rounded-lg px-3 py-2 cursor-pointer"><input type="checkbox" id="acumuladaEntregasCD" checked onchange="window.pgAtualizarPeriodoEntregasCD()"> Visão acumulada</label>
+                <label id="periodoEntregasCD">Mês <input id="mesEntregasCD" type="month" class="border rounded px-2 py-1" onchange="window.pgAtualizarPeriodoEntregasCD()"></label>
+            </div>
+        </div>
+        <div id="graficosEntregasCD" class="space-y-4"></div>
+    </div>
+</div>
+<script>
+(function() {
+    const normalizar = valor => String(valor ?? '').normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
+    const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, c =>
+        ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+    const campo = (linha, nome) => typeof window.pgCampoColeta === 'function'
+        ? window.pgCampoColeta(linha, nome) : linha?.[nome];
+    const numero = valor => {
+        if (typeof window.pgNumeroPrazoV35 === 'function') return window.pgNumeroPrazoV35(valor);
+        if (typeof valor === 'number') return Math.max(0, Number.isFinite(valor) ? valor : 0);
+        let texto = String(valor ?? '').trim();
+        if (texto.includes(',')) texto = texto.replace(/\./g, '').replace(',', '.');
+        else if (/^\d{1,3}(\.\d{3})+$/.test(texto)) texto = texto.replace(/\./g, '');
+        return Math.max(0, Number(texto) || 0);
+    };
+    const hojePortal = () => typeof dtHojeISO !== 'undefined' ? dtHojeISO :
+        new Date().toLocaleDateString('en-CA');
+    const ehAcabadora = linha => typeof window.pgEhFonteAcabadora === 'function'
+        ? window.pgEhFonteAcabadora(linha)
+        : [linha._SOURCE, linha.BASE, linha._base].some(v => normalizar(v).includes('ACAB'));
+    const cacheResumos = new WeakMap();
+    let sufixosAtivos = [];
+
+    window.pgCalcularEntregaCDFunil = function(base, hoje) {
+        const anterior = cacheResumos.get(base);
+        if (anterior && anterior.hoje === hoje && anterior.matriz === window.PG_MATRIZ_SLA) return anterior.resumo;
+        const resumo = {
+            tipo: 'entrega', total: 0, esperadoHoje: 0, pendenteVencido: 0,
+            realizado: 0, realizadoDatado: 0, mapaSolicitado: 0,
+            mapaAgendadoTotal: 0, mapaSemColetaTP: 0, semPlano: 0,
+            excluidoReal: 0, backlogAtual: 0, backlogSemData: 0,
+            marcas: {}, graficas: {}, registros: [], prazosRegistros: [],
+            backlogRegistros: [], dias: new Map()
+        };
+        const somarDia = (dia, tipo, volume) => {
+            if (!dia || volume <= 0) return;
+            if (!resumo.dias.has(dia)) resumo.dias.set(dia, {esperado: 0, real: 0, agendado: 0});
+            resumo.dias.get(dia)[tipo] += volume;
+        };
+        (base || []).forEach(linha => {
+            if (window.pgSolicitacaoCancelada?.(linha)) return;
+            const acabadora = ehAcabadora(linha);
+            const volumeBase = numero(campo(linha, acabadora ? 'TIRAGEM A ENTREGAR (total por CD)' : 'TIRAGEM'));
+            const tiragem = numero(campo(linha, 'TIRAGEM'));
+            const dtPlan = window.pgDataPlanoEntregaSLA?.(linha) || null;
+            const volumes = window.pgVolumesColetaUnificadosV37(linha, hoje);
+            const dtReal = volumes.entregaTP;
+            const entregue = volumes.entrega;
+            const dtAgendaColeta = !acabadora
+                ? window.pgNormalizarDataColeta(campo(linha, 'Mapa_Agendado'), hoje) : null;
+            const dtMapaAgendado = dtAgendaColeta
+                ? window.pgDataPlanoEntregaSLA(linha, dtAgendaColeta) : null;
+            const volumeMapaAgendado = dtMapaAgendado && dtMapaAgendado >= hoje && !dtReal
+                ? volumes.mapa : 0;
+            // Mantém o contrato do gráfico compartilhado; dtColeta representa Entrega_TP nesta visão.
+            const prazo = {
+                linha, vencida: !dtPlan || dtPlan <= hoje ? tiragem : 0,
+                dtVencida: dtPlan && dtPlan <= hoje ? dtPlan : null,
+                aVencer: dtPlan && dtPlan > hoje ? tiragem : 0,
+                dtAVencer: dtPlan && dtPlan > hoje ? dtPlan : null,
+                coletadaBruta: volumes.mapa, dtColeta: dtReal, dtMapaAgendado
+            };
+            const saldo = window.pgSaldoPrazoV35(prazo, hoje, hoje);
+            resumo.total += volumeBase;
+            resumo.realizado += entregue;
+            resumo.realizadoDatado += entregue;
+            resumo.mapaSolicitado += volumes.mapa;
+            resumo.mapaAgendadoTotal += volumeMapaAgendado;
+            resumo.backlogAtual += saldo.vencido;
+            resumo.backlogSemData += saldo.semData;
+            resumo.pendenteVencido += saldo.vencido;
+            resumo.prazosRegistros.push(prazo);
+            resumo.registros.push({
+                linha, pcp: linha, dtPlan, dtReal, tiragem, volumeBase,
+                coletada: entregue, entregue, mapaSolicitado: volumes.mapa,
+                dtMapaAgendado, volumeMapaAgendado, prazo,
+                motivo: dtPlan ? 'Coleta (re)plan ou baseline + Matriz_SLA' : 'Sem previsão de entrega: verificar coleta planejada e rota Matriz_SLA'
+            });
+            somarDia(dtReal, 'real', entregue);
+            somarDia(dtMapaAgendado, 'agendado', volumeMapaAgendado);
+            if (!dtPlan) resumo.semPlano += tiragem;
+            else {
+                somarDia(dtPlan, 'esperado', tiragem);
+                if (dtPlan <= hoje) resumo.esperadoHoje += tiragem;
+            }
+        });
+        cacheResumos.set(base, {hoje, matriz: window.PG_MATRIZ_SLA, resumo});
+        return resumo;
+    };
+
+    window.pgExportarVisaoEntregaCD = function(dataCorte, titulo, elemento, resumo) {
+        const corte = String(dataCorte || hojePortal()).slice(0, 10);
+        const corteReal = corte > hojePortal() ? hojePortal() : corte;
+        const cabecalho = ['Marca', 'Gráfica', 'Série', 'SKU', 'Descrição', 'CD destino',
+            'Kit', 'OP', 'Envio', 'Coleta planejada', 'SLA (dias)', 'Entrega prevista',
+            'Entrega TP', 'Tiragem', 'Planejado acumulado', 'Entregue acumulado', 'Gap'];
+        const linhas = (resumo?.registros || []).map(r => {
+            const l = r.linha || r.pcp;
+            const plan = r.dtPlan && r.dtPlan <= corte ? r.tiragem : 0;
+            const real = r.dtReal && r.dtReal <= corteReal ? r.coletada : 0;
+            return [
+                l.MARCA_FINAL || campo(l, 'MARCA') || l.UNIDADE || '',
+                l.GRAFICA_FINAL || campo(l, 'GRÁFICA') || l.GRAFICA || '',
+                campo(l, 'SÉRIE') || campo(l, 'Série') || l.SERIE || '',
+                l.SKU_REAL || campo(l, 'SKU') || '',
+                l.DESC_REAL || campo(l, 'DESCRIÇÃO') || l.DESCRICAO || l.PRODUTO || '',
+                l.CD_FINAL || campo(l, 'CD DESTINO') || l.CD || '',
+                campo(l, 'KIT') || campo(l, 'Kit') || '',
+                campo(l, 'OP') || '', campo(l, 'ENVIO') || campo(l, 'Envio') || '',
+                window.pgDataPlanoColetaLinha(l) || '',
+                window.pgDiasSLALinha(l) ?? '', r.dtPlan || '', r.dtReal || '',
+                Math.round(r.tiragem), Math.round(plan), Math.round(real),
+                Math.max(0, Math.round(plan) - Math.round(real))
+            ];
+        });
+        const total = Array(cabecalho.length).fill('');
+        total[0] = 'TOTAL GERAL';
+        [13,14,15,16].forEach(i => total[i] = linhas.reduce((s, l) => s + Number(l[i] || 0), 0));
+        linhas.push(total);
+        window.reCriarSheets('Entregas_CD_' + corte.replaceAll('-', ''),
+            [{nome: 'Entregas_por_CD', cabecalho, linhas}], elemento);
+    };
+
+    window.pgAtualizarPeriodoEntregasCD = function() {
+        const modo = document.querySelector('input[name="visaoEntregasCD"]:checked')?.value || 'mes';
+        const acumulado = !!document.getElementById('acumuladaEntregasCD')?.checked;
+        const mes = document.getElementById('mesEntregasCD');
+        if (mes && !mes.value) mes.value = hojePortal().slice(0, 7);
+        document.getElementById('periodoEntregasCD')?.classList.toggle('hidden', modo !== 'mes');
+        sufixosAtivos.forEach(sufixo => {
+            document.querySelectorAll('input[name="visaoColetaFunil' + sufixo + '"]').forEach(r => r.checked = r.value === modo);
+            document.getElementById('acumuladaColetaFunil' + sufixo).checked = acumulado;
+            document.getElementById('mesColetaFunil' + sufixo).value = mes?.value || hojePortal().slice(0, 7);
+            window.renderColetaFinalFunil(sufixo);
+        });
+    };
+
+    window.processarEntregasCD = function() {
+        const container = document.getElementById('graficosEntregasCD');
+        if (!container) return;
+        const origem = document.getElementById('pgFiltroOrigem')?.value || 'TODOS';
+        const baseGlobal = window.pgBaseGeralReportExecutiva || window.dadosDestinoCDFinal || [];
+        let base = typeof window.pgBaseForecastFiltrada === 'function'
+            ? window.pgBaseForecastFiltrada(baseGlobal, origem, 'CD') : baseGlobal.slice();
+        if (origem === 'TODOS') base = base.filter(l => !ehAcabadora(l) ||
+            !['ATHOS', 'KN', 'RAIZES'].includes(normalizar(l.GRAFICA_FINAL || campo(l, 'GRÁFICA') || l.GRAFICA || l.BQ)));
+        const grupos = new Map();
+        base.forEach(l => {
+            const cd = normalizar(l.CD_FINAL || campo(l, 'CD DESTINO') || l.CD);
+            if (!cd || ['-', 'N/A', 'NA', 'SEM CD', 'SEM DESTINO', 'A DEFINIR'].includes(cd)) return;
+            if (!grupos.has(cd)) grupos.set(cd, []);
+            grupos.get(cd).push(l);
+        });
+        const graficosAtuais = typeof graficos !== 'undefined' ? graficos : window.graficos;
+        sufixosAtivos.forEach(sufixo => {
+            const chave = 'coletaFinalFunil' + sufixo;
+            if (graficosAtuais?.[chave]) {
+                graficosAtuais[chave].destroy();
+                delete graficosAtuais[chave];
+            }
+            delete window.pgContextosEntregasCD?.[sufixo];
+            delete window.pgExtracaoColetaV35?.[sufixo];
+        });
+        sufixosAtivos = [];
+        window.pgContextosEntregasCD = window.pgContextosEntregasCD || {};
+        container.innerHTML = '';
+        Array.from(grupos.keys()).sort((a, b) => a.localeCompare(b, 'pt-BR', {numeric: true})).forEach((cd, i) => {
+            const sufixo = 'EntregasCD' + i;
+            sufixosAtivos.push(sufixo);
+            window.pgContextosEntregasCD[sufixo] = {base: grupos.get(cd), cd, entrega: true};
+            const card = document.createElement('div');
+            card.className = 'bg-white p-4 rounded-xl shadow-sm border border-slate-200';
+            card.innerHTML = `<div class="flex items-center justify-between gap-3 mb-4">
+                <h3 class="text-sm font-black text-slate-800">${escapar(cd)}</h3>
+                <button type="button" class="text-xs font-bold text-slate-600 border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50" onclick="window.pgExtrairPontoColetaV35('${sufixo}', 0, 'base', this)">Baixar auditoria</button>
+                </div>
+                <div style="display:none" aria-hidden="true">
+                    ${['mes','30d','7d','semana'].map(m => `<input type="radio" name="visaoColetaFunil${sufixo}" value="${m}" ${m === 'mes' ? 'checked' : ''}>`).join('')}
+                    <input type="checkbox" id="acumuladaColetaFunil${sufixo}" checked>
+                    <div id="periodoColetaFunil${sufixo}"><input id="mesColetaFunil${sufixo}" type="month"></div>
+                </div>
+                <div id="resumoColetaFinalFunil${sufixo}" class="flex flex-wrap gap-4 text-xs text-slate-700 mb-4"></div>
+                <div class="overflow-x-auto scroller"><div id="larguraColetaFunil${sufixo}">
+                    <div class="relative h-80"><canvas id="grafColetaFinalFunil${sufixo}"></canvas></div>
+                    <div id="diasColetaFunil${sufixo}" style="display:grid;padding:0 24px"></div>
+                </div></div>
+                <p id="notaColetaFinalFunil${sufixo}" class="text-xs text-slate-500 mt-3"></p>`;
+            container.appendChild(card);
+        });
+        if (!sufixosAtivos.length) container.innerHTML = '<div class="bg-white p-4 rounded-xl text-sm text-slate-500">Nenhum CD nos filtros selecionados.</div>';
+        window.pgAtualizarPeriodoEntregasCD();
+    };
+})();
+</script>

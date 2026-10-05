@@ -492,6 +492,7 @@ window.exportarSkusFiltradosSheets = function() {
                 <svg id="ic-pos" class="w-4 h-4 transition-transform duration-200 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="sub-pos" class="hidden flex-col gap-1 pl-3 ml-2 border-l border-neutral-800 mt-1 pb-2">
+                <button onclick="abrirGrafico('abaEntregasCD', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🚚 Entregas por CD</button>
                 <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-700 cursor-not-allowed text-left">🚚 Pendente de entrega (Em Breve)</button>
                 <button onclick="abrirGrafico('abaColetas', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">
     🗺️ Auditoria de Coletas Mapa
@@ -766,6 +767,10 @@ window.exportarSkusFiltradosSheets = function() {
                         }
                         if (typeof window.processarMetaArmazem === 'function') {
                             window.processarMetaArmazem();
+                        }
+                        if (typeof window.processarEntregasCD === 'function' &&
+                            !document.getElementById('abaEntregasCD')?.classList.contains('hidden')) {
+                            window.processarEntregasCD();
                         }
                     }
                     if (chave === 'PG_FORECAST_COLETA' && typeof window.renderColetaFinalFunil === 'function') {
