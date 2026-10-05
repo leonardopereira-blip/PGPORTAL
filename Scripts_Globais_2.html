@@ -4223,11 +4223,14 @@ let tRef = document.getElementById('filtroReferencia').value;
                     mFase[f.id].tp += tFaseReal; mGrid[cv][f.id].tp += tFaseReal; rankG[g].fases[f.id].tp += tFaseReal; 
                     if(f.id === fSelecionada) mGraf[g].tp += tFaseReal;
                     if(foiEntregueNoPrazo(l, f, tRef)) { mFase[f.id].tn += tFaseReal; mGrid[cv][f.id].tn += tFaseReal; rankG[g].fases[f.id].tn += tFaseReal; if(f.id === fSelecionada) mGraf[g].tn += tFaseReal; } 
-                    else {
-                        let cols = getCols(f, tRef);
-                        let isoR = extrairDataISO(l[cols.real]) || (cols.realAlt ? extrairDataISO(l[cols.realAlt]) : null);
-                        let isoP = extrairDataISO(l[cols.plan]);
-                        if(isoR && isoP) { let dif = calcDiffDiasISO(isoP, isoR); if(dif > 0) { mFase[f.id].atrD += dif; mFase[f.id].atrC += 1; } }
+                    // Atraso ponderado pela tiragem, com os mesmos prazos do aging desta visão.
+                    let cols = getCols(f, tRef);
+                    let isoR = window.pgEficienciaAgingDataReal ? window.pgEficienciaAgingDataReal(l, f) :
+                        (extrairDataISO(l[cols.real]) || (cols.realAlt ? extrairDataISO(l[cols.realAlt]) : null));
+                    let isoP = window.pgEficienciaAgingPrazo ? window.pgEficienciaAgingPrazo(l, f, tRef) : extrairDataISO(l[cols.plan]);
+                    if(isoR && isoR <= dtHojeISO && isoP) {
+                        let dif = calcDiffDiasISO(isoP, isoR), peso = Math.min(tBase, Math.max(0, tFaseReal));
+                        if(dif > 0 && peso > 0) { mFase[f.id].atrD += dif * peso; mFase[f.id].atrC += peso; }
                     }
                     let lt = getLeadTimeEmDias(l, f, tRef); 
                     if(lt !== null) { 
@@ -4348,6 +4351,7 @@ let tRef = document.getElementById('filtroReferencia').value;
             document.getElementById('containerRankingTabelas').innerHTML = htmlGeral;
         };
         renderRankingHtml();
+        if (window.pgEfAgingAtualizar) window.pgEfAgingAtualizar({forcar:true});
     }
 
 function processarMetaCD() {

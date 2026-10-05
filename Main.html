@@ -762,6 +762,10 @@ window.exportarSkusFiltradosSheets = function() {
                     // O dashboard guarda copia local por fatia dentro de carregarDashboardPorMes.
                     if (chave === 'DADOS_COCKPIT_INICIAL' && typeof renderCockpit === 'function') renderCockpit(valor);
                     if (chave === 'PG_MATRIZ_SLA' && window.dadosGlobais) {
+                        if (typeof window.pgEfAgingAtualizar === 'function' &&
+                            !document.getElementById('abaEficiencia')?.classList.contains('hidden')) {
+                            window.pgEfAgingAtualizar({forcar:true});
+                        }
                         if (typeof window.processarReportExecutiva === 'function') {
                             window.processarReportExecutiva();
                         }

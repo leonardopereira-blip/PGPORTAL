@@ -1,0 +1,155 @@
+<style>
+  #abaEficiencia .ef-tail-layout{display:grid;grid-template-columns:1fr 1.7fr;gap:28px;align-items:center}
+  #abaEficiencia .ef-tail-slider{width:100%;accent-color:#284081;margin:18px 0 8px;cursor:pointer}
+  #abaEficiencia .ef-tail-labels{display:flex;justify-content:space-between;font-size:11px;color:#64748b}
+  #abaEficiencia .ef-tail-values{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:22px}
+  #abaEficiencia .ef-tail-values dt{font-size:11px;color:#52677f}
+  #abaEficiencia .ef-tail-values dd{font-size:25px;font-weight:700;color:#0C2340;margin:4px 0}
+  #abaEficiencia .ef-extras-grid{display:grid;grid-template-columns:1fr 1.35fr;gap:20px}
+  #abaEficiencia .ef-contribution{display:flex;gap:10px;align-items:center;justify-content:flex-end}
+  #abaEficiencia .ef-contribution-bar{width:70px;height:6px;background:#edf2f7;border-radius:4px;overflow:hidden}
+  #abaEficiencia .ef-contribution-bar i{display:block;height:100%;background:#FA4616;border-radius:4px}
+  @media(max-width:1050px){#abaEficiencia .ef-tail-layout,#abaEficiencia .ef-extras-grid{grid-template-columns:1fr}}
+</style>
+<div class="ef-panel">
+  <div class="ef-toolbar"><div><h3>Do pior volume à visão completa</h3><p class="ef-muted">Escolha a fatia de tiragem com o maior desvio do prazo, incluindo a fração necessária do último item.</p></div></div>
+  <div class="ef-tail-layout">
+    <div>
+      <label for="efAgingFatia" style="display:block;font-size:16px;font-weight:600;margin-top:16px">Piores <span id="efAgingFatiaLabel">10</span>% da tiragem</label>
+      <input type="range" class="ef-tail-slider" id="efAgingFatia" min="1" max="100" step="1" value="10" oninput="pgEfAgingFatiaAlterar(this.value)">
+      <div class="ef-tail-labels"><span>1% · maior desvio</span><span>100% · todo o volume</span></div>
+      <dl class="ef-tail-values"><div><dt>Média ponderada da fatia</dt><dd id="efAgingFatiaMedia">—</dd></div><div><dt>Desvio no limite da fatia</dt><dd id="efAgingFatiaLimite">—</dd></div></dl>
+      <p class="ef-muted" id="efAgingFatiaVolume" style="margin-top:12px"></p>
+      <p class="ef-muted" style="margin-top:12px">Desvio positivo: atraso. Zero: no prazo. Negativo: antecipação. Itens sem prazo ou data válida ficam fora desta distribuição.</p>
+    </div>
+    <div class="ef-chart"><canvas id="efAgingFatiaChart" aria-label="Média e limite do desvio por fatia de tiragem" role="img"></canvas></div>
+  </div>
+</div>
+<div class="ef-extras-grid">
+  <div class="ef-panel"><h3>Carteira vencida por etapa</h3><p class="ef-muted">Saldo ainda em aberto na referência, com prazo vencido. Uma linha pode ter saldo pendente em mais de uma etapa.</p><div class="ef-scroll"><table class="ef-table"><thead><tr><th>Etapa</th><th>Linhas vencidas</th><th>Tiragem vencida</th><th>Dias médios</th></tr></thead><tbody id="efAgingCarteira"></tbody></table></div></div>
+  <div class="ef-panel"><h3>Participação no atraso</h3><p class="ef-muted" id="efAgingConcentracaoTexto">Peso de cada gráfica no atraso da visão selecionada: tiragem × dias.</p><div class="ef-scroll"><table class="ef-table"><thead><tr><th id="efAgingConcentracaoGrupo">Gráfica</th><th>Tiragem avaliada</th><th>Tiragem atrasada</th><th>% atrasado</th><th>Dias médios · fora</th><th>Peso no atraso</th></tr></thead><tbody id="efAgingConcentracao"></tbody></table></div></div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var estado = { registros: [], modelo: null, aberto: null, percentual: 10, cauda: null, grafico: null };
+  var textos = { grafica: 'Gráfica', marca: 'Marca', serie: 'Série', cd: 'CD destino' };
+  function elemento(id) { return document.getElementById(id); }
+  function texto(id, valor) { var e = elemento(id); if (e) e.textContent = valor; }
+  function escape(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function quantidade(r) { var v = Number(r.volume); return Number.isFinite(v) && v > 0 ? v : 0; }
+  function desvio(r) { var v = r.desvio; if (v === null || v === undefined) v = r.rawdesvio; if (v === null || v === undefined) v = r.dias; return typeof v === 'number' && Number.isFinite(v) ? v : null; }
+  function inteiro(v) { return Math.round(v || 0).toLocaleString('pt-BR'); }
+  function decimal(v) { return v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+  function campo(l, nomes) {
+    l = l || {};
+    var normalizar = function(v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(); };
+    for (var i = 0; i < nomes.length; i++) {
+      var nome = nomes[i], valor = l[nome];
+      if (valor === undefined && typeof window.pgCampoPrazoV35 === 'function') valor = window.pgCampoPrazoV35(l, nome);
+      if (valor === undefined || valor === null || String(valor).trim() === '') {
+        var chave = Object.keys(l).find(function(k) { return normalizar(k) === normalizar(nome); });
+        valor = chave === undefined ? null : l[chave];
+      }
+      if (valor !== undefined && valor !== null && String(valor).trim() !== '') return String(valor).trim();
+    }
+    return 'Sem informação';
+  }
+  function grupo(r, chave) {
+    if (r[chave] !== undefined && r[chave] !== null && String(r[chave]).trim()) return String(r[chave]).trim();
+    return campo(r.linha, chave === 'grafica' ? ['GRAFICA_FINAL', 'GRÁFICA', 'GRAFICA', 'FORNECEDOR'] : chave === 'marca' ? ['MARCA_FINAL', 'UNIDADE', 'MARCA'] : chave === 'serie' ? ['SÉRIE', 'SERIE'] : ['CD_FINAL', 'CD DESTINO', 'CD DESTINO FINAL', 'DESTINO']);
+  }
+  function preparar(registros) {
+    var lista = (registros || []).map(function(r) { return { dias: desvio(r), volume: quantidade(r) }; }).filter(function(r) { return r.dias !== null && r.volume > 0; }).sort(function(a, b) { return b.dias - a.dias; });
+    var volumes = [], somas = [], total = 0, soma = 0;
+    lista.forEach(function(r) { total += r.volume; soma += r.volume * r.dias; volumes.push(total); somas.push(soma); });
+    return { lista: lista, volumes: volumes, somas: somas, total: total };
+  }
+  function calcular(cauda, percentual) {
+    var pct = Math.max(1, Math.min(100, Number(percentual) || 10));
+    var alvo = cauda.total * pct / 100;
+    if (!alvo || !cauda.lista.length) return { media: null, limite: null, mean: null, boundary: null, volume: 0, total: cauda.total, totalVolume: cauda.total, percentual: pct, percent: pct };
+    var lo = 0, hi = cauda.lista.length - 1;
+    while (lo < hi) { var mid = Math.floor((lo + hi) / 2); if (cauda.volumes[mid] < alvo) lo = mid + 1; else hi = mid; }
+    var anterior = lo ? cauda.volumes[lo - 1] : 0;
+    var soma = lo ? cauda.somas[lo - 1] : 0;
+    soma += (alvo - anterior) * cauda.lista[lo].dias;
+    return { media: soma / alvo, limite: cauda.lista[lo].dias, mean: soma / alvo, boundary: cauda.lista[lo].dias, volume: alvo, total: cauda.total, totalVolume: cauda.total, percentual: pct, percent: pct };
+  }
+  // O gráfico calcula os 100 pontos a partir de uma única ordenação e somas prefixadas.
+  // A API pura permanece disponível para outros resumos sem depender do DOM.
+  if (typeof window.pgEficienciaAgingFatia !== 'function') window.pgEficienciaAgingFatia = function(registros, percentual) { return calcular(preparar(registros), percentual); };
+  function fatiaSelecionada() {
+    var r = window.pgEficienciaAgingFatia(estado.registros, estado.percentual);
+    var fallback = calcular(estado.cauda || preparar(estado.registros), estado.percentual);
+    return { media: r && (r.media !== undefined ? r.media : r.mean !== undefined ? r.mean : fallback.media), limite: r && (r.limite !== undefined ? r.limite : r.boundary !== undefined ? r.boundary : fallback.limite), volume: r && r.volume !== undefined ? r.volume : fallback.volume, total: r && r.total !== undefined ? r.total : r && r.totalVolume !== undefined ? r.totalVolume : fallback.total };
+  }
+  function atualizarFatia() {
+    var r = fatiaSelecionada();
+    texto('efAgingFatiaLabel', estado.percentual);
+    texto('efAgingFatiaMedia', r.media === null ? '—' : decimal(r.media) + ' d');
+    texto('efAgingFatiaLimite', r.limite === null ? '—' : decimal(r.limite) + ' d');
+    texto('efAgingFatiaVolume', r.total > 0 ? inteiro(r.volume) + ' de ' + inteiro(r.total) + ' exemplares com desvio calculável.' : 'Nenhum volume com desvio calculável nesta seleção.');
+    if (estado.grafico) estado.grafico.update('none');
+  }
+  function desenharFatia() {
+    var canvas = elemento('efAgingFatiaChart');
+    if (estado.grafico) { estado.grafico.destroy(); estado.grafico = null; }
+    if (!canvas || typeof Chart === 'undefined') return;
+    var labels = [], media = [], limite = [];
+    for (var p = 1; p <= 100; p++) { var f = calcular(estado.cauda, p); labels.push(p); media.push(f.media); limite.push(f.limite); }
+    estado.grafico = new Chart(canvas, {
+      type: 'line',
+      data: { labels: labels, datasets: [
+        { label: 'Média ponderada da fatia', data: media, borderColor: '#284081', backgroundColor: '#284081', borderWidth: 2.5, pointRadius: function(c) { return c.dataIndex + 1 === estado.percentual ? 5 : 0; }, pointHoverRadius: 5, tension: 0, fill: false },
+        { label: 'Desvio no limite', data: limite, borderColor: '#FA4616', backgroundColor: '#FA4616', borderWidth: 2, borderDash: [5, 4], pointRadius: function(c) { return c.dataIndex + 1 === estado.percentual ? 5 : 0; }, pointHoverRadius: 5, tension: 0, fill: false }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { family: 'Poppins', size: 10 } } }, tooltip: { callbacks: { title: function(itens) { return itens.length ? 'Piores ' + itens[0].label + '% da tiragem' : ''; }, label: function(item) { return item.dataset.label + ': ' + decimal(item.parsed.y) + ' dias'; } } } }, scales: { x: { title: { display: true, text: 'Fatia da tiragem (%)' }, ticks: { maxTicksLimit: 6, callback: function(v) { return this.getLabelForValue(v) + '%'; } }, grid: { display: false } }, y: { title: { display: true, text: 'Desvio do prazo (dias)' }, grid: { color: '#edf2f7' } } } }
+    });
+  }
+  function chaveLinha(r, indice) {
+    var l = r.linha || {};
+    if (typeof getKey === 'function') return getKey(l);
+    return l._ROW_ID || l.ID || l.SKU || l.OP || indice;
+  }
+  function carteira() {
+    var tbody = elemento('efAgingCarteira'); if (!tbody) return;
+    var fs = estado.aberto && Array.isArray(estado.aberto.fases) ? estado.aberto.fases : [];
+    var html = [];
+    fs.forEach(function(f) {
+      var linhas = new Set(), volume = 0, impacto = 0;
+      (f.registros || []).forEach(function(r, i) { var qty = quantidade(r); if (typeof r.dias === 'number' && r.dias > 0 && qty > 0) { linhas.add(chaveLinha(r, i)); volume += qty; impacto += qty * r.dias; } });
+      if (!volume) return;
+      html.push('<tr><td>' + escape(f.nome || f.id) + '</td><td>' + inteiro(linhas.size) + '</td><td>' + inteiro(volume) + '</td><td>' + decimal(impacto / volume) + ' d</td></tr>');
+    });
+    tbody.innerHTML = html.length ? html.join('') : '<tr><td colspan="4" class="ef-muted">Nenhum saldo com prazo vencido na referência.</td></tr>';
+  }
+  function concentracao() {
+    var tbody = elemento('efAgingConcentracao'); if (!tbody) return;
+    var seletor = elemento('efAgingAgrupar'), chave = seletor && textos[seletor.value] ? seletor.value : 'grafica';
+    texto('efAgingConcentracaoGrupo', textos[chave]);
+    texto('efAgingConcentracaoTexto', 'Peso por ' + textos[chave].toLowerCase() + ' no atraso da visão selecionada: tiragem × dias.');
+    var grupos = new Map(), impactoTotal = 0;
+    estado.registros.forEach(function(r) {
+      var qty = quantidade(r);
+      if (typeof r.dias !== 'number' || !Number.isFinite(r.dias) || !qty) return;
+      var nome = grupo(r, chave), g = grupos.get(nome);
+      if (!g) { g = { nome: nome, volume: 0, atrasado: 0, impacto: 0 }; grupos.set(nome, g); }
+      g.volume += qty;
+      if (r.dias > 0) { g.atrasado += qty; g.impacto += qty * r.dias; impactoTotal += qty * r.dias; }
+    });
+    var lista = Array.from(grupos.values()).sort(function(a, b) { return b.impacto - a.impacto || b.volume - a.volume || a.nome.localeCompare(b.nome, 'pt-BR'); });
+    tbody.innerHTML = lista.length ? lista.map(function(g) {
+      var share = impactoTotal > 0 ? 100 * g.impacto / impactoTotal : 0;
+      return '<tr><td>' + escape(g.nome) + '</td><td>' + inteiro(g.volume) + '</td><td>' + inteiro(g.atrasado) + '</td><td>' + decimal(100 * g.atrasado / g.volume) + '%</td><td>' + (g.atrasado ? decimal(g.impacto / g.atrasado) + ' d' : '—') + '</td><td><span class="ef-contribution"><span class="ef-contribution-bar"><i style="width:' + share.toFixed(3) + '%"></i></span>' + decimal(share) + '%</span></td></tr>';
+    }).join('') : '<tr><td colspan="6" class="ef-muted">Nenhum volume com atraso calculável nesta seleção.</td></tr>';
+  }
+  window.pgEfAgingFatiaAlterar = function(valor) { estado.percentual = Math.max(1, Math.min(100, Math.round(Number(valor) || 10))); atualizarFatia(); };
+  window.pgEfAgingExtras = function(modelo, registros, modeloAberto) {
+    estado.modelo = modelo; estado.registros = Array.isArray(registros) ? registros : []; estado.aberto = modeloAberto;
+    var slider = elemento('efAgingFatia'); if (slider) estado.percentual = Math.max(1, Math.min(100, Number(slider.value) || 10));
+    estado.cauda = preparar(estado.registros);
+    desenharFatia(); atualizarFatia(); carteira(); concentracao();
+  };
+})();
+</script>

@@ -1,0 +1,261 @@
+<script>
+(function () {
+  'use strict';
+
+  // Modelo exclusivo da Eficiência: não muda os prazos das demais visões.
+  function campo(linha, nome) {
+    if (!nome || !linha) return null;
+    if (typeof window.pgCampoPrazoV35 === 'function') return window.pgCampoPrazoV35(linha, nome);
+    if (Object.prototype.hasOwnProperty.call(linha, nome)) return linha[nome];
+    var normal = function(v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(); };
+    var chave = Object.keys(linha).find(function(k) { return normal(k) === normal(nome); });
+    return chave === undefined ? null : linha[chave];
+  }
+  function preenchido(v) { return v !== null && v !== undefined && String(v).trim() !== ''; }
+  function numero(v) {
+    if (typeof window.pgNumeroPrazoV35 === 'function') return Math.max(0, window.pgNumeroPrazoV35(v));
+    if (typeof v === 'number') return Number.isFinite(v) ? Math.max(0, v) : 0;
+    var s = String(v == null ? '' : v).trim().replace(/\s/g, '');
+    if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    return Math.max(0, Number(s) || 0);
+  }
+  function data(v) {
+    if (!preenchido(v)) return null;
+    var iso = typeof window.pgNormalizarDataColeta === 'function' ? window.pgNormalizarDataColeta(v) :
+      (typeof extrairDataISO === 'function' ? extrairDataISO(v) : String(v));
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+    var d = new Date(iso + 'T12:00:00Z');
+    return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : null;
+  }
+  function diferenca(inicio, fim) {
+    return Math.round((Date.parse(fim + 'T12:00:00Z') - Date.parse(inicio + 'T12:00:00Z')) / 86400000);
+  }
+  function tiragem(linha) {
+    var valor = campo(linha, 'TIRAGEM');
+    return numero(preenchido(valor) ? valor : campo(linha, 'QUANTIDADE'));
+  }
+  function fases() { return typeof FASES !== 'undefined' && Array.isArray(FASES) ? FASES : []; }
+  function aplicavel(linha, fase) {
+    return (!window.pgLinhaNaVisaoDaFase || window.pgLinhaNaVisaoDaFase(linha, fase.id)) &&
+      (typeof belongsToPhase !== 'function' || belongsToPhase(linha, fase.id));
+  }
+  function planoColeta(linha, base) {
+    var replan = campo(linha, 'Coleta/Internalização de estoque final (re) plan');
+    return data(base === 'baseline' || !preenchido(replan) ? campo(linha, 'COLETA/INTERNALIZAÇÃO FIM BASELINE') : replan);
+  }
+  function planoEntrega(linha, base) {
+    var coleta = planoColeta(linha, base);
+    return coleta && typeof window.pgDataPlanoEntregaSLA === 'function' ? data(window.pgDataPlanoEntregaSLA(linha, coleta)) : null;
+  }
+  function prazoFase(linha, fase, base) {
+    if (['ent_tp', 'ent_cd'].includes(fase.id)) return planoEntrega(linha, base);
+    if (['tra', 'col', 'col_mapa', 'col_tp'].includes(fase.id)) return planoColeta(linha, base);
+    if (!fase.colPlan && !fase.colBase) return null;
+    var replan = campo(linha, fase.colPlan);
+    return data(base === 'baseline' || !preenchido(replan) ? campo(linha, fase.colBase || fase.colPlan) : replan);
+  }
+  function realFase(linha, fase) {
+    if (['col_mapa', 'col_tp'].includes(fase.id)) return data(campo(linha, 'Coleta_TP'));
+    if (fase.id === 'ent_tp') return data(campo(linha, 'Entrega_TP'));
+    if (fase.id === 'ent_cd') return data(linha._DT_ENTREGUE_CD_REAL) || data(campo(linha, fase.colReal));
+    return data(campo(linha, fase.colReal)) || (fase.colRealAlt ? data(campo(linha, fase.colRealAlt)) : null);
+  }
+  function volumeReal(linha, fase, total) {
+    var nome = ['col_mapa', 'col_tp', 'ent_tp'].includes(fase.id) ? 'TIRAGEM COLETADA' : fase.colVol;
+    if (!nome) return total;
+    var valor = campo(linha, nome);
+    if (!preenchido(valor) && fase.id === 'int_cd') {
+      valor = campo(linha, 'Tiragem Internalizada');
+      if (!preenchido(valor)) valor = campo(linha, '# Tiragem Internalizada');
+    }
+    // Nunca usar a quantidade de outra etapa para suprir uma quantidade ausente.
+    return Math.min(total, numero(valor));
+  }
+  function registro(linha, fase, prazo, observada, volume, motivo) {
+    var desvio = prazo && observada ? diferenca(prazo, observada) : null;
+    var dias = desvio === null ? null : Math.max(0, desvio);
+    return {
+      linha: linha, etapa: fase.id, id: fase.id, nome: fase.nome,
+      dataPrazo: prazo || null, dataObservada: observada || null, volume: volume,
+      dias: dias, desvio: desvio, status: dias === null ? 'sem-previsao' : (dias > 0 ? 'atrasado' : 'no-prazo'),
+      motivo: motivo || (dias === null ? (!prazo ? 'Prazo ausente ou inválido.' : 'Data real ausente ou inválida.') : '')
+    };
+  }
+  function observacaoFase(linha, fase, base, modo, corte, total) {
+    var prazo = prazoFase(linha, fase, base), real = realFase(linha, fase);
+    var realAteCorte = real && real <= corte;
+    var quantidade = volumeReal(linha, fase, total);
+    if (modo === 'aberto') {
+      var pendente = Math.max(0, total - (realAteCorte ? quantidade : 0));
+      return pendente > 0 ? registro(linha, fase, prazo, corte, pendente) : null;
+    }
+    if (realAteCorte && quantidade > 0) return registro(linha, fase, prazo, real, quantidade);
+    // Uma quantidade preenchida sem data continua auditável, fora da média de atraso.
+    if (!real && fase.colVol && quantidade > 0) return registro(linha, fase, prazo, null, quantidade, 'Quantidade registrada sem data real válida.');
+    if (!real && ['col_mapa', 'col_tp', 'ent_tp'].includes(fase.id) && quantidade > 0) {
+      return registro(linha, fase, prazo, null, quantidade, 'Quantidade registrada sem a data operacional da etapa.');
+    }
+    return null;
+  }
+  function itensCanonicos(cenario) {
+    if (typeof window.pgMAObterItens === 'function') return window.pgMAObterItens({ cenario: cenario });
+    var base = window.pgBaseGeralReportExecutiva || window.dadosGlobais || [];
+    if (window.pgSolicitacaoCancelada) base = base.filter(function(l) { return !window.pgSolicitacaoCancelada(l); });
+    if (window.pgLinhasUnicas) base = window.pgLinhasUnicas(base);
+    if (!window.pgUnirTotalSemDuplicidade) return [];
+    return window.pgUnirTotalSemDuplicidade(base).map(function(l) { return { linha: l, total: tiragem(l) }; });
+  }
+  function originaisPorId(linhas) {
+    var mapa = new Map();
+    linhas.forEach(function(l) {
+      if (l._ROW_ID) mapa.set(String(l._ROW_ID), l);
+      if (typeof getKey === 'function') mapa.set(getKey(l), l);
+    });
+    return mapa;
+  }
+  function faseAtual(item, corte, originais) {
+    var l = item.linha;
+    // A base híbrida copia a linha da acabadora apenas para corrigir seu total por CD.
+    if (l._PG_TOTAL_HIBRIDO && l._ROW_ID) l = originais.get(String(l._ROW_ID).replace(/:total-todas$/, '')) || l;
+    var fs = fases();
+    var encontrada = fs.find(function(f) {
+      if (!aplicavel(l, f)) return false;
+      var dt = realFase(l, f), total = tiragem(l);
+      return !(dt && dt <= corte && volumeReal(l, f, total) >= total);
+    });
+    return encontrada || fs.find(function(f) { return f.id === 'ent_tp'; }) || { id: 'ent_tp', nome: 'Entrega TP' };
+  }
+
+  window.pgEficienciaAgingPrazo = prazoFase;
+  window.pgEficienciaAgingDataReal = realFase;
+
+  window.pgEficienciaAgingModelo = function(opcoes) {
+    opcoes = opcoes || {};
+    var base = ['replan', 'baseline', 'meta'].includes(opcoes.base) ? opcoes.base : 'replan';
+    var modo = ['real', 'aberto', 'previsto'].includes(opcoes.modo) ? opcoes.modo : 'real';
+    var cenario = opcoes.cenario === 'com' ? 'com' : 'sem';
+    var corte = data(opcoes.corte) || (typeof dtHojeISO !== 'undefined' ? dtHojeISO : new Date().toISOString().slice(0, 10));
+    var listaFases = fases().map(function(f) { return { id: f.id, nome: f.nome, registros: [] }; });
+    var porFase = new Map(listaFases.map(function(f) { return [f.id, f]; }));
+    var entrega = [], geral = [], avisos = [];
+    if (modo === 'previsto' && base !== 'meta') {
+      modo = 'real';
+      avisos.push('A projeção por dias úteis está disponível na comparação com a Meta Armazém.');
+    }
+    var linhas = typeof window.pgDadosParaFases === 'function' ? window.pgDadosParaFases() : (window.dadosFiltrados || []);
+    if (window.pgLinhasUnicas) linhas = window.pgLinhasUnicas(linhas);
+    var itens = itensCanonicos(cenario).filter(function(item) {
+      var origem = window.pgOrigemAtivaPortal || 'TODOS', destino = window.pgDestinoAtivoPortal || 'TODOS';
+      return (!window.pgLinhaDaOrigem || window.pgLinhaDaOrigem(item.linha, origem)) &&
+        (!window.pgLinhaDoDestino || window.pgLinhaDoDestino(item.linha, destino, origem));
+    });
+    var faseEntrega = fases().find(function(f) { return f.id === 'ent_tp'; }) || { id: 'ent_tp', nome: 'Entrega TP' };
+    if (base !== 'meta') {
+      linhas.forEach(function(l) {
+        var total = tiragem(l);
+        if (total <= 0) return;
+        fases().forEach(function(f) {
+          if (!aplicavel(l, f)) return;
+          var r = observacaoFase(l, f, base, modo, corte, total);
+          if (r) { porFase.get(f.id).registros.push(r); geral.push(r); }
+        });
+      });
+      itens.forEach(function(item) {
+        var r = observacaoFase(item.linha, faseEntrega, base, modo, corte, item.total);
+        if (r) entrega.push(r);
+      });
+    } else {
+      if (!window.pgMAObterItens || !window.pgMADiasEntrega) avisos.push('As regras da Meta Armazém ainda não estão disponíveis.');
+      var originais = originaisPorId(linhas);
+      itens.forEach(function(item) {
+        var l = item.linha, total = item.total;
+        if (total <= 0) return;
+        var prazo = data(item.metaAplicada), real = realFase(l, faseEntrega);
+        var quantidade = volumeReal(l, faseEntrega, total);
+        var realAteCorte = real && real <= corte;
+        var regs = [];
+        var etapaAtual = modo === 'real' ? faseEntrega : faseAtual(item, corte, originais);
+        if (modo === 'previsto') {
+          var parcelas = typeof window.pgMADiasEntrega === 'function' ? window.pgMADiasEntrega(item) : [];
+          parcelas.forEach(function(p) {
+            if (p.volume > 0) regs.push(registro(l, etapaAtual, prazo, data(p.data), p.volume, 'Entrega planejada distribuída conforme as regras da Meta Armazém.'));
+          });
+          if (!parcelas.length) regs.push(registro(l, etapaAtual, prazo, null, total, 'Sem previsão de entrega válida: conferir coleta, intervalo e Matriz_SLA.'));
+        } else if (modo === 'aberto') {
+          var pendente = Math.max(0, total - (realAteCorte ? quantidade : 0));
+          if (pendente > 0) regs.push(registro(l, etapaAtual, prazo, corte, pendente));
+        } else if (realAteCorte && quantidade > 0) {
+          regs.push(registro(l, etapaAtual, prazo, real, quantidade));
+        } else if (!real && quantidade > 0) {
+          regs.push(registro(l, etapaAtual, prazo, null, quantidade, 'Tiragem registrada sem Entrega_TP válida.'));
+        }
+        regs.forEach(function(r) {
+          r.metaOriginal = item.alvo || null;
+          r.metaAplicada = prazo;
+          r.inicioPlan = item.inicioPlan || null;
+          r.fimPlan = item.dtPlan || null;
+          r.cenario = cenario;
+          geral.push(r);
+          entrega.push(r);
+          if (porFase.has(r.etapa)) porFase.get(r.etapa).registros.push(r);
+        });
+      });
+    }
+    return { fases: listaFases, geral: geral, entrega: entrega, avisos: avisos, base: base, modo: modo, cenario: cenario, corte: corte };
+  };
+
+  window.pgEficienciaAgingResumo = function(registros) {
+    var buckets = [
+      { id: '0', label: 'No prazo', volume: 0 }, { id: '1-3', label: '1–3 dias', volume: 0 },
+      { id: '4-7', label: '4–7 dias', volume: 0 }, { id: '8-15', label: '8–15 dias', volume: 0 },
+      { id: '16-30', label: '16–30 dias', volume: 0 }, { id: '>30', label: '>30 dias', volume: 0 }
+    ];
+    var totalKnown = 0, unknown = 0, late = 0, daysWeighted = 0, daysSignedWeighted = 0, over15 = 0;
+    (registros || []).forEach(function(r) {
+      var v = numero(r.volume);
+      if (!v) return;
+      if (r.dias === null || r.dias === undefined || !Number.isFinite(r.dias)) { unknown += v; return; }
+      var d = Math.max(0, r.dias);
+      totalKnown += v;
+      daysWeighted += v * d;
+      daysSignedWeighted += v * (Number.isFinite(r.desvio) ? r.desvio : d);
+      if (d > 0) late += v;
+      if (d > 15) over15 += v;
+      var i = d === 0 ? 0 : d <= 3 ? 1 : d <= 7 ? 2 : d <= 15 ? 3 : d <= 30 ? 4 : 5;
+      buckets[i].volume += v;
+    });
+    return {
+      totalKnown: totalKnown, unknown: unknown, total: totalKnown + unknown, late: late,
+      daysWeighted: daysWeighted, meanLate: late > 0 ? daysWeighted / late : null,
+      meanAll: totalKnown > 0 ? daysWeighted / totalKnown : null,
+      daysSignedWeighted: daysSignedWeighted, meanSignedAll: totalKnown > 0 ? daysSignedWeighted / totalKnown : null,
+      tail10: window.pgEficienciaAgingFatia(registros, 10).mean, over15: over15, buckets: buckets
+    };
+  };
+
+  window.pgEficienciaAgingFatia = function(registros, percentual) {
+    var pct = Number.isFinite(Number(percentual)) ? Math.max(0, Math.min(100, Number(percentual))) : 10;
+    var conhecidos = [], total = 0;
+    (registros || []).forEach(function(r) {
+      var desvio = Number.isFinite(r.desvio) ? r.desvio : r.dias;
+      var volume = numero(r.volume);
+      if (!volume || !Number.isFinite(desvio)) return;
+      total += volume;
+      conhecidos.push({ desvio: desvio, volume: volume });
+    });
+    // Seleciona por tiragem, inclusive uma fração da linha no limite da fatia.
+    // Desvios negativos representam antecipações e permanecem na curva da cauda.
+    conhecidos.sort(function(a, b) { return b.desvio - a.desvio; });
+    var alvo = total * pct / 100, restante = alvo, soma = 0, limite = null;
+    conhecidos.forEach(function(r) {
+      if (restante <= 0) return;
+      var volume = Math.min(restante, r.volume);
+      soma += volume * r.desvio;
+      restante -= volume;
+      limite = r.desvio;
+    });
+    return { percent: pct, volume: alvo, totalVolume: total, mean: alvo > 0 ? soma / alvo : null, boundary: limite };
+  };
+})();
+</script>

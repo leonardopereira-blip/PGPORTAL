@@ -1,0 +1,75 @@
+<script>
+(function(){
+  'use strict';
+  var estado={modelo:null,aberto:null,selecionada:'geral',pagina:0,cache:null,diaChart:null,grupoChart:null,baseLocal:false};
+  var cores=['#a8bed6','#FCB04E','#fa9e74','#FA4616','#c73412','#82240e'];
+  var el=function(id){return document.getElementById(id);};
+  var esc=function(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+  var n=function(v){return new Intl.NumberFormat('pt-BR',{maximumFractionDigits:0}).format(Math.round(v||0));};
+  var d=function(v){return v==null?'–':new Intl.NumberFormat('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}).format(v)+' d';};
+  var p=function(a,b){return b>0?n(a/b*100)+'%':'–';};
+  var data=function(v){return v&&/^\d{4}-\d{2}-\d{2}$/.test(v)?v.slice(8,10)+'/'+v.slice(5,7)+'/'+v.slice(0,4):'–';};
+  function campo(l,nome){return window.pgCampoPrazoV35?window.pgCampoPrazoV35(l,nome):l[nome];}
+  function primeiro(l,nomes){for(var i=0;i<nomes.length;i++){var v=campo(l,nomes[i]);if(v!==null&&v!==undefined&&String(v).trim()!=='')return v;}return '';}
+  function ids(r){var l=r.linha||{};return {kit:primeiro(l,['KIT','Kit']),sku:primeiro(l,['SKU','COD SKU','Código SKU']),descricao:primeiro(l,['DESCRIÇÃO','DESCRICAO','Descrição']),marca:l.MARCA_FINAL||l.UNIDADE||l.MARCA||'',serie:primeiro(l,['SÉRIE','SERIE']),grafica:l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA||'',cd:l.CD_FINAL||l['CD DESTINO']||'',envio:primeiro(l,['ENVIO','Envio']),op:primeiro(l,['OP']),fonte:l._SOURCE||'PCP'};}
+  function regs(){if(!estado.modelo)return [];if(estado.selecionada==='geral')return estado.modelo.entrega;if(estado.selecionada==='todas')return estado.modelo.geral;var fase=estado.modelo.fases.find(function(f){return f.id===estado.selecionada;});return fase?fase.registros:[];}
+  function titulo(){if(estado.selecionada==='geral')return 'Geral · entrega final';if(estado.selecionada==='todas')return 'Todas as etapas';var f=estado.modelo.fases.find(function(f){return f.id===estado.selecionada;});return f?f.nome:'Etapa';}
+  function stack(s){return '<div class="ef-stack">'+s.buckets.map(function(b,i){return '<span style="width:'+(s.totalKnown>0?b.volume/s.totalKnown*100:0)+'%;background:'+cores[i]+'" title="'+esc(b.label)+': '+n(b.volume)+' ('+p(b.volume,s.totalKnown)+')"></span>';}).join('')+'</div>';}
+  function linhaEtapa(id,nome,registros){var s=window.pgEficienciaAgingResumo(registros);return '<tr class="'+(estado.selecionada===id?'ef-selected':'')+'"><td><button class="ef-stage-button" onclick="pgEfAgingSelecionar(\''+id+'\')">'+esc(nome)+'</button></td><td>'+n(s.totalKnown)+'</td><td><strong class="ef-accent">'+p(s.late,s.totalKnown)+'</strong></td><td>'+d(s.meanLate)+'</td><td>'+d(s.meanAll)+'</td><td>'+n(s.unknown)+'</td><td>'+stack(s)+'</td></tr>';}
+  function resumo(){var registros=regs(),s=window.pgEficienciaAgingResumo(registros),m=estado.modelo;var verbo=m.modo==='aberto'?'está pendente após o prazo':m.modo==='previsto'?'está previsto depois da meta':'foi realizado depois do prazo';
+    el('efAgingResumo').innerHTML='<div><p class="ef-eyebrow">'+esc(titulo())+'</p><div class="ef-hero-number">'+p(s.late,s.totalKnown)+' <small>do volume fora do prazo</small></div><p style="font-size:15px;line-height:1.9;margin-top:14px"><span class="ef-accent">'+n(s.late)+'</span> de '+n(s.totalKnown)+' '+verbo+'. Esse volume atrasa, em média, <span class="ef-accent">'+d(s.meanLate)+'</span>.</p><p class="ef-muted" style="margin-top:12px">Sem prazo ou data utilizável: <strong>'+n(s.unknown)+'</strong>. '+(estado.selecionada==='todas'&&m.base!=='meta'?'Total de volume por etapa; os exemplares podem aparecer em etapas diferentes.':'')+'</p></div><dl class="ef-metrics"><div><dt>Atraso médio · volume fora</dt><dd>'+d(s.meanLate)+'</dd><p class="ef-muted">Ponderado só pelo volume atrasado</p></div><div><dt>Atraso diluído no volume todo</dt><dd>'+d(s.meanAll)+'</dd><p class="ef-muted">No prazo e antecipado contam zero</p></div><div><dt>Piores 10% do volume</dt><dd>'+d(s.tail10)+'</dd><p class="ef-muted">Média ponderada dessa fatia</p></div><div><dt>Mais de 15 dias de atraso</dt><dd>'+p(s.over15,s.totalKnown)+'</dd><p class="ef-muted">'+n(s.over15)+' exemplares avaliados</p></div></dl>';
+    el('efAgingGeralBtn').classList.toggle('active',estado.selecionada==='geral');el('efAgingTodasBtn').classList.toggle('active',estado.selecionada==='todas');
+    el('efAgingEtapas').innerHTML=linhaEtapa('geral','Geral · entrega final',m.entrega)+m.fases.map(function(f){return linhaEtapa(f.id,f.nome,f.registros);}).join('')+linhaEtapa('todas',m.base==='meta'?'Total · Meta Armazém':'Total · volume por etapa',m.geral);
+  }
+  window.pgEfAgingTrocarBase=function(){estado.baseLocal=true;window.pgEfAgingAtualizar();};
+  window.pgEfAgingAtualizar=function(opcoes){
+    if(!el('efAging')||!window.pgEficienciaAgingModelo)return;
+    if(!estado.baseLocal){var global=el('filtroReferencia');if(global)el('efAgingBase').value=global.value==='baseline'?'baseline':'replan';}
+    var hoje=typeof dtHojeISO==='string'?dtHojeISO:new Date().toISOString().slice(0,10);var corteEl=el('efAgingCorte');if(!corteEl.value)corteEl.value=hoje;corteEl.max=hoje;if(corteEl.value>hoje)corteEl.value=hoje;
+    var base=el('efAgingBase').value,modoEl=el('efAgingModo');modoEl.querySelector('option[value="previsto"]').disabled=base!=='meta';if(base!=='meta'&&modoEl.value==='previsto')modoEl.value='real';el('efAgingCenarioLabel').hidden=base!=='meta';
+    var config={base:base,modo:modoEl.value,cenario:el('efAgingCenario').value,corte:corteEl.value};var chave=JSON.stringify(config)+'|'+(window.pgVersaoFiltros||0);var ref=window.pgDadosParaFases?window.pgDadosParaFases():null;
+    if(!estado.cache||estado.cache.chave!==chave||estado.cache.ref!==ref||estado.cache.sla!==window.PG_MATRIZ_SLA||opcoes&&opcoes.forcar){estado.modelo=window.pgEficienciaAgingModelo(config);estado.aberto=config.modo==='aberto'?estado.modelo:window.pgEficienciaAgingModelo(Object.assign({},config,{modo:'aberto'}));estado.cache={chave:chave,ref:ref,sla:window.PG_MATRIZ_SLA};estado.pagina=0;}
+    el('efAgingAvisos').innerHTML=(estado.modelo.avisos||[]).map(function(v){return '<p class="ef-notice">'+esc(v)+'</p>';}).join('');
+    el('efAgingContexto').textContent=(base==='meta'?'Meta Armazém':base==='baseline'?'Baseline':'(Re)planejado')+' · '+(config.modo==='real'?'Realizado':config.modo==='aberto'?'Em aberto':'Previsto')+' · '+data(config.corte);
+    el('efAgingEtapasTexto').textContent=base==='meta'?'Distribuição da entrega final pela etapa atual; cada parcela entra uma vez.':'Selecione uma etapa para ver o aging diário, a curva e as gráficas.';
+    el('efAgingLegenda').innerHTML=window.pgEficienciaAgingResumo([]).buckets.map(function(b,i){return '<span><i style="background:'+cores[i]+'"></i>'+esc(b.label)+'</span>';}).join('');
+    window.pgEfAgingDetalhes();
+  };
+  window.pgEfAgingSelecionar=function(id){estado.selecionada=id;estado.pagina=0;window.pgEfAgingDetalhes();};
+  window.pgEfAgingDetalhes=function(){
+    if(!estado.modelo)return;resumo();var registros=regs(),s=window.pgEficienciaAgingResumo(registros);
+    el('efAgingDiaTitulo').textContent='Aging por dia · '+titulo();
+    var diarios=new Map();registros.forEach(function(r){if(r.dias==null)return;var dia=Math.min(90,r.dias);diarios.set(dia,(diarios.get(dia)||0)+r.volume);});var max=Math.max(0,...diarios.keys()),labs=[],vols=[],acum=[],atual=0;
+    for(var i=0;i<=max;i++){labs.push(i===90?'90+':String(i));vols.push(diarios.get(i)||0);atual+=diarios.get(i)||0;acum.push(s.totalKnown>0?atual/s.totalKnown*100:0);}
+    if(estado.diaChart){estado.diaChart.destroy();estado.diaChart=null;}if(estado.grupoChart){estado.grupoChart.destroy();estado.grupoChart=null;}
+    if(typeof Chart==='function'){
+      estado.diaChart=new Chart(el('efAgingDiaChart'), {
+        type:'bar',
+        data:{labels:labs,datasets:[
+          {label:'Tiragem',data:vols,backgroundColor:vols.map(function(v,i){return i===0?'#a8bed6':'#FA4616';}),borderRadius:3},
+          {type:'line',label:'Acumulado %',data:acum,yAxisID:'pct',borderColor:'#284081',backgroundColor:'#284081',pointRadius:0,borderWidth:2}
+        ]},
+        options:{
+          maintainAspectRatio:false,animation:false,interaction:{mode:'index',intersect:false},
+          plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+(c.dataset.yAxisID==='pct'?n(c.raw)+'%':n(c.raw));}}}},
+          scales:{
+            x:{title:{display:true,text:'Dias de atraso (0 = no prazo / antecipado)'},ticks:{maxTicksLimit:16}},
+            y:{beginAtZero:true,ticks:{callback:n}},
+            pct:{position:'right',min:0,max:100,grid:{drawOnChartArea:false},ticks:{callback:function(v){return v+'%';}}}
+          }
+        }
+      });
+      var dim=el('efAgingAgrupar').value,grupos=new Map();registros.forEach(function(r){if(!(r.dias>0))return;var g=ids(r)[dim]||'Não informado';grupos.set(g,(grupos.get(g)||0)+r.volume*r.dias);});var ordenados=Array.from(grupos).sort(function(a,b){return b[1]-a[1];});var maiores=ordenados.slice(0,12);if(ordenados.length>12)maiores.push(['Outros',ordenados.slice(12).reduce(function(a,b){return a+b[1];},0)]);
+      estado.grupoChart=new Chart(el('efAgingGrupoChart'),{type:'bar',data:{labels:maiores.map(function(g){return g[0];}),datasets:[{label:'Participação em dias × tiragem atrasada',data:maiores.map(function(g){return s.daysWeighted>0?g[1]/s.daysWeighted*100:0;}),backgroundColor:'#418EDE',borderRadius:4}]},options:{indexAxis:'y',maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return n(c.raw)+'% do atraso ponderado';}}}},scales:{x:{beginAtZero:true,max:100,ticks:{callback:function(v){return v+'%';}}}}}});
+    }
+    if(window.pgEfAgingExtras)window.pgEfAgingExtras(estado.modelo,registros,estado.aberto);
+    window.pgEfAgingAuditoria();
+  };
+  // Distribui o arredondamento entre parcelas da mesma linha/etapa; conserva o total.
+  function inteiros(registros){var valores=registros.map(function(r){return Math.floor(r.volume||0);}),grupos=new Map();registros.forEach(function(r,i){var l=r.linha||{},k=(typeof getKey==='function'?getKey(l):l._ROW_ID||JSON.stringify(l))+'|'+r.etapa;if(!grupos.has(k))grupos.set(k,[]);grupos.get(k).push(i);});grupos.forEach(function(indices){var total=indices.reduce(function(a,i){return a+(registros[i].volume||0);},0),resta=Math.round(total)-indices.reduce(function(a,i){return a+valores[i];},0);indices.sort(function(a,b){return (registros[b].volume-valores[b])-(registros[a].volume-valores[a]);});for(var i=0;i<resta;i++)valores[indices[i%indices.length]]++;});return valores;}
+  window.pgEfAgingAuditoria=function(){var registros=regs(),volumes=inteiros(registros),inicio=estado.pagina*50;el('efAgingAuditoria').innerHTML=registros.slice(inicio,inicio+50).map(function(r,i){var l=ids(r);return '<tr><td>'+esc(l.kit||'–')+' / '+esc(l.sku||'–')+'</td><td title="'+esc(l.descricao)+'" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;text-align:left">'+esc(l.descricao)+'</td><td>'+esc(l.marca)+'</td><td>'+esc(l.serie)+'</td><td>'+esc(r.nome)+'</td><td>'+data(r.dataPrazo)+'</td><td>'+data(r.dataObservada)+'</td><td>'+n(volumes[inicio+i])+'</td><td>'+ (r.dias==null?'–':n(r.dias)+' d')+'</td><td>'+esc(r.dias==null?'Sem previsão':r.dias>0?(estado.modelo.modo==='previsto'?'Atraso previsto':'Atrasado'):'No prazo')+'</td></tr>';}).join('')||'<tr><td colspan="10" style="text-align:center">Nenhum item para esta seleção.</td></tr>';el('efAgingAuditInfo').textContent=n(registros.length)+' registros · '+titulo();el('efAgingPaginaInfo').textContent=(estado.pagina+1)+' / '+Math.max(1,Math.ceil(registros.length/50));};
+  window.pgEfAgingPagina=function(delta){estado.pagina=Math.max(0,Math.min(Math.max(0,Math.ceil(regs().length/50)-1),estado.pagina+delta));window.pgEfAgingAuditoria();};
+  window.pgEfAgingObterAuditoria=function(){var registros=regs(),volumes=inteiros(registros),m=estado.modelo;return {cabecalho:['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio','OP','Fonte','Etapa','Base de prazo','Visão','Data de referência','Prazo usado','Data observada','Tiragem usada','Dias de atraso','Desvio em dias','Situação','Meta original','Meta aplicada','Combinado Posi','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim baseline','SLA dias','Entrega início usada','Entrega fim prevista','Motivo'],linhas:registros.map(function(r,i){var l=ids(r),row=r.linha||{};return [l.kit,l.sku,l.descricao,l.marca,l.serie,l.grafica,l.cd,l.envio,l.op,l.fonte,r.nome,m.base,m.modo,data(m.corte),data(r.dataPrazo),data(r.dataObservada),volumes[i],r.dias==null?'':Math.round(r.dias),r.desvio==null?'':Math.round(r.desvio),r.status,data(r.metaOriginal),data(r.metaAplicada),m.base==='meta'?m.cenario:'',campo(row,'Coleta/Internalização de estoque inicial (re) plan')||'',campo(row,'Coleta/Internalização de estoque final (re) plan')||'',campo(row,'COLETA/INTERNALIZAÇÃO FIM BASELINE')||'',window.pgDiasSLALinha?window.pgDiasSLALinha(row):'',data(r.inicioPlan),data(r.fimPlan||(window.pgEficienciaAgingPrazo?window.pgEficienciaAgingPrazo(row,{id:'ent_tp'},m.base==='meta'?'replan':m.base):null)),r.motivo||''];})};};
+  window.pgEfAgingBaixarAuditoria=function(){if(!estado.modelo)return;var base=window.pgEfAgingObterAuditoria();var celula=function(v){var s=String(v==null?'':v);if(typeof v!=='number'&&/^[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};var csv='\uFEFF'+[base.cabecalho].concat(base.linhas).map(function(l){return l.map(celula).join(';');}).join('\r\n');var url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='auditoria-aging-'+estado.modelo.base+'-'+estado.modelo.modo+'-'+estado.modelo.corte+'.csv';a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);};
+})();
+</script>

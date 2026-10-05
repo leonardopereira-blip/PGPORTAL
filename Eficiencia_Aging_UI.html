@@ -1,0 +1,86 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+  #abaEficiencia{font-family:'Poppins','Segoe UI',sans-serif;color:#0C2340}
+  #abaEficiencia>div:first-child{padding:20px 24px;border-radius:16px;background:#0C2340;margin-bottom:24px}
+  #abaEficiencia>div:first-child h2{color:#fff;font-weight:700}
+  #abaEficiencia .ef-aging{--navy:#0C2340;--blue:#418EDE;--deep:#284081;--orange:#FA4616;--gold:#FCB04E;margin-top:40px;padding:24px;background:#f3f6fa;border-radius:20px;border:1px solid #dce5f0;color:var(--navy)}
+  #abaEficiencia .ef-aging h2{font-size:clamp(24px,3vw,38px);font-weight:700;line-height:1.25;margin:6px 0 10px;letter-spacing:-.035em}
+  #abaEficiencia .ef-aging h3{font-size:18px;font-weight:600;margin-bottom:8px}
+  #abaEficiencia .ef-eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#64748b;font-weight:600}
+  #abaEficiencia .ef-muted{font-size:12px;color:#64748b;line-height:1.7}
+  #abaEficiencia .ef-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:24px}
+  #abaEficiencia .ef-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  #abaEficiencia .ef-controls label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:600;color:#385574}
+  #abaEficiencia .ef-controls select,#abaEficiencia .ef-controls input,#abaEficiencia .ef-button{background:white;border:1px solid #b7cbe2;border-radius:10px;padding:10px 12px;color:#0C2340;font-size:12px;font-weight:600;min-height:42px}
+  #abaEficiencia .ef-button{cursor:pointer}
+  #abaEficiencia .ef-button.active{background:#284081;border-color:#284081;color:white}
+  #abaEficiencia .ef-controls select:focus-visible,#abaEficiencia .ef-controls input:focus-visible,#abaEficiencia .ef-button:focus-visible{outline:3px solid #418EDE;outline-offset:2px}
+  #abaEficiencia .ef-panel{background:#fff;border:1px solid #dce5f0;border-radius:16px;padding:24px;margin-top:20px;box-shadow:0 4px 16px #0c234004}
+  #abaEficiencia .ef-summary{display:grid;grid-template-columns:1.15fr 1fr;gap:32px;align-items:center}
+  #abaEficiencia .ef-hero-number{font-size:clamp(44px,5vw,76px);font-weight:700;line-height:1.2;letter-spacing:-.055em;color:#0C2340}
+  #abaEficiencia .ef-hero-number small{font-size:16px;font-weight:600;letter-spacing:0}
+  #abaEficiencia .ef-metrics{display:grid;grid-template-columns:1fr 1fr;gap:24px;border-left:1px solid #dce5f0;padding-left:28px}
+  #abaEficiencia .ef-metrics dt{font-size:12px;color:#52677f}
+  #abaEficiencia .ef-metrics dd{font-size:26px;font-weight:700;color:#0C2340;margin:3px 0}
+  #abaEficiencia .ef-accent{color:#FA4616;font-weight:600}
+  #abaEficiencia .ef-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  #abaEficiencia .ef-scroll{overflow:auto;max-height:520px;margin-top:18px}
+  #abaEficiencia .ef-table{border-collapse:separate;border-spacing:0;width:100%;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  #abaEficiencia .ef-table th{font-size:10px;text-transform:uppercase;letter-spacing:.065em;text-align:right;color:#52677f;background:#f3f6fa;padding:12px;position:sticky;top:0;z-index:2;border-bottom:1px solid #dce5f0}
+  #abaEficiencia .ef-table td{padding:12px;text-align:right;border-bottom:1px solid #edf2f7}
+  #abaEficiencia .ef-table th:first-child,#abaEficiencia .ef-table td:first-child{text-align:left;position:sticky;left:0;background:white;z-index:1}
+  #abaEficiencia .ef-table th:first-child{background:#f3f6fa;z-index:3}
+  #abaEficiencia .ef-table tr.ef-selected td{background:#edf4fc}
+  #abaEficiencia .ef-table tr.ef-selected td:first-child{background:#edf4fc}
+  #abaEficiencia .ef-table .ef-stage-button{background:none;border:0;color:#284081;font-weight:600;cursor:pointer;text-align:left;padding:4px 0}
+  #abaEficiencia .ef-stack{height:18px;width:220px;display:flex;overflow:hidden;background:#e9eff5;border-radius:4px;margin-left:auto}
+  #abaEficiencia .ef-stack span{display:block;height:100%;min-width:0}
+  #abaEficiencia .ef-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:10px;color:#52677f}
+  #abaEficiencia .ef-legend span{display:flex;align-items:center;gap:5px}
+  #abaEficiencia .ef-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
+  #abaEficiencia .ef-chart-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:20px}
+  #abaEficiencia .ef-chart{height:310px;position:relative;margin-top:18px}
+  #abaEficiencia .ef-notice{padding:12px 16px;border-radius:10px;background:#fff5e6;border:1px solid #fcd49b;font-size:12px;color:#754511;margin:14px 0}
+  #abaEficiencia .ef-rule-text{font-size:12px;line-height:1.9;color:#52677f;margin-top:12px}
+  #abaEficiencia .ef-audit-nav{display:flex;gap:12px;align-items:center;font-size:12px}
+  @media(max-width:1000px){#abaEficiencia .ef-summary,#abaEficiencia .ef-chart-grid{grid-template-columns:1fr}#abaEficiencia .ef-metrics{border-left:0;border-top:1px solid #dce5f0;padding:20px 0 0}}
+  @media(max-width:600px){#abaEficiencia .ef-aging{padding:14px}#abaEficiencia .ef-panel{padding:16px}#abaEficiencia .ef-controls{width:100%}#abaEficiencia .ef-controls label{flex:1}#abaEficiencia .ef-metrics{gap:16px}#abaEficiencia .ef-metrics dd{font-size:22px}}
+</style>
+<section class="ef-aging" id="efAging" aria-labelledby="efAgingTitulo">
+  <div class="ef-head">
+    <div><p class="ef-eyebrow">Eficiência · Aging por tiragem</p><h2 id="efAgingTitulo">Quanto atrasa, e por quantos dias</h2><p class="ef-muted">Atraso em dias corridos, ponderado pelo volume. Use as etapas para encontrar onde o prazo se perde.</p></div>
+    <div class="ef-controls">
+      <label>Comparar com<select id="efAgingBase" onchange="pgEfAgingTrocarBase()"><option value="replan">(Re)planejado</option><option value="baseline">Baseline</option><option value="meta">Meta Armazém</option></select></label>
+      <label>Visão<select id="efAgingModo" onchange="pgEfAgingAtualizar()"><option value="real">Realizado</option><option value="aberto">Em aberto</option><option value="previsto" disabled>Previsto · rateio armazém</option></select></label>
+      <label>Data de referência<input type="date" id="efAgingCorte" onchange="pgEfAgingAtualizar()"></label>
+      <label id="efAgingCenarioLabel" hidden>Combinado Posi<select id="efAgingCenario" onchange="pgEfAgingAtualizar()"><option value="sem">Fere a meta</option><option value="com">Não fere a meta</option></select></label>
+    </div>
+  </div>
+  <div id="efAgingAvisos" role="status"></div>
+  <div class="ef-toolbar"><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ef-button active" id="efAgingGeralBtn" onclick="pgEfAgingSelecionar('geral')">Geral · entrega final</button><button class="ef-button" id="efAgingTodasBtn" onclick="pgEfAgingSelecionar('todas')">Todas as etapas</button></div><span class="ef-muted" id="efAgingContexto"></span></div>
+  <div class="ef-panel ef-summary" id="efAgingResumo"></div>
+  <div class="ef-panel">
+    <div class="ef-toolbar"><div><h3>Etapa a etapa</h3><p class="ef-muted" id="efAgingEtapasTexto">Selecione uma etapa para abrir sua distribuição diária e as gráficas.</p></div><div class="ef-legend" id="efAgingLegenda"></div></div>
+    <div class="ef-scroll"><table class="ef-table"><thead><tr><th>Etapa</th><th>Volume avaliado</th><th>Fora do prazo</th><th>Dias médios · fora</th><th>Diluído</th><th>Sem prazo</th><th>Tiragem por faixa</th></tr></thead><tbody id="efAgingEtapas"></tbody></table></div>
+  </div>
+  <div class="ef-chart-grid">
+    <div class="ef-panel"><h3 id="efAgingDiaTitulo">Aging por dia · Geral</h3><p class="ef-muted">Barras: tiragem em cada dia de atraso. Linha: percentual acumulado do volume avaliado.</p><div class="ef-chart"><canvas id="efAgingDiaChart" aria-label="Tiragem por dia de atraso" role="img"></canvas></div></div>
+    <div class="ef-panel"><h3>Onde se concentra o atraso</h3><div class="ef-controls" style="margin-top:12px"><label>Agrupar por<select id="efAgingAgrupar" onchange="pgEfAgingDetalhes()"><option value="grafica">Gráfica</option><option value="marca">Marca</option><option value="cd">CD destino</option><option value="serie">Série</option></select></label></div><div class="ef-chart"><canvas id="efAgingGrupoChart" aria-label="Tiragem atrasada por grupo" role="img"></canvas></div></div>
+  </div>
+  <?!= include('Eficiencia_Aging_Extras'); ?>
+  <div class="ef-panel">
+    <div class="ef-toolbar"><div><h3>Base auditável</h3><p class="ef-muted">Itens da visão selecionada, com identificadores, prazo, data observada e tiragem usada no cálculo.</p></div><button class="ef-button" onclick="pgEfAgingBaixarAuditoria()">Baixar auditoria CSV</button></div>
+    <div class="ef-scroll"><table class="ef-table"><thead><tr><th>Kit / SKU</th><th>Descrição</th><th>Marca</th><th>Série</th><th>Etapa</th><th>Prazo</th><th>Data observada</th><th>Tiragem</th><th>Atraso</th><th>Situação</th></tr></thead><tbody id="efAgingAuditoria"></tbody></table></div>
+    <div class="ef-toolbar" style="margin-top:14px"><span class="ef-muted" id="efAgingAuditInfo"></span><div class="ef-audit-nav"><button class="ef-button" onclick="pgEfAgingPagina(-1)">Anterior</button><span id="efAgingPaginaInfo"></span><button class="ef-button" onclick="pgEfAgingPagina(1)">Próxima</button></div></div>
+  </div>
+  <details class="ef-panel"><summary style="cursor:pointer;font-weight:600">Regras de cálculo e leitura</summary><div class="ef-rule-text">
+    <p>A média fora do prazo é a soma de <strong>tiragem × dias de atraso</strong> dividida pela tiragem atrasada. Na média diluída, volumes antecipados ou no prazo entram com zero. A faixa dos piores 10% é ponderada pelo volume, incluindo somente a fração necessária do último item.</p>
+    <p><strong>Geral</strong> acompanha a entrega final, na base de CD sem duplicar transferências. <strong>Todas as etapas</strong> soma observações de volume por etapa: a mesma tiragem pode aparecer em mais de uma etapa. O volume dessa opção não representa exemplares únicos.</p>
+    <p><strong>(Re)planejado:</strong> quando o campo está vazio, usa baseline. Uma data preenchida inválida fica sem prazo. <strong>Baseline:</strong> usa a data original, sem substituir pelo replanejado. Entrega prevista = coleta da base escolhida + Matriz_SLA; prazo zero é válido e rota ausente fica sem previsão.</p>
+    <p><strong>Realizado:</strong> usa somente a quantidade com data real válida até a referência. <strong>Em aberto:</strong> mede o saldo pendente contra a referência. As quantidades parciais de coleta, entrega, confirmação e internalização são limitadas à tiragem da linha. Ausência de prazo não vira zero dia nem entra na média.</p>
+    <p><strong>Meta Armazém:</strong> 15/10; SAS Bradesco 26/10; GEE/Geekie 12/11; WAYS 30/11, em 2026. Mantém os cenários do combinado Posi somente nas rotas próprias elegíveis. A visão <strong>Previsto</strong> distribui a tiragem de todas as gráficas e acabadoras entre início e fim de entrega em dias úteis, incluindo as pontas e descontando fins de semana e feriados nacionais. Início ausente, datas iguais ou intervalo sem DU concentram tudo no fim. Dados inválidos ficam sem previsão.</p>
+    <p>Na comparação com armazém, as etapas mostram onde está o saldo ou a previsão da entrega final; a meta da entrega não é inventada como prazo intermediário de cada etapa. O atraso previsto permanece identificado como projeção.</p>
+  </div></details>
+</section>
+<?!= include('Scripts_Eficiencia_Aging'); ?>
+<?!= include('Scripts_Eficiencia_Aging_UI'); ?>

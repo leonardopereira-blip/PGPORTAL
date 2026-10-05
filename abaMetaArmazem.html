@@ -318,6 +318,10 @@
     '2026-01-01','2026-04-03','2026-04-21','2026-05-01','2026-09-07',
     '2026-10-12','2026-11-02','2026-11-15','2026-11-20','2026-12-25'
   ]);
+  function diaUtilArmazem(d){
+    var n=d.getUTCDay();
+    return n!==0&&n!==6&&!FERIADOS_2026.has(d.toISOString().slice(0,10));
+  }
   function rateioDiasUteis(inicio,fim,meta){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(inicio)||!/^\d{4}-\d{2}-\d{2}$/.test(fim))return null;
     var a=new Date(inicio+'T12:00:00Z'),b=new Date(fim+'T12:00:00Z');
@@ -328,8 +332,8 @@
       entregaUnica:true,motivo:'mesmo-dia'};
     var dias=0,antes=0,limite=740;
     for(var d=new Date(a.getTime());d<=b&&limite-->0;d.setUTCDate(d.getUTCDate()+1)){
-      var n=d.getUTCDay(),iso=d.toISOString().slice(0,10);
-      if(n===0||n===6||FERIADOS_2026.has(iso))continue;
+      var iso=d.toISOString().slice(0,10);
+      if(!diaUtilArmazem(d))continue;
       dias++;
       if(iso<=meta)antes++;
     }
@@ -361,7 +365,8 @@
     }
     return rateioDiasUteis(inicio,fim,meta);
   }
-  function dadosBase() {
+  function dadosBase(opcoes) {
+    var cenario=opcoes&&(opcoes.cenario==='com'||opcoes.cenario==='sem')?opcoes.cenario:estado.cenario;
     var base=window.pgBaseGeralReportExecutiva||window.dadosGlobais||[];
     base=base.filter(function(l){return !(window.pgSolicitacaoCancelada&&window.pgSolicitacaoCancelada(l));});
     if(typeof window.pgLinhasUnicas==='function')base=window.pgLinhasUnicas(base);
@@ -396,13 +401,13 @@
         var rateioAcordo=rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,inicioAusente);
         previstoNaoFere=rateioAcordo?total*rateioAcordo.fracao:0;
       }
-      var metaAplicada=estado.cenario==='com'&&elegivel?dataAcordada:alvo;
+      var metaAplicada=cenario==='com'&&elegivel?dataAcordada:alvo;
       var rateioAplicado=conhecido?rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioAusente):null;
       // Distribuição pela meta original da marca, independente do cenário escolhido.
       var ate15=previstoOriginal,apos15=conhecido?Math.max(0,total-previstoOriginal):0;
-      var previsto=estado.cenario==='sem'?previstoFere:previstoNaoFere;
+      var previsto=cenario==='sem'?previstoFere:previstoNaoFere;
       var combinadoAdicional=Math.max(0,previstoNaoFere-previstoFere);
-      var excecao=estado.cenario==='com'?Math.max(0,previstoNaoFere-previstoOriginal):0;
+      var excecao=cenario==='com'?Math.max(0,previstoNaoFere-previstoOriginal):0;
       var realRaw=l['TIRAGEM CONFIRMADA DENTRO DA META'];
       var realTem=realRaw!==null&&realRaw!==undefined&&realRaw!=='';
       return {
@@ -422,6 +427,24 @@
       };
     }).filter(Boolean);
   }
+  // A eficiência usa a mesma base e as mesmas metas, sem trocar o cenário desta tela.
+  window.pgMAObterItens=function(opcoes){return dadosBase(opcoes);};
+  window.pgMADiasEntrega=function(item){
+    if(!item||item.semData>0||!item.dtPlan)return [];
+    var total=volume(item.total),rateio=item.rateioAplicado||item.rateio;
+    if(!total||!rateio)return [];
+    if(rateio.entregaUnica)return [{data:item.dtPlan,volume:total}];
+    if(!(rateio.dias>0))return [];
+    var parcelas=[],fim=new Date(rateio.fim+'T12:00:00Z'),limite=740;
+    for(var d=new Date(rateio.inicio+'T12:00:00Z');d<=fim&&limite-->0;d.setUTCDate(d.getUTCDate()+1)){
+      if(diaUtilArmazem(d))parcelas.push({data:d.toISOString().slice(0,10),volume:total/rateio.dias});
+    }
+    if(limite<=0||parcelas.length!==rateio.dias)return [];
+    // Conserva a tiragem inclusive quando a divisão por DU tem dízima.
+    var somaParcelas=parcelas.reduce(function(s,p){return s+p.volume;},0);
+    parcelas[parcelas.length-1].volume+=total-somaParcelas;
+    return parcelas;
+  };
   function soma(items) {
     return items.reduce(function(a,l){
       a.total+=l.total;a.previsto+=l.previsto;a.pos+=l.pos;a.semData+=l.semData;
