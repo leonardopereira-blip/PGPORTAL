@@ -3,15 +3,15 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
   var colunas = [
     'Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio','OP',
     'Tiragem total','Dentro da meta','Fora da meta','Sem previsão','% dentro da meta',
-    'Coleta início (re)plan','Coleta fim (re)plan','Coleta fim baseline','Coleta fim usada',
-    'Origem da data de coleta','SLA (dias corridos)','Entrega início usada','Entrega fim prevista',
+    'Coleta início (re)plan','Coleta fim real','Coleta fim (re)plan','Coleta fim baseline','Coleta fim usada',
+    'Origem da data de coleta','SLA (dias corridos)','Entrega início usada','Entrega fim prevista','Data realizada CD',
     'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
     'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
     'Fonte','ID da linha','Chave','Cenário'
   ];
   var datas = [
-    'Coleta início (re)plan','Coleta fim (re)plan','Coleta fim baseline','Coleta fim usada',
-    'Entrega início usada','Entrega fim prevista','Meta original','Prazo combinado Posi','Meta aplicada'
+    'Coleta início (re)plan','Coleta fim real','Coleta fim (re)plan','Coleta fim baseline','Coleta fim usada',
+    'Entrega início usada','Entrega fim prevista','Data realizada CD','Meta original','Prazo combinado Posi','Meta aplicada'
   ];
   var quantidades = ['Tiragem total','Dentro da meta','Fora da meta','Sem previsão','Tiragem por DU'];
   var inteiros = ['SLA (dias corridos)','DU totais','DU dentro da meta','DU fora da meta'];
