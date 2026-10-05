@@ -448,7 +448,7 @@
     let selecoesFiltrosPre = {};
     window.opcoesFiltrosPre = {}; 
     window.dropdownAbertoPre = null; 
-    camposFiltro.forEach(c => selecoesFiltrosPre[c] = (c === 'envio' ? ['V1'] : []));
+    camposFiltro.forEach(c => selecoesFiltrosPre[c] = (c === 'envio' ? ['1'] : []));
 
     window.chamarTelaPreProd = function(visao) {
         visaoAtualPre = visao;
@@ -709,7 +709,7 @@
     }
 
     function limparFiltrosPre() {
-        camposFiltro.forEach(c => selecoesFiltrosPre[c] = (c === 'envio' ? ['V1'] : []));
+        camposFiltro.forEach(c => selecoesFiltrosPre[c] = (c === 'envio' ? ['1'] : []));
         window.dropdownAbertoPre = null;
         desenharFiltrosInteligentes(); aplicarFiltrosInteligentes();
     }
