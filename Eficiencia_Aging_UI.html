@@ -3,7 +3,7 @@
   #abaEficiencia{font-family:'Poppins','Segoe UI',sans-serif;color:#0C2340}
   #abaEficiencia>div:first-child{padding:20px 24px;border-radius:16px;background:#0C2340;margin-bottom:24px}
   #abaEficiencia>div:first-child h2{color:#fff;font-weight:700}
-  #abaEficiencia .ef-aging{--navy:#0C2340;--blue:#418EDE;--deep:#284081;--orange:#FA4616;--gold:#FCB04E;margin-top:40px;padding:24px;background:#f3f6fa;border-radius:20px;border:1px solid #dce5f0;color:var(--navy)}
+  #abaEficiencia .ef-aging{--navy:#0C2340;--blue:#418EDE;--deep:#284081;--orange:#FA4616;--gold:#FCB04E;margin-top:0;margin-bottom:32px;padding:24px;background:#f3f6fa;border-radius:20px;border:1px solid #dce5f0;color:var(--navy)}
   #abaEficiencia .ef-aging h2{font-size:clamp(24px,3vw,38px);font-weight:700;line-height:1.25;margin:6px 0 10px;letter-spacing:-.035em}
   #abaEficiencia .ef-aging h3{font-size:18px;font-weight:600;margin-bottom:8px}
   #abaEficiencia .ef-eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#64748b;font-weight:600}
@@ -54,6 +54,8 @@
       <label>Visão<select id="efAgingModo" onchange="pgEfAgingAtualizar()"><option value="real">Realizado</option><option value="aberto">Em aberto</option><option value="previsto" disabled>Previsto · rateio armazém</option></select></label>
       <label>Data de referência<input type="date" id="efAgingCorte" onchange="pgEfAgingAtualizar()"></label>
       <label id="efAgingCenarioLabel" hidden>Combinado Posi<select id="efAgingCenario" onchange="pgEfAgingAtualizar()"><option value="sem">Fere a meta</option><option value="com">Não fere a meta</option></select></label>
+      <label>Etapa<select id="efAgingEtapa" onchange="pgEfAgingSelecionar(this.value)"><option value="geral">Geral · entrega final</option></select></label>
+      <button class="ef-button" type="button" onclick="pgEfAgingBaixarAuditoria(true)">Baixar base auditável</button>
     </div>
   </div>
   <div id="efAgingAvisos" role="status"></div>
@@ -68,18 +70,13 @@
     <div class="ef-panel"><h3>Onde se concentra o atraso</h3><div class="ef-controls" style="margin-top:12px"><label>Agrupar por<select id="efAgingAgrupar" onchange="pgEfAgingDetalhes()"><option value="grafica">Gráfica</option><option value="marca">Marca</option><option value="cd">CD destino</option><option value="serie">Série</option></select></label></div><div class="ef-chart"><canvas id="efAgingGrupoChart" aria-label="Tiragem atrasada por grupo" role="img"></canvas></div></div>
   </div>
   <?!= include('Eficiencia_Aging_Extras'); ?>
-  <div class="ef-panel">
-    <div class="ef-toolbar"><div><h3>Base auditável</h3><p class="ef-muted">Itens da visão selecionada, com identificadores, prazo, data observada e tiragem usada no cálculo.</p></div><button class="ef-button" onclick="pgEfAgingBaixarAuditoria()">Baixar auditoria CSV</button></div>
-    <div class="ef-scroll"><table class="ef-table"><thead><tr><th>Kit / SKU</th><th>Descrição</th><th>Marca</th><th>Série</th><th>Etapa</th><th>Prazo</th><th>Data observada</th><th>Tiragem</th><th>Atraso</th><th>Situação</th></tr></thead><tbody id="efAgingAuditoria"></tbody></table></div>
-    <div class="ef-toolbar" style="margin-top:14px"><span class="ef-muted" id="efAgingAuditInfo"></span><div class="ef-audit-nav"><button class="ef-button" onclick="pgEfAgingPagina(-1)">Anterior</button><span id="efAgingPaginaInfo"></span><button class="ef-button" onclick="pgEfAgingPagina(1)">Próxima</button></div></div>
-  </div>
   <details class="ef-panel"><summary style="cursor:pointer;font-weight:600">Regras de cálculo e leitura</summary><div class="ef-rule-text">
-    <p>A média fora do prazo é a soma de <strong>tiragem × dias de atraso</strong> dividida pela tiragem atrasada. Na média diluída, volumes antecipados ou no prazo entram com zero. A faixa dos piores 10% é ponderada pelo volume, incluindo somente a fração necessária do último item.</p>
+    <p>Toda média de dias desta visão é ponderada por tiragem: <strong>Σ(tiragem × dias) ÷ Σ(tiragem)</strong> do universo aplicável. Quanto maior a tiragem, maior o peso no resultado. Volumes no prazo contam zero na média diluída.</p>
     <p><strong>Geral</strong> acompanha a entrega final, na base de CD sem duplicar transferências. <strong>Todas as etapas</strong> soma observações de volume por etapa: a mesma tiragem pode aparecer em mais de uma etapa. O volume dessa opção não representa exemplares únicos.</p>
     <p><strong>(Re)planejado:</strong> quando o campo está vazio, usa baseline. Uma data preenchida inválida fica sem prazo. <strong>Baseline:</strong> usa a data original, sem substituir pelo replanejado. Entrega prevista = coleta da base escolhida + Matriz_SLA; prazo zero é válido e rota ausente fica sem previsão.</p>
     <p><strong>Realizado:</strong> usa somente a quantidade com data real válida até a referência. <strong>Em aberto:</strong> mede o saldo pendente contra a referência. As quantidades parciais de coleta, entrega, confirmação e internalização são limitadas à tiragem da linha. Ausência de prazo não vira zero dia nem entra na média.</p>
     <p><strong>Meta Armazém:</strong> 15/10; SAS Bradesco 26/10; GEE/Geekie 12/11; WAYS 30/11, em 2026. Mantém os cenários do combinado Posi somente nas rotas próprias elegíveis. A visão <strong>Previsto</strong> distribui a tiragem de todas as gráficas e acabadoras entre início e fim de entrega em dias úteis, incluindo as pontas e descontando fins de semana e feriados nacionais. Início ausente, datas iguais ou intervalo sem DU concentram tudo no fim. Dados inválidos ficam sem previsão.</p>
-    <p>Na comparação com armazém, as etapas mostram onde está o saldo ou a previsão da entrega final; a meta da entrega não é inventada como prazo intermediário de cada etapa. O atraso previsto permanece identificado como projeção.</p>
+    <p>Na comparação com armazém, a aderência usa as mesmas regras e o mesmo rateio da Meta Armazém. Item sem previsão válida não conta como dentro da meta; permanece identificado como sem previsão e reduz o atingimento. Os dias médios continuam usando apenas registros com prazo e data calculáveis, sempre ponderados pela tiragem.</p>
   </div></details>
 </section>
 <?!= include('Scripts_Eficiencia_Aging'); ?>

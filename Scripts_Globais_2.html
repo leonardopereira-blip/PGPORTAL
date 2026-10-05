@@ -4202,21 +4202,30 @@ let tRef = document.getElementById('filtroReferencia').value;
     }
 
     function processarEficiencia() {
-        let tRef = document.getElementById('filtroReferencia').value;
+        const fasesEficiencia = FASES.filter(f => !['oc','col_mapa','ent_cd','int_cd'].includes(f.id));
+        let globalRef = document.getElementById('filtroReferencia');
+        let tRef = globalRef ? globalRef.value : 'replan';
+        let localRef = document.getElementById('efFiltroReferencia');
+        if(localRef) localRef.value = tRef === 'baseline' ? 'baseline' : 'replan';
         let selElement = document.getElementById('selFaseEficiencia');
-        let fSelecionada = selElement ? selElement.value : 'imp'; 
-        let mFase = {}; FASES.forEach(f => { mFase[f.id] = { ls:0, lc:0, tp:0, tn:0, atrD:0, atrC:0 }; });
+        if(selElement) {
+            let atual = selElement.value;
+            selElement.innerHTML = fasesEficiencia.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
+            selElement.value = fasesEficiencia.some(f => f.id === atual) ? atual : 'imp';
+        }
+        let fSelecionada = selElement ? selElement.value : 'imp';
+        let mFase = {}; fasesEficiencia.forEach(f => { mFase[f.id] = { ls:0, lc:0, tp:0, tn:0, atrD:0, atrC:0 }; });
         let mGraf = {}; let mGrid = {}; 
         let distLT = {}; let volTotalFaseSel = 0; let rankG = {}; let volGeralRank = 0;
         window.pgDadosParaFases().forEach(l => {
             let tBase = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"]); 
             if (tBase <= 0) return;
             let g = l["GRÁFICA"]||"N/A", m = l["UNIDADE"]||"N/A"; let cv = g+"|"+m;
-            if(!rankG[g]) { rankG[g] = { nome: g, vol: 0, fases: {} }; FASES.forEach(f => rankG[g].fases[f.id] = { tp: 0, tn: 0 }); }
+            if(!rankG[g]) { rankG[g] = { nome: g, vol: 0, fases: {} }; fasesEficiencia.forEach(f => rankG[g].fases[f.id] = { tp: 0, tn: 0 }); }
             if (window.pgLinhaNaVisaoDaFase(l, "col")) { rankG[g].vol += tBase; volGeralRank += tBase; }
             if(!mGraf[g]) mGraf[g] = { ls:0, lc:0, tp:0, tn:0 }; 
-            if(!mGrid[cv]) { mGrid[cv] = { grafica:g, marca:m }; FASES.forEach(f => mGrid[cv][f.id] = { ls:0, lc:0, tp:0, tn:0 }); }
-            FASES.forEach(f => {
+            if(!mGrid[cv]) { mGrid[cv] = { grafica:g, marca:m }; fasesEficiencia.forEach(f => mGrid[cv][f.id] = { ls:0, lc:0, tp:0, tn:0 }); }
+            fasesEficiencia.forEach(f => {
                 if(!(window.pgLinhaNaVisaoDaFase(l, f.id) && belongsToPhase(l, f.id))) return;
                 let tFaseReal = window.getVolFase(l, f, tBase);
                 if (dataFoiPreenchida(l, f)) {
@@ -4232,20 +4241,31 @@ let tRef = document.getElementById('filtroReferencia').value;
                         let dif = calcDiffDiasISO(isoP, isoR), peso = Math.min(tBase, Math.max(0, tFaseReal));
                         if(dif > 0 && peso > 0) { mFase[f.id].atrD += dif * peso; mFase[f.id].atrC += peso; }
                     }
-                    let lt = getLeadTimeEmDias(l, f, tRef); 
-                    if(lt !== null) { 
-                        mFase[f.id].ls += lt; mFase[f.id].lc++; mGrid[cv][f.id].ls += lt; mGrid[cv][f.id].lc++; 
-                        if(f.id === fSelecionada) { 
-                            mGraf[g].ls += lt; mGraf[g].lc++; 
+                    let lt = getLeadTimeEmDias(l, f, tRef);
+                    let pesoLt = Math.min(tBase, Math.max(0, tFaseReal));
+                    if(lt !== null && pesoLt > 0) {
+                        mFase[f.id].ls += lt * pesoLt; mFase[f.id].lc += pesoLt;
+                        mGrid[cv][f.id].ls += lt * pesoLt; mGrid[cv][f.id].lc += pesoLt;
+                        if(f.id === fSelecionada) {
+                            mGraf[g].ls += lt * pesoLt; mGraf[g].lc += pesoLt;
                             let diaStr = lt > 15 ? '15+' : lt.toString();
-                            distLT[diaStr] = (distLT[diaStr] || 0) + tFaseReal; volTotalFaseSel += tFaseReal;
+                            distLT[diaStr] = (distLT[diaStr] || 0) + pesoLt; volTotalFaseSel += pesoLt;
                         }
                     }
                 }
             });
         });
         let hAd = "", hLt = "", hAtr = "";
-        FASES.forEach(f => {
+        let geralFinal = mFase['ent_tp'] || {ls:0,lc:0,tp:0,tn:0,atrD:0,atrC:0};
+        let geralAd = geralFinal.tp > 0 ? Math.round((geralFinal.tn / geralFinal.tp) * 100) : '-';
+        if (geralAd === 100 && geralFinal.tn < geralFinal.tp) geralAd = 99;
+        let geralAdCor = geralAd === '-' ? 'text-slate-400' : (geralAd >= 80 ? 'text-emerald-600' : 'text-rose-600');
+        let geralLt = geralFinal.lc > 0 ? (geralFinal.ls / geralFinal.lc).toFixed(1) : '-';
+        let geralAtr = geralFinal.atrC > 0 ? (geralFinal.atrD / geralFinal.atrC).toFixed(1) : '-';
+        hAd += `<div class="bg-slate-50 p-2 rounded-lg shadow-sm border-t-2 text-center flex flex-col justify-center" style="border-color:#0C2340"><h3 class="font-black text-slate-700 text-[9px] uppercase mb-1">Geral</h3><p class="text-xl font-black ${geralAdCor}">${geralAd !== '-' ? geralAd+'%' : '-'}</p><span class="text-[8px] text-slate-400">Entrega final</span></div>`;
+        hLt += `<div class="bg-slate-50 p-2 rounded-lg shadow-sm border-t-2 text-center flex flex-col justify-center" style="border-color:#0C2340"><h3 class="font-black text-slate-700 text-[9px] uppercase mb-1">Geral</h3><p class="text-xl font-black text-indigo-700">${geralLt !== '-' ? geralLt+' d' : '-'}</p><span class="text-[8px] text-slate-400">Ponderado por tiragem</span></div>`;
+        hAtr += `<div class="bg-slate-50 p-2 rounded-lg shadow-sm border-t-2 text-center flex flex-col justify-center" style="border-color:#0C2340"><h3 class="font-black text-slate-700 text-[9px] uppercase mb-1">Geral</h3><p class="text-xl font-black text-red-600">${geralAtr !== '-' ? geralAtr+' d' : '-'}</p><span class="text-[8px] text-slate-400">Ponderado por tiragem</span></div>`;
+        fasesEficiencia.forEach(f => {
             let p = mFase[f.id].tp > 0 ? Math.round((mFase[f.id].tn/mFase[f.id].tp)*100) : '-'; if (p === 100 && mFase[f.id].tn < mFase[f.id].tp) p = 99; 
             let c = p === '-' ? 'text-slate-400' : (p>=80?'text-emerald-600':'text-rose-600');
             hAd += `<div class="bg-white p-2 rounded-lg shadow-sm border-t-2 text-center flex flex-col justify-center" style="border-color:${f.corLinha}"><h3 class="font-bold text-slate-500 text-[9px] uppercase mb-1 truncate" title="${f.nome}">${f.nome}</h3><p class="text-xl font-black ${c}">${p !== '-' ? p+'%' : '-'}</p></div>`;
@@ -4257,7 +4277,7 @@ let tRef = document.getElementById('filtroReferencia').value;
         let cAd = document.getElementById('cardsAderencia'); if(cAd) cAd.innerHTML = hAd; 
         let cLt = document.getElementById('cardsLeadTime'); if(cLt) cLt.innerHTML = hLt; 
         let cAtr = document.getElementById('cardsAtrasoMedio'); if(cAtr) cAtr.innerHTML = hAtr;
-        let fObjSel = FASES.find(f => f.id === fSelecionada);
+        let fObjSel = fasesEficiencia.find(f => f.id === fSelecionada);
         let tAd = document.getElementById('tituloGraficoAd'); if(tAd) tAd.innerText = `Aderência (%) - ${fObjSel ? fObjSel.nome : ''}`;
         let tLt = document.getElementById('tituloGraficoLt'); if(tLt) tLt.innerText = `Lead Time Médio (Dias) - ${fObjSel ? fObjSel.nome : ''}`;
         let tHist = document.getElementById('tituloGraficoHist'); if(tHist) tHist.innerText = `Distribuição de Lead Time (%) - ${fObjSel ? fObjSel.nome : ''}`;
@@ -4294,14 +4314,14 @@ let tRef = document.getElementById('filtroReferencia').value;
         let cvHist = document.getElementById('graficoHistograma');
         if(cvHist) graficos.hist = new Chart(cvHist, { type: 'bar', data: { labels: histLabs, datasets: [ { type: 'line', label: '% Acumulado (Evolução)', data: histValsAcumulado, borderColor: '#ef4444', backgroundColor: '#ef4444', borderWidth: 2, tension: 0.3, pointRadius: 4, yAxisID: 'y1', order: 1 }, { type: 'bar', label: 'Volume Absoluto (Tiragem)', data: histValsVolume, backgroundColor: '#f59e0b', borderRadius: 4, yAxisID: 'y', order: 2 } ] }, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: function(context) { if (context.dataset.type === 'line') return `% Acumulado: ${context.parsed.y}%`; else return `Volume: ${window.formatarBR(context.parsed.y)}`; } } } }, scales: { y: { type: 'linear', display: true, position: 'left', beginAtZero: true, title: { display: true, text: 'Volume (Tiragem)', color: '#64748b', font: { weight: 'bold' } } }, y1: { type: 'linear', display: true, position: 'right', beginAtZero: true, max: 100, title: { display: true, text: '% Acumulado', color: '#64748b', font: { weight: 'bold' } }, grid: { drawOnChartArea: false }, ticks: { callback: function(value) { return value + '%'; } } } } } });
         let hH = `<th class="p-2 border-r border-slate-200 sticky left-0 bg-slate-100 z-10 shadow-[1px_0_0_#cbd5e1]">Gráfica</th><th class="p-2 border-r border-slate-200">Marca</th>`;
-        FASES.forEach(f => hH += `<th class="p-2 text-center border-r border-slate-200">${f.nome}<br><span class="text-[9px] font-normal text-slate-400">OTIF | LeadTime</span></th>`);
+        fasesEficiencia.forEach(f => hH += `<th class="p-2 text-center border-r border-slate-200">${f.nome}<br><span class="text-[9px] font-normal text-slate-400">OTIF | LeadTime</span></th>`);
         document.getElementById('tbEficienciaCabecalho').innerHTML = hH;
         let hB = ""; let arrGrid = Object.values(mGrid).sort(sortGMarca);
         if(arrGrid.length === 0) hB = `<tr><td colspan="11" class="p-4 text-center">Nenhum dado encontrado.</td></tr>`;
         else {
             arrGrid.forEach(r => {
                 hB += `<tr class="hover:bg-slate-50 border-b border-slate-100"><td class="p-2 font-semibold border-r border-slate-200 sticky left-0 bg-white shadow-[1px_0_0_#e2e8f0]">${r.grafica}</td><td class="p-2 border-r border-slate-200">${r.marca}</td>`;
-                FASES.forEach(f => {
+                fasesEficiencia.forEach(f => {
                     let dF = r[f.id];
                     let pct = dF.tp > 0 ? Math.round((dF.tn/dF.tp)*100) : '-'; if(pct === 100 && dF.tn < dF.tp) pct = 99; 
                     let lt = dF.lc > 0 ? (dF.ls/dF.lc).toFixed(1) : '-';
@@ -4315,7 +4335,7 @@ let tRef = document.getElementById('filtroReferencia').value;
         let categorias = { 'GRANDE': [], 'MÉDIA': [], 'PEQUENA': [] };
         Object.values(rankG).forEach(rg => {
             let ptsTotais = 0; let fasesAtivas = 0; rg.ptsFase = {}; 
-            FASES.forEach(f => {
+            fasesEficiencia.forEach(f => {
                 let d = rg.fases[f.id];
                 if(d.tp > 0) { fasesAtivas++; let pct = (d.tn / d.tp) * 100; let pts = 0; if (pct >= 90) pts = 3; else if (pct >= 75) pts = 1; ptsTotais += pts; rg.ptsFase[f.id] = pts; } 
                 else { rg.ptsFase[f.id] = '-'; }
@@ -4330,12 +4350,12 @@ let tRef = document.getElementById('filtroReferencia').value;
             const buildTable = (arr, titulo, corBorda, corTexto) => {
                 if (arr.length === 0) return "";
                 arr.sort((a, b) => b.pts - a.pts || b.share - a.share);
-                let thFases = ""; FASES.forEach(f => thFases += `<th class="p-2 border-r border-slate-200 text-center" title="${f.nome}">${f.nome}</th>`);
+                let thFases = ""; fasesEficiencia.forEach(f => thFases += `<th class="p-2 border-r border-slate-200 text-center" title="${f.nome}">${f.nome}</th>`);
                 let trs = "";
                 arr.forEach((rg, index) => {
                     let posicao = index === 0 ? '🥇' : (index === 1 ? '🥈' : (index === 2 ? '🥉' : `${index+1}º`));
                     let tdFases = "";
-                    FASES.forEach(f => {
+                    fasesEficiencia.forEach(f => {
                         let pt = rg.ptsFase[f.id];
                         let ptHtml = pt === '-' ? '<span class="text-slate-300">-</span>' : (pt === 3 ? '<span class="text-emerald-600 font-black">3</span>' : (pt === 1 ? '<span class="text-amber-500 font-bold">1</span>' : '<span class="text-red-500 font-bold">0</span>'));
                         tdFases += `<td class="p-2 border-r border-slate-200 text-center bg-slate-50">${ptHtml}</td>`;

@@ -35,7 +35,7 @@
     var valor = campo(linha, 'TIRAGEM');
     return numero(preenchido(valor) ? valor : campo(linha, 'QUANTIDADE'));
   }
-  function fases() { return typeof FASES !== 'undefined' && Array.isArray(FASES) ? FASES : []; }
+  function fases() { var excluidas=new Set(['oc','col_mapa','ent_cd','int_cd']); return typeof FASES !== 'undefined' && Array.isArray(FASES) ? FASES.filter(function(f){return !excluidas.has(f.id);}) : []; }
   function aplicavel(linha, fase) {
     return (!window.pgLinhaNaVisaoDaFase || window.pgLinhaNaVisaoDaFase(linha, fase.id)) &&
       (typeof belongsToPhase !== 'function' || belongsToPhase(linha, fase.id));
