@@ -11858,18 +11858,160 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
 
 window.pgFecharAuditoriaPontoColetaV56=function(){document.getElementById('pgAuditoriaPontoColetaV56')?.remove();};
 
+
+window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
+    if(!visao||visao.tipo==='entrega')return null;
+    const resumo=visao.resumo||{};
+    const registros=Array.isArray(resumo.registros)?resumo.registros:[];
+    const hoje=String(typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toISOString().slice(0,10));
+    const fim=visao.fim||hoje;
+    const inicio=visao.inicio||hoje;
+    const corte=fim<=hoje?fim:hoje;
+    const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toUpperCase();
+    const campo=(l,n)=>window.pgCampoColeta?window.pgCampoColeta(l,n):l?.[n];
+    const num=v=>{
+        if(typeof v==='number')return Number.isFinite(v)?v:0;
+        let s=String(v??'').trim();if(!s)return 0;
+        if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');
+        else if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');
+        return Number(s)||0;
+    };
+    const fonte=l=>norm(l?._SOURCE||l?.BASE||l?._base||'PCP').includes('ACAB')?'PCP_ACABADORAS':'PCP_GRÁFICAS';
+    const grafica=l=>String(l?.GRAFICA_FINAL||campo(l,'GRÁFICA')||l?.GRAFICA||l?.BQ||'').trim();
+    const unidade=l=>String(l?.MARCA_FINAL||l?.UNIDADE||l?.MARCA||'').trim();
+    const rawCd=l=>String(l?.CD_FINAL||campo(l,'CD DESTINO')||l?.CD||l?.CK||'').trim();
+    const rawRota=l=>String(campo(l,'CD DESTINO')||l?.CD_FINAL||l?.CD||l?.CK||'').trim();
+    const vazio=v=>['','-','N/A','NA','(VAZIO)','VAZIO','SEM CD','SEM DESTINO'].includes(norm(v));
+    const rota=l=>{
+        if(fonte(l)==='PCP_ACABADORAS')return{acabadora:grafica(l),cd:vazio(rawCd(l))?'':rawCd(l)};
+        if(window.pgEhDestinoAcabadora?.(l))return{acabadora:rawRota(l),cd:''};
+        return{acabadora:'',cd:vazio(rawCd(l))?'':rawCd(l)};
+    };
+    const volumeBase=l=>Math.max(0,num(fonte(l)==='PCP_ACABADORAS'?campo(l,'TIRAGEM A ENTREGAR (total por CD)'):campo(l,'TIRAGEM')));
+    const isoCampo=(l,n)=>window.pgNormalizarDataColeta?(window.pgNormalizarDataColeta(campo(l,n),hoje)||''):'';
+
+    const linhaBase=[];
+    let totalBase=0,planAte=0,realAte=0,forecastFim=0,planFuturoPeriodo=0,planFuturoAposPeriodo=0;
+    let backlogBruto=0,semData=0,saldoVencidoPrazo=0,tiragemVencida=0,aVencer=0,mapaAgendadoPeriodo=0;
+
+    registros.forEach(r=>{
+        const l=r.linha||r.pcp;if(!l)return;
+        const rt=rota(l);if(!rt.cd&&!rt.acabadora)return;
+        const p=r.prazo||(window.pgPrazoLinhaV35?window.pgPrazoLinhaV35(l,hoje):{});
+        const base=volumeBase(l);
+        const tiragem=Math.max(0,Number(r.tiragem||0));
+        const planHoje=r.dtPlan&&r.dtPlan<=corte?tiragem:0;
+        const planFim=r.dtPlan&&r.dtPlan<=fim?tiragem:0;
+        const futuroPeriodo=r.dtPlan&&r.dtPlan>corte&&r.dtPlan<=fim?tiragem:0;
+        const futuroApos=r.dtPlan&&r.dtPlan>fim?tiragem:0;
+        const realHoje=r.dtReal&&r.dtReal<=corte?Math.max(0,Number(r.coletada||0)):0;
+        const backlogLinha=planHoje-realHoje;
+        const saldoPrazo=window.pgSaldoPrazoV35&&p?window.pgSaldoPrazoV35(p,corte,hoje):{vencido:0,semData:0};
+        const mapaAgendado=r.dtMapaAgendado&&r.dtMapaAgendado>=inicio&&r.dtMapaAgendado<=fim
+            ? Math.max(0,Number(r.volumeMapaAgendado||0)):0;
+        let situacao='Sem plano';
+        if(r.dtPlan){
+            if(r.dtPlan>corte)situacao='Futuro';
+            else if(backlogLinha>0)situacao='Backlog';
+            else if(backlogLinha<0)situacao='Coleta excedente';
+            else situacao='Atendido';
+        }
+
+        totalBase+=base;planAte+=planHoje;realAte+=realHoje;forecastFim+=planFim;
+        planFuturoPeriodo+=futuroPeriodo;planFuturoAposPeriodo+=futuroApos;backlogBruto+=backlogLinha;
+        semData+=Math.max(0,Number(saldoPrazo.semData||0));saldoVencidoPrazo+=Math.max(0,Number(saldoPrazo.vencido||0));
+        tiragemVencida+=Math.max(0,Number(p?.vencida||0));aVencer+=Math.max(0,Number(p?.aVencer||0));mapaAgendadoPeriodo+=mapaAgendado;
+
+        linhaBase.push([
+            fonte(l),grafica(l),unidade(l),rt.acabadora,rt.cd,
+            String(campo(l,'KIT')||campo(l,'Kit')||''),String(l?.SKU_REAL||campo(l,'SKU')||l?.SKU||''),
+            String(l?.DESC_REAL||campo(l,'DESCRIÇÃO')||l?.DESCRICAO||l?.PRODUTO||''),
+            String(l?.['SÉRIE']||l?.['Série']||l?.SERIE||''),String(l?.ENVIO||l?.Envio||''),
+            isoCampo(l,'Coleta/Internalização de estoque final (re) plan'),
+            isoCampo(l,'COLETA/INTERNALIZAÇÃO FIM BASELINE'),r.dtPlan||'',
+            p?.dtVencida||'',p?.dtAVencer||'',p?.dtColeta||r.dtReal||'',p?.dtMapaAgendado||r.dtMapaAgendado||'',
+            Math.round(base),Math.round(tiragem),Math.round(p?.vencida||0),Math.round(p?.aVencer||0),Math.round(p?.coletadaBruta||r.coletada||0),
+            Math.round(planHoje),Math.round(futuroPeriodo),Math.round(realHoje),Math.round(backlogLinha),
+            Math.round(saldoPrazo.vencido||0),Math.round(saldoPrazo.semData||0),Math.round(mapaAgendado),situacao
+        ]);
+    });
+
+    const backlogLiquido=Math.max(0,backlogBruto);
+    const qtdSemPlano=Math.max(0,Number(resumo.semPlano||0));
+    const mapaSolicitado=Math.max(0,Number(resumo.mapaSolicitado||0));
+    const mapaSemColeta=Math.max(0,Number(resumo.mapaSemColetaTP||0));
+    const agendadoQuadrinho=visao.acumulado
+        ? registros.reduce((s,r)=>s+(r.dtMapaAgendado&&r.dtMapaAgendado<=fim?Math.max(0,Number(r.volumeMapaAgendado||0)):0),0)
+        : mapaAgendadoPeriodo;
+    const pct=v=>totalBase>0?(Number(v||0)/totalBase*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%':'—';
+    const origem=document.getElementById('pgFiltroOrigem')?.value||'TODOS';
+    const destino=document.getElementById('pgFiltroDestino')?.value||'TODOS';
+    const basePrazo=document.getElementById('filtroReferencia')?.value||'replan';
+
+    const resumoLinhas=[
+        ['Contexto','Origem',origem,'','','Filtro global ativo'],
+        ['Contexto','Destino',destino,'','','Filtro global ativo'],
+        ['Contexto','Base de prazo',basePrazo,'','','Baseline ou (Re)Plan selecionado'],
+        ['Contexto','Visão',visao.acumulado?'Acumulada':'Dia a dia','','','Modo atual do gráfico'],
+        ['Contexto','Início do período',inicio,'',inicio,''],
+        ['Contexto','Fim do período',fim,'',fim,''],
+        ['Volume','Base',Math.round(totalBase),pct(totalBase),'','Base total desta visão'],
+        ['Volume','Planejado acumulado até corte',Math.round(planAte),pct(planAte),corte,'Mesmo planejado do gráfico'],
+        ['Volume','Coletado acumulado até corte',Math.round(realAte),pct(realAte),corte,'Somente Coleta_TP válida'],
+        ['Volume','Forecast acumulado até fim',Math.round(forecastFim),pct(forecastFim),fim,'Planejado até o fim do filtro'],
+        ['Volume','Futuro planejado no período',Math.round(planFuturoPeriodo),pct(planFuturoPeriodo),fim,'Planejado depois do corte e até o fim'],
+        ['Volume','Futuro planejado após o período',Math.round(planFuturoAposPeriodo),pct(planFuturoAposPeriodo),'','Planejado depois do fim selecionado'],
+        ['Volume','Backlog líquido',Math.round(backlogLiquido),pct(backlogLiquido),corte,'máx(0, Σ planejado vencido - Σ coletado)'],
+        ['Volume','Sem data',Math.round(semData),pct(semData),corte,'Saldo sem DT Vencido utilizável'],
+        ['Volume','Sem plano',Math.round(qtdSemPlano),pct(qtdSemPlano),'','Tiragem sem (Re)Plan/Baseline válido'],
+        ['Volume','Saldo vencido por DT Vencido',Math.round(saldoVencidoPrazo),pct(saldoVencidoPrazo),corte,'Auditoria do campo DT Vencido'],
+        ['Volume','Tiragem Vencida',Math.round(tiragemVencida),pct(tiragemVencida),'','Valor bruto da coluna TIRAGEM VENCIDA'],
+        ['Volume','A Vencer',Math.round(aVencer),pct(aVencer),'','Valor bruto da coluna A_Vencer'],
+        ['Volume','Mapa solicitado',Math.round(mapaSolicitado),pct(mapaSolicitado),'','TIRAGEM COLETADA bruta'],
+        ['Volume','Mapa solicitado sem Coleta TP',Math.round(mapaSemColeta),pct(mapaSemColeta),'','Mapa existente sem coleta real'],
+        ['Volume',visao.acumulado?'Mapa agendado acumulado':'Mapa agendado no período',Math.round(agendadoQuadrinho),pct(agendadoQuadrinho),fim,'Compromisso futuro usado no gráfico']
+    ];
+
+    return{
+        abas:[
+            {
+                nome:'Linha a linha',
+                cabecalho:['Origem','Gráfica','Unidade/Marca','Acabadora','CD Destino','Kit','SKU','Descrição','Série','Envio',
+                    'Data (Re)Plan','Data Baseline','Data Plan usada','DT Vencido','DT a vencer','Coleta TP','Mapa Agendado',
+                    'Base','Tiragem','Tiragem Vencida','A Vencer','Tiragem Coletada','Planejado até hoje','Planejado futuro',
+                    'Coletado até hoje','Backlog portal (bruto)','Saldo vencido por DT Vencido','Sem data','Mapa agendado','Situação'],
+                linhas:linhaBase
+            },
+            {
+                nome:'Quadrinhos',
+                cabecalho:['Categoria','Indicador','Valor','% da base','Corte','Regra'],
+                linhas:resumoLinhas
+            }
+        ],
+        nome:'Auditoria_Portal_'+hoje.replaceAll('-','')+'.xlsx'
+    };
+};
+
 window.pgBaixarAuditoriaPontoColetaV56=function(){
-    const a=window.pgAuditoriaPontoColetaAtualV56;if(!a)return;
-    const cols=['Origem','Gráfica','Unidade/Marca','Acabadora','CD Destino','Kit','SKU','Descrição','Data (Re)Plan','Data Baseline','Data Plan usada','DT Vencido','DT a vencer','Coleta TP','Mapa Agendado','Tiragem Vencida','A Vencer','Tiragem Coletada'];
-    if(a.colunas.base)cols.push('Base');if(a.colunas.plan)cols.push('Planejado');if(a.colunas.real)cols.push('Coletado');if(a.colunas.agenda)cols.push('Mapa Agendado Volume');if(a.colunas.semData)cols.push('Sem Data');if(a.colunas.backlog)cols.push('Backlog');
-    const linhas=(a.detalhes||[]).map(d=>{const r=[d.fonte,d.grafica,d.unidade,d.acabadora,d.cd,d.kit,d.sku,d.descricao,d.replan,d.baseline,d.dtPlan,d.dtVencida,d.dtAVencer,d.coletaTP,d.mapaAgendado,Math.round(d.tiragemVencida),Math.round(d.aVencer),Math.round(d.tiragemColetada)];if(a.colunas.base)r.push(Math.round(d.base));if(a.colunas.plan)r.push(Math.round(d.plan));if(a.colunas.real)r.push(Math.round(d.real));if(a.colunas.agenda)r.push(Math.round(d.agenda));if(a.colunas.semData)r.push(Math.round(d.semData));if(a.colunas.backlog)r.push(Math.round(d.backlog));return r;});
-    const cell=v=>{let s=String(v??'');if(/^[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
-    const csv='\uFEFF'+[cols,...linhas].map(r=>r.map(cell).join(';')).join('\r\n');
-    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='Auditoria_Linha_a_Linha_'+String(a.tipo||'visao').replace(/[^A-Za-z0-9_-]+/g,'_')+'_'+String(a.ponto||dtHojeISO).replaceAll('-','')+'.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    const visao=window.pgAuditoriaVisaoAtualV56;
+    if(!visao)return;
+    if(typeof window.pgGerarExcelAbas!=='function'){alert('Exportador XLSX não carregado.');return;}
+    try{
+        const pacote=window.pgMontarAuditoriaCompletaXlsxV57(visao);
+        if(!pacote||!pacote.abas?.length){alert('Não há dados para exportar.');return;}
+        const blob=window.pgGerarExcelAbas(pacote.abas);
+        const url=URL.createObjectURL(blob);
+        const link=document.createElement('a');
+        link.href=url;link.download=pacote.nome;link.click();
+        setTimeout(()=>URL.revokeObjectURL(url),10000);
+    }catch(e){
+        console.error('[AUDITORIA XLSX]',e);
+        alert('Erro ao gerar XLSX: '+(e?.message||e));
+    }
 };
 
 window.pgAbrirAuditoriaPontoColetaV56=function(visao,indice=0,tipo='dia'){
-    const a=window.pgMontarAuditoriaPontoColetaV56(visao,indice,tipo);if(!a)return;window.pgAuditoriaPontoColetaAtualV56=a;window.pgFecharAuditoriaPontoColetaV56();
+    const a=window.pgMontarAuditoriaPontoColetaV56(visao,indice,tipo);if(!a)return;window.pgAuditoriaPontoColetaAtualV56=a;window.pgAuditoriaVisaoAtualV56=visao;window.pgFecharAuditoriaPontoColetaV56();
     const fmt=n=>Math.round(Number(n||0)).toLocaleString('pt-BR');const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));const cel=(n,cls='')=>'<td class="px-3 py-2 text-right whitespace-nowrap '+cls+'">'+fmt(n)+'</td>';const th=txt=>'<th class="px-3 py-2 text-left whitespace-nowrap">'+txt+'</th>';
     const cab=[th('GRÁFICA'),th('UNIDADE'),th('ACABADORA'),th('CD DESTINO')];if(a.colunas.base)cab.push('<th class="px-3 py-2 text-right">Base</th>');if(a.colunas.plan)cab.push('<th class="px-3 py-2 text-right">Planejado</th>');if(a.colunas.real)cab.push('<th class="px-3 py-2 text-right">Coletado</th>');if(a.colunas.agenda)cab.push('<th class="px-3 py-2 text-right">Mapa agendado</th>');if(a.colunas.semData)cab.push('<th class="px-3 py-2 text-right">Sem data</th>');if(a.colunas.backlog)cab.push('<th class="px-3 py-2 text-right">Backlog</th>');
     const porFonte=new Map();a.linhas.forEach(g=>{if(!porFonte.has(g.fonte))porFonte.set(g.fonte,[]);porFonte.get(g.fonte).push(g);});
@@ -11880,10 +12022,10 @@ window.pgAbrirAuditoriaPontoColetaV56=function(visao,indice=0,tipo='dia'){
 
     const dh=['Origem','Gráfica','Unidade','Acabadora','CD Destino','Kit','SKU','Descrição','(Re)Plan','Baseline','Plan usado','DT Vencido','DT a vencer','Coleta TP'];if(a.colunas.plan)dh.push('Planejado');if(a.colunas.real)dh.push('Coletado');if(a.colunas.backlog)dh.push('Backlog');
     const dr=(a.detalhes||[]).map(d=>{let vals=[d.fonte,d.grafica,d.unidade,d.acabadora,d.cd,d.kit,d.sku,d.descricao,d.replan,d.baseline,d.dtPlan,d.dtVencida,d.dtAVencer,d.coletaTP];if(a.colunas.plan)vals.push(fmt(d.plan));if(a.colunas.real)vals.push(fmt(d.real));if(a.colunas.backlog)vals.push(fmt(d.backlog));return '<tr class="border-b border-slate-100">'+vals.map((v,i)=>'<td class="px-2 py-1.5 whitespace-nowrap '+(i===7?'max-w-[340px] truncate':'')+'" title="'+esc(v)+'">'+esc(v||'—')+'</td>').join('')+'</tr>';}).join('');
-    const detalhe='<section class="mt-6"><div class="flex items-end justify-between gap-3 mb-2"><div><h4 class="text-sm font-black text-slate-800">Base linha a linha</h4><p class="text-[10px] text-slate-500">Concilia exatamente com o número clicado. DT Vencido e DT a vencer ficam separados.</p></div><span class="text-[10px] font-bold text-slate-500">'+fmt((a.detalhes||[]).length)+' linhas</span></div><div class="overflow-auto max-h-[42vh] rounded-lg border border-slate-200"><table class="min-w-max text-[10px]"><thead class="sticky top-0 bg-slate-800 text-white z-10"><tr>'+dh.map(x=>'<th class="px-2 py-2 text-left whitespace-nowrap">'+esc(x)+'</th>').join('')+'</tr></thead><tbody>'+dr+'</tbody></table></div></section>';
+    const detalhe='<section class="mt-6"><div class="flex items-end justify-between gap-3 mb-2"><div><h4 class="text-sm font-black text-slate-800">Base linha a linha</h4><p class="text-[10px] text-slate-500">A tela mostra o número clicado. O XLSX baixa a base completa da visão, com backlog, futuro, sem data e os demais quadrinhos.</p></div><span class="text-[10px] font-bold text-slate-500">'+fmt((a.detalhes||[]).length)+' linhas</span></div><div class="overflow-auto max-h-[42vh] rounded-lg border border-slate-200"><table class="min-w-max text-[10px]"><thead class="sticky top-0 bg-slate-800 text-white z-10"><tr>'+dh.map(x=>'<th class="px-2 py-2 text-left whitespace-nowrap">'+esc(x)+'</th>').join('')+'</tr></thead><tbody>'+dr+'</tbody></table></div></section>';
 
     let cards='';if(a.colunas.base)cards+='<div><span>Base</span><b>'+fmt(a.totais.base)+'</b></div>';if(a.colunas.plan)cards+='<div><span>Planejado</span><b>'+fmt(a.totais.plan)+'</b></div>';if(a.colunas.real)cards+='<div><span>Coletado</span><b>'+fmt(a.totais.real)+'</b></div>';if(a.colunas.agenda)cards+='<div><span>Mapa agendado</span><b>'+fmt(a.totais.agenda)+'</b></div>';if(a.colunas.semData)cards+='<div><span>Sem data</span><b>'+fmt(a.totais.semData)+'</b></div>';if(a.colunas.backlog)cards+='<div><span>Backlog portal</span><b>'+fmt(a.totais.backlog)+'</b></div>';
-    const modal=document.createElement('div');modal.id='pgAuditoriaPontoColetaV56';modal.className='fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4';modal.innerHTML='<div class="bg-white rounded-2xl shadow-2xl w-[min(1700px,98vw)] max-h-[94vh] flex flex-col"><div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4"><div><div class="text-[10px] font-black uppercase tracking-[.18em] text-blue-700">Auditoria do número do portal</div><h3 class="text-xl font-black text-slate-900 mt-1">'+esc(a.titulo)+'</h3><p class="text-xs text-slate-500 mt-1">'+esc(a.descricao)+'</p></div><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="text-slate-500 hover:text-slate-900 text-2xl leading-none">×</button></div><div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 px-5 py-3 bg-slate-50 [&>div]:rounded-lg [&>div]:border [&>div]:border-slate-200 [&>div]:bg-white [&>div]:px-3 [&>div]:py-2 [&_span]:block [&_span]:text-[9px] [&_span]:font-bold [&_span]:uppercase [&_span]:text-slate-500 [&_b]:text-base [&_b]:text-slate-900">'+cards+'</div><div class="overflow-y-auto px-5 py-4 flex-1">'+(tabelas||'<div class="p-8 text-center text-sm text-slate-500">Nenhuma linha compõe este número.</div>')+detalhe+'</div><div class="flex flex-wrap justify-between items-center gap-3 border-t border-slate-200 px-5 py-3"><p class="text-[10px] text-slate-500">CD vazio/N/A não entra na visão de CD. Destinos que são nomes de fornecedores/gráficas ficam classificados como acabadora.</p><div class="flex gap-2"><button type="button" onclick="pgBaixarAuditoriaPontoColetaV56()" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Baixar CSV linha a linha</button><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Fechar</button></div></div></div>';
+    const modal=document.createElement('div');modal.id='pgAuditoriaPontoColetaV56';modal.className='fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4';modal.innerHTML='<div class="bg-white rounded-2xl shadow-2xl w-[min(1700px,98vw)] max-h-[94vh] flex flex-col"><div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4"><div><div class="text-[10px] font-black uppercase tracking-[.18em] text-blue-700">Auditoria do número do portal</div><h3 class="text-xl font-black text-slate-900 mt-1">'+esc(a.titulo)+'</h3><p class="text-xs text-slate-500 mt-1">'+esc(a.descricao)+'</p></div><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="text-slate-500 hover:text-slate-900 text-2xl leading-none">×</button></div><div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 px-5 py-3 bg-slate-50 [&>div]:rounded-lg [&>div]:border [&>div]:border-slate-200 [&>div]:bg-white [&>div]:px-3 [&>div]:py-2 [&_span]:block [&_span]:text-[9px] [&_span]:font-bold [&_span]:uppercase [&_span]:text-slate-500 [&_b]:text-base [&_b]:text-slate-900">'+cards+'</div><div class="overflow-y-auto px-5 py-4 flex-1">'+(tabelas||'<div class="p-8 text-center text-sm text-slate-500">Nenhuma linha compõe este número.</div>')+detalhe+'</div><div class="flex flex-wrap justify-between items-center gap-3 border-t border-slate-200 px-5 py-3"><p class="text-[10px] text-slate-500">CD vazio/N/A não entra na visão de CD. Destinos que são nomes de fornecedores/gráficas ficam classificados como acabadora.</p><div class="flex gap-2"><button type="button" onclick="pgBaixarAuditoriaPontoColetaV56()" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Baixar XLSX completo</button><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Fechar</button></div></div></div>';
     modal.addEventListener('click',e=>{if(e.target===modal)window.pgFecharAuditoriaPontoColetaV56();});document.body.appendChild(modal);
 };
 
