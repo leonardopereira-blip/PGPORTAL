@@ -21,6 +21,26 @@
         font-weight: 700;
         color: #111827;
     }
+    #abaReportExecutiva .re-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 26px;
+    }
+    #abaReportExecutiva .re-title-row .re-title { margin-bottom: 0; }
+    #abaReportExecutiva .re-capture {
+        background: #FA4616;
+        color: #ffffff;
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font: bold 12px Arial, sans-serif;
+        cursor: pointer;
+    }
+    #abaReportExecutiva .re-capture:hover { background: #e13c11; }
+    #abaReportExecutiva .re-capture:disabled { opacity: .65; cursor: wait; }
 
     #abaReportExecutiva .re-scroll {
         width: 100%;
@@ -78,6 +98,15 @@
     }
 
     #abaReportExecutiva .re-table tbody tr.re-total td { font-weight: 700; }
+    #abaReportExecutiva .re-table .re-key-cell {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    #abaReportExecutiva .re-table tbody .re-key-cell { background: inherit; }
+    #abaReportExecutiva .re-table thead .re-key-cell { z-index: 3; }
 
     #abaReportExecutiva .re-status-cell {
         padding-left: 0 !important;
@@ -161,44 +190,47 @@
 </style>
 
 <div class="re-wrap">
-    <h2 class="re-title">Status de Produção e Entregas por Marca</h2>
+    <div class="re-title-row">
+        <h2 class="re-title">Status de Produção e Entregas por Marca</h2>
+        <button type="button" id="reScreenshot" class="re-capture" onclick="window.pgRECapturarTabela(this)" title="Baixa todas as linhas e etapas visíveis em PNG de alta resolução">📸 Capturar tabela completa (PNG)</button>
+    </div>
     <div class="re-scroll">
         <table class="re-table">
             <colgroup>
                 <col style="width:8%">
-                <col style="width:11%">
-                <col style="width:12%">
-                <col style="width:2.2%">
+                <col class="re-group-acab" style="width:11%">
+                <col class="re-group-acab" style="width:12%">
+                <col class="re-group-acab" style="width:2.2%">
                 <col class="re-group-kit" style="width:11%">
                 <col class="re-group-kit" style="width:12%">
                 <col class="re-group-kit" style="width:2.2%">
                 <col class="re-group-enttodos" style="width:14%">
                 <col class="re-group-enttodos" style="width:15%">
                 <col class="re-group-enttodos" style="width:2.2%">
-                <col style="width:11%">
-                <col style="width:12.5%">
-                <col style="width:2.2%">
+                <col class="re-group-entcd" style="width:11%">
+                <col class="re-group-entcd" style="width:12.5%">
+                <col class="re-group-entcd" style="width:2.2%">
                 <col class="re-group-enttp" style="width:11%">
                 <col class="re-group-enttp" style="width:12.5%">
                 <col class="re-group-enttp" style="width:2.2%">
             </colgroup>
             <thead>
                 <tr>
-                    <th>Marca</th>
-                    <th>Mat. Acabado (Real)</th>
-                    <th id="reThAcabPlan">Mat. Acabado (Plan.)</th>
-                    <th></th>
+                    <th class="re-key-cell">Marca</th>
+                    <th class="re-group-acab">Acabado (Real)</th>
+                    <th class="re-group-acab" id="reThAcabPlan">Acabado (Plan.)</th>
+                    <th class="re-group-acab"></th>
                     <th class="re-group-kit">Form. Kit (Real)</th>
                     <th class="re-group-kit" id="reThKitPlan">Form. Kit (Plan.)</th>
                     <th class="re-group-kit"></th>
-                    <th class="re-group-enttodos">Coletados (Real) - CD + Acab.</th>
-                    <th class="re-group-enttodos" id="reThEntTodosPlan">Coletados (Plan.) - CD + Acab.</th>
+                    <th class="re-group-enttodos">Coleta (Real)</th>
+                    <th class="re-group-enttodos" id="reThEntTodosPlan">Coleta (Plan.)</th>
                     <th class="re-group-enttodos"></th>
-                    <th>Coletados (Real) - CD</th>
-                    <th id="reThEntCDPlan">Coletados (Plan.) - CD</th>
-                    <th></th>
-                    <th class="re-group-enttp">Entrega TP (Real) - CD</th>
-                    <th class="re-group-enttp" id="reThEntTPPlan">Entrega TP (Plan.) - CD</th>
+                    <th class="re-group-entcd">Coleta (Real)</th>
+                    <th class="re-group-entcd" id="reThEntCDPlan">Coleta (Plan.)</th>
+                    <th class="re-group-entcd"></th>
+                    <th class="re-group-enttp">Entrega TP (Real)</th>
+                    <th class="re-group-enttp" id="reThEntTPPlan">Entrega TP (Plan.)</th>
                     <th class="re-group-enttp"></th>
                 </tr>
             </thead>
@@ -217,3 +249,141 @@
     </div>
 </div>
 </div>
+<script>
+window.pgREFixarAgrupamento = function() {
+    const tabela = document.querySelector('#abaReportExecutiva .re-table');
+    if (!tabela) return;
+    let esquerda = 0;
+    const posicoes = Array.from(tabela.querySelectorAll('thead .re-key-cell')).map(th => {
+        const atual = esquerda; esquerda += th.getBoundingClientRect().width; return atual;
+    });
+    tabela.querySelectorAll('tr').forEach(tr => {
+        tr.querySelectorAll('.re-key-cell').forEach((celula, i) => {
+            celula.style.left = (posicoes[i] || 0) + 'px';
+        });
+    });
+};
+window.addEventListener('resize', window.pgREFixarAgrupamento);
+if (typeof ResizeObserver === 'function') {
+    const tabelaRE = document.querySelector('#abaReportExecutiva .re-table');
+    if (tabelaRE) new ResizeObserver(window.pgREFixarAgrupamento).observe(tabelaRE);
+}
+// Captura a tabela já calculada e os indicadores visíveis, incluindo toda a rolagem.
+window.pgRECapturarTabela = async function(botao) {
+    if (window.pgRECapturandoTabela) return;
+    const tabela = document.querySelector('#abaReportExecutiva .re-table');
+    const ths = tabela ? Array.from(tabela.querySelectorAll('thead th')) : [];
+    const indices = ths.map((th, i) => window.getComputedStyle(th).display !== 'none' ? i : -1).filter(i => i >= 0);
+    const trs = tabela ? Array.from(tabela.querySelectorAll('tbody tr[data-re-chave]')) : [];
+    if (!indices.length || !trs.length) { window.alert('A tabela ainda não tem dados para capturar.'); return; }
+    window.pgRECapturandoTabela = true;
+    const anterior = botao ? botao.textContent : '';
+    if (botao) { botao.disabled = true; botao.textContent = 'Gerando PNG…'; }
+    try {
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Não foi possível preparar a imagem.');
+        const texto = el => String(el && el.textContent || '').replace(/\s+/g, ' ').trim();
+        const colunas = indices.map(i => ({ nome: texto(ths[i]), grupo: !ths[i].className.includes('re-group-') }));
+        const linhas = trs.map(tr => ({
+            total: tr.classList.contains('re-total'),
+            cells: indices.map(i => {
+                const td = tr.children[i], dot = td && td.querySelector('.re-dot');
+                const cor = dot ? ['green', 'yellow', 'red'].find(c => dot.classList.contains('re-dot-' + c)) : null;
+                return { texto: texto(td), cor: cor };
+            })
+        }));
+        const margem = 24, escala = 2;
+        ctx.font = 'bold 20px Arial, sans-serif';
+        const larguras = colunas.map((c, j) => !c.nome ? 46 : c.grupo ?
+            Math.min(420, Math.max(190, ...linhas.map(l => ctx.measureText(l.cells[j].texto).width + 28))) : 180);
+        const largura = Math.max(520, larguras.reduce((a, b) => a + b, 0) + margem * 2);
+        const quebrar = (valor, maximo) => {
+            const resultado = []; let atual = '';
+            for (const palavra of String(valor).split(' ')) {
+                const junto = atual ? atual + ' ' + palavra : palavra;
+                if (ctx.measureText(junto).width <= maximo) { atual = junto; continue; }
+                if (atual) { resultado.push(atual); atual = ''; }
+                for (const letra of Array.from(palavra)) {
+                    if (atual && ctx.measureText(atual + letra).width > maximo) { resultado.push(atual); atual = ''; }
+                    atual += letra;
+                }
+            }
+            if (atual || !resultado.length) resultado.push(atual);
+            return resultado;
+        };
+        const corte = window.pgREDataCorteV57 || '', data = /^\d{4}-\d{2}-\d{2}$/.test(corte) ? corte.split('-').reverse().join('/') : corte;
+        const referencia = document.getElementById('filtroReferencia');
+        const base = referencia && referencia.selectedOptions ? texto(referencia.selectedOptions[0]) : '';
+        const contexto = 'Corte: ' + data + ' (' + (window.pgREModoCorteV57 === 'D-1' ? 'D-1' : 'Hoje') + ')' + (base ? ' · ' + base : '');
+        ctx.font = 'bold 24px Arial, sans-serif';
+        const titulo = quebrar('Status de Produção e Entregas por Marca', largura - margem * 2);
+        ctx.font = '16px Arial, sans-serif';
+        const subtitulo = quebrar(contexto, largura - margem * 2);
+        const topo = 32 + titulo.length * 30 + subtitulo.length * 22 + 30;
+        ctx.font = 'bold 18px Arial, sans-serif';
+        const headers = colunas.map((c, j) => quebrar(c.nome, larguras[j] - 20));
+        const cabAltura = Math.max(76, ...headers.map(h => h.length * 23 + 20));
+        linhas.forEach(l => {
+            ctx.font = (l.total ? 'bold ' : '') + '20px Arial, sans-serif';
+            l.textos = l.cells.map((c, j) => quebrar(c.texto, larguras[j] - 20));
+            l.altura = Math.max(46, ...l.textos.map(t => t.length * 25 + 16));
+        });
+        // Divide recortes muito extensos em partes, mantendo sempre fonte e resolução.
+        const alturaMaxima = Math.min(8000, Math.floor(16000000 / (largura * escala * escala)));
+        const paginas = []; let pagina = [], altura = topo + cabAltura + 56;
+        linhas.forEach(l => {
+            if (pagina.length && altura + l.altura > alturaMaxima) { paginas.push(pagina); pagina = []; altura = topo + cabAltura + 56; }
+            pagina.push(l); altura += l.altura;
+        });
+        if (pagina.length) paginas.push(pagina);
+        const linhaTexto = (textos, x, y, w, h, esquerda, entre) => {
+            ctx.textAlign = esquerda ? 'left' : 'center'; ctx.textBaseline = 'middle';
+            textos.forEach((t, k) => ctx.fillText(t, esquerda ? x + 12 : x + w / 2, y + h / 2 + (k - (textos.length - 1) / 2) * entre));
+        };
+        for (let p = 0; p < paginas.length; p++) {
+            const alturaPagina = topo + cabAltura + paginas[p].reduce((a, l) => a + l.altura, 0) + 56;
+            canvas.width = Math.ceil(largura * escala); canvas.height = Math.ceil(alturaPagina * escala);
+            ctx.scale(escala, escala); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, largura, alturaPagina);
+            ctx.fillStyle = '#172B4D'; ctx.font = 'bold 24px Arial, sans-serif';
+            linhaTexto(titulo, margem - 12, 18, largura - margem * 2, titulo.length * 30, true, 30);
+            ctx.fillStyle = '#52637d'; ctx.font = '16px Arial, sans-serif';
+            linhaTexto(subtitulo, margem - 12, 24 + titulo.length * 30, largura - margem * 2, subtitulo.length * 22, true, 22);
+            ctx.fillStyle = '#48659a'; ctx.fillRect(margem, topo, largura - margem * 2, cabAltura);
+            let x = margem;
+            ctx.font = 'bold 18px Arial, sans-serif'; ctx.fillStyle = '#ffffff';
+            headers.forEach((h, j) => { linhaTexto(h, x, topo, larguras[j], cabAltura, false, 23); x += larguras[j]; });
+            let y = topo + cabAltura;
+            paginas[p].forEach((l, i) => {
+                ctx.fillStyle = l.total ? '#dceafa' : i % 2 ? '#f4f4fb' : '#ffffff';
+                ctx.fillRect(margem, y, largura - margem * 2, l.altura);
+                ctx.strokeStyle = '#dce5f0'; ctx.beginPath(); ctx.moveTo(margem, y + l.altura); ctx.lineTo(largura - margem, y + l.altura); ctx.stroke();
+                x = margem;
+                l.cells.forEach((c, j) => {
+                    if (c.cor) {
+                        ctx.fillStyle = { green: '#1fb96e', yellow: '#edbc2c', red: '#df3454' }[c.cor];
+                        ctx.beginPath(); ctx.arc(x + larguras[j] / 2, y + l.altura / 2, 10, 0, Math.PI * 2); ctx.fill();
+                    } else {
+                        ctx.fillStyle = '#172B4D'; ctx.font = (l.total ? 'bold ' : '') + '20px Arial, sans-serif';
+                        linhaTexto(l.textos[j], x, y, larguras[j], l.altura, colunas[j].grupo, 25);
+                    }
+                    x += larguras[j];
+                });
+                y += l.altura;
+            });
+            ctx.font = '14px Arial, sans-serif'; ctx.fillStyle = '#52637d'; ctx.textAlign = 'left';
+            ctx.fillText('Conforme os filtros e indicadores selecionados.' + (paginas.length > 1 ? ' · Parte ' + (p + 1) + '/' + paginas.length : ''), margem, alturaPagina - 24);
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error('Não foi possível gerar o PNG.');
+            const url = URL.createObjectURL(blob), a = document.createElement('a');
+            a.download = 'status-producao-entregas-' + corte + (paginas.length > 1 ? '-parte-' + (p + 1) : '') + '.png';
+            a.href = url; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
+    } catch (e) {
+        console.error('[REPORT] Captura PNG:', e); window.alert('Não foi possível capturar a tabela: ' + (e && e.message || e));
+    } finally {
+        window.pgRECapturandoTabela = false;
+        if (botao) { botao.disabled = false; botao.textContent = anterior; }
+    }
+};
+</script>

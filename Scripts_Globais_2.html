@@ -10376,9 +10376,10 @@ window.processarReportExecutiva = function() {
     }
     // V58 - grupos opcionais da tabela executiva. A escolha vale para a sessão
     // e altera somente a apresentação; nenhum cálculo é refeito ao recolher/abrir.
-    if (!window.pgREGruposV58) {
-        window.pgREGruposV58 = { entTodos: true, kit: false, entTP: false };
-    }
+    window.pgREGruposV58 = Object.assign(
+        { acab: true, kit: true, entCD: true, entTP: true, entTodos: false },
+        window.pgREGruposV58 || {}
+    );
 
     let gruposReV58 = painelRE.querySelector('[data-pg-re-grupos-v58]');
     if (!gruposReV58) {
@@ -10389,11 +10390,15 @@ window.processarReportExecutiva = function() {
         gruposReV58.innerHTML =
             '<span class="text-[10px] font-black uppercase text-slate-600">Indicadores</span>' +
             '<label class="inline-flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2 py-1 cursor-pointer">' +
-                '<input type="checkbox" data-re-grupo-v58="entTodos"> CD + Acab.</label>' +
+                '<input type="checkbox" data-re-grupo-v58="acab"> Acabado</label>' +
             '<label class="inline-flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2 py-1 cursor-pointer">' +
                 '<input type="checkbox" data-re-grupo-v58="kit"> Form. Kit</label>' +
             '<label class="inline-flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2 py-1 cursor-pointer">' +
-                '<input type="checkbox" data-re-grupo-v58="entTP"> Entrega TP - CD</label>';
+                '<input type="checkbox" data-re-grupo-v58="entCD"> Coleta</label>' +
+            '<label class="inline-flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2 py-1 cursor-pointer">' +
+                '<input type="checkbox" data-re-grupo-v58="entTP"> Entrega TP</label>' +
+            '<label class="inline-flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2 py-1 cursor-pointer">' +
+                '<input type="checkbox" data-re-grupo-v58="entTodos"> CD + Acabadora</label>';
         painelRE.appendChild(gruposReV58);
 
         gruposReV58.querySelectorAll('input[data-re-grupo-v58]').forEach(cb => {
@@ -10410,16 +10415,26 @@ window.processarReportExecutiva = function() {
     window.pgREAplicarVisibilidadeV58 = function() {
         const tabela = document.querySelector('#abaReportExecutiva .re-table');
         if (!tabela) return;
-        const estado = window.pgREGruposV58 || { entTodos: true, kit: false, entTP: false };
+        const estado = window.pgREGruposV58 || { acab: true, kit: true, entCD: true, entTP: true, entTodos: false };
         [
+            ['acab', !!estado.acab],
             ['kit', !!estado.kit],
             ['enttodos', !!estado.entTodos],
+            ['entcd', !!estado.entCD],
             ['enttp', !!estado.entTP]
         ].forEach(([grupo, visivel]) => {
             tabela.querySelectorAll('.re-group-' + grupo).forEach(el => {
                 el.style.display = visivel ? '' : 'none';
             });
         });
+        const duasColetas = !!estado.entTodos && !!estado.entCD;
+        [['enttodos', 'CD + Acabadora'], ['entcd', 'CD']].forEach(([grupo, destino]) => {
+            tabela.querySelectorAll('thead th.re-group-' + grupo).forEach(th => {
+                const nome = th.textContent.replace(/\s+-\s+.*$/, '');
+                if (nome) th.textContent = nome + (duasColetas ? ' - ' + destino : '');
+            });
+        });
+        if (typeof window.pgREFixarAgrupamento === 'function') window.pgREFixarAgrupamento();
     };
 
     gruposReV58.querySelectorAll('input[data-re-grupo-v58]').forEach(cb => {
@@ -10654,11 +10669,11 @@ window.processarReportExecutiva = function() {
     const thEntTodos = document.getElementById('reThEntTodosPlan');
     const thEntCD = document.getElementById('reThEntCDPlan');
     const thEntTP = document.getElementById('reThEntTPPlan');
-    if (thAcab) thAcab.textContent = `Mat. Acabado (Plan. ${fmtData(hojeIso)})`;
+    if (thAcab) thAcab.textContent = `Acabado (Plan. ${fmtData(hojeIso)})`;
     if (thKit) thKit.textContent = `Form. Kit (Plan. ${fmtData(hojeIso)})`;
-    if (thEntTodos) thEntTodos.textContent = `Coletados (Plan. ${fmtData(hojeIso)}) - CD + Acab.`;
-    if (thEntCD) thEntCD.textContent = `Coletados (Plan. ${fmtData(hojeIso)}) - CD`;
-    if (thEntTP) thEntTP.textContent = `Entrega TP (Plan. ${fmtData(hojeIso)}) - CD`;
+    if (thEntTodos) thEntTodos.textContent = `Coleta (Plan. ${fmtData(hojeIso)})`;
+    if (thEntCD) thEntCD.textContent = `Coleta (Plan. ${fmtData(hojeIso)})`;
+    if (thEntTP) thEntTP.textContent = `Entrega TP (Plan. ${fmtData(hojeIso)})`;
 
     const novoAgg = () => ({ den: 0, real: 0, plan: 0 });
     const add = (map, marca, campo, valor) => {
@@ -10989,24 +11004,24 @@ window.processarReportExecutiva = function() {
                 (id === 'agrupamento' ? 'Total filtrado' : info[id] || 'N/A');
             const seguro = String(valor).replace(/&/g, '&amp;').replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            return `<td>${seguro}</td>`;
+            return `<td class="re-key-cell">${seguro}</td>`;
         }).join('');
         const chaveSegura = encodeURIComponent(marca).replace(/'/g, '%27');
         return `
             <tr class="${total ? 're-total' : ''}" data-re-chave="${chaveSegura}">
                 ${celulas}
-                <td>${pctTxt(acabReal)}</td>
-                <td>${pctTxt(acabPlan)}</td>
-                <td class="re-status-cell" data-re-indicador="acab">${dot(status(acabReal, acabPlan))}</td>
+                <td class="re-group-acab">${pctTxt(acabReal)}</td>
+                <td class="re-group-acab">${pctTxt(acabPlan)}</td>
+                <td class="re-status-cell re-group-acab" data-re-indicador="acab">${dot(status(acabReal, acabPlan))}</td>
                 <td class="re-group-kit">${pctTxt(kitReal)}</td>
                 <td class="re-group-kit">${pctTxt(kitPlan)}</td>
                 <td class="re-status-cell re-group-kit" data-re-indicador="kit">${dot(status(kitReal, kitPlan))}</td>
                 <td class="re-group-enttodos">${pctTxt(entTodosReal)}</td>
                 <td class="re-group-enttodos">${pctTxt(entTodosPlan)}</td>
                 <td class="re-status-cell re-group-enttodos" data-re-indicador="entTodos">${dot(status(entTodosReal, entTodosPlan))}</td>
-                <td>${pctTxt(entCDReal)}</td>
-                <td>${pctTxt(entCDPlan)}</td>
-                <td class="re-status-cell" data-re-indicador="entCD">${dot(status(entCDReal, entCDPlan))}</td>
+                <td class="re-group-entcd">${pctTxt(entCDReal)}</td>
+                <td class="re-group-entcd">${pctTxt(entCDPlan)}</td>
+                <td class="re-status-cell re-group-entcd" data-re-indicador="entCD">${dot(status(entCDReal, entCDPlan))}</td>
                 <td class="re-group-enttp">${pctTxt(entTPReal)}</td>
                 <td class="re-group-enttp">${pctTxt(entTPPlan)}</td>
                 <td class="re-status-cell re-group-enttp" data-re-indicador="entTP">${dot(status(entTPReal, entTPPlan))}</td>
