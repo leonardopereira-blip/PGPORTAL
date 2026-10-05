@@ -820,7 +820,10 @@ window.pgAnexarDadosDashboard = function(fatia) {
             window.dadosGlobais.forEach(l => {
                 Object.keys(window.mapCamposProducao).forEach(k => {
                     let val = String(l[window.mapCamposProducao[k]] || "").trim();
-                    if(!val || val === "undefined" || val === "-") val = "(Vazio)"; 
+                    if(!val || val === "undefined" || val === "-") {
+                        if (k === 'CD Destino') return;
+                        val = "(Vazio)";
+                    }
                     window.listasMultiProducao[k].add(val);
                 });
             });
@@ -1080,7 +1083,7 @@ function aplicarFiltros() {
     );
 
     const basePCPDiretoTP = basePCP.filter(l =>
-        !window.pgEhDestinoAcabadora(l)
+        window.pgEhDestinoCD(l)
     );
 
     if (origem === 'TODOS') {
@@ -9774,11 +9777,15 @@ window.exportarDivergenciasColetas = function() {
     window.pgEhFonteAcabadora = l => pgMetaLinha(l).fonteAcabadora;
 
     // Lista fechada para Todas/Gráfica. ATHOS, KN e RAÍZES são destino CD.
+    // CD DESTINO vazio não é CD: operacionalmente ele pertence ao fluxo Acabadora.
+    function pgDestinoVazio(l) {
+        return !pgCdDestinoRoteamento(l);
+    }
     function pgEhAcabadora(l) {
         return !window.pgEhFonteAcabadora(l) && PG_ACABADORAS.includes(pgCdDestinoRoteamento(l));
     }
     window.pgEhDestinoAcabadora = pgEhAcabadora;
-    window.pgEhDestinoCD = l => !pgEhAcabadora(l);
+    window.pgEhDestinoCD = l => !pgDestinoVazio(l) && !pgEhAcabadora(l);
     window.pgAcabadoraDaLista = l => PG_ACABADORAS.includes(pgGraficaLinha(l));
 
     // EXCLUSIVO do filtro Origem = Gráfica + Destino = Acabadora.
@@ -9804,7 +9811,9 @@ window.exportarDivergenciasColetas = function() {
     };
     window.pgLinhaDoDestino = function(l, destino, origem) {
         if (origem === 'ACABADORA') return window.pgEhFonteAcabadora(l);
-        return destino === 'TODOS' || (destino === 'ACAB' ? pgEhAcabadora(l) : !pgEhAcabadora(l));
+        if (destino === 'TODOS') return true;
+        if (destino === 'ACAB') return pgDestinoVazio(l) || pgEhAcabadora(l);
+        return window.pgEhDestinoCD(l);
     };
     // TOTAL BASE — regra exclusiva para ORIGEM = TODAS.
     // Não compensa volume, não tenta parear PCP x PCP_ACABADORAS e não altera fases.
