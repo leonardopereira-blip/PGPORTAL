@@ -426,7 +426,7 @@
             const dtReal = volumes.entregaTP;
             const entregue = volumes.entrega;
             const dtAgendaColeta = !acabadora
-                ? window.pgNormalizarDataColeta(campo(linha, 'Mapa_Agendado'), hoje) : null;
+                ? volumes.mapaAgendado : null;
             const dtMapaAgendado = dtAgendaColeta
                 ? window.pgDataPlanoEntregaSLA(linha, dtAgendaColeta) : null;
             const volumeMapaAgendado = dtMapaAgendado && dtMapaAgendado >= hoje && !dtReal
@@ -437,7 +437,7 @@
                 dtVencida: dtPlan && dtPlan <= hoje ? dtPlan : null,
                 aVencer: dtPlan && dtPlan > hoje ? tiragem : 0,
                 dtAVencer: dtPlan && dtPlan > hoje ? dtPlan : null,
-                coletadaBruta: volumes.mapa, dtColeta: dtReal, dtMapaAgendado
+                coletadaBruta: volumes.bruto, dtColeta: dtReal, dtMapaAgendado
             };
             const saldo = window.pgSaldoPrazoV35(prazo, hoje, hoje);
             resumo.total += volumeBase;
