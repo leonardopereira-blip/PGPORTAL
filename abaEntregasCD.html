@@ -11,7 +11,18 @@
                 <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="semana" onchange="window.pgAtualizarPeriodoEntregasCD()"> Semana atual</label>
                 <label class="border border-violet-200 bg-violet-50 rounded-lg px-3 py-2 cursor-pointer"><input type="checkbox" id="acumuladaEntregasCD" checked onchange="window.pgAtualizarPeriodoEntregasCD()"> Visão acumulada</label>
                 <label id="periodoEntregasCD">Mês <input id="mesEntregasCD" type="month" class="border rounded px-2 py-1" onchange="window.pgAtualizarPeriodoEntregasCD()"></label>
+                <button type="button" class="border border-slate-300 bg-white hover:bg-slate-50 rounded-lg px-3 py-2 font-bold text-slate-700" onclick="window.pgBaixarBaseEntregasCD(this)">Baixar base CSV</button>
             </div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-4">
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+                <div>
+                    <h3 class="text-sm font-black text-slate-800">Visão geral dos CDs</h3>
+                    <p class="text-[11px] text-slate-500 mt-1">Mesma cor = mesmo CD · tracejado = planejado · sólido = realizado.</p>
+                </div>
+                <span id="notaGraficoGeralEntregasCD" class="text-[11px] font-semibold text-slate-500"></span>
+            </div>
+            <div class="relative h-[420px]"><canvas id="grafLinhaEntregasCD"></canvas></div>
         </div>
         <div id="graficosEntregasCD" class="space-y-4"></div>
     </div>
@@ -39,6 +50,276 @@
         : [linha._SOURCE, linha.BASE, linha._base].some(v => normalizar(v).includes('ACAB'));
     const cacheResumos = new WeakMap();
     let sufixosAtivos = [];
+    let baseAtivaEntregasCD = [];
+    let gruposAtivosEntregasCD = new Map();
+    let graficoGeralEntregasCD = null;
+
+    const cdFinalEntrega = linha => normalizar(
+        linha.CD_FINAL || campo(linha, 'CD DESTINO') || linha.CD || linha.CK
+    );
+    const destinoRoteamentoEntrega = linha => normalizar(
+        campo(linha, 'CD DESTINO') || linha.CD || linha.CK || linha.CD_FINAL
+    );
+    const graficaEntrega = linha => normalizar(
+        linha.GRAFICA_FINAL || campo(linha, 'GRÁFICA') || linha.GRAFICA || linha.BQ
+    );
+    const ehAthosNome = valor => {
+        const nome = normalizar(valor);
+        return nome === 'ATHOS' || nome.startsWith('ATHOS ');
+    };
+    const ehPcpParaAthos = linha =>
+        !ehAcabadora(linha) && ehAthosNome(destinoRoteamentoEntrega(linha));
+
+    // Regra exclusiva desta visão:
+    // ATHOS deixa de ser tratado como CD e passa a entrar pelo fluxo de PCP_ACABADORAS,
+    // representando o que efetivamente seguirá da ATHOS para os CDs.
+    const ajustarBaseEntregasCD = (linhas, origem) => (linhas || []).filter(linha => {
+        if (ehPcpParaAthos(linha)) return false;
+        if (ehAthosNome(cdFinalEntrega(linha))) return false;
+
+        if (origem === 'TODOS' && ehAcabadora(linha)) {
+            const grafica = graficaEntrega(linha);
+            // Preserva a regra já existente de KN e RAIZES em "Todas";
+            // ATHOS deixa de ser excluída somente nesta visão.
+            if (['KN', 'RAIZES'].includes(grafica)) return false;
+        }
+        return true;
+    });
+
+    const addDaysEntregaCD = (iso, dias) => {
+        const d = new Date(iso + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() + dias);
+        return d.toISOString().slice(0, 10);
+    };
+    const ultimoDiaEntregaCD = mes =>
+        new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0))
+            .toISOString().slice(0, 10);
+    const labelDataEntregaCD = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+    const fmtEntregaCD = n => Math.round(Number(n || 0)).toLocaleString('pt-BR');
+
+    const periodoAtualEntregasCD = () => {
+        const hoje = hojePortal();
+        const modo = document.querySelector('input[name="visaoEntregasCD"]:checked')?.value || 'mes';
+        const acumulado = !!document.getElementById('acumuladaEntregasCD')?.checked;
+        const inputMes = document.getElementById('mesEntregasCD');
+        if (inputMes && !inputMes.value) inputMes.value = hoje.slice(0, 7);
+
+        let inicio = hoje;
+        let fim = hoje;
+        if (modo === 'semana') {
+            const dow = new Date(hoje + 'T00:00:00Z').getUTCDay();
+            inicio = addDaysEntregaCD(hoje, -((dow + 6) % 7));
+            fim = addDaysEntregaCD(inicio, 6);
+        } else if (modo === '7d') {
+            fim = addDaysEntregaCD(hoje, 6);
+        } else if (modo === '30d') {
+            fim = addDaysEntregaCD(hoje, 29);
+        } else {
+            const mes = inputMes?.value || hoje.slice(0, 7);
+            inicio = mes + '-01';
+            fim = ultimoDiaEntregaCD(mes);
+        }
+        return {hoje, modo, acumulado, inicio, fim};
+    };
+
+    const somarAteEntregaCD = (mapa, campoNome, limite) => {
+        let total = 0;
+        mapa.forEach((evento, data) => {
+            if (data <= limite) total += Number(evento?.[campoNome] || 0);
+        });
+        return total;
+    };
+
+    window.pgRenderGraficoGeralEntregasCD = function() {
+        const canvas = document.getElementById('grafLinhaEntregasCD');
+        const nota = document.getElementById('notaGraficoGeralEntregasCD');
+        if (!canvas) return;
+
+        if (graficoGeralEntregasCD) {
+            graficoGeralEntregasCD.destroy();
+            graficoGeralEntregasCD = null;
+        }
+
+        if (typeof Chart === 'undefined' || !gruposAtivosEntregasCD.size) {
+            if (nota) nota.textContent = gruposAtivosEntregasCD.size ? 'Gráfico indisponível.' : 'Nenhum CD nos filtros selecionados.';
+            return;
+        }
+
+        const periodo = periodoAtualEntregasCD();
+        const contextos = Array.from(gruposAtivosEntregasCD.entries())
+            .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', {numeric: true}))
+            .map(([cd, linhas]) => {
+                const resumo = window.pgCalcularEntregaCDFunil(linhas, periodo.hoje);
+                return {cd, mapa: new Map(Array.from(resumo.dias.entries()))};
+            });
+
+        const todosDias = [];
+        for (let d = periodo.inicio; d <= periodo.fim; d = addDaysEntregaCD(d, 1)) {
+            todosDias.push(d);
+        }
+
+        const pontos = todosDias.filter(d => contextos.some(ctx => {
+            const evt = ctx.mapa.get(d) || {};
+            return Number(evt.esperado || 0) > 0 ||
+                (d <= periodo.hoje && Number(evt.real || 0) > 0);
+        }));
+
+        if (!pontos.length) {
+            if (nota) nota.textContent = 'Sem planejado ou realizado no período selecionado.';
+            return;
+        }
+
+        const paleta = [
+            '#0C2340', '#418EDE', '#FA4616', '#FCB04E', '#284081',
+            '#10B981', '#7C3AED', '#BE123C', '#0F766E', '#9333EA'
+        ];
+        const datasets = [];
+
+        contextos.forEach((ctx, indice) => {
+            const cor = paleta[indice % paleta.length];
+            const planejado = pontos.map(d => {
+                if (periodo.acumulado) return somarAteEntregaCD(ctx.mapa, 'esperado', d);
+                return Math.max(0, Number(ctx.mapa.get(d)?.esperado || 0));
+            });
+            const realizado = pontos.map(d => {
+                if (d > periodo.hoje) return null;
+                if (periodo.acumulado) return somarAteEntregaCD(ctx.mapa, 'real', d);
+                return Math.max(0, Number(ctx.mapa.get(d)?.real || 0));
+            });
+
+            datasets.push({
+                label: ctx.cd + ' · Planejado',
+                data: planejado,
+                borderColor: cor,
+                backgroundColor: cor,
+                borderWidth: 2,
+                borderDash: [7, 5],
+                pointRadius: pontos.length > 31 ? 0 : 2,
+                pointHoverRadius: 4,
+                tension: 0.2,
+                fill: false,
+                spanGaps: false
+            });
+            datasets.push({
+                label: ctx.cd + ' · Realizado',
+                data: realizado,
+                borderColor: cor,
+                backgroundColor: cor,
+                borderWidth: 3,
+                pointRadius: pontos.length > 31 ? 0 : 2,
+                pointHoverRadius: 4,
+                tension: 0.2,
+                fill: false,
+                spanGaps: false
+            });
+        });
+
+        graficoGeralEntregasCD = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: pontos.map(labelDataEntregaCD),
+                datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: {mode: 'index', intersect: false},
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {boxWidth: 16, boxHeight: 3, usePointStyle: false, font: {size: 10}}
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: contexto => contexto.dataset.label + ': ' + fmtEntregaCD(contexto.parsed.y)
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {display: false},
+                        ticks: {maxRotation: 0, autoSkip: true, maxTicksLimit: 16}
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {callback: valor => Number(valor || 0).toLocaleString('pt-BR')}
+                    }
+                }
+            }
+        });
+
+        if (nota) {
+            nota.textContent = periodo.acumulado
+                ? 'Visão acumulada'
+                : 'Visão dia a dia';
+        }
+    };
+
+    window.pgBaixarBaseEntregasCD = function() {
+        if (!baseAtivaEntregasCD.length) {
+            alert('Nenhum registro disponível para exportar nesta visão.');
+            return;
+        }
+
+        const hoje = hojePortal();
+        const cabecalho = [
+            'CD destino', 'Origem', 'Gráfica', 'Marca', 'Série', 'Kit', 'SKU', 'Descrição',
+            'OP', 'Envio', 'Coleta planejada', 'SLA (dias)', 'Entrega prevista', 'Entrega TP',
+            'Tiragem base CD', 'Tiragem linha', 'Entregue', 'Fonte original', 'Tratamento'
+        ];
+
+        const linhas = baseAtivaEntregasCD.map(linha => {
+            const acabadora = ehAcabadora(linha);
+            const volumes = window.pgVolumesColetaUnificadosV37?.(linha, hoje) || {};
+            const tiragemLinha = numero(campo(linha, 'TIRAGEM'));
+            const tiragemBase = acabadora
+                ? numero(campo(linha, 'TIRAGEM A ENTREGAR (total por CD)'))
+                : tiragemLinha;
+            const grafica = graficaEntrega(linha);
+
+            return [
+                cdFinalEntrega(linha),
+                acabadora ? 'ACABADORA' : 'GRAFICA',
+                grafica,
+                linha.MARCA_FINAL || campo(linha, 'MARCA') || linha.UNIDADE || '',
+                campo(linha, 'SÉRIE') || campo(linha, 'Série') || linha.SERIE || '',
+                campo(linha, 'KIT') || campo(linha, 'Kit') || '',
+                linha.SKU_REAL || campo(linha, 'SKU') || '',
+                linha.DESC_REAL || campo(linha, 'DESCRIÇÃO') || linha.DESCRICAO || linha.PRODUTO || '',
+                campo(linha, 'OP') || '',
+                campo(linha, 'ENVIO') || campo(linha, 'Envio') || '',
+                window.pgDataPlanoColetaLinha?.(linha) || '',
+                window.pgDiasSLALinha?.(linha) ?? '',
+                window.pgDataPlanoEntregaSLA?.(linha) || '',
+                volumes.entregaTP || '',
+                Math.round(tiragemBase),
+                Math.round(tiragemLinha),
+                Math.round(Number(volumes.entrega || 0)),
+                linha._SOURCE || linha.BASE || linha._base || '',
+                acabadora && ehAthosNome(grafica) ? 'ATHOS como acabadora nesta visão' : ''
+            ];
+        }).sort((a, b) =>
+            String(a[0]).localeCompare(String(b[0]), 'pt-BR', {numeric: true}) ||
+            String(a[2]).localeCompare(String(b[2]), 'pt-BR', {numeric: true}) ||
+            String(a[6]).localeCompare(String(b[6]), 'pt-BR', {numeric: true})
+        );
+
+        const celula = valor => {
+            let texto = String(valor ?? '');
+            if (/^[=+@-]/.test(texto)) texto = "'" + texto;
+            return '"' + texto.replace(/"/g, '""') + '"';
+        };
+        const csv = '\uFEFF' + [cabecalho].concat(linhas)
+            .map(linha => linha.map(celula).join(';'))
+            .join('\r\n');
+        const url = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'Entregas_CD_base_' + hoje.replaceAll('-', '') + '.csv';
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
 
     window.pgCalcularEntregaCDFunil = function(base, hoje) {
         const anterior = cacheResumos.get(base);
@@ -152,6 +433,7 @@
             document.getElementById('mesColetaFunil' + sufixo).value = mes?.value || hojePortal().slice(0, 7);
             window.renderColetaFinalFunil(sufixo);
         });
+        window.pgRenderGraficoGeralEntregasCD();
     };
 
     window.processarEntregasCD = function() {
@@ -161,15 +443,17 @@
         const baseGlobal = window.pgBaseGeralReportExecutiva || window.dadosDestinoCDFinal || [];
         let base = typeof window.pgBaseForecastFiltrada === 'function'
             ? window.pgBaseForecastFiltrada(baseGlobal, origem, 'CD') : baseGlobal.slice();
-        if (origem === 'TODOS') base = base.filter(l => !ehAcabadora(l) ||
-            !['ATHOS', 'KN', 'RAIZES'].includes(normalizar(l.GRAFICA_FINAL || campo(l, 'GRÁFICA') || l.GRAFICA || l.BQ)));
+        base = ajustarBaseEntregasCD(base, origem);
+
         const grupos = new Map();
         base.forEach(l => {
-            const cd = normalizar(l.CD_FINAL || campo(l, 'CD DESTINO') || l.CD);
+            const cd = cdFinalEntrega(l);
             if (!cd || ['-', 'N/A', 'NA', 'SEM CD', 'SEM DESTINO', 'A DEFINIR'].includes(cd)) return;
             if (!grupos.has(cd)) grupos.set(cd, []);
             grupos.get(cd).push(l);
         });
+        gruposAtivosEntregasCD = grupos;
+        baseAtivaEntregasCD = Array.from(grupos.values()).flat();
         const graficosAtuais = typeof graficos !== 'undefined' ? graficos : window.graficos;
         sufixosAtivos.forEach(sufixo => {
             const chave = 'coletaFinalFunil' + sufixo;
