@@ -293,11 +293,11 @@ window.pgRECapturarTabela = async function(botao) {
                 return { texto: texto(td), cor: cor };
             })
         }));
-        const margem = 24, escala = 2;
+        const margem = 0, topo = 0, escala = 2;
         ctx.font = 'bold 20px Arial, sans-serif';
         const larguras = colunas.map((c, j) => !c.nome ? 46 : c.grupo ?
             Math.min(420, Math.max(190, ...linhas.map(l => ctx.measureText(l.cells[j].texto).width + 28))) : 180);
-        const largura = Math.max(520, larguras.reduce((a, b) => a + b, 0) + margem * 2);
+        const largura = larguras.reduce((a, b) => a + b, 0);
         const quebrar = (valor, maximo) => {
             const resultado = []; let atual = '';
             for (const palavra of String(valor).split(' ')) {
@@ -312,15 +312,7 @@ window.pgRECapturarTabela = async function(botao) {
             if (atual || !resultado.length) resultado.push(atual);
             return resultado;
         };
-        const corte = window.pgREDataCorteV57 || '', data = /^\d{4}-\d{2}-\d{2}$/.test(corte) ? corte.split('-').reverse().join('/') : corte;
-        const referencia = document.getElementById('filtroReferencia');
-        const base = referencia && referencia.selectedOptions ? texto(referencia.selectedOptions[0]) : '';
-        const contexto = 'Corte: ' + data + ' (' + (window.pgREModoCorteV57 === 'D-1' ? 'D-1' : 'Hoje') + ')' + (base ? ' · ' + base : '');
-        ctx.font = 'bold 24px Arial, sans-serif';
-        const titulo = quebrar('Status de Produção e Entregas por Marca', largura - margem * 2);
-        ctx.font = '16px Arial, sans-serif';
-        const subtitulo = quebrar(contexto, largura - margem * 2);
-        const topo = 32 + titulo.length * 30 + subtitulo.length * 22 + 30;
+        const corte = window.pgREDataCorteV57 || '';
         ctx.font = 'bold 18px Arial, sans-serif';
         const headers = colunas.map((c, j) => quebrar(c.nome, larguras[j] - 20));
         const cabAltura = Math.max(76, ...headers.map(h => h.length * 23 + 20));
@@ -331,9 +323,9 @@ window.pgRECapturarTabela = async function(botao) {
         });
         // Divide recortes muito extensos em partes, mantendo sempre fonte e resolução.
         const alturaMaxima = Math.min(8000, Math.floor(16000000 / (largura * escala * escala)));
-        const paginas = []; let pagina = [], altura = topo + cabAltura + 56;
+        const paginas = []; let pagina = [], altura = cabAltura;
         linhas.forEach(l => {
-            if (pagina.length && altura + l.altura > alturaMaxima) { paginas.push(pagina); pagina = []; altura = topo + cabAltura + 56; }
+            if (pagina.length && altura + l.altura > alturaMaxima) { paginas.push(pagina); pagina = []; altura = cabAltura; }
             pagina.push(l); altura += l.altura;
         });
         if (pagina.length) paginas.push(pagina);
@@ -342,13 +334,9 @@ window.pgRECapturarTabela = async function(botao) {
             textos.forEach((t, k) => ctx.fillText(t, esquerda ? x + 12 : x + w / 2, y + h / 2 + (k - (textos.length - 1) / 2) * entre));
         };
         for (let p = 0; p < paginas.length; p++) {
-            const alturaPagina = topo + cabAltura + paginas[p].reduce((a, l) => a + l.altura, 0) + 56;
+            const alturaPagina = cabAltura + paginas[p].reduce((a, l) => a + l.altura, 0);
             canvas.width = Math.ceil(largura * escala); canvas.height = Math.ceil(alturaPagina * escala);
             ctx.scale(escala, escala); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, largura, alturaPagina);
-            ctx.fillStyle = '#172B4D'; ctx.font = 'bold 24px Arial, sans-serif';
-            linhaTexto(titulo, margem - 12, 18, largura - margem * 2, titulo.length * 30, true, 30);
-            ctx.fillStyle = '#52637d'; ctx.font = '16px Arial, sans-serif';
-            linhaTexto(subtitulo, margem - 12, 24 + titulo.length * 30, largura - margem * 2, subtitulo.length * 22, true, 22);
             ctx.fillStyle = '#48659a'; ctx.fillRect(margem, topo, largura - margem * 2, cabAltura);
             let x = margem;
             ctx.font = 'bold 18px Arial, sans-serif'; ctx.fillStyle = '#ffffff';
@@ -371,8 +359,6 @@ window.pgRECapturarTabela = async function(botao) {
                 });
                 y += l.altura;
             });
-            ctx.font = '14px Arial, sans-serif'; ctx.fillStyle = '#52637d'; ctx.textAlign = 'left';
-            ctx.fillText('Conforme os filtros e indicadores selecionados.' + (paginas.length > 1 ? ' · Parte ' + (p + 1) + '/' + paginas.length : ''), margem, alturaPagina - 24);
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
             if (!blob) throw new Error('Não foi possível gerar o PNG.');
             const url = URL.createObjectURL(blob), a = document.createElement('a');
