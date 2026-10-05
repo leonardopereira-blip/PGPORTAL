@@ -3432,11 +3432,15 @@ let tRef = document.getElementById('filtroReferencia').value;
     // Auditoria nao interfere em filtros, porcentagens, cronologia ou dados.
     window.pgAuditoriaBrutoV56 = {
         totalCanonico:tGeral, totalBruto:pgTotalBrutoV56,
+        totalExibido:tGeral,
         fonte:pgReferenciaV56('geral','GERAL'),
         linhasFonte:pgLinhasBrutasV56.length
     };
 
-    let hFunil = `<div class="funnel-layer bg-black w-full shadow-lg rounded-t-md text-white text-center py-1">00 - Total Base (${window.formatarBR(pgTotalBrutoV56)} | 100%)</div>`;
+    // O Total Base do Funil deve ser EXATAMENTE a mesma base canônica usada
+    // pelo gráfico de Coleta/TP no mesmo recorte de Origem/Destino.
+    // A referência bruta V56 é somente auditiva e nunca pode substituir o denominador.
+    let hFunil = `<div class="funnel-layer bg-black w-full shadow-lg rounded-t-md text-white text-center py-1">00 - Total Base (${window.formatarBR(tGeral)} | 100%)</div>`;
     
     fasesAtivas.forEach((f, index) => {
         let tReal = fTotais[f.id].real;
