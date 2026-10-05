@@ -379,7 +379,7 @@
       if(!total||!marca)return null;
       var grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA)||'NÃO INFORMADA';
       var s=serie(l['SÉRIE']||l.SERIE);
-      var dtPlan=typeof window.pgDataPlanoEntregaSLA==='function'?window.pgDataPlanoEntregaSLA(l):null;
+      var campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
       var alvo=metaOriginal(marca),cd=normal(l.CD_FINAL||l['CD DESTINO']);
       var posiPropria=grafica==='POSIGRAF'&&cd==='POSIGRAF';
       var regras=posiPropria?posiRegra(l):null;
@@ -387,41 +387,76 @@
         return r.datas.reduce(function(a,d){return d>a?d:a;},ultima);
       },'');
       var elegivel=!!regras&&dataAcordada>alvo;
-      var inicioRaw=window.pgCampoColeta?window.pgCampoColeta(l,'Coleta/Internalização de estoque inicial (re) plan'):
-        l['Coleta/Internalização de estoque inicial (re) plan'];
+      var metaAplicada=cenario==='com'&&elegivel?dataAcordada:alvo;
+
+      // Meta Armazém não usa mais baseline para completar Coleta Fim.
+      // Se a coleta já terminou, a data real prevalece; caso contrário, usa somente o (re)plan.
+      var fimRealRaw=campo('Coleta/Internalização de estoque Final Real');
+      var fimReplanRaw=campo('Coleta/Internalização de estoque final (re) plan');
+      var fimRealColeta=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(fimRealRaw):data(fimRealRaw);
+      var fimReplanColeta=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(fimReplanRaw):data(fimReplanRaw);
+      var fimColetaUsada=fimRealColeta||fimReplanColeta||null;
+      var origemColeta=fimRealColeta?'Realizado':fimReplanColeta?'Replanejado':'Sem data';
+      var dtPlan=fimColetaUsada&&typeof window.pgDataPlanoEntregaSLA==='function'?
+        window.pgDataPlanoEntregaSLA(l,fimColetaUsada):null;
+
+      var inicioRaw=campo('Coleta/Internalização de estoque inicial (re) plan');
       var inicioAusente=inicioRaw==null||String(inicioRaw).trim()==='';
       var inicioColeta=inicioAusente?null:
         (window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(inicioRaw):data(inicioRaw));
       var inicioPlan=inicioColeta&&window.pgDataPlanoEntregaSLA(l,inicioColeta);
-      var rateio=rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioAusente);
-      var conhecido=!!dtPlan&&!!rateio;
-      var previstoOriginal=conhecido?total*rateio.fracao:0;
+      // Coleta final realizada representa conclusão: o saldo ainda em trânsito fica concentrado
+      // na entrega calculada a partir dessa data real, sem ratear por um início planejado antigo.
+      var entregaUnicaPorReal=!!fimRealColeta;
+      var inicioAusenteRateio=inicioAusente||entregaUnicaPorReal;
+
+      // O que já chegou ao CD é classificado pela data real de entrega.
+      var realCDRaw=campo('TIRAGEM CONFIRMADA CD');
+      var realCDTem=realCDRaw!==null&&realCDRaw!==undefined&&String(realCDRaw).trim()!=='';
+      var realCD=Math.min(total,volume(realCDRaw));
+      var dtRealCD=data(l._DT_ENTREGUE_CD_REAL||campo('_DT_ENTREGUE_CD_REAL'));
+      var pendentePlanejado=Math.max(0,total-realCD);
+      var realDentro=function(meta){return realCD>0&&dtRealCD&&dtRealCD<=meta?realCD:0;};
+      var realFora=function(meta){return realCD>0&&dtRealCD&&dtRealCD>meta?realCD:0;};
+
+      var rateio=pendentePlanejado>0&&dtPlan?
+        rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioAusenteRateio):null;
+      var previstoOriginal=realDentro(alvo)+(rateio?pendentePlanejado*rateio.fracao:0);
       var previstoFere=previstoOriginal,previstoNaoFere=previstoOriginal;
-      if(elegivel&&conhecido){
-        var rateioAcordo=rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,inicioAusente);
-        previstoNaoFere=rateioAcordo?total*rateioAcordo.fracao:0;
+      if(elegivel){
+        var rateioAcordo=pendentePlanejado>0&&dtPlan?
+          rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,inicioAusenteRateio):null;
+        previstoNaoFere=realDentro(dataAcordada)+(rateioAcordo?pendentePlanejado*rateioAcordo.fracao:0);
       }
-      var metaAplicada=cenario==='com'&&elegivel?dataAcordada:alvo;
-      var rateioAplicado=conhecido?rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioAusente):null;
-      // Distribuição pela meta original da marca, independente do cenário escolhido.
-      var ate15=previstoOriginal,apos15=conhecido?Math.max(0,total-previstoOriginal):0;
+      var rateioAplicado=pendentePlanejado>0&&dtPlan?
+        rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioAusenteRateio):null;
       var previsto=cenario==='sem'?previstoFere:previstoNaoFere;
+      var semDataReal=realCD>0&&!dtRealCD?realCD:0;
+      var semDataPlan=pendentePlanejado>0&&!rateioAplicado?pendentePlanejado:0;
+      var semData=semDataReal+semDataPlan;
+      var pos=Math.max(0,total-previsto-semData);
+      var conhecido=semData===0;
+
+      // Distribuição pela meta original da marca, independente do cenário escolhido.
+      var ate15=previstoOriginal;
+      var apos15=realFora(alvo)+(rateio?Math.max(0,pendentePlanejado-pendentePlanejado*rateio.fracao):0);
       var combinadoAdicional=Math.max(0,previstoNaoFere-previstoFere);
       var excecao=cenario==='com'?Math.max(0,previstoNaoFere-previstoOriginal):0;
-      var realRaw=l['TIRAGEM CONFIRMADA DENTRO DA META'];
-      var realTem=realRaw!==null&&realRaw!==undefined&&realRaw!=='';
+      var real=realDentro(metaAplicada);
+      var realTem=realCDTem&&!!dtRealCD;
       return {
         marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),
-        total:total,previsto:previsto,pos:conhecido?Math.max(0,total-previsto):0,
-        semData:conhecido?0:total,real:realTem?Math.min(total,volume(realRaw)):0,realTem:realTem,
-        realCD:Math.min(total,volume(l['TIRAGEM CONFIRMADA CD'])),realCDTem:l['TIRAGEM CONFIRMADA CD']!==null&&l['TIRAGEM CONFIRMADA CD']!==undefined&&l['TIRAGEM CONFIRMADA CD']!=='',
+        total:total,previsto:previsto,pos:pos,semData:semData,real:real,realTem:realTem,
+        realCD:realCD,realCDTem:realCDTem,dtRealCD:dtRealCD,
         metaArmDate:alvo,
         ate15:ate15,apos15:apos15,excecao:excecao,
         posi:elegivel,alvo:alvo,dtPlan:dtPlan,rateio:rateio,
-        rateioDia:rateio&&!rateio.entregaUnica?total/rateio.dias:null,
-        linha:l,inicioColeta:inicioColeta,inicioAusente:inicioAusente,inicioPlan:inicioPlan,
+        rateioDia:rateio&&!rateio.entregaUnica?pendentePlanejado/rateio.dias:null,
+        linha:l,inicioColeta:inicioColeta,inicioAusente:inicioAusenteRateio,inicioPlan:inicioPlan,
+        fimRealColeta:fimRealColeta,fimReplanColeta:fimReplanColeta,fimColetaUsada:fimColetaUsada,
+        origemColeta:origemColeta,pendentePlanejado:pendentePlanejado,
         posiPropria:posiPropria,dataAcordada:dataAcordada,metaAplicada:metaAplicada,rateioAplicado:rateioAplicado,
-        combinadoAdicional:combinadoAdicional,
+        combinadoAdicional:combinadoAdicional,conhecido:conhecido,
         prazos:[alvo].concat(elegivel?[dataAcordada]:[]),
         cd:cd
       };
@@ -430,20 +465,24 @@
   // A eficiência usa a mesma base e as mesmas metas, sem trocar o cenário desta tela.
   window.pgMAObterItens=function(opcoes){return dadosBase(opcoes);};
   window.pgMADiasEntrega=function(item){
-    if(!item||item.semData>0||!item.dtPlan)return [];
-    var total=volume(item.total),rateio=item.rateioAplicado||item.rateio;
-    if(!total||!rateio)return [];
-    if(rateio.entregaUnica)return [{data:item.dtPlan,volume:total}];
-    if(!(rateio.dias>0))return [];
-    var parcelas=[],fim=new Date(rateio.fim+'T12:00:00Z'),limite=740;
+    if(!item)return [];
+    var parcelas=[];
+    var real=volume(item.realCD),pendente=volume(item.pendentePlanejado);
+    if(real>0&&item.dtRealCD)parcelas.push({data:item.dtRealCD,volume:real,realizado:true});
+    if(!pendente)return parcelas;
+    var rateio=item.rateioAplicado||item.rateio;
+    if(!item.dtPlan||!rateio)return parcelas;
+    if(rateio.entregaUnica){parcelas.push({data:item.dtPlan,volume:pendente});return parcelas;}
+    if(!(rateio.dias>0))return parcelas;
+    var previstas=[],fim=new Date(rateio.fim+'T12:00:00Z'),limite=740;
     for(var d=new Date(rateio.inicio+'T12:00:00Z');d<=fim&&limite-->0;d.setUTCDate(d.getUTCDate()+1)){
-      if(diaUtilArmazem(d))parcelas.push({data:d.toISOString().slice(0,10),volume:total/rateio.dias});
+      if(diaUtilArmazem(d))previstas.push({data:d.toISOString().slice(0,10),volume:pendente/rateio.dias});
     }
-    if(limite<=0||parcelas.length!==rateio.dias)return [];
-    // Conserva a tiragem inclusive quando a divisão por DU tem dízima.
-    var somaParcelas=parcelas.reduce(function(s,p){return s+p.volume;},0);
-    parcelas[parcelas.length-1].volume+=total-somaParcelas;
-    return parcelas;
+    if(limite<=0||previstas.length!==rateio.dias)return parcelas;
+    // Conserva a tiragem pendente inclusive quando a divisão por DU tem dízima.
+    var somaParcelas=previstas.reduce(function(s,p){return s+p.volume;},0);
+    previstas[previstas.length-1].volume+=pendente-somaParcelas;
+    return parcelas.concat(previstas);
   };
   function soma(items) {
     return items.reduce(function(a,l){
