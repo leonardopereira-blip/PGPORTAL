@@ -1,0 +1,72 @@
+name: Atualizar ambiente de testes
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '*.gs'
+      - '*.js'
+      - '*.html'
+      - appsscript.json
+      - .clasp.json
+      - .github/workflows/atualizar-testes.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pgportal-testes
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    if: ${{ github.ref == 'refs/heads/main' && vars.PGPORTAL_TESTES_ATIVO == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Preparar destino de testes e autenticacao
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          TEST_SCRIPT_ID: ${{ vars.PGPORTAL_TESTES_SCRIPT_ID }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import os from 'node:os';
+          import path from 'node:path';
+          const scriptId = (process.env.TEST_SCRIPT_ID || '').trim();
+          if (!/^[A-Za-z0-9_-]{20,}$/.test(scriptId)) {
+            throw new Error('Configure PGPORTAL_TESTES_SCRIPT_ID com o ID confirmado do projeto de testes.');
+          }
+          if (!process.env.CLASPRC_JSON) {
+            throw new Error('Configure o segredo CLASPRC_JSON para autorizar o envio aos testes.');
+          }
+          const auth = JSON.parse(process.env.CLASPRC_JSON);
+          const config = JSON.parse(fs.readFileSync('.clasp.json', 'utf8'));
+          config.scriptId = scriptId;
+          config.rootDir = '.';
+          config.skipSubdirectories = true;
+          fs.writeFileSync('.clasp.json', JSON.stringify(config));
+          fs.writeFileSync(path.join(os.homedir(), '.clasprc.json'), JSON.stringify(auth), {mode: 0o600});
+          NODE
+
+      - name: Atualizar codigo usado nos testes
+        run: node node_modules/@google/clasp/build/src/index.js push --force < /dev/null
+
+      - name: Registrar atualizacao
+        run: |
+          COMMIT_TESTES=$(git rev-parse HEAD)
+          printf 'Codigo enviado ao HEAD do projeto de testes: `%s`.\n\nNenhuma versao ou implantacao de producao foi criada ou alterada.\n' "$COMMIT_TESTES" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remover autenticacao temporaria
+        if: always()
+        run: rm -f "$HOME/.clasprc.json"
