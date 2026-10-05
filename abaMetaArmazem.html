@@ -111,7 +111,7 @@
       <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mt-2">
         <div><h2 class="text-2xl md:text-3xl font-black">Meta Armazém · cenários de prazo</h2>
           </div>
-        <span class="text-[10px] font-bold rounded-full border border-white/30 px-3 py-2 text-cyan-100">V1/27 · Entrega prevista · PCP + Acabadoras</span>
+        <span class="text-[10px] font-bold rounded-full border border-white/30 px-3 py-2 text-cyan-100">V1/27 · Real + previsão · PCP + Acabadoras</span>
       </div>
     </div>
     <div class="p-4 md:p-5 space-y-4">
@@ -166,7 +166,7 @@
     <p id="maComparativoNota" class="text-[10px] text-slate-500 mt-2"></p>
   </div>
 <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Entrega prevista: coleta planejada + SLA da rota. Rateio por dias úteis para todas as gráficas e acabadoras quando o fim é posterior ao início. No mesmo dia, entrega integral nessa data.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa a data real. O saldo usa Coleta Fim Real quando já concluída; caso contrário, somente Coleta Fim (re)plan + SLA. Baseline não completa data ausente.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
       <thead><tr><th>Grupo</th><th>Meta original / exceção</th><th>Volume total</th><th id="maThPrevisto">Dentro da meta</th><th id="maThPos">Fora da meta</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
@@ -650,13 +650,13 @@
     var p=hasValue?Math.max(0,Math.min(100,100*x.previsto/x.total)):0;
     var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
     return '<div class="ma-matrix-tile" title="'+
-      escapeHTML(hasValue?fmt(x.previsto,true)+' planejado no prazo / '+fmt(x.total,true)+' total':'Sem volume')+'">'+
+      escapeHTML(hasValue?fmt(x.previsto,true)+' real + previsto no prazo / '+fmt(x.total,true)+' total':'Sem volume')+'">'+
       (hasValue?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
       '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(x.previsto,x.total)+'</span></div>';
   }
   function colunasMatriz(x,c) {
     return '<td class="ma-matrix-cell'+(!c.campo?' ma-matrix-total-col':'')+'" title="'+
-      escapeHTML(fmt(x.previsto,true)+' planejado no prazo / '+fmt(x.total,true)+' total')+'">'+
+      escapeHTML(fmt(x.previsto,true)+' real + previsto no prazo / '+fmt(x.total,true)+' total')+'">'+
       barraMatriz(x)+'</td>';
   }
   function ordenarMatriz(a,b) {
@@ -793,7 +793,7 @@
       ctx.fillStyle='#fff';ctx.font='bold 17px Poppins, sans-serif';
       ctx.fillText('META ARMAZÉM · '+m.nomeModo,16,29);
       ctx.font='11px Poppins, sans-serif';
-      ctx.fillText('Entrega prevista  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta')+
+      ctx.fillText('Real + previsão  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta')+
         '  |  15/10 · SAS Bradesco 26/10 · GEE 12/11 · WAYS 30/11',16,51);
       ctx.fillStyle='#284081';ctx.fillRect(0,top,w,head);
       ctx.fillStyle='#fff';ctx.font='bold 12px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,5,top+27,first-9);
@@ -842,7 +842,7 @@
         '<p class="text-[10px] text-slate-500 mt-2">'+sub+(disponivel&&total.total?' · '+pct(n,total.total)+' do total':'')+'</p></div>';
     }
     document.getElementById('maComparativo').innerHTML=
-      box('Planejado',planejado,'Entrega prevista dentro da '+(estado.cenario==='sem'?'meta original':'meta acordada'),'#418EDE',!!items.length)+
+      box('Real + previsto',planejado,'Volume realizado e saldo previsto dentro da '+(estado.cenario==='sem'?'meta original':'meta acordada'),'#418EDE',!!items.length)+
       box('Realizado',total.realCD,'Tiragem confirmada no CD (todas as datas)','#0f766e',total.realCDTem)+
       box('Meta Armazém',total.total,'Volume total esperado no CD para os itens filtrados','#FA4616',!!items.length);
     document.getElementById('maComparativoNota').textContent=dataNota+
