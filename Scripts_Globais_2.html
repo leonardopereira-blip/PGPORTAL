@@ -1566,6 +1566,52 @@ window.pgSaldoPrazoV35 = function(r, limite, hoje = dtHojeISO) {
     return { vencido, semData, coletada, devido: vencidaDatada + aVencerDatada };
 };
 
+// V56: backlog operacional considera somente obrigações com data válida.
+// "Sem data" permanece separado e não pode criar backlog nem fornecer
+// coleta excedente para abater obrigações datadas de outras linhas.
+// Entre linhas datadas, o backlog continua líquido.
+window.pgComposicaoBacklogDatadoV56 = function(prazos, limite, hoje = dtHojeISO) {
+    const corte = limite > hoje ? hoje : limite;
+    let devido = 0;
+    let coletado = 0;
+    let semData = 0;
+    const itens = [];
+
+    (prazos || []).forEach(r => {
+        if (!r) return;
+        const vencidaDatada = r.dtVencida && r.dtVencida <= corte
+            ? Math.max(0, Number(r.vencida || 0)) : 0;
+        const aVencerDatada = r.dtAVencer && r.dtAVencer <= corte
+            ? Math.max(0, Number(r.aVencer || 0)) : 0;
+        const devidoLinha = vencidaDatada + aVencerDatada;
+        const coletadoLinha = devidoLinha > 0 && r.dtColeta && r.dtColeta <= corte
+            ? Math.max(0, Number(r.coletadaBruta || 0)) : 0;
+
+        const saldoSeparado = window.pgSaldoPrazoV35(r, corte, hoje);
+        semData += Math.max(0, Number(saldoSeparado.semData || 0));
+
+        if (devidoLinha <= 0 && coletadoLinha <= 0) return;
+        devido += devidoLinha;
+        coletado += coletadoLinha;
+        itens.push({
+            prazo: r,
+            devido: devidoLinha,
+            coletado: coletadoLinha,
+            saldoLiquido: devidoLinha - coletadoLinha
+        });
+    });
+
+    return {
+        corte,
+        devido,
+        coletado,
+        backlog: Math.max(0, devido - coletado),
+        saldoLiquido: devido - coletado,
+        semData,
+        itens
+    };
+};
+
 window.pgCalcularColetaFunil = function(base, hoje) {
     const norm = v => String(v ?? '')
         .normalize('NFD')
@@ -1841,6 +1887,14 @@ window.pgCalcularColetaFunil = function(base, hoje) {
             );
         }
     });
+
+    const backlogDatadoV56 = window.pgComposicaoBacklogDatadoV56(
+        out.prazosRegistros,
+        hoje,
+        hoje
+    );
+    out.backlogAtual = backlogDatadoV56.backlog;
+    out.backlogSemData = backlogDatadoV56.semData;
 
     window.pgItensColetaDia(
         out,
@@ -2364,24 +2418,12 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     //
     // Nunca considera planejado futuro como vencido.
 
-    const backlogAte = limite => {
-
-        const corte =
-            limite > dtHojeISO
-                ? dtHojeISO
-                : limite;
-
-        const planejado =
-            somaAte('esperado', corte);
-
-        const realizado =
-            somaAte('real', corte);
-
-        return Math.max(
-            0,
-            planejado - realizado
-        );
-    };
+    const backlogAte = limite =>
+        window.pgComposicaoBacklogDatadoV56(
+            prazos,
+            limite,
+            dtHojeISO
+        ).backlog;
 
     const semDataAte = limite => prazos.reduce((s, r) =>
         s + window.pgSaldoPrazoV35(r, limite, dtHojeISO).semData, 0);
@@ -2413,7 +2455,9 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     }));
     const planejadoVisao = comparativoVisao.map(p => p.plan);
     const realizadoVisao = comparativoVisao.map(p => p.real);
-    const backlogVisao = comparativoVisao.map(p => p.gap);
+    const backlogVisao = pontos.map((d, i) =>
+        acumulado ? backlogAte(d) : comparativoVisao[i].gap
+    );
     const percentualVisao = comparativoVisao.map(p => p.percentual);
     const agendadoVisao = pontos.map((d, i) =>
         acumulado ? somaAte('agendado', d) : agendadoDia[i]
@@ -11748,6 +11792,7 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
     let cortePlan = null, corteReal = null, dataAgendaIni = null, dataAgendaFim = null;
     let planDia = false, realDia = false, agendaDia = false;
     let backlogFuturoZero = false;
+    let backlogDatado = false;
 
     if (tipo === 'base') {
         titulo = 'Base do filtro atual';
@@ -11782,9 +11827,10 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
     } else if (tipo === 'backlogAtual') {
         cortePlan = hoje;
         corteReal = hoje;
-        usarPlan = usarReal = mostrarBacklog = true;
-        titulo = 'Backlog líquido em ' + fmtData(hoje);
-        descricao = 'Backlog do portal = máximo entre zero e Planejado acumulado - Coletado acumulado. Excedentes podem compensar faltas entre linhas.';
+        mostrarBacklog = true;
+        backlogDatado = true;
+        titulo = 'Backlog líquido datado em ' + fmtData(hoje);
+        descricao = 'Somente obrigações com data válida entram no backlog. Linhas sem data ficam separadas e não aumentam nem reduzem o backlog. Dentro do universo datado, excedentes podem compensar faltas.';
     } else if (tipo === 'semData') {
         usarSemData = true;
         titulo = 'Sem data em ' + fmtData(hoje);
@@ -11801,6 +11847,11 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
             usarPlan = tipo === 'plan' || tipo === 'backlog' || tipo === 'dia';
             usarReal = tipo === 'real' || tipo === 'backlog' || tipo === 'dia';
             mostrarBacklog = tipo === 'backlog' || tipo === 'dia';
+            if (acumulado && mostrarBacklog) {
+                backlogDatado = true;
+                usarPlan = false;
+                usarReal = false;
+            }
             if (acumulado) {
                 cortePlan = (mostrarBacklog && futuro) ? hoje : ponto;
                 corteReal = ponto <= hoje ? ponto : hoje;
@@ -11831,6 +11882,22 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
         const g = garantir(l);
 
         if (usarBase) g.base += volumeBase(l);
+
+        if (backlogDatado) {
+            const p = r.prazo || (window.pgPrazoLinhaV35 ? window.pgPrazoLinhaV35(l, hoje) : null);
+            if (p) {
+                const corte = (cortePlan || ponto || hoje) > hoje ? hoje : (cortePlan || ponto || hoje);
+                const vencidaDatada = p.dtVencida && p.dtVencida <= corte ? Math.max(0, Number(p.vencida || 0)) : 0;
+                const aVencerDatada = p.dtAVencer && p.dtAVencer <= corte ? Math.max(0, Number(p.aVencer || 0)) : 0;
+                const devidoDatado = vencidaDatada + aVencerDatada;
+                if (devidoDatado > 0) {
+                    g.plan += devidoDatado;
+                    if (p.dtColeta && p.dtColeta <= corte) {
+                        g.real += Math.max(0, Number(p.coletadaBruta || 0));
+                    }
+                }
+            }
+        }
 
         if (usarPlan) {
             const entra = planDia ? r.dtPlan === ponto : (r.dtPlan && cortePlan && r.dtPlan <= cortePlan);
@@ -11990,7 +12057,7 @@ window.pgAbrirAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia'
     if (a.colunas.real) totalCards += '<div><span>Coletado</span><b>' + fmt(a.totais.real) + '</b></div>';
     if (a.colunas.agenda) totalCards += '<div><span>Mapa agendado</span><b>' + fmt(a.totais.agenda) + '</b></div>';
     if (a.colunas.semData) totalCards += '<div><span>Sem data</span><b>' + fmt(a.totais.semData) + '</b></div>';
-    if (a.colunas.backlog) totalCards += '<div><span>Backlog portal</span><b>' + fmt(a.totais.backlog) + '</b></div>';
+    if (a.colunas.backlog) totalCards += '<div><span>Backlog datado</span><b>' + fmt(a.totais.backlog) + '</b></div>';
 
     const modal = document.createElement('div');
     modal.id = 'pgAuditoriaPontoColetaV56';
@@ -11999,7 +12066,7 @@ window.pgAbrirAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia'
         '<div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4"><div><div class="text-[10px] font-black uppercase tracking-[.18em] text-blue-700">Auditoria do número do portal</div><h3 class="text-xl font-black text-slate-900 mt-1">' + esc(a.titulo) + '</h3><p class="text-xs text-slate-500 mt-1">' + esc(a.descricao) + '</p></div><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="text-slate-500 hover:text-slate-900 text-2xl leading-none">×</button></div>' +
         '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 px-5 py-3 bg-slate-50 [&>div]:rounded-lg [&>div]:border [&>div]:border-slate-200 [&>div]:bg-white [&>div]:px-3 [&>div]:py-2 [&_span]:block [&_span]:text-[9px] [&_span]:font-bold [&_span]:uppercase [&_span]:text-slate-500 [&_b]:text-base [&_b]:text-slate-900">' + totalCards + '</div>' +
         '<div class="overflow-y-auto px-5 py-4 flex-1">' + (tabelas || '<div class="p-8 text-center text-sm text-slate-500">Nenhuma linha compõe este número.</div>') + '</div>' +
-        '<div class="flex flex-wrap justify-between items-center gap-3 border-t border-slate-200 px-5 py-3"><p class="text-[10px] text-slate-500">A tabela respeita os filtros ativos e a regra atual do portal. Valores negativos no backlog por grupo representam coleta excedente que compensa faltas de outros grupos.</p><div class="flex gap-2"><button type="button" onclick="pgBaixarAuditoriaPontoColetaV56()" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Baixar CSV</button><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Fechar</button></div></div>' +
+        '<div class="flex flex-wrap justify-between items-center gap-3 border-t border-slate-200 px-5 py-3"><p class="text-[10px] text-slate-500">A tabela respeita os filtros ativos e a regra atual do portal. Valores negativos no backlog por grupo representam coleta excedente dentro do universo datado. Registros sem data ficam fora desta conta.</p><div class="flex gap-2"><button type="button" onclick="pgBaixarAuditoriaPontoColetaV56()" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">Baixar CSV</button><button type="button" onclick="pgFecharAuditoriaPontoColetaV56()" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Fechar</button></div></div>' +
         '</div>';
     modal.addEventListener('click', e => { if (e.target === modal) window.pgFecharAuditoriaPontoColetaV56(); });
     document.body.appendChild(modal);
