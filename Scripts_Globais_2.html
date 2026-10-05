@@ -439,9 +439,10 @@ window.pgDataPlanoEntregaSLA = function(l, coletaPlanejada = window.pgDataPlanoC
     return entrega.toISOString().slice(0, 10);
 };
 
-// Fonte única para Mapa, Coleta TP, Entrega TP e curva diária.
-// Mapa Solicitado usa TIRAGEM COLETADA somente com Mapa_Agendado (EB) >= corte.
-// Coleta TP/Entrega TP preservam o volume bruto e suas próprias datas operacionais.
+// Fonte única para Mapa Solicitado, Mapa Agendado, Coleta TP, Entrega TP e curva diária.
+// Mapa Solicitado = coluna TIRAGEM COLETADA inteira.
+// Mapa Agendado = esse mesmo volume somente quando Mapa_Agendado (EB) >= corte.
+// Coleta TP/Entrega TP preservam suas próprias datas operacionais.
 // Não usa DATA_EA nem Data_Coleta_Mapa.
 const pgCacheVolumesColetaV37 = new WeakMap();
 
@@ -470,8 +471,9 @@ window.pgVolumesColetaUnificadosV37 = function(linha, corte = dtHojeISO) {
 
     return {
         bruto: base.bruto,
-        mapa: base.mapaAgendado && base.mapaAgendado >= corte ? base.bruto : 0,
+        mapa: base.bruto,
         mapaAgendado: base.mapaAgendado,
+        agendado: base.mapaAgendado && base.mapaAgendado >= corte ? base.bruto : 0,
         coleta: base.coletaTP && base.coletaTP <= corte ? base.bruto : 0,
         entrega: base.entregaTP && base.entregaTP <= corte ? base.bruto : 0,
         coletaTP: base.coletaTP,
@@ -491,9 +493,9 @@ window.pgTiragemEntregueTPReal = function(linha) {
     return window.pgVolumesColetaUnificadosV37(linha).entrega;
 };
 window.getVolFase = function(linha, fObj, tBase) {
-    // MAPA SOLICITADO = TIRAGEM COLETADA com Mapa_Agendado (EB) >= hoje.
+    // MAPA SOLICITADO = coluna TIRAGEM COLETADA inteira.
     if (fObj.id === 'col_mapa') {
-        return window.pgMapaSolicitadoAtual(linha);
+        return window.pgTiragemColetadaBruta(linha);
     }
 
     // COLETA TP = TIRAGEM COLETADA somente quando Coleta_TP tem data.
@@ -1763,8 +1765,7 @@ window.pgCalcularColetaFunil = function(base, hoje) {
         );
 
         // MAPA SOLICITADO:
-        // TIRAGEM COLETADA somente quando Mapa_Agendado (EB) >= hoje.
-        // Coleta TP/Entrega TP continuam independentes desta trava de agenda.
+        // coluna TIRAGEM COLETADA inteira, incluindo o já coletado e o ainda agendado.
         const volumeColeta = window.pgVolumesColetaUnificadosV37(l, hoje);
         const mapaSolicitado = volumeColeta.mapa;
         const dtReal = volumeColeta.coletaTP;
@@ -1779,8 +1780,8 @@ window.pgCalcularColetaFunil = function(base, hoje) {
             ? volumeColeta.mapaAgendado
             : null;
         const volumeMapaAgendado = (
-            dtMapaAgendado && dtMapaAgendado >= hoje && !dtReal
-        ) ? mapaSolicitado : 0;
+            dtMapaAgendado && !dtReal
+        ) ? volumeColeta.agendado : 0;
         if (volumeMapaAgendado > 0) {
             out.mapaAgendadoTotal += volumeMapaAgendado;
             somar(dtMapaAgendado, 'agendado', volumeMapaAgendado);
@@ -11967,7 +11968,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
         ['Volume','Saldo vencido por DT Vencido',Math.round(saldoVencidoPrazo),pct(saldoVencidoPrazo),corte,'Auditoria do campo DT Vencido'],
         ['Volume','Tiragem Vencida',Math.round(tiragemVencida),pct(tiragemVencida),'','Valor bruto da coluna TIRAGEM VENCIDA'],
         ['Volume','A Vencer',Math.round(aVencer),pct(aVencer),'','Valor bruto da coluna A_Vencer'],
-        ['Volume','Mapa solicitado',Math.round(mapaSolicitado),pct(mapaSolicitado),'','TIRAGEM COLETADA com Mapa_Agendado >= hoje'],
+        ['Volume','Mapa solicitado',Math.round(mapaSolicitado),pct(mapaSolicitado),'','TIRAGEM COLETADA inteira'],
         ['Volume','Mapa solicitado sem Coleta TP',Math.round(mapaSemColeta),pct(mapaSemColeta),'','Mapa existente sem coleta real'],
         ['Volume',visao.acumulado?'Mapa agendado acumulado':'Mapa agendado no período',Math.round(agendadoQuadrinho),pct(agendadoQuadrinho),fim,'Compromisso futuro usado no gráfico']
     ];
