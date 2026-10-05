@@ -463,16 +463,6 @@
                 if (dtPlan <= hoje) resumo.esperadoHoje += tiragem;
             }
         });
-        if (typeof window.pgComposicaoBacklogDatadoV56 === 'function') {
-            const backlogDatado = window.pgComposicaoBacklogDatadoV56(
-                resumo.prazosRegistros,
-                hoje,
-                hoje
-            );
-            resumo.backlogAtual = backlogDatado.backlog;
-            resumo.backlogSemData = backlogDatado.semData;
-            resumo.pendenteVencido = backlogDatado.backlog;
-        }
         cacheResumos.set(base, {hoje, matriz: window.PG_MATRIZ_SLA, resumo});
         return resumo;
     };
