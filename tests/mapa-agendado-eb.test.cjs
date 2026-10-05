@@ -22,21 +22,32 @@ function contexto() {
   return context.window;
 }
 
-test('Mapa solicitado usa Mapa_Agendado EB e aceita somente data >= hoje', () => {
+test('Mapa solicitado sempre usa a coluna TIRAGEM COLETADA inteira', () => {
+  const w = contexto();
+  const base = { 'TIRAGEM COLETADA': 100 };
+
+  for (const mapaAgendado of ['', '2026-10-04', '2026-10-05', '2026-10-06']) {
+    const v = w.pgVolumesColetaUnificadosV37(
+      { ...base, Mapa_Agendado: mapaAgendado }, '2026-10-05');
+    assert.equal(v.mapa, 100, mapaAgendado || 'sem data');
+  }
+});
+
+test('Mapa agendado usa EB e somente data >= hoje', () => {
   const w = contexto();
   const base = { 'TIRAGEM COLETADA': 100 };
 
   assert.equal(w.pgVolumesColetaUnificadosV37(
-    { ...base, Mapa_Agendado: '2026-10-04' }, '2026-10-05').mapa, 0);
+    { ...base, Mapa_Agendado: '2026-10-04' }, '2026-10-05').agendado, 0);
   assert.equal(w.pgVolumesColetaUnificadosV37(
-    { ...base, Mapa_Agendado: '' }, '2026-10-05').mapa, 0);
+    { ...base, Mapa_Agendado: '' }, '2026-10-05').agendado, 0);
   assert.equal(w.pgVolumesColetaUnificadosV37(
-    { ...base, Mapa_Agendado: '2026-10-05' }, '2026-10-05').mapa, 100);
+    { ...base, Mapa_Agendado: '2026-10-05' }, '2026-10-05').agendado, 100);
   assert.equal(w.pgVolumesColetaUnificadosV37(
-    { ...base, Mapa_Agendado: '2026-10-06' }, '2026-10-05').mapa, 100);
+    { ...base, Mapa_Agendado: '2026-10-06' }, '2026-10-05').agendado, 100);
 });
 
-test('filtro de Mapa_Agendado nao altera Coleta TP nem Entrega TP realizadas', () => {
+test('regra de mapa nao altera Coleta TP nem Entrega TP realizadas', () => {
   const w = contexto();
   const v = w.pgVolumesColetaUnificadosV37({
     'TIRAGEM COLETADA': 100,
@@ -46,7 +57,8 @@ test('filtro de Mapa_Agendado nao altera Coleta TP nem Entrega TP realizadas', (
   }, '2026-10-05');
 
   assert.equal(v.bruto, 100);
-  assert.equal(v.mapa, 0);
+  assert.equal(v.mapa, 100);
+  assert.equal(v.agendado, 0);
   assert.equal(v.coleta, 100);
   assert.equal(v.entrega, 100);
 });
