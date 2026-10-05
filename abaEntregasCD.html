@@ -5,12 +5,12 @@
     <div class="flex-1 overflow-y-auto p-2 scroller bg-neutral-100">
         <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-4">
             <div class="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="mes" checked onchange="window.pgAtualizarPeriodoEntregasCD()"> Mês</label>
-                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="30d" onchange="window.pgAtualizarPeriodoEntregasCD()"> Próximos 30 dias</label>
-                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="7d" onchange="window.pgAtualizarPeriodoEntregasCD()"> Próximos 7 dias</label>
-                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="semana" onchange="window.pgAtualizarPeriodoEntregasCD()"> Semana atual</label>
-                <label class="border border-violet-200 bg-violet-50 rounded-lg px-3 py-2 cursor-pointer"><input type="checkbox" id="acumuladaEntregasCD" checked onchange="window.pgAtualizarPeriodoEntregasCD()"> Visão acumulada</label>
-                <label id="periodoEntregasCD">Mês <input id="mesEntregasCD" type="month" class="border rounded px-2 py-1" onchange="window.pgAtualizarPeriodoEntregasCD()"></label>
+                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="mes" checked onchange="window.pgAtualizarPeriodoEntregasCD('periodo')"> Mês</label>
+                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="30d" onchange="window.pgAtualizarPeriodoEntregasCD('periodo')"> Próximos 30 dias</label>
+                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="7d" onchange="window.pgAtualizarPeriodoEntregasCD('periodo')"> Próximos 7 dias</label>
+                <label class="border border-slate-200 rounded-lg px-3 py-2 cursor-pointer"><input type="radio" name="visaoEntregasCD" value="semana" onchange="window.pgAtualizarPeriodoEntregasCD('periodo')"> Semana atual</label>
+                <label class="border border-violet-200 bg-violet-50 rounded-lg px-3 py-2 cursor-pointer"><input type="checkbox" id="acumuladaEntregasCD" checked onchange="window.pgAtualizarPeriodoEntregasCD('modo-global')"> Visão acumulada (todos)</label>
+                <label id="periodoEntregasCD">Mês <input id="mesEntregasCD" type="month" class="border rounded px-2 py-1" onchange="window.pgAtualizarPeriodoEntregasCD('periodo')"></label>
                 <button type="button" class="border border-slate-300 bg-white hover:bg-slate-50 rounded-lg px-3 py-2 font-bold text-slate-700" onclick="window.pgBaixarBaseEntregasCD(this)">Baixar base CSV</button>
             </div>
         </div>
@@ -18,10 +18,17 @@
             <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
                 <div>
                     <h3 class="text-sm font-black text-slate-800">Visão geral dos CDs</h3>
-                    <p class="text-[11px] text-slate-500 mt-1">Mesma cor = mesmo CD · tracejado = planejado · sólido = realizado.</p>
+                    <p class="text-[11px] text-slate-500 mt-1">Linha = planejado · coluna = realizado · mesma cor = mesmo CD.</p>
                 </div>
-                <span id="notaGraficoGeralEntregasCD" class="text-[11px] font-semibold text-slate-500"></span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <div id="modoGeralEntregasCD" class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-[11px] font-bold">
+                        <button type="button" data-pg-modo="dia" onclick="window.pgDefinirModoGeralEntregasCD(false)" class="rounded-md px-3 py-1.5 transition-colors">Dia a dia</button>
+                        <button type="button" data-pg-modo="acumulado" onclick="window.pgDefinirModoGeralEntregasCD(true)" class="rounded-md px-3 py-1.5 transition-colors">Acumulada</button>
+                    </div>
+                    <span id="notaGraficoGeralEntregasCD" class="text-[11px] font-semibold text-slate-500"></span>
+                </div>
             </div>
+            <div id="flagsEntregasCD" class="flex flex-wrap items-center gap-2 mb-3"></div>
             <div class="relative h-[420px]"><canvas id="grafLinhaEntregasCD"></canvas></div>
         </div>
         <div id="graficosEntregasCD" class="space-y-4"></div>
@@ -53,6 +60,12 @@
     let baseAtivaEntregasCD = [];
     let gruposAtivosEntregasCD = new Map();
     let graficoGeralEntregasCD = null;
+    let acumuladoGeralEntregasCD = true;
+    const cdsOcultosEntregasCD = new Set();
+    const paletaEntregasCD = [
+        '#0C2340', '#418EDE', '#FA4616', '#FCB04E', '#284081',
+        '#10B981', '#7C3AED', '#BE123C', '#0F766E', '#9333EA'
+    ];
 
     const cdFinalEntrega = linha => normalizar(
         linha.CD_FINAL || campo(linha, 'CD DESTINO') || linha.CD || linha.CK
@@ -97,10 +110,12 @@
     const labelDataEntregaCD = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
     const fmtEntregaCD = n => Math.round(Number(n || 0)).toLocaleString('pt-BR');
 
-    const periodoAtualEntregasCD = () => {
+    const periodoAtualEntregasCD = (acumuladoOverride = null) => {
         const hoje = hojePortal();
         const modo = document.querySelector('input[name="visaoEntregasCD"]:checked')?.value || 'mes';
-        const acumulado = !!document.getElementById('acumuladaEntregasCD')?.checked;
+        const acumulado = acumuladoOverride === null
+            ? !!document.getElementById('acumuladaEntregasCD')?.checked
+            : !!acumuladoOverride;
         const inputMes = document.getElementById('mesEntregasCD');
         if (inputMes && !inputMes.value) inputMes.value = hoje.slice(0, 7);
 
@@ -130,6 +145,66 @@
         return total;
     };
 
+    const atualizarBotoesModoEntregaCD = (id, acumulado) => {
+        const bloco = document.getElementById(id);
+        if (!bloco) return;
+        bloco.querySelectorAll('[data-pg-modo]').forEach(botao => {
+            const ativo = botao.dataset.pgModo === (acumulado ? 'acumulado' : 'dia');
+            botao.className = 'rounded-md px-3 py-1.5 transition-colors ' +
+                (ativo ? 'bg-white text-indigo-700 shadow-sm border border-indigo-200' : 'text-slate-500 hover:text-slate-800');
+        });
+    };
+
+    const corCDEntrega = cd => {
+        const cds = Array.from(gruposAtivosEntregasCD.keys())
+            .sort((a, b) => a.localeCompare(b, 'pt-BR', {numeric: true}));
+        const indice = Math.max(0, cds.indexOf(cd));
+        return paletaEntregasCD[indice % paletaEntregasCD.length];
+    };
+
+    const renderFlagsEntregasCD = () => {
+        const bloco = document.getElementById('flagsEntregasCD');
+        if (!bloco) return;
+        const cds = Array.from(gruposAtivosEntregasCD.keys())
+            .sort((a, b) => a.localeCompare(b, 'pt-BR', {numeric: true}));
+        bloco.innerHTML =
+            '<button type="button" onclick="window.pgMostrarTodosCDsEntregas()" class="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50">Todos</button>' +
+            cds.map(cd => {
+                const ativo = !cdsOcultosEntregasCD.has(cd);
+                const cor = corCDEntrega(cd);
+                return '<button type="button" data-pg-cd="' + escapar(cd) + '" onclick="window.pgAlternarCDGeralEntregasCD(\'' +
+                    String(cd).replace(/\\/g, '\\\\').replace(/'/g, "\\'") +
+                    '\')" class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-opacity ' +
+                    (ativo ? 'bg-white text-slate-700 opacity-100' : 'bg-slate-50 text-slate-400 opacity-45') +
+                    '" style="border-color:' + cor + '"><span class="inline-block h-2.5 w-2.5 rounded-full" style="background:' + cor + '"></span>' +
+                    escapar(cd) + '</button>';
+            }).join('');
+    };
+
+    window.pgAlternarCDGeralEntregasCD = function(cd) {
+        if (cdsOcultosEntregasCD.has(cd)) cdsOcultosEntregasCD.delete(cd);
+        else cdsOcultosEntregasCD.add(cd);
+        window.pgRenderGraficoGeralEntregasCD();
+    };
+
+    window.pgMostrarTodosCDsEntregas = function() {
+        cdsOcultosEntregasCD.clear();
+        window.pgRenderGraficoGeralEntregasCD();
+    };
+
+    window.pgDefinirModoGeralEntregasCD = function(acumulado) {
+        acumuladoGeralEntregasCD = !!acumulado;
+        atualizarBotoesModoEntregaCD('modoGeralEntregasCD', acumuladoGeralEntregasCD);
+        window.pgRenderGraficoGeralEntregasCD();
+    };
+
+    window.pgDefinirModoIndividualEntregasCD = function(sufixo, acumulado) {
+        const chk = document.getElementById('acumuladaColetaFunil' + sufixo);
+        if (chk) chk.checked = !!acumulado;
+        atualizarBotoesModoEntregaCD('modoIndividual' + sufixo, !!acumulado);
+        window.renderColetaFinalFunil(sufixo);
+    };
+
     window.pgRenderGraficoGeralEntregasCD = function() {
         const canvas = document.getElementById('grafLinhaEntregasCD');
         const nota = document.getElementById('notaGraficoGeralEntregasCD');
@@ -145,13 +220,22 @@
             return;
         }
 
-        const periodo = periodoAtualEntregasCD();
+        const periodo = periodoAtualEntregasCD(acumuladoGeralEntregasCD);
+        atualizarBotoesModoEntregaCD('modoGeralEntregasCD', periodo.acumulado);
+        renderFlagsEntregasCD();
+
         const contextos = Array.from(gruposAtivosEntregasCD.entries())
             .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', {numeric: true}))
+            .filter(([cd]) => !cdsOcultosEntregasCD.has(cd))
             .map(([cd, linhas]) => {
                 const resumo = window.pgCalcularEntregaCDFunil(linhas, periodo.hoje);
                 return {cd, mapa: new Map(Array.from(resumo.dias.entries()))};
             });
+
+        if (!contextos.length) {
+            if (nota) nota.textContent = 'Selecione ao menos um CD nas flags acima.';
+            return;
+        }
 
         const todosDias = [];
         for (let d = periodo.inicio; d <= periodo.fim; d = addDaysEntregaCD(d, 1)) {
@@ -169,14 +253,10 @@
             return;
         }
 
-        const paleta = [
-            '#0C2340', '#418EDE', '#FA4616', '#FCB04E', '#284081',
-            '#10B981', '#7C3AED', '#BE123C', '#0F766E', '#9333EA'
-        ];
         const datasets = [];
 
-        contextos.forEach((ctx, indice) => {
-            const cor = paleta[indice % paleta.length];
+        contextos.forEach(ctx => {
+            const cor = corCDEntrega(ctx.cd);
             const planejado = pontos.map(d => {
                 if (periodo.acumulado) return somarAteEntregaCD(ctx.mapa, 'esperado', d);
                 return Math.max(0, Number(ctx.mapa.get(d)?.esperado || 0));
@@ -188,34 +268,36 @@
             });
 
             datasets.push({
+                type: 'line',
                 label: ctx.cd + ' · Planejado',
                 data: planejado,
                 borderColor: cor,
                 backgroundColor: cor,
-                borderWidth: 2,
+                borderWidth: 2.5,
                 borderDash: [7, 5],
                 pointRadius: pontos.length > 31 ? 0 : 2,
                 pointHoverRadius: 4,
                 tension: 0.2,
                 fill: false,
-                spanGaps: false
+                spanGaps: false,
+                order: 1
             });
             datasets.push({
+                type: 'bar',
                 label: ctx.cd + ' · Realizado',
                 data: realizado,
                 borderColor: cor,
-                backgroundColor: cor,
-                borderWidth: 3,
-                pointRadius: pontos.length > 31 ? 0 : 2,
-                pointHoverRadius: 4,
-                tension: 0.2,
-                fill: false,
-                spanGaps: false
+                backgroundColor: cor + '99',
+                borderWidth: 1,
+                borderRadius: 3,
+                categoryPercentage: 0.82,
+                barPercentage: 0.86,
+                order: 2
             });
         });
 
         graficoGeralEntregasCD = new Chart(canvas.getContext('2d'), {
-            type: 'line',
+            type: 'bar',
             data: {
                 labels: pontos.map(labelDataEntregaCD),
                 datasets
@@ -226,10 +308,7 @@
                 animation: false,
                 interaction: {mode: 'index', intersect: false},
                 plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: {boxWidth: 16, boxHeight: 3, usePointStyle: false, font: {size: 10}}
-                    },
+                    legend: {display: false},
                     tooltip: {
                         callbacks: {
                             label: contexto => contexto.dataset.label + ': ' + fmtEntregaCD(contexto.parsed.y)
@@ -421,16 +500,25 @@
             [{nome: 'Entregas_por_CD', cabecalho, linhas}], elemento);
     };
 
-    window.pgAtualizarPeriodoEntregasCD = function() {
+    window.pgAtualizarPeriodoEntregasCD = function(acao = 'periodo') {
         const modo = document.querySelector('input[name="visaoEntregasCD"]:checked')?.value || 'mes';
-        const acumulado = !!document.getElementById('acumuladaEntregasCD')?.checked;
+        const acumuladoGlobal = !!document.getElementById('acumuladaEntregasCD')?.checked;
         const mes = document.getElementById('mesEntregasCD');
         if (mes && !mes.value) mes.value = hojePortal().slice(0, 7);
         document.getElementById('periodoEntregasCD')?.classList.toggle('hidden', modo !== 'mes');
+
+        const aplicarModoEmTodos = acao === 'modo-global' || acao === 'inicial';
+        if (aplicarModoEmTodos) {
+            acumuladoGeralEntregasCD = acumuladoGlobal;
+            atualizarBotoesModoEntregaCD('modoGeralEntregasCD', acumuladoGeralEntregasCD);
+        }
+
         sufixosAtivos.forEach(sufixo => {
             document.querySelectorAll('input[name="visaoColetaFunil' + sufixo + '"]').forEach(r => r.checked = r.value === modo);
-            document.getElementById('acumuladaColetaFunil' + sufixo).checked = acumulado;
+            const chk = document.getElementById('acumuladaColetaFunil' + sufixo);
+            if (aplicarModoEmTodos && chk) chk.checked = acumuladoGlobal;
             document.getElementById('mesColetaFunil' + sufixo).value = mes?.value || hojePortal().slice(0, 7);
+            atualizarBotoesModoEntregaCD('modoIndividual' + sufixo, !!chk?.checked);
             window.renderColetaFinalFunil(sufixo);
         });
         window.pgRenderGraficoGeralEntregasCD();
@@ -473,9 +561,15 @@
             window.pgContextosEntregasCD[sufixo] = {base: grupos.get(cd), cd, entrega: true};
             const card = document.createElement('div');
             card.className = 'bg-white p-4 rounded-xl shadow-sm border border-slate-200';
-            card.innerHTML = `<div class="flex items-center justify-between gap-3 mb-4">
+            card.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h3 class="text-sm font-black text-slate-800">${escapar(cd)}</h3>
-                <button type="button" class="text-xs font-bold text-slate-600 border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50" onclick="window.pgExtrairPontoColetaV35('${sufixo}', 0, 'base', this)">Baixar auditoria</button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <div id="modoIndividual${sufixo}" class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-[11px] font-bold">
+                        <button type="button" data-pg-modo="dia" onclick="window.pgDefinirModoIndividualEntregasCD('${sufixo}', false)" class="rounded-md px-3 py-1.5 transition-colors">Dia a dia</button>
+                        <button type="button" data-pg-modo="acumulado" onclick="window.pgDefinirModoIndividualEntregasCD('${sufixo}', true)" class="rounded-md px-3 py-1.5 transition-colors">Acumulada</button>
+                    </div>
+                    <button type="button" class="text-xs font-bold text-slate-600 border border-slate-200 rounded px-3 py-1.5 hover:bg-slate-50" onclick="window.pgExtrairPontoColetaV35('${sufixo}', 0, 'base', this)">Baixar auditoria</button>
+                </div>
                 </div>
                 <div style="display:none" aria-hidden="true">
                     ${['mes','30d','7d','semana'].map(m => `<input type="radio" name="visaoColetaFunil${sufixo}" value="${m}" ${m === 'mes' ? 'checked' : ''}>`).join('')}
@@ -491,7 +585,7 @@
             container.appendChild(card);
         });
         if (!sufixosAtivos.length) container.innerHTML = '<div class="bg-white p-4 rounded-xl text-sm text-slate-500">Nenhum CD nos filtros selecionados.</div>';
-        window.pgAtualizarPeriodoEntregasCD();
+        window.pgAtualizarPeriodoEntregasCD('inicial');
     };
 })();
 </script>
