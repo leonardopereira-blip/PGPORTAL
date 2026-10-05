@@ -1,7 +1,7 @@
 <script>
 (function(){
   'use strict';
-  var estado={modelo:null,aberto:null,selecionada:'geral',pagina:0,cache:null,diaChart:null,grupoChart:null,baseLocal:false};
+  var estado={modelo:null,aberto:null,selecionada:'todas',pagina:0,cache:null,diaChart:null,grupoChart:null,baseLocal:false};
   var cores=['#a8bed6','#FCB04E','#fa9e74','#FA4616','#c73412','#82240e'];
   var el=function(id){return document.getElementById(id);};
   var esc=function(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
