@@ -1915,6 +1915,10 @@ window.pgCalcularColetaFunil = function(base, hoje) {
         }
     });
 
+    // Em qualquer visão que consome o resumo de Coleta Final, o vencido
+    // deve ser o mesmo backlog datado exibido no gráfico/resumo.
+    out.pendenteVencido = backlogDatadoV56.backlog;
+
     // Contagem e volume já apurados a partir dos novos campos.
     return out;
 };
