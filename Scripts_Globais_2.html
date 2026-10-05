@@ -1080,7 +1080,7 @@ function aplicarFiltros() {
     );
 
     const basePCPDiretoTP = basePCP.filter(l =>
-        window.pgEhDestinoCD(l)
+        !window.pgEhDestinoAcabadora(l)
     );
 
     if (origem === 'TODOS') {
@@ -3432,18 +3432,11 @@ let tRef = document.getElementById('filtroReferencia').value;
     // Auditoria nao interfere em filtros, porcentagens, cronologia ou dados.
     window.pgAuditoriaBrutoV56 = {
         totalCanonico:tGeral, totalBruto:pgTotalBrutoV56,
-        totalExibido:totalBaseFunil,
         fonte:pgReferenciaV56('geral','GERAL'),
         linhasFonte:pgLinhasBrutasV56.length
     };
 
-    // Destino = CD: o Total Base do Funil NÃO recalcula nada.
-    // Ele espelha exatamente o mesmo resumo que alimenta o gráfico de coleta abaixo.
-    // Demais recortes preservam a regra histórica do Funil.
-    const totalBaseFunil = destinoCDAtivo
-        ? Number(resumoColetaUnico?.total || 0)
-        : tGeral;
-    let hFunil = `<div class="funnel-layer bg-black w-full shadow-lg rounded-t-md text-white text-center py-1">00 - Total Base (${window.formatarBR(totalBaseFunil)} | 100%)</div>`;
+    let hFunil = `<div class="funnel-layer bg-black w-full shadow-lg rounded-t-md text-white text-center py-1">00 - Total Base (${window.formatarBR(pgTotalBrutoV56)} | 100%)</div>`;
     
     fasesAtivas.forEach((f, index) => {
         let tReal = fTotais[f.id].real;
@@ -9715,15 +9708,6 @@ window.exportarDivergenciasColetas = function() {
         }
     };
 
-    const PG_DESTINOS_CD_EXCECAO = new Set(['POSIGRAF', 'ATHOS', 'KN', 'RAIZES']);
-    const PG_DESTINOS_GRAFICA_NAO_CD = new Set(
-        Object.values(PG_PESSOAS)
-            .flatMap(p => p.graficas || [])
-            .map(pgNorm)
-            .filter(n => n && !PG_DESTINOS_CD_EXCECAO.has(n))
-    );
-    const PG_DESTINOS_VAZIOS = new Set(['', '-', 'N/A', 'NA', '(VAZIO)', 'VAZIO', 'SEM CD', 'SEM DESTINO']);
-
     const PG_GESTORES = {
         'camila.pagliuca@arcoeducacao.com.br': 'CAMILA',
         'jaqueline.melo@arcoeducacao.com.br': 'JAQUELINE'
@@ -9789,25 +9773,12 @@ window.exportarDivergenciasColetas = function() {
 
     window.pgEhFonteAcabadora = l => pgMetaLinha(l).fonteAcabadora;
 
-    // Roteamento operacional:
-    // - destino vazio/N/A nunca é CD;
-    // - nomes de fornecedor/gráfica na coluna CD DESTINO (ex.: WALPRINT, REPROSET)
-    //   são tratados como rota de acabadora, não como CD;
-    // - POSIGRAF, ATHOS, KN e RAÍZES preservam a classificação histórica de destino CD.
-    function pgDestinoVazio(l) {
-        return PG_DESTINOS_VAZIOS.has(pgCdDestinoRoteamento(l));
-    }
+    // Lista fechada para Todas/Gráfica. ATHOS, KN e RAÍZES são destino CD.
     function pgEhAcabadora(l) {
-        if (window.pgEhFonteAcabadora(l)) return false;
-        const rota = pgCdDestinoRoteamento(l);
-        if (pgDestinoVazio(l)) return false;
-        return PG_ACABADORAS.includes(rota) ||
-            PG_DESTINOS_GRAFICA_NAO_CD.has(rota) ||
-            rota.includes('ACABADORA');
+        return !window.pgEhFonteAcabadora(l) && PG_ACABADORAS.includes(pgCdDestinoRoteamento(l));
     }
     window.pgEhDestinoAcabadora = pgEhAcabadora;
-    window.pgEhDestinoCD = l => !window.pgEhFonteAcabadora(l) && !pgDestinoVazio(l) && !pgEhAcabadora(l);
-    window.pgDestinoOperacionalValido = l => window.pgEhFonteAcabadora(l) || !pgDestinoVazio(l);
+    window.pgEhDestinoCD = l => !pgEhAcabadora(l);
     window.pgAcabadoraDaLista = l => PG_ACABADORAS.includes(pgGraficaLinha(l));
 
     // EXCLUSIVO do filtro Origem = Gráfica + Destino = Acabadora.
@@ -9833,9 +9804,7 @@ window.exportarDivergenciasColetas = function() {
     };
     window.pgLinhaDoDestino = function(l, destino, origem) {
         if (origem === 'ACABADORA') return window.pgEhFonteAcabadora(l);
-        if (destino === 'TODOS') return true;
-        if (destino === 'ACAB') return pgEhAcabadora(l);
-        return window.pgEhDestinoCD(l);
+        return destino === 'TODOS' || (destino === 'ACAB' ? pgEhAcabadora(l) : !pgEhAcabadora(l));
     };
     // TOTAL BASE — regra exclusiva para ORIGEM = TODAS.
     // Não compensa volume, não tenta parear PCP x PCP_ACABADORAS e não altera fases.
@@ -11891,7 +11860,13 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
     const vazio=v=>['','-','N/A','NA','(VAZIO)','VAZIO','SEM CD','SEM DESTINO'].includes(norm(v));
     const rota=l=>{
         if(fonte(l)==='PCP_ACABADORAS')return{acabadora:grafica(l),cd:vazio(rawCd(l))?'':rawCd(l)};
-        if(window.pgEhDestinoAcabadora?.(l))return{acabadora:rawRota(l),cd:''};
+        const rotaNorm=norm(rawRota(l));
+        const fornecedorConhecido=(typeof PG_PESSOAS!=='undefined') &&
+            Object.values(PG_PESSOAS).some(p=>(p.graficas||[]).some(g=>norm(g)===rotaNorm));
+        const rotaAcab=window.pgEhDestinoAcabadora?.(l) ||
+            (fornecedorConhecido && !['POSIGRAF','ATHOS','KN','RAIZES'].includes(rotaNorm)) ||
+            rotaNorm.includes('ACABADORA');
+        if(rotaAcab)return{acabadora:rawRota(l),cd:''};
         return{acabadora:'',cd:vazio(rawCd(l))?'':rawCd(l)};
     };
     const volumeBase=l=>Math.max(0,num(fonte(l)==='PCP_ACABADORAS'?campo(l,'TIRAGEM A ENTREGAR (total por CD)'):campo(l,'TIRAGEM')));
