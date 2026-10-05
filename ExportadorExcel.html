@@ -63,8 +63,13 @@
     return serial < 61 ? serial - 1 : serial;
   }
   var DATAS = new Set(['Coleta início (re)plan', 'Coleta fim (re)plan', 'Coleta fim baseline',
-    'Coleta fim usada', 'Entrega início usada', 'Entrega fim prevista', 'Meta original', 'Prazo combinado Posi', 'Meta aplicada']);
-  var VOLUMES = new Set(['Tiragem total', 'Dentro da meta', 'Fora da meta', 'Sem previsão', 'Tiragem por DU']);
+    'Coleta fim usada', 'Entrega início usada', 'Entrega fim prevista', 'Meta original', 'Prazo combinado Posi', 'Meta aplicada',
+    'Data (Re)Plan', 'Data Baseline', 'Data Plan usada', 'DT Vencido', 'DT a vencer', 'Coleta TP', 'Mapa Agendado',
+    'Data de referência', 'Início do período', 'Fim do período', 'Corte']);
+  var VOLUMES = new Set(['Tiragem total', 'Dentro da meta', 'Fora da meta', 'Sem previsão', 'Tiragem por DU',
+    'Tiragem', 'Tiragem Vencida', 'A Vencer', 'Tiragem Coletada', 'Planejado até hoje', 'Planejado futuro',
+    'Coletado até hoje', 'Backlog portal (bruto)', 'Saldo vencido por DT Vencido', 'Sem data', 'Mapa agendado',
+    'Base', 'Planejado', 'Coletado', 'Forecast', 'Backlog líquido', 'Futuro', 'Valor']);
   var INTEIROS = new Set(['SLA (dias corridos)', 'DU totais', 'DU dentro da meta', 'DU fora da meta']);
   function tipo(nome) {
     return DATAS.has(nome) ? 3 : VOLUMES.has(nome) ? 4 : nome === '% dentro da meta' ? 5 : INTEIROS.has(nome) ? 6 : 2;
@@ -144,5 +149,105 @@
       ['xl/styles.xml', ESTILOS], ['xl/worksheets/sheet1.xml', sheet]
     ]);
   };
+
+  function nomeAbaSeguro(nome, usado) {
+    var base = String(nome || 'Aba').replace(/[\\\/\?\*\[\]\:]/g, ' ').trim() || 'Aba';
+    base = base.slice(0, 31);
+    var final = base, n = 2;
+    while (usado.has(final)) {
+      var sufixo = ' (' + n++ + ')';
+      final = base.slice(0, 31 - sufixo.length) + sufixo;
+    }
+    usado.add(final);
+    return final;
+  }
+
+  function xmlAba(base) {
+    if (!base || !Array.isArray(base.cabecalho) || !base.cabecalho.length || !Array.isArray(base.linhas)) {
+      throw new Error('Aba auditável inválida.');
+    }
+    if (base.linhas.length > 1048575 || base.cabecalho.length > 16384) {
+      throw new Error('A seleção ultrapassa o limite de linhas ou colunas do Excel.');
+    }
+    var nomes = base.cabecalho;
+    var letras = nomes.map(function (_, j) { return coluna(j + 1); });
+    var estilos = nomes.map(tipo);
+    var larguras = nomes.map(largura);
+    var ultima = letras[letras.length - 1] + Math.max(1, base.linhas.length + 1);
+    var rows = ['<row r="1" ht="48" customHeight="1">' + nomes.map(function (n, j) {
+      return celula(letras[j] + '1', n, 1);
+    }).join('') + '</row>'];
+
+    for (var r = 0; r < base.linhas.length; r++) {
+      var linha = base.linhas[r] || [], numero = r + 2, cells = new Array(nomes.length), linhasVisuais = 1;
+      for (var j = 0; j < nomes.length; j++) {
+        cells[j] = celula(letras[j] + numero, linha[j], estilos[j]);
+        if (estilos[j] === 2 && linha[j] != null) {
+          var segmentos = String(linha[j]).split(/\r\n|\r|\n/), visuais = 0;
+          for (var k = 0; k < segmentos.length; k++) {
+            visuais += Math.max(1, Math.ceil(segmentos[k].length / Math.max(8, larguras[j] - 2)));
+          }
+          linhasVisuais = Math.max(linhasVisuais, visuais);
+        }
+      }
+      rows.push('<row r="' + numero + '" ht="' + Math.min(150, Math.max(30, linhasVisuais * 15 + 4)) +
+        '" customHeight="1">' + cells.join('') + '</row>');
+    }
+
+    return XML + '<worksheet xmlns="' + NS + '"><dimension ref="A1:' + ultima + '"/>' +
+      '<sheetViews><sheetView workbookViewId="0"><pane xSplit="2" ySplit="1" topLeftCell="C2" activePane="bottomRight" state="frozen"/>' +
+      '<selection pane="bottomRight" activeCell="C2" sqref="C2"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="30"/>' +
+      '<cols>' + nomes.map(function (n, j) {
+        return '<col min="' + (j + 1) + '" max="' + (j + 1) + '" width="' + larguras[j] + '" customWidth="1"/>';
+      }).join('') + '</cols><sheetData>' + rows.join('') + '</sheetData><autoFilter ref="A1:' + ultima + '"/>' +
+      '<pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.3" footer="0.3"/></worksheet>';
+  }
+
+  window.pgGerarExcelAbas = function (abas) {
+    if (!Array.isArray(abas) || !abas.length) throw new Error('Nenhuma aba para exportar.');
+    var rel = 'http://schemas.openxmlformats.org/package/2006/relationships';
+    var docRel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    var usados = new Set();
+    var preparadas = abas.map(function (aba, i) {
+      return {
+        nome: nomeAbaSeguro(aba.nome || ('Aba ' + (i + 1)), usados),
+        xml: xmlAba(aba)
+      };
+    });
+
+    var overrides = preparadas.map(function (_, i) {
+      return '<Override PartName="/xl/worksheets/sheet' + (i + 1) +
+        '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+    }).join('');
+    var sheets = preparadas.map(function (aba, i) {
+      return '<sheet name="' + textoXML(aba.nome) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>';
+    }).join('');
+    var rels = preparadas.map(function (_, i) {
+      return '<Relationship Id="rId' + (i + 1) + '" Type="' + docRel +
+        '/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>';
+    }).join('');
+    var styleId = preparadas.length + 1;
+
+    var arquivos = [
+      ['[Content_Types].xml', XML + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        overrides +
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+      ['_rels/.rels', XML + '<Relationships xmlns="' + rel + '"><Relationship Id="rId1" Type="' +
+        docRel + '/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+      ['xl/workbook.xml', XML + '<workbook xmlns="' + NS + '" xmlns:r="' + docRel +
+        '"><bookViews><workbookView/></bookViews><sheets>' + sheets + '</sheets></workbook>'],
+      ['xl/_rels/workbook.xml.rels', XML + '<Relationships xmlns="' + rel + '">' + rels +
+        '<Relationship Id="rId' + styleId + '" Type="' + docRel + '/styles" Target="styles.xml"/></Relationships>'],
+      ['xl/styles.xml', ESTILOS]
+    ];
+    preparadas.forEach(function (aba, i) {
+      arquivos.push(['xl/worksheets/sheet' + (i + 1) + '.xml', aba.xml]);
+    });
+    return zip(arquivos);
+  };
+
 })();
 </script>
