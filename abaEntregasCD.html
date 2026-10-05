@@ -429,8 +429,9 @@
                 ? volumes.mapaAgendado : null;
             const dtMapaAgendado = dtAgendaColeta
                 ? window.pgDataPlanoEntregaSLA(linha, dtAgendaColeta) : null;
-            const volumeMapaAgendado = dtMapaAgendado && dtMapaAgendado >= hoje && !dtReal
-                ? volumes.mapa : 0;
+            const volumeMapaAgendado = dtAgendaColeta && dtAgendaColeta >= hoje &&
+                dtMapaAgendado && dtMapaAgendado >= hoje && !dtReal
+                ? volumes.bruto : 0;
             // Mantém o contrato do gráfico compartilhado; dtColeta representa Entrega_TP nesta visão.
             const prazo = {
                 linha, vencida: !dtPlan || dtPlan <= hoje ? tiragem : 0,
