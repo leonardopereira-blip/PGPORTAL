@@ -5,18 +5,20 @@ window.graficoInspGraficas = null;
 window.graficoInspSemana = null;
 
 function iniciarAbaInspecaoCDs() {
-    console.log("=== DIAGNÓSTICO INSPEÇÕES CDS ===");
-    console.log("1. A variável de dados existe?", !!window.DADOS_INSPECOES_CACHE);
-    
-    if (window.DADOS_INSPECOES_CACHE) {
-        console.log("2. Quantas linhas de inspeção chegaram?", window.DADOS_INSPECOES_CACHE.length);
-        if (window.DADOS_INSPECOES_CACHE.length > 0) {
-            console.log("3. Amostra da 1ª linha:", window.DADOS_INSPECOES_CACHE[0]);
-        }
-    }
-    
     if (!window.DADOS_INSPECOES_CACHE || window.DADOS_INSPECOES_CACHE.length === 0) {
-        console.error("❌ ERRO: O Google Sheets não enviou os dados! Verifique se a aba se chama exatamente 'qlogs_V4' (sem espaços no final).");
+        if(window.setLoading) window.setLoading(true, "Carregando Inspeções CDs...");
+        google.script.run
+            .withSuccessHandler(function(dados) {
+                window.DADOS_INSPECOES_CACHE = dados || [];
+                window.filtrosInspIniciados = false;
+                if(window.setLoading) window.setLoading(false);
+                iniciarAbaInspecaoCDs();
+            })
+            .withFailureHandler(function(erro) {
+                if(window.setLoading) window.setLoading(false);
+                console.error("[QUALIDADE] Falha ao carregar Inspeções CDs:", erro);
+            })
+            .getDadosInspecaoCDs();
         return;
     }
     
