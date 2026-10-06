@@ -9810,8 +9810,8 @@ window.exportarDivergenciasColetas = function() {
         return pgMetaLinha(l).cd;
     }
 
-    // Para decidir o ROTEAMENTO PCP -> acabadora, a coluna soberana é CD DESTINO.
-    // CD_FINAL pode já representar o CD final e esconder KN ACABADORA / RAÍZES ACABADORA.
+    // Para decidir o ROTEAMENTO PCP -> acabadora, a coluna soberana é CD_MAPA.
+    // CD DESTINO original não participa da classificação da PCP.
     function pgCdDestinoRoteamento(l) {
         return pgMetaLinha(l).rota;
     }
