@@ -652,7 +652,12 @@
         else if(visaoAlvo === 'aderencia') {
             if(elAderencia) elAderencia.classList.remove('hidden');
             if(elTitulo) elTitulo.innerText = '🏆 Aderência e Produtividade';
-            dadosAtivosPre = dadosPreProdBrutos; 
+            dadosAtivosPre = dadosPreProdBrutos;
+            // Garante o primeiro desenho depois que a visão realmente ficou visível.
+            // O cálculo continua sendo feito por aplicarFiltrosInteligentes/renderizarPainelAderencia.
+            window.requestAnimationFrame(() => {
+                if(visaoAtualPre === 'aderencia') aplicarFiltrosInteligentes();
+            });
         }
         else if(visaoAlvo === 'resumo') {
             if(elResumo) elResumo.classList.remove('hidden');
@@ -1097,10 +1102,16 @@
     }
 
     function renderizarPainelAderencia() {
-        let dados = dadosFiltradosPre;
+        let dados = Array.isArray(dadosFiltradosPre) ? dadosFiltradosPre : [];
+        let faseEl = document.getElementById('filtroFaseAderencia');
+        let metricaEl = document.getElementById('filtroMetricaAderencia');
+        if(!faseEl || !metricaEl) {
+            console.warn('[PRÉ-PRODUÇÃO] Aderência aguardando montagem da tela.');
+            return;
+        }
         
-        let faseSel = document.getElementById('filtroFaseAderencia').value;
-        let metrSel = document.getElementById('filtroMetricaAderencia').value; 
+        let faseSel = faseEl.value;
+        let metrSel = metricaEl.value; 
 
         let kAd = { env: {pT:0, pP:0, rT:0, rP:0}, rec: {pT:0, pP:0, rT:0, rP:0}, apv: {pT:0, pP:0, rT:0, rP:0} };
         let grafPrin = {}, grafReen = {}; let marcPrin = {}, marcReen = {};
@@ -1230,6 +1241,8 @@
             datasets: [ { label: 'No Prazo', data: lbAn.map(m=>stAn[m].p), backgroundColor: '#10b981', borderRadius: 2 }, { label: 'Atrasado', data: lbAn.map(m=>stAn[m].f), backgroundColor: '#ef4444', borderRadius: 2 } ]
         }, optStacked);
     }
+
+    window.renderizarPainelAderencia = renderizarPainelAderencia;
 
     function desenharGraficoChartJS(canvasId, tipo, data, customOptions) {
         let ctx = document.getElementById(canvasId).getContext('2d');
