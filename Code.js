@@ -100,7 +100,17 @@ function getDadosDashboard() {
 function _processarDadosDashboardBruto() {
   pgValidarCabecalhosDashboard_();
   var result = [];
+  var personalizacaoPorSku = typeof pgLerEspecificacaoPersonalizacao_ === 'function'
+    ? pgLerEspecificacaoPersonalizacao_()
+    : Object.create(null);
+
   function limparHeader(h) { return h ? String(h).trim() : ""; }
+  function aplicarEspecificacao(obj) {
+    var sku = String(obj["SKU_REAL"] || obj["SKU"] || obj["Produto"] || obj["Item"] || "").trim().toUpperCase();
+    var esp = sku ? personalizacaoPorSku[sku] : null;
+    obj["CLIENTE_PERSONALIZADO"] = esp && esp.clientePersonalizado ? "Sim" : "Não";
+    obj["CAPA_PERSONALIZADA"] = esp && esp.capaPersonalizada ? "Sim" : "Não";
+  }
  
   var safeIsoDate = function(valData) {
       if (!valData || valData === "") return "";
@@ -174,6 +184,7 @@ function _processarDadosDashboardBruto() {
              if(op && sku) obj["Chave"] = op + "_" + sku;
         }
         if(obj["Chave"]) {
+          aplicarEspecificacao(obj);
           obj["_SOURCE"] = "PCP";
           result.push(obj);
         }
@@ -240,6 +251,7 @@ function _processarDadosDashboardBruto() {
         obj["Chave"] = pgCorrigirPrefixoSasWaysAcab_(obj["Chave"]);
 
         if(obj["Chave"]) {
+          aplicarEspecificacao(obj);
           obj["_SOURCE"] = "ACABADORA";
           result.push(obj);
         }
