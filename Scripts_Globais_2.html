@@ -664,8 +664,14 @@ window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar) {
     }
 
     function atualizarDadosGeral() {
-        if(window.setLoading) window.setLoading(true, "Atualizando Dashboard...");
-        google.script.run.withSuccessHandler(iniciarDashboard).withFailureHandler(erroAoCarregar).getDadosDashboard();
+        if(window.setLoading) window.setLoading(true, "Atualizando Produção...");
+        google.script.run
+            .withSuccessHandler(function() {
+                // Usa a mesma geração mensal que será lida na próxima abertura.
+                window.location.reload();
+            })
+            .withFailureHandler(erroAoCarregar)
+            .atualizarCacheDashboard();
     }
 
     window.pgSolicitacaoCancelada = function(linha) {
