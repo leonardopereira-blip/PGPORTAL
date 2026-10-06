@@ -156,11 +156,11 @@
     <div id="maMatriz" class="overflow-x-auto max-w-full" aria-label="Matriz com rolagem horizontal"></div>
   </div>
   <div class="ma-card px-4 py-3">
-    <div class="text-xs font-black text-slate-800 mb-1">Distribuição do realizado + saldo previsto · meta original de cada marca</div>
+    <div class="text-xs font-black text-slate-800 mb-1">Distribuição do realizado + saldo previsto · meta do cenário selecionado</div>
     <div id="maLegendaPrazos" class="text-[11px] text-slate-600 leading-relaxed mb-2"></div>
     <div class="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-600">
-      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-blue mr-1"></i> Dentro da meta original</span>
-      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-orange mr-1"></i> Fora da meta original</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-blue mr-1"></i> Dentro da meta</span>
+      <span><i class="inline-block w-3 h-3 rounded-sm ma-legend-orange mr-1"></i> Fora da meta</span>
     </div>
   </div>
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -476,6 +476,7 @@
         linha:l,inicioColeta:inicioColeta,inicioAusente:inicioAusente,inicioPlan:inicioPlan,
         fimReplanColeta:fimReplanColeta,fimColetaUsada:replanValido?fimReplanColeta:null,
         origemColeta:origemColeta,replanValido:replanValido,motivoReplan:motivoReplan,statusSemPrevisao:statusSemPrevisao,
+        slaDias:typeof window.pgDiasSLALinha==='function'?window.pgDiasSLALinha(l):null,
         pendentePlanejado:pendentePlanejado,
         posiPropria:posiPropria,dataAcordada:dataAcordada,metaAplicada:metaAplicada,rateioAplicado:rateioAplicado,
         combinadoAdicional:combinadoAdicional,conhecido:conhecido,
@@ -516,15 +517,28 @@
       return a;
     },{total:0,previsto:0,pos:0,semData:0,ate15:0,apos15:0,excecao:0,real:0,realTem:false,realCD:0,realCDTem:false,combinadoAdicional:0});
   }
+  // Os mesmos volumes inteiros alimentam todos os componentes e a auditoria.
+  // O arredondamento acontece uma vez por linha, antes de qualquer soma da visão.
+  function volumesVisao(items){
+    return items.map(function(item){
+      var i=Object.assign({},item);
+      ['total','coletadaBruta','realizado','real','previsto','semData','ate15','excecao','combinadoAdicional'].forEach(function(c){
+        i[c]=Math.round(i[c]||0);
+      });
+      i.pos=i.total-i.previsto-i.semData;
+      i.apos15=i.total-i.ate15-i.semData;
+      i.realCD=i.realizado;
+      return i;
+    });
+  }
   function card(rotulo, valor, sub, classe) {
     return '<div class="ma-kpi '+(classe||'')+'"><p class="text-[10px] uppercase tracking-wider font-black opacity-75">'+escapeHTML(rotulo)+'</p>'+
       '<div class="text-2xl md:text-3xl font-black tabular-nums mt-2">'+valor+'</div><p class="text-[10px] mt-2 opacity-85">'+sub+'</p></div>';
   }
   function fmtPrazo(iso){return /^\d{4}-\d{2}-\d{2}$/.test(iso)?iso.slice(8)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4):iso;}
   // Cada registro vem da própria linha que alimenta a visão, sem reagrupar por SKU.
-  window.pgMAObterAuditoria=function(){
-    if(!Array.isArray(window.pgMAUltimosItens))window.processarMetaArmazem();
-    var cenario=estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
+  function montarAuditoria(items,cenarioId){
+    var cenario=cenarioId==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
     var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio','OP',
       'Tiragem total','Tiragem coletada','Dentro da meta','Fora da meta','Sem previsão','% dentro da meta',
       'Entrega TP real','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
@@ -532,14 +546,14 @@
       'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
       'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
       'Fonte','ID da linha','Chave','Cenário'];
-    var linhas=(window.pgMAUltimosItens||[]).map(function(i){
+    var linhas=items.map(function(i){
       var l=i.linha||{},campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
       var preenchido=function(v){return v!==null&&v!==undefined&&String(v).trim()!=='';};
       var dataFonte=function(v){return preenchido(v)?(window.pgNormalizarDataColeta(v)||String(v)):'';};
       var inicioRaw=campo('Coleta/Internalização de estoque inicial (re) plan');
       var fimRaw=campo('Coleta/Internalização de estoque final (re) plan');
       var coletaFim=i.fimColetaUsada||'';
-      var sla=typeof window.pgDiasSLALinha==='function'?window.pgDiasSLALinha(l):null;
+      var sla=i.slaDias;
       var origem=i.origemColeta||'Sem previsão';
       var r=i.rateioAplicado,porDU=!!r&&!r.entregaUnica;
       var semDU=!!r&&r.motivo==='sem-dias-uteis';
@@ -572,25 +586,22 @@
         String(l.JOIN_KEY||campo('Chave')||campo('CHAVE')||''),cenario];
     });
     return {nome:'Meta_Armazem_Base_Auditavel',cenario:cenario,cabecalho:cabecalho,linhas:linhas};
+  }
+  window.pgMAObterAuditoria=function(){
+    var atual=window.pgMAVisaoAtual;
+    var base=atual?atual.auditoria:montarAuditoria([],estado.cenario);
+    return {nome:base.nome,cenario:base.cenario,cabecalho:base.cabecalho.slice(),
+      linhas:base.linhas.map(function(l){return l.slice();})};
   };
-  function auditoriaArredondada(){
-    var base=window.pgMAObterAuditoria(),h=base.cabecalho;
-    var total=h.indexOf('Tiragem total'),dentro=h.indexOf('Dentro da meta'),fora=h.indexOf('Fora da meta');
-    var sem=h.indexOf('Sem previsão'),percentual=h.indexOf('% dentro da meta'),porDU=h.indexOf('Tiragem por DU');
-    base.linhas.forEach(function(l){
-      [total,dentro,sem,porDU].forEach(function(j){if(typeof l[j]==='number')l[j]=Math.round(l[j]);});
-      // Fora é o saldo, para o arredondamento preservar a tiragem de cada linha.
-      l[fora]=l[total]-l[dentro]-l[sem];
-      l[percentual]=l[total]?Math.round(100*l[dentro]/l[total])/100:0;
-    });
-    return base;
+  function auditoriaVisao(){
+    return window.pgMAObterAuditoria();
   }
   window.pgMABaixarAuditoriaCSV=function(){
-    var base=auditoriaArredondada();
+    var base=auditoriaVisao();
     if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
     var csv=function(v,j){
       var txt=typeof v==='number'?
-        (base.cabecalho[j]==='% dentro da meta'?Math.round(v*100)+'%':String(v).replace('.',',')):String(v??'');
+        (base.cabecalho[j]==='% dentro da meta'?pct(v,1):String(v).replace('.',',')):String(v??'');
       if(j>=14&&j<=24&&/^\d{4}-\d{2}-\d{2}$/.test(txt))txt=fmtPrazo(txt);
       if(typeof v==='string'&&/^[\s]*[=+@-]/.test(txt))txt="'"+txt;
       return '"'+txt.replace(/"/g,'""')+'"';
@@ -608,7 +619,7 @@
     try{
       // Permite pintar o estado do botão antes de preparar a base completa.
       await new Promise(function(resolve){setTimeout(resolve,0);});
-      var base=auditoriaArredondada();
+      var base=auditoriaVisao();
       if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
       if(typeof window.pgGerarExcelAuditoria!=='function')throw new Error('Atualize a página para carregar o exportador Excel');
       var arquivo=window.pgGerarExcelAuditoria(base);
@@ -628,16 +639,16 @@
   }
   function barras(s,label,items){
     if(!s.total)return '<p class="text-sm text-slate-400">Sem volume para esta seleção.</p>';
-    var ok=100*s.ate15/s.total,depois=100*s.apos15/s.total;
+    var ok=100*s.previsto/s.total,depois=100*s.pos/s.total;
     var ways=(items||[]).some(function(l){return l.marca==='WAYS';});
     return '<div><div class="flex items-center justify-between gap-2 text-[11px] mb-2">'+
       '<b class="ma-dist-name" title="'+escapeHTML(label)+'">'+escapeHTML(label)+'</b>'+
-      '<b class="shrink-0">'+pct(s.ate15,s.total)+'</b></div>'+
-      '<div class="flex h-4 rounded-full overflow-hidden" style="background:#e5eef8" aria-label="Dentro da meta original: '+pct(s.ate15,s.total)+'">'+
+      '<b class="shrink-0">'+pct(s.previsto,s.total)+'</b></div>'+
+      '<div class="flex h-4 rounded-full overflow-hidden" style="background:#e5eef8" aria-label="Dentro da meta: '+pct(s.previsto,s.total)+'">'+
       '<span style="background:#418EDE;width:'+ok+'%"></span>'+
       '<span style="background:#FA4616;width:'+depois+'%"></span></div>'+
       '<div class="text-[10px] mt-1 leading-relaxed" style="color:#61738d">'+
-      'Dentro da meta original: <b>'+fmt(s.ate15,true)+'</b> · Fora: <b>'+fmt(s.apos15,true)+'</b>'+
+      'Dentro da meta: <b>'+fmt(s.previsto,true)+'</b> · Fora: <b>'+fmt(s.pos,true)+'</b>'+
       (s.semData?' · Sem data planejada: <b>'+fmt(s.semData,true)+'</b>':'')+'</div>'+
       (ways?'<div class="ma-dist-dates">WAYS: meta original 30/11/2026.</div>':'')+
       (estado.cenario==='com'&&s.excecao>0?'<div class="ma-dist-dates">Dentro do prazo combinado: <b>'+fmt(s.excecao,true)+'</b></div>':'')+'</div>';
@@ -726,7 +737,6 @@
       escondidas:escondidas,geral:soma(items)};
   }
   function matriz(items) {
-    window.pgMAUltimosItens=items.slice();
     var root=document.getElementById('maMatriz'),m=modeloMatriz(items);
     window.pgMAMatrizSnapshot=m;
     var toggle=document.getElementById('maOutrosToggle');
@@ -910,7 +920,14 @@
     var visao=document.getElementById('maVisao');if(visao)visao.value=estado.matrizModo;
     atualizarFiltroTipoMaterial(base);
     var items=estado.tipoMaterial==='TODOS'?base:base.filter(function(l){return l.tipo===estado.tipoMaterial;});
-    var total=soma(items);
+    items=volumesVisao(items);
+    var resultado={cenario:estado.cenario,itens:items,total:soma(items)};
+    resultado.auditoria=montarAuditoria(resultado.itens,resultado.cenario);
+    // Publicar o resultado completo antes de renderizar qualquer componente.
+    window.pgMAVisaoAtual=resultado;
+    window.pgMAUltimosItens=resultado.itens;
+    items=resultado.itens;
+    var total=resultado.total;
     var missing=items.filter(function(l){return l.semData>0;}).length;
     aviso.classList.toggle('hidden',!missing);
     aviso.textContent=missing?missing+' itens sem previsão válida de entrega (data, SLA ou intervalo).':'';

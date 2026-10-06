@@ -78,7 +78,7 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
         normalizada[indice_('Dentro da meta') - 1] - normalizada[indice_('Sem previsão') - 1];
       var total = normalizada[indice_('Tiragem total') - 1];
       normalizada[indice_('% dentro da meta') - 1] = total ?
-        Math.round(100 * normalizada[indice_('Dentro da meta') - 1] / total) / 100 : 0;
+        normalizada[indice_('Dentro da meta') - 1] / total : 0;
       return normalizada;
     });
     resultado = gerarPlanilhaReportExecutiva({
@@ -126,7 +126,7 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
     formato_(sheet, datas, 'dd/MM/yyyy', n);
     formato_(sheet, quantidades, '#,##0', n);
     formato_(sheet, inteiros, '#,##0', n);
-    formato_(sheet, percentuais, '0%', n);
+    formato_(sheet, percentuais, '0.0%', n);
     // Identificadores são texto: preservar zeros iniciais de kit, SKU, OP e chave.
     sheet.getRange(2, 1, n, 9).setNumberFormat('@');
     sheet.getRange(2, 19, n, 1).setNumberFormat('@');
