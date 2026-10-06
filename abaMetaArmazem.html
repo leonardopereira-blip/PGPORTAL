@@ -119,6 +119,20 @@
         <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="true" onclick="window.pgMACenario('sem')">Combinado Posi Fere a Meta</button>
         <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="false" onclick="window.pgMACenario('com')">Combinado Posi não fere a meta</button>
       </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label class="text-[10px] font-black uppercase tracking-wide text-slate-600">Visão
+          <select id="maVisao" class="ma-select mt-1 normal-case" onchange="window.pgMAMatrizModo(this.value)">
+            <option value="marca">Apenas marcas</option>
+            <option value="marcaSerie" selected>Marca × Séries</option>
+            <option value="graficaMarca">Gráfica × Marca</option>
+          </select>
+        </label>
+        <label class="text-[10px] font-black uppercase tracking-wide text-slate-600">Tipo de material
+          <select id="maTipoMaterial" class="ma-select mt-1 normal-case" onchange="window.pgMATipoMaterial(this.value)">
+            <option value="TODOS">Todos</option>
+          </select>
+        </label>
+      </div>
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-t border-slate-200 pt-3">
         <div><h3 class="text-xs font-black">Base auditável</h3><p class="text-[10px] text-slate-500 mt-1">Kit, SKU, descrição, marca, série e todas as datas do cálculo. Segue os filtros e o cenário desta visão.</p></div>
         <div class="flex flex-wrap items-center gap-2">
@@ -136,12 +150,7 @@
         <p class="text-[10px] text-slate-500 mt-1">Marcas nas linhas; TOTAL GERAL primeiro. Arraste as séries prioritárias para mudar a ordem. Outros pode ser expandido; VARIOS permanece por último.</p></div>
       <button type="button" id="maScreenshot" onclick="window.pgMACapturarMatriz()" class="shrink-0 rounded-xl px-4 py-3 text-xs font-black text-white shadow-sm" title="Captura a tabela inteira em PNG, inclusive o conteúdo fora da rolagem">📸 Capturar tabela completa (PNG)</button>
     </div>
-    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-      <div class="flex flex-wrap gap-2" role="group" aria-label="Modo da matriz">
-        <button type="button" class="ma-pill" data-ma-modo="marca" aria-pressed="false" onclick="window.pgMAMatrizModo('marca')">Apenas marcas</button>
-        <button type="button" class="ma-pill" data-ma-modo="marcaSerie" aria-pressed="true" onclick="window.pgMAMatrizModo('marcaSerie')">Marca × Séries</button>
-        <button type="button" class="ma-pill" data-ma-modo="graficaMarca" aria-pressed="false" onclick="window.pgMAMatrizModo('graficaMarca')">Gráfica × Marca</button>
-      </div>
+    <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
       <button type="button" id="maOutrosToggle" class="ma-pill hidden" onclick="window.pgMAAlternarOutros()" title="Exibe individualmente as séries menores, sem duplicar no total">Expandir Outros</button>
     </div>
     <div id="maMatriz" class="overflow-x-auto max-w-full" aria-label="Matriz com rolagem horizontal"></div>
@@ -238,7 +247,7 @@
     if (f.length !== 8) throw new Error('Regra Combinado Posi inválida: ' + s);
     return { marca: f[0], segmento: f[1], serie: f[2], tipo: f[3], datas: f.slice(4) };
   });
-  var estado = {cenario:'sem',matrizModo:'marcaSerie',matrizExpandida:false,ordemPrioridade:null};
+  var estado = {cenario:'sem',matrizModo:'marcaSerie',matrizExpandida:false,ordemPrioridade:null,tipoMaterial:'TODOS'};
   var META = '2026-10-15';
   var META_WAYS = '2026-11-30';
   var META_GEE = '2026-11-12';
