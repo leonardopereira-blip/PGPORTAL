@@ -47,7 +47,11 @@ function lerDoCache(chave) {
 
 // ⚠️ ATENÇÃO: Configure um Acionador (Trigger) de tempo para rodar esta função a cada 10 ou 15 minutos!
 function TRIGGER_AtualizarCache() {
-  var dados = _processarDadosDashboardBruto();
+  var dados;
+  try { dados = _processarDadosDashboardBruto(); } catch (e) {
+    if (e.refNoCabecalhoDashboard) return pgAdiarDashboardPorRef_(e);
+    throw e;
+  }
   salvarNoCache('DADOS_DASHBOARD', dados);
   Logger.log("Cache atualizado com sucesso. SKUs lidos: " + dados.length);
 }
@@ -94,6 +98,7 @@ function getDadosDashboard() {
 
 // A FUNÇÃO ORIGINAL RENOMEADA (A "LEITURA TURBO REVISADA")
 function _processarDadosDashboardBruto() {
+  pgValidarCabecalhosDashboard_();
   var result = [];
   function limparHeader(h) { return h ? String(h).trim() : ""; }
  

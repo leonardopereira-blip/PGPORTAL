@@ -4,10 +4,11 @@ var pgPreparacaoCache_ = null;
 function atualizarTodoOCachePorCopia() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) throw new Error('Uma geracao por copia ja esta em andamento.');
-  var props = PropertiesService.getUserProperties();
   var estado;
   try {
     var origem = SpreadsheetApp.getActiveSpreadsheet().getId();
+    pgValidarCabecalhosDashboard_(origem);
+    var props = PropertiesService.getUserProperties();
     var chave = 'CACHE_SNAPSHOT_' + origem;
     var salvo = props.getProperty(chave);
     estado = salvo ? JSON.parse(salvo) : null;
@@ -52,7 +53,8 @@ function atualizarTodoOCachePorCopia() {
     pgMetadadosCache_ = null;
     pgPreparacaoCache_ = Object.create(null);
     console.log('[snapshot] Preparando e validando todos os JSONs antes de publicar');
-    atualizarTodoOCache();
+    var resultado = atualizarTodoOCache();
+    if (resultado && resultado.motivo === 'REF_NO_CABECALHO') return resultado;
     var preparados = pgPreparacaoCache_;
     pgPreparacaoCache_ = null;
     console.log('[snapshot] Todos os JSONs preparados. Publicando no Drive');
@@ -76,6 +78,9 @@ function atualizarTodoOCachePorCopia() {
     props.setProperty(chave, JSON.stringify(estado));
     console.log('[snapshot] Todos os JSONs publicados; RAM=' + ram);
     return { copiaId: estado.id, criadoEm: estado.criadoEm, arquivos: Object.keys(preparados), ram: ram };
+  } catch (e) {
+    if (e.refNoCabecalhoDashboard) return pgAdiarDashboardPorRef_(e);
+    throw e;
   } finally {
     pgFonteSnapshot_ = null;
     pgPreparacaoCache_ = null;

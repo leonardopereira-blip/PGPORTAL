@@ -296,7 +296,11 @@ function getDadosDashboard_Cache() {
 function atualizarCacheDashboard() {
   var inicio = Date.now();
   console.log('[cache] Dashboard: iniciando leitura das planilhas');
-  var dadosPCP = _processarDadosDashboardBruto();
+  var dadosPCP;
+  try { dadosPCP = _processarDadosDashboardBruto(); } catch (e) {
+    if (e.refNoCabecalhoDashboard) return pgAdiarDashboardPorRef_(e);
+    throw e;
+  }
   console.log('[cache] Dashboard: leitura concluida, ' + dadosPCP.length + ' registros');
   if (!dadosPCP.length) throw new Error('Dashboard sem registros. Cache anterior preservado.');
 
@@ -367,7 +371,10 @@ function atualizarCacheQualidade() {
 
 function atualizarTodoOCache() {
   var falhas = [];
-  try { atualizarCacheDashboard(); } catch (e) {
+  try {
+    var dashboard = atualizarCacheDashboard();
+    if (dashboard && dashboard.motivo === 'REF_NO_CABECALHO') return dashboard;
+  } catch (e) {
     console.error('[cache] Dashboard: ' + e.message);
     falhas.push('cache_dashboard.json: ' + e.message);
   }

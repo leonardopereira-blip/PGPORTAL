@@ -136,6 +136,44 @@ function pgColunaCache_(numero) {
   return texto;
 }
 
+// A trava de importacao considera somente a primeira linha de PCP/PCP_ACABADORAS.
+// REF precisa ocupar a celula inteira: REFERENCIA e outros titulos continuam validos.
+function pgConferirRefCabecalhoDashboard_(cabecalho, nome) {
+  if (nome !== 'PCP' && nome !== 'PCP_ACABADORAS') return;
+  for (var i = 0; i < cabecalho.length; i++) {
+    if (/^#?REF!?$/i.test(String(cabecalho[i] == null ? '' : cabecalho[i]).trim())) {
+      var erro = new Error('REF no cabecalho de ' + nome + '!' + pgColunaCache_(i + 1) + '1');
+      erro.refNoCabecalhoDashboard = true;
+      erro.origem = nome;
+      throw erro;
+    }
+  }
+}
+
+// Consulta os dois cabecalhos antes de ler dados ou iniciar qualquer publicacao.
+// A copia precisa conferir sua fonte original antes de criar arquivos/propriedades.
+function pgValidarCabecalhosDashboard_(idFonte) {
+  ['PCP', 'PCP_ACABADORAS'].forEach(function(nome) {
+    var meta = pgMetadadosPlanilhaCache_(idFonte || pgFonteExternaCache_([nome]));
+    var aba = meta.abas.filter(function(s) { return s.title === nome; })[0];
+    if (!aba) {
+      if (nome === 'PCP_ACABADORAS') return; // Mantem a origem opcional do processador.
+      throw new Error('Aba ausente: ' + nome + '. Cache anterior preservado.');
+    }
+    var colunas = aba.gridProperties && aba.gridProperties.columnCount;
+    if (!colunas) throw new Error('Aba sem grade: ' + nome);
+    var intervalo = "'" + nome + "'!A1:" + pgColunaCache_(colunas) + '1';
+    var cabecalho = pgValoresComRetentativa_(meta.id, intervalo, false).values || [];
+    pgConferirRefCabecalhoDashboard_(cabecalho[0] || [], nome);
+  });
+}
+
+function pgAdiarDashboardPorRef_(erro) {
+  console.log('[cache] Dashboard: atualizacao adiada; ' + erro.message +
+    '. Nenhuma publicacao realizada. Aguardando o proximo gatilho.');
+  return { atualizado: false, motivo: 'REF_NO_CABECALHO', origem: erro.origem };
+}
+
 // A API evita getSheetByName e preserva os tipos usados pelos processadores.
 // Os valores vem em blocos e os formatos de data de amostras pequenas, porque
 // pedir numberFormat celula a celula custa mais que os proprios dados.
@@ -168,6 +206,8 @@ function pgLerAbaCache_(nomes, colunas, exibicao, opcional, calendario) {
       var inicioBloco = Date.now();
       console.log('[cache API] Lendo ' + intervalo);
       var bloco = pgValoresComRetentativa_(meta.id, intervalo, exibicao).values || [];
+      // Protege tambem o recalculo entre a consulta do cabecalho e o primeiro lote.
+      if (inicio === 0) pgConferirRefCabecalhoDashboard_(bloco[0] || [], nome);
       console.log('[cache API] ' + intervalo + ': ' + bloco.length + ' linhas em ' +
         ((Date.now() - inicioBloco) / 1000) + 's');
       if (bloco.length) {
@@ -194,6 +234,10 @@ function pgLerAbaCache_(nomes, colunas, exibicao, opcional, calendario) {
   } catch (e) {
     var erro = new Error('Leitura pela API Sheets: ' + e.message);
     erro.cacheLeitura = true;
+    if (e.refNoCabecalhoDashboard) {
+      erro.refNoCabecalhoDashboard = true;
+      erro.origem = e.origem;
+    }
     throw erro;
   }
 }

@@ -189,9 +189,16 @@ function snapshotApp() {
   ctx.MimeType = { PLAIN_TEXT: 'text/plain' };
   ctx.CacheService = { getScriptCache: () => ({ putAll() { ramWrites++; }, put() {} }) };
   ctx.Sheets.Spreadsheets.get = id => {
+    if (id === 'test-id') return { properties: { timeZone: 'America/Sao_Paulo' },
+      sheets: [{ properties: { title: 'PCP', gridProperties: { rowCount: 100, columnCount: 135 } } }] };
     assert.equal(id, 'snapshot-id');
     return { sheets: [{ properties: { sheetId: 42, title: 'PCP', sheetType: 'GRID',
       gridProperties: { rowCount: 100, columnCount: 135 } }, protectedRanges: [{ protectedRangeId: 8 }] }] };
+  };
+  ctx.Sheets.Spreadsheets.Values.get = (id, range) => {
+    assert.equal(id, 'test-id');
+    assert.equal(range, "'PCP'!A1:EE1");
+    return { values: [['cabecalho']] };
   };
   ctx.Sheets.Spreadsheets.batchUpdate = (body, id) => { updates.push({ body, id }); };
   return { ctx, writes, updates, properties, copies: () => copies, releases: () => releases, ramWrites: () => ramWrites };
