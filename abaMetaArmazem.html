@@ -398,51 +398,49 @@
       var elegivel=!!regras&&dataAcordada>alvo;
       var metaAplicada=cenario==='com'&&elegivel?dataAcordada:alvo;
 
-      // Meta Armazém não usa mais baseline para completar Coleta Fim.
-      // Se a coleta já terminou, a data real prevalece; caso contrário, usa somente o (re)plan.
-      var fimRealRaw=campo('Coleta/Internalização de estoque Final Real');
-      var fimReplanRaw=campo('Coleta/Internalização de estoque final (re) plan');
-      var fimRealColeta=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(fimRealRaw):data(fimRealRaw);
-      var fimReplanColeta=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(fimReplanRaw):data(fimReplanRaw);
-      var fimColetaUsada=fimRealColeta||fimReplanColeta||null;
-      var origemColeta=fimRealColeta?'Realizado':fimReplanColeta?'Replanejado':'Sem data';
-      var dtPlan=fimColetaUsada&&typeof window.pgDataPlanoEntregaSLA==='function'?
-        window.pgDataPlanoEntregaSLA(l,fimColetaUsada):null;
-
+      // Meta Armazém:
+      // - realizado = TIRAGEM COLETADA classificada pela data real de Entrega_TP;
+      // - somente o saldo ainda pendente usa o planejamento;
+      // - planejamento usa APENAS início/fim (re)plan, nunca baseline;
+      // - (re)plan ausente ou fim anterior ao início é inválido.
       var inicioRaw=campo('Coleta/Internalização de estoque inicial (re) plan');
-      var inicioAusente=inicioRaw==null||String(inicioRaw).trim()==='';
-      var inicioColeta=inicioAusente?null:
-        (window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(inicioRaw):data(inicioRaw));
-      var inicioPlan=inicioColeta&&window.pgDataPlanoEntregaSLA(l,inicioColeta);
-      // Coleta final realizada representa conclusão: o saldo ainda em trânsito fica concentrado
-      // na entrega calculada a partir dessa data real, sem ratear por um início planejado antigo.
-      var entregaUnicaPorReal=!!fimRealColeta;
-      var inicioAusenteRateio=inicioAusente||entregaUnicaPorReal;
+      var fimReplanRaw=campo('Coleta/Internalização de estoque final (re) plan');
+      var inicioColeta=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(inicioRaw):data(inicioRaw);
+      var fimReplanColeta=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(fimReplanRaw):data(fimReplanRaw);
+      var replanValido=!!inicioColeta&&!!fimReplanColeta&&fimReplanColeta>=inicioColeta;
+      var motivoReplan=!inicioColeta||!fimReplanColeta?'(re)plan ausente':
+        fimReplanColeta<inicioColeta?'Coleta Fim (re)plan anterior ao início':'';
+      var inicioPlan=replanValido&&typeof window.pgDataPlanoEntregaSLA==='function'?
+        window.pgDataPlanoEntregaSLA(l,inicioColeta):null;
+      var dtPlan=replanValido&&typeof window.pgDataPlanoEntregaSLA==='function'?
+        window.pgDataPlanoEntregaSLA(l,fimReplanColeta):null;
+      if(replanValido&&(!inicioPlan||!dtPlan))motivoReplan='SLA da rota ausente ou inválido';
 
-      // O que já chegou ao CD é classificado pela data real de entrega.
-      var realCDRaw=campo('TIRAGEM CONFIRMADA CD');
-      var realCDTem=realCDRaw!==null&&realCDRaw!==undefined&&String(realCDRaw).trim()!=='';
-      var realCD=Math.min(total,volume(realCDRaw));
-      var dtRealCD=data(l._DT_ENTREGUE_CD_REAL||campo('_DT_ENTREGUE_CD_REAL'));
-      var pendentePlanejado=Math.max(0,total-realCD);
-      var realDentro=function(meta){return realCD>0&&dtRealCD&&dtRealCD<=meta?realCD:0;};
-      var realFora=function(meta){return realCD>0&&dtRealCD&&dtRealCD>meta?realCD:0;};
+      var coletadaBruta=Math.min(total,volume(campo('TIRAGEM COLETADA')));
+      var entregaTPRaw=campo('Entrega_TP')||l.DATA_EA||'';
+      var dtEntregaTP=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(entregaTPRaw):data(entregaTPRaw);
+      var realizadoTem=coletadaBruta>0&&!!dtEntregaTP;
+      var realizado=realizadoTem?coletadaBruta:0;
 
-      var rateio=pendentePlanejado>0&&dtPlan?
-        rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioAusenteRateio):null;
+      // Se existe volume coletado sem Entrega_TP válida, ele não vira "Sem previsão" automaticamente:
+      // volta para o planejamento, exatamente como qualquer volume ainda não classificável como realizado.
+      var pendentePlanejado=Math.max(0,total-realizado);
+      var realDentro=function(meta){return realizado>0&&dtEntregaTP<=meta?realizado:0;};
+      var realFora=function(meta){return realizado>0&&dtEntregaTP>meta?realizado:0;};
+
+      var rateio=pendentePlanejado>0&&replanValido&&inicioPlan&&dtPlan?
+        rateioPlanejado(l,inicioPlan,dtPlan,alvo,false):null;
       var previstoOriginal=realDentro(alvo)+(rateio?pendentePlanejado*rateio.fracao:0);
       var previstoFere=previstoOriginal,previstoNaoFere=previstoOriginal;
       if(elegivel){
-        var rateioAcordo=pendentePlanejado>0&&dtPlan?
-          rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,inicioAusenteRateio):null;
+        var rateioAcordo=pendentePlanejado>0&&replanValido&&inicioPlan&&dtPlan?
+          rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,false):null;
         previstoNaoFere=realDentro(dataAcordada)+(rateioAcordo?pendentePlanejado*rateioAcordo.fracao:0);
       }
-      var rateioAplicado=pendentePlanejado>0&&dtPlan?
-        rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioAusenteRateio):null;
+      var rateioAplicado=pendentePlanejado>0&&replanValido&&inicioPlan&&dtPlan?
+        rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,false):null;
       var previsto=cenario==='sem'?previstoFere:previstoNaoFere;
-      var semDataReal=realCD>0&&!dtRealCD?realCD:0;
-      var semDataPlan=pendentePlanejado>0&&!rateioAplicado?pendentePlanejado:0;
-      var semData=semDataReal+semDataPlan;
+      var semData=pendentePlanejado>0&&!rateioAplicado?pendentePlanejado:0;
       var pos=Math.max(0,total-previsto-semData);
       var conhecido=semData===0;
 
@@ -452,18 +450,22 @@
       var combinadoAdicional=Math.max(0,previstoNaoFere-previstoFere);
       var excecao=cenario==='com'?Math.max(0,previstoNaoFere-previstoOriginal):0;
       var real=realDentro(metaAplicada);
-      var realTem=realCDTem&&!!dtRealCD;
+      var realTem=realizadoTem;
+      var origemColeta=realizadoTem?(pendentePlanejado>0?'Entrega TP + (re)plan':'Entrega TP'):
+        (pendentePlanejado>0&&rateioAplicado?'(re)plan':'Sem previsão');
       return {
         marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),
         total:total,previsto:previsto,pos:pos,semData:semData,real:real,realTem:realTem,
-        realCD:realCD,realCDTem:realCDTem,dtRealCD:dtRealCD,
+        realCD:realizado,realCDTem:realizadoTem,dtRealCD:dtEntregaTP,
+        realizado:realizado,realizadoTem:realizadoTem,coletadaBruta:coletadaBruta,dtEntregaTP:dtEntregaTP,
         metaArmDate:alvo,
         ate15:ate15,apos15:apos15,excecao:excecao,
         posi:elegivel,alvo:alvo,dtPlan:dtPlan,rateio:rateio,
         rateioDia:rateio&&!rateio.entregaUnica?pendentePlanejado/rateio.dias:null,
-        linha:l,inicioColeta:inicioColeta,inicioAusente:inicioAusenteRateio,inicioPlan:inicioPlan,
-        fimRealColeta:fimRealColeta,fimReplanColeta:fimReplanColeta,fimColetaUsada:fimColetaUsada,
-        origemColeta:origemColeta,pendentePlanejado:pendentePlanejado,
+        linha:l,inicioColeta:inicioColeta,inicioAusente:!inicioColeta,inicioPlan:inicioPlan,
+        fimReplanColeta:fimReplanColeta,fimColetaUsada:replanValido?fimReplanColeta:null,
+        origemColeta:origemColeta,replanValido:replanValido,motivoReplan:motivoReplan,
+        pendentePlanejado:pendentePlanejado,
         posiPropria:posiPropria,dataAcordada:dataAcordada,metaAplicada:metaAplicada,rateioAplicado:rateioAplicado,
         combinadoAdicional:combinadoAdicional,conhecido:conhecido,
         prazos:[alvo].concat(elegivel?[dataAcordada]:[]),
