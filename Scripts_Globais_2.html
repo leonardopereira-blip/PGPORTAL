@@ -664,8 +664,15 @@ window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar) {
     }
 
     function atualizarDadosGeral() {
-        if(window.setLoading) window.setLoading(true, "Atualizando Dashboard..."); 
-        google.script.run.withSuccessHandler(iniciarDashboard).withFailureHandler(erroAoCarregar).getDadosDashboard();
+        if(window.setLoading) window.setLoading(true, "Atualizando Produção...");
+        google.script.run
+            .withSuccessHandler(function() {
+                // O cache mensal de Produção acabou de ser regenerado; recarrega o portal
+                // para baixar exatamente as novas fatias publicadas.
+                window.location.reload();
+            })
+            .withFailureHandler(erroAoCarregar)
+            .atualizarCacheDashboard();
     }
 
     window.pgSolicitacaoCancelada = function(linha) {
@@ -676,7 +683,13 @@ window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar) {
     };
 
     function iniciarDashboard(dados) {
-    const dadosAtivos = window.pgLinhasUnicas((dados || []).filter(l => !window.pgSolicitacaoCancelada(l)));
+    const dadosFonte = Array.isArray(dados) ? dados : [];
+    // Fonte literal do cache de Produção: usada exclusivamente pelo Total Base
+    // para reproduzir a soma das linhas filtradas nas abas de origem.
+    window.DADOS_PCP_TOTAL_FONTE = dadosFonte.slice();
+
+    // Demais visões preservam a regra operacional existente de solicitações canceladas.
+    const dadosAtivos = window.pgLinhasUnicas(dadosFonte.filter(l => !window.pgSolicitacaoCancelada(l)));
     window.DADOS_PCP_CACHE = dadosAtivos;
     window.dadosGlobais = dadosAtivos;
     if(window.setLoading && !window.pgCarregamentoInicial) window.setLoading(false);
@@ -1004,6 +1017,12 @@ function aplicarFiltros() {
         filtroExtra(l, { ignorarOrigem: true, ignorarDestino: true, ignorarRoteamento: true }) &&
         (!window.filtrosGeraisIniciados || passaCategorias(l))));
 
+    // Mesmos filtros visíveis, porém sobre a fonte literal. Esta base existe APENAS
+    // para o Total Base e não remove linha por status oculto nem por deduplicação.
+    const baseGeralTotal = (window.DADOS_PCP_TOTAL_FONTE || window.dadosGlobais || []).filter(l =>
+        filtroExtra(l, { ignorarOrigem: true, ignorarDestino: true, ignorarRoteamento: true }) &&
+        (!window.filtrosGeraisIniciados || passaCategorias(l)));
+
     // Base já com todos os filtros globais aplicados, mas antes de Origem/Destino.
     // A Report Executiva usa esta base para montar simultaneamente Todos x Todos e Todos x CD.
     window.pgBaseGeralReportExecutiva = baseGeral.slice();
@@ -1028,6 +1047,7 @@ function aplicarFiltros() {
     window.dadosTotalAcabamento = window.dadosAcabamentoOrigem.slice();
 
     const baseOrigem = baseGeral.filter(l => window.pgLinhaDaOrigem(l, origem));
+    const baseOrigemTotal = baseGeralTotal.filter(l => window.pgLinhaDaOrigem(l, origem));
     const graficaAcabadoraExclusivo = origem === 'GRAFICA' && destinoExtra === 'ACAB';
 
     // Contexto dos filtros para regras específicas das fases.
@@ -1057,7 +1077,9 @@ function aplicarFiltros() {
     // ÚNICA exceção: Origem = Todas + Destino = CD.
     // Nesse caso ATHOS, KN e RAIZES vindos da PCP_ACABADORAS são ignorados,
     // porque esses volumes já estão representados no PCP.
-    let totalCanonico = dadosFiltrados.slice();
+    let totalCanonico = graficaAcabadoraExclusivo
+        ? baseOrigemTotal.filter(l => window.pgEhDestinoAcabadoraGraficaFiltro(l))
+        : baseOrigemTotal.filter(l => window.pgLinhaDoDestino(l, destinoExtra, origem));
 
     if (origem === 'TODOS' && destinoExtra === 'CD') {
         totalCanonico = totalCanonico.filter(l => {
