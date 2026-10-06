@@ -5,8 +5,9 @@
  * ACABADORAS_PGBM  -> PCP_ACABADORAS
  *
  * REGRA DE SEGURANCA:
- * 1. Valida as chaves preenchidas (coluna A) e o volume de ambas as origens.
- * 2. Nao bloqueia por erros temporarios em outras colunas (ex.: DN69).
+ * 1. Encerra sem alteracoes se houver #REF! na primeira linha de qualquer origem.
+ * 2. Valida as chaves preenchidas (coluna A) e o volume de ambas as origens.
+ *    A trava de #REF! nao verifica as linhas de dados (ex.: DN69).
  * 3. Se ambas aprovadas, apaga TODO o conteudo dos destinos
  *    e escreve as novas bases como valores (sem copiar formulas IMPORTRANGE).
  * 4. Preserva nomes, IDs das abas e formatacao. Nao recria as abas.
@@ -49,15 +50,22 @@ function atualizarPCPs() {
   try {
     // Nao usa a planilha ativa do portal: acessa exclusivamente a planilha PCPs.
     const ss = SpreadsheetApp.openById(CONFIG_ATUALIZAR_PCPS.planilhaId);
+    const origemComRef = obterOrigemComRefNoCabecalhoPCPs_(ss);
+    if (origemComRef) return encerrarPorRefNoCabecalhoPCPs_(origemComRef);
+
     const propriedades = PropertiesService.getScriptProperties();
 
     SpreadsheetApp.flush();
 
     // FASE 1: conferir as chaves em A e guardar os dados de AMBAS as origens.
     // NENHUM destino e apagado ou alterado nesta fase.
-    const pacotes = CONFIG_ATUALIZAR_PCPS.abas.map(cfg =>
-      prepararEValidarOrigem_(ss, propriedades, cfg)
-    );
+    const pacotes = [];
+    for (const cfg of CONFIG_ATUALIZAR_PCPS.abas) {
+      const pacote = prepararEValidarOrigem_(ss, propriedades, cfg);
+      // A origem pode recalcular entre a verificacao inicial e a leitura do lote.
+      if (!pacote) return encerrarPorRefNoCabecalhoPCPs_(cfg.origem);
+      pacotes.push(pacote);
+    }
 
     Logger.log('VALIDACAO APROVADA DAS DUAS ORIGENS. Iniciando substituicao.');
 
@@ -98,6 +106,29 @@ function atualizarPCPs() {
   }
 }
 
+/** Somente a primeira linha: nao confunde o erro REF com cabecalhos como REFERENCIA. */
+function cabecalhoComRefPCPs_(cabecalho) {
+  return cabecalho.some(valor => /^#?REF!?$/i.test(String(valor == null ? '' : valor).trim()));
+}
+
+function obterOrigemComRefNoCabecalhoPCPs_(ss) {
+  for (const cfg of CONFIG_ATUALIZAR_PCPS.abas) {
+    const origem = ss.getSheetByName(cfg.origem);
+    if (!origem) throw new Error('Aba de origem nao encontrada: ' + cfg.origem);
+    const colunas = origem.getLastColumn();
+    if (colunas > 0 && cabecalhoComRefPCPs_(origem.getRange(1, 1, 1, colunas).getValues()[0])) {
+      return cfg.origem;
+    }
+  }
+  return '';
+}
+
+function encerrarPorRefNoCabecalhoPCPs_(origem) {
+  Logger.log('ATUALIZACAO ADIADA: #REF! na primeira linha de ' + origem +
+    '. Nenhuma alteracao realizada. Aguardando o proximo gatilho agendado.');
+  return { atualizado: false, motivo: 'REF_NO_CABECALHO', origem: origem };
+}
+
 /** Valida somente as linhas de origem pela coluna A (Chave) e seu volume. */
 function prepararEValidarOrigem_(ss, propriedades, cfg) {
   const origem = ss.getSheetByName(cfg.origem);
@@ -122,6 +153,7 @@ function prepararEValidarOrigem_(ss, propriedades, cfg) {
   for (let inicio = 1; inicio <= linhas; inicio += CONFIG_ATUALIZAR_PCPS.tamanhoLote) {
     const quantidade = Math.min(CONFIG_ATUALIZAR_PCPS.tamanhoLote, linhas - inicio + 1);
     const lote = origem.getRange(inicio, 1, quantidade, colunas).getValues();
+    if (inicio === 1 && cabecalhoComRefPCPs_(lote[0])) return null;
     for (let i = 0; i < lote.length; i++) {
       const linha = lote[i];
       if (inicio + i > 1 && chavePreenchidaPCPs_(linha[0])) {
