@@ -768,14 +768,14 @@ window.pgAnexarDadosDashboard = function(fatia) {
     // 1. Adicionamos a Prioridade com as opções fixas para garantir a ordem de visualização
     window.listasMultiProducao = {
     'Prioridade': new Set(['1. 🚨 Backlog (Atrasado)', '2. 🔴 0 a 7 Dias', '3. 🟡 8 a 15 Dias', '4. 🟢 +15 Dias', '5. ⚪ (Sem Data)']),
-    'Gráfica': new Set(), 'Marca': new Set(), 'CD Destino': new Set(),
+    'Gráfica': new Set(), 'Marca': new Set(), 'CD Destino': new Set(), 'CD_DESTINO': new Set(),
     'Ciclo': new Set(), 'Envio': new Set(), 'Congelado': new Set(),
     'Cliente personalizado': new Set(), 'Capa personalizada': new Set()
 };
     
     // A Prioridade não está aqui porque ela é "calculada", não puxa do Excel puro
     window.mapCamposProducao = {
-    'Gráfica': 'GRÁFICA', 'Marca': 'UNIDADE', 'CD Destino': 'CD_MAPA',
+    'Gráfica': 'GRÁFICA', 'Marca': 'UNIDADE', 'CD Destino': 'CD_MAPA', 'CD_DESTINO': 'CD_DESTINO',
     'Ciclo': 'CICLO', 'Envio': 'ENVIO', 'Congelado': 'Congelado',
     'Cliente personalizado': 'CLIENTE_PERSONALIZADO',
     'Capa personalizada': 'CAPA_PERSONALIZADA'
@@ -783,6 +783,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
     // PCP usa exclusivamente CD_MAPA. PCP_ACABADORAS não possui esse campo,
     // então mantém seu CD final próprio apenas para a linha da fonte Acabadora.
     window.pgValorFiltroProducao = function(l, categoria) {
+        if (categoria === 'CD_DESTINO') return l.CD_DESTINO ?? l.CD_DESTINO_PCP_ORIGINAL ?? l['CD DESTINO'] ?? '';
         if (categoria !== 'CD Destino') return l[window.mapCamposProducao[categoria]];
         const fonteAcab = [l?._SOURCE, l?.BASE, l?._base]
             .some(v => String(v || '').toUpperCase().includes('ACAB'));

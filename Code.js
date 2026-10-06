@@ -163,6 +163,7 @@ function _processarDadosDashboardBruto() {
         
         // PCP: CD_MAPA e a unica origem do CD para filtros, calculos e cruzamentos.
         // Conserva o CD original somente para auditoria, sem usá-lo como fallback.
+        obj["CD_DESTINO"] = obj["CD_DESTINO"] ?? obj["CD DESTINO"] ?? "";
         obj["CD_DESTINO_PCP_ORIGINAL"] = obj["CD DESTINO"] || "";
         var cdMapaPCP = String(obj["CD_MAPA"] == null ? "" : obj["CD_MAPA"]).trim().toUpperCase();
         obj["CD DESTINO"] = cdMapaPCP;
@@ -210,6 +211,7 @@ function _processarDadosDashboardBruto() {
           }
         }
          
+        obj["CD_DESTINO"] = obj["CD_DESTINO"] ?? obj["CD DESTINO"] ?? "";
         obj["Chave"] = dataAcab[i][0]; 
         if(dataAcab[i].length > 1)  obj["JOIN_KEY"] = String(dataAcab[i][1] || "").trim(); 
         if(dataAcab[i].length > 2)  obj["META_OKR_POS"] = safeIsoDate(dataAcab[i][2]);    
