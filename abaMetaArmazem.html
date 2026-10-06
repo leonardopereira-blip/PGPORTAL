@@ -175,7 +175,7 @@
     <p id="maComparativoNota" class="text-[10px] text-slate-500 mt-2"></p>
   </div>
 <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa a data real. O saldo usa Coleta Fim Real quando já concluída; caso contrário, somente Coleta Fim (re)plan + SLA. Baseline não completa data ausente.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa TIRAGEM COLETADA na data de Entrega_TP. Só o saldo pendente usa Coleta Início/Fim (re)plan + SLA. Baseline não participa do cálculo.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
       <thead><tr><th>Grupo</th><th>Meta original / exceção</th><th>Volume total</th><th id="maThPrevisto">Dentro da meta</th><th id="maThPos">Fora da meta</th><th>Sem previsão</th><th>Confirmado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
@@ -515,9 +515,9 @@
     if(!Array.isArray(window.pgMAUltimosItens))window.processarMetaArmazem();
     var cenario=estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
     var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio','OP',
-      'Tiragem total','Dentro da meta','Fora da meta','Sem previsão','% dentro da meta',
-      'Coleta início (re)plan','Coleta fim real','Coleta fim (re)plan','Coleta fim baseline','Coleta fim usada',
-      'Origem da data de coleta','SLA (dias corridos)','Entrega início usada','Entrega fim prevista','Data realizada CD',
+      'Tiragem total','Tiragem coletada','Dentro da meta','Fora da meta','Sem previsão','% dentro da meta',
+      'Entrega TP real','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
+      'Origem do cálculo','SLA (dias corridos)','Entrega início prevista','Entrega fim prevista',
       'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
       'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
       'Fonte','ID da linha','Chave','Cenário'];
@@ -526,40 +526,31 @@
       var preenchido=function(v){return v!==null&&v!==undefined&&String(v).trim()!=='';};
       var dataFonte=function(v){return preenchido(v)?(window.pgNormalizarDataColeta(v)||String(v)):'';};
       var inicioRaw=campo('Coleta/Internalização de estoque inicial (re) plan');
-      var fimRealRaw=campo('Coleta/Internalização de estoque Final Real');
       var fimRaw=campo('Coleta/Internalização de estoque final (re) plan');
-      var baseRaw=campo('COLETA/INTERNALIZAÇÃO FIM BASELINE');
       var coletaFim=i.fimColetaUsada||'';
       var sla=typeof window.pgDiasSLALinha==='function'?window.pgDiasSLALinha(l):null;
-      var origem=i.origemColeta||'Sem data';
+      var origem=i.origemColeta||'Sem previsão';
       var r=i.rateioAplicado,porDU=!!r&&!r.entregaUnica;
       var semDU=!!r&&r.motivo==='sem-dias-uteis';
       var mesmoDia=!!r&&r.motivo==='mesmo-dia';
-      var regra=i.pendentePlanejado<=0?'Sem saldo planejado; realizado pela data real do CD':
-        i.fimRealColeta?'Saldo pendente concentrado em coleta fim real + SLA':
-        i.inicioAusente?'Entrega única na data final (início vazio)':
-        mesmoDia?'Entrega única na data final (início e fim no mesmo dia)':
-        semDU?'Entrega única na data final (intervalo sem dias úteis)':'Rateio por dias úteis';
+      var regra=i.pendentePlanejado<=0?'100% realizado pela Entrega_TP':
+        !i.replanValido?'Saldo pendente sem (re)plan válido':
+        mesmoDia?'Saldo pendente em entrega única':
+        semDU?'Saldo pendente em entrega única (sem DU)':'Saldo pendente rateado por dias úteis';
       var situacao=i.semData>0?'Sem previsão':i.previsto>0&&i.pos>0?'Parcialmente dentro da meta':i.pos>0?'Fora da meta':'Dentro da meta';
       var notas=[];
-      if(i.pendentePlanejado>0&&!coletaFim)notas.push('Saldo pendente sem Coleta Fim Real ou (re)plan válida; baseline não é utilizada.');
-      if(preenchido(baseRaw)&&!i.fimRealColeta&&!i.fimReplanColeta)notas.push('Baseline existente foi ignorada pela regra da Meta Armazém.');
-      if(sla===null&&i.pendentePlanejado>0)notas.push(Array.isArray(window.PG_MATRIZ_SLA)?'Rota sem SLA válido na Matriz_SLA.':'Matriz_SLA ainda indisponível.');
-      if(!i.inicioAusente&&!i.inicioColeta)notas.push('Data de início planejada inválida.');
-      if(coletaFim&&sla!==null&&i.inicioColeta&&!r&&i.pendentePlanejado>0)notas.push('Intervalo de entrega invertido ou inválido.');
-      if(i.inicioAusente&&i.pendentePlanejado>0&&!i.fimRealColeta)notas.push('Início planejado vazio: tiragem pendente concentrada na data final.');
-      if(i.fimRealColeta&&i.pendentePlanejado>0)notas.push('Coleta Fim Real prevalece sobre o (re)plan para projetar o saldo pendente.');
-      if(mesmoDia)notas.push('Início e fim planejados no mesmo dia: saldo pendente integral considerado nessa data, sem rateio.');
-      if(semDU)notas.push('Intervalo planejado sem dias úteis: saldo pendente integral considerado na data final de entrega.');
-      if(i.realCD>0&&i.dtRealCD)notas.push('Volume confirmado no CD classificado pela data real de entrega.');
-      if(i.realCD>0&&!i.dtRealCD)notas.push('Volume confirmado no CD sem data real válida: mantido em Sem previsão.');
+      if(i.coletadaBruta>0&&!i.realizadoTem)notas.push('TIRAGEM COLETADA sem Entrega_TP válida: volume voltou para o planejamento.');
+      if(i.pendentePlanejado>0&&!i.replanValido)notas.push(i.motivoReplan||'(re)plan inválido.');
+      if(i.pendentePlanejado>0&&i.replanValido&&(!i.inicioPlan||!i.dtPlan))notas.push('SLA da rota ausente ou inválido.');
+      if(i.realizado>0&&i.dtEntregaTP)notas.push('Realizado classificado pela Entrega_TP.');
+      if(i.pendentePlanejado>0&&i.replanValido)notas.push('Somente o saldo pendente usa o (re)plan.');
       if(l._PG_TOTAL_HIBRIDO)notas.push('Volume da PCP_ACABADORAS: TIRAGEM A ENTREGAR (total por CD).');
       return [String(campo('KIT')??''),String(l.SKU_REAL||campo('SKU')||''),
         String(l.DESC_REAL||campo('DESCRIÇÃO')||campo('DESCRICAO')||l.PRODUTO||''),
         i.marca,i.serie,i.grafica,i.cd,String(l.ENVIO||l.Envio||''),String(campo('OP')??''),
-        i.total,i.previsto,i.pos,i.semData,i.total?i.previsto/i.total:0,
-        dataFonte(inicioRaw),dataFonte(fimRealRaw),dataFonte(fimRaw),dataFonte(baseRaw),coletaFim,origem,sla===null?'':sla,
-        r&&r.entregaUnica?i.dtPlan||'':i.inicioPlan||'',i.dtPlan||'',i.dtRealCD||'',
+        i.total,i.coletadaBruta,i.previsto,i.pos,i.semData,i.total?i.previsto/i.total:0,
+        i.dtEntregaTP||'',dataFonte(inicioRaw),dataFonte(fimRaw),coletaFim,origem,sla===null?'':sla,
+        r&&r.entregaUnica?i.dtPlan||'':i.inicioPlan||'',i.dtPlan||'',
         i.alvo,i.dataAcordada||'',i.metaAplicada,
         porDU?r.dias:'',porDU?r.antes:'',porDU?r.dias-r.antes:'',porDU&&i.pendentePlanejado?i.pendentePlanejado/r.dias:'',
         regra,situacao,notas.join(' '),String(l._SOURCE||'PCP'),String(l.ID??l._ROW_ID??''),
@@ -876,7 +867,7 @@
     }
     document.getElementById('maComparativo').innerHTML=
       box('Real + previsto',planejado,'Volume realizado e saldo previsto dentro da '+(estado.cenario==='sem'?'meta original':'meta acordada'),'#418EDE',!!items.length)+
-      box('Realizado',total.realCD,'Tiragem confirmada no CD (todas as datas)','#0f766e',total.realCDTem)+
+      box('Realizado',total.realCD,'Tiragem coletada com Entrega_TP válida','#0f766e',total.realCDTem)+
       box('Meta Armazém',total.total,'Volume total esperado no CD para os itens filtrados','#FA4616',!!items.length);
     document.getElementById('maComparativoNota').textContent=dataNota+
       (semData?' · '+semData+' linha(s) sem data de meta.':'')+
