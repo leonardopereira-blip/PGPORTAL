@@ -184,8 +184,8 @@ function _processarDadosDashboardBruto() {
       var headersAcab = dataAcab[0].map(limparHeader);
      
       for (var i = 1; i < dataAcab.length; i++) {
-        var statusAcab = String(dataAcab[i][33] || "").trim().toUpperCase();
-        if (statusAcab === "CANCELADO") continue;
+        // Não descartar linhas da PCP_ACABADORAS por CARACTERÍSTICA DA SOLICITAÇÃO.
+        // O Total Base deve reproduzir a soma das linhas filtradas na própria base.
         var obj = {};
        
         for (var j = 0; j < headersAcab.length; j++) {
