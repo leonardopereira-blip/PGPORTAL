@@ -664,15 +664,8 @@ window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar) {
     }
 
     function atualizarDadosGeral() {
-        if(window.setLoading) window.setLoading(true, "Atualizando Produção...");
-        google.script.run
-            .withSuccessHandler(function() {
-                // O cache mensal de Produção acabou de ser regenerado; recarrega o portal
-                // para baixar exatamente as novas fatias publicadas.
-                window.location.reload();
-            })
-            .withFailureHandler(erroAoCarregar)
-            .atualizarCacheDashboard();
+        if(window.setLoading) window.setLoading(true, "Atualizando Dashboard...");
+        google.script.run.withSuccessHandler(iniciarDashboard).withFailureHandler(erroAoCarregar).getDadosDashboard();
     }
 
     window.pgSolicitacaoCancelada = function(linha) {
@@ -683,13 +676,7 @@ window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar) {
     };
 
     function iniciarDashboard(dados) {
-    const dadosFonte = Array.isArray(dados) ? dados : [];
-    // Fonte literal do cache de Produção: usada exclusivamente pelo Total Base
-    // para reproduzir a soma das linhas filtradas nas abas de origem.
-    window.DADOS_PCP_TOTAL_FONTE = dadosFonte.slice();
-
-    // Demais visões preservam a regra operacional existente de solicitações canceladas.
-    const dadosAtivos = window.pgLinhasUnicas(dadosFonte.filter(l => !window.pgSolicitacaoCancelada(l)));
+    const dadosAtivos = window.pgLinhasUnicas((dados || []).filter(l => !window.pgSolicitacaoCancelada(l)));
     window.DADOS_PCP_CACHE = dadosAtivos;
     window.dadosGlobais = dadosAtivos;
     if(window.setLoading && !window.pgCarregamentoInicial) window.setLoading(false);
@@ -854,7 +841,6 @@ window.pgAnexarDadosDashboard = function(fatia) {
                 Object.keys(window.mapCamposProducao).forEach(k => {
                     let val = String(window.pgValorFiltroProducao(l, k) || "").trim();
                     if(!val || val === "undefined" || val === "-") {
-                        if (k === 'CD Destino') return;
                         val = "(Vazio)";
                     }
                     window.listasMultiProducao[k].add(val);
@@ -1017,12 +1003,6 @@ function aplicarFiltros() {
         filtroExtra(l, { ignorarOrigem: true, ignorarDestino: true, ignorarRoteamento: true }) &&
         (!window.filtrosGeraisIniciados || passaCategorias(l))));
 
-    // Mesmos filtros visíveis, porém sobre a fonte literal. Esta base existe APENAS
-    // para o Total Base e não remove linha por status oculto nem por deduplicação.
-    const baseGeralTotal = (window.DADOS_PCP_TOTAL_FONTE || window.dadosGlobais || []).filter(l =>
-        filtroExtra(l, { ignorarOrigem: true, ignorarDestino: true, ignorarRoteamento: true }) &&
-        (!window.filtrosGeraisIniciados || passaCategorias(l)));
-
     // Base já com todos os filtros globais aplicados, mas antes de Origem/Destino.
     // A Report Executiva usa esta base para montar simultaneamente Todos x Todos e Todos x CD.
     window.pgBaseGeralReportExecutiva = baseGeral.slice();
@@ -1047,7 +1027,6 @@ function aplicarFiltros() {
     window.dadosTotalAcabamento = window.dadosAcabamentoOrigem.slice();
 
     const baseOrigem = baseGeral.filter(l => window.pgLinhaDaOrigem(l, origem));
-    const baseOrigemTotal = baseGeralTotal.filter(l => window.pgLinhaDaOrigem(l, origem));
     const graficaAcabadoraExclusivo = origem === 'GRAFICA' && destinoExtra === 'ACAB';
 
     // Contexto dos filtros para regras específicas das fases.
@@ -1074,26 +1053,9 @@ function aplicarFiltros() {
 
     // TOTAL BASE:
     // Regra geral: usa exatamente o recorte filtrado.
-    // ÚNICA exceção: Origem = Todas + Destino = CD.
-    // Nesse caso ATHOS, KN e RAIZES vindos da PCP_ACABADORAS são ignorados,
-    // porque esses volumes já estão representados no PCP.
-    let totalCanonico = graficaAcabadoraExclusivo
-        ? baseOrigemTotal.filter(l => window.pgEhDestinoAcabadoraGraficaFiltro(l))
-        : baseOrigemTotal.filter(l => window.pgLinhaDoDestino(l, destinoExtra, origem));
-
-    if (origem === 'TODOS' && destinoExtra === 'CD') {
-        totalCanonico = totalCanonico.filter(l => {
-            if (!window.pgEhFonteAcabadora(l)) return true;
-
-            const grafica = String(
-                l['GRAFICA_FINAL'] || l['GRÁFICA'] || l['GRAFICA'] || l['BQ'] || ''
-            )
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .trim().replace(/\s+/g, ' ').toUpperCase();
-
-            return !['ATHOS', 'KN', 'RAIZES'].includes(grafica);
-        });
-    }
+    // ATHOS, KN e RAIZES da PCP_ACABADORAS só entram em Origem = Acabadora.
+    // Essa regra é aplicada pelo classificador de Origem antes do Destino.
+    let totalCanonico = dadosFiltrados.slice();
 
     window.dadosTotalCanonico = totalCanonico;
 
@@ -1130,9 +1092,8 @@ function aplicarFiltros() {
 
     if (origem === 'TODOS') {
         if (destinoExtra === 'TODOS') {
-            // TODAS + TODOS = literalmente tudo.
-            // PCP inteiro + PCP_ACABADORAS inteiro.
-            baseTPPortal = baseGeral.slice();
+            // Mantém o recorte de Origem também sem filtro de Destino.
+            baseTPPortal = baseOrigem.slice();
         } else if (destinoExtra === 'ACAB') {
             // Mantém a regra já validada para Destino Acabadora.
             baseTPPortal = baseAcabadorasTP.slice();
@@ -3239,18 +3200,22 @@ let tRef = document.getElementById('filtroReferencia').value;
         Object.entries(pgAcabPorGraficaV46.porGrupo).map(([k, v]) => [k, v.den]));
     const totalAcabamento = pgAcabPorMarcaV46.total.den;
 
+    const baseTotalCanonica = {};
     const baseMarcaCanonica = {};
     const baseGraficaCanonica = {};
-    let tGeral = 0;
 
-    // Total Base = soma literal das linhas que sobreviveram aos filtros/roteamento.
-    // Não deduplica por chave: se a base possui duas linhas, as duas entram,
-    // exatamente como na soma do Google Sheets.
     linhasBaseCanonica.forEach(l => {
         const tBaseCanon = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"] || 0);
         if (tBaseCanon <= 0) return;
 
-        tGeral += tBaseCanon;
+        const srcCanon = l["_SOURCE"] === "ACABADORA" ? "acab" : "pcp";
+        const chaveOperacional = getKey(l);
+        // O roteamento já retirou a transferência PCP. A identidade da linha
+        // evita reenvios sem colapsar lotes distintos da mesma OP/SKU.
+        const chaveCanon = chaveOperacional;
+        if (baseTotalCanonica[chaveCanon] !== undefined) return;
+
+        baseTotalCanonica[chaveCanon] = tBaseCanon;
         const marcaCanon = String(l["MARCA_FINAL"] || l["UNIDADE"] || "N/A").toUpperCase();
         const graficaCanon = String(l["GRAFICA_FINAL"] || l["GRÁFICA"] || "N/A").toUpperCase();
         baseMarcaCanonica[marcaCanon] = (baseMarcaCanonica[marcaCanon] || 0) + tBaseCanon;
@@ -3276,7 +3241,7 @@ let tRef = document.getElementById('filtroReferencia').value;
     Object.keys(mGrid).forEach(m => { mGrid[m].total = baseMarcaCanonica[m] || 0; });
     Object.keys(gGrid).forEach(g => { gGrid[g].total = baseGraficaCanonica[g] || 0; });
 
-
+    let tGeral = Object.values(baseTotalCanonica).reduce((a,b)=>a+b, 0);
 
     // ORIGEM = ACABADORA: a aba começa operacionalmente após O.C.
     // Portanto Env. Arq até O.C. aparecem como 100% do Total Base da PCP_ACABADORAS.
@@ -9873,16 +9838,17 @@ window.exportarDivergenciasColetas = function() {
     };
 
     // ORIGEM:
-    // - Todas = literalmente PCP + PCP_ACABADORAS completos.
+    // - Todas = PCP + PCP_ACABADORAS, exceto ATHOS, KN e RAIZES da Acabadora.
     // - Gráfica = somente PCP.
     // - Acabadora = somente PCP_ACABADORAS.
     window.pgLinhaDaOrigem = function(l, origem) {
         const acab = window.pgEhFonteAcabadora(l);
         if (origem === 'ACABADORA') return acab;
         if (origem === 'GRAFICA') return !acab;
-        return true;
+        return !acab || !['ATHOS', 'KN', 'RAIZES'].includes(pgGraficaLinha(l));
     };
     window.pgLinhaDoDestino = function(l, destino, origem) {
+        if (!window.pgLinhaDaOrigem(l, origem)) return false;
         if (origem === 'ACABADORA') return window.pgEhFonteAcabadora(l);
         if (destino === 'TODOS') return true;
         if (destino === 'ACAB') return pgEhAcabadora(l);

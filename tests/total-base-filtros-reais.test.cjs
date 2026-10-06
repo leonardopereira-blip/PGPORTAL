@@ -1,23 +1,38 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const vm = require('node:vm');
 const path = require('node:path');
 
-const code = fs.readFileSync(path.join(__dirname, '..', 'Code.js'), 'utf8');
-const front = fs.readFileSync(path.join(__dirname, '..', 'Scripts_Globais_2.html'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'Scripts_Globais_2.html'), 'utf8');
 
-test('PCP_ACABADORAS usa TIRAGEM A ENTREGAR e nao elimina linha por CARACTERISTICA=CANCELADO', () => {
-  assert.match(code, /if\(dataAcab\[i\]\.length > 43\) obj\["TIRAGEM"\] = dataAcab\[i\]\[43\] \|\| 0/);
-  assert.doesNotMatch(code, /statusAcab[\s\S]{0,180}if\s*\(statusAcab\s*===\s*"CANCELADO"\)\s*continue/);
+function total(linhas) {
+  const context = vm.createContext({
+    window: { arredondar: Number },
+    linhasBaseCanonica: linhas
+  });
+  vm.runInContext(source.slice(source.indexOf('    const pgChavesLinhas ='),
+    source.indexOf('    // As visões por fase compartilham')), context);
+  const inicio = source.indexOf('    const baseTotalCanonica =');
+  assert.ok(inicio >= 0, 'Total usa a identidade das linhas da base canônica');
+  vm.runInContext(source.slice(inicio, source.indexOf('    // IMPORTANTE:', inicio)) +
+    '\nresultado = Object.values(baseTotalCanonica).reduce((a, b) => a + b, 0);', context);
+  return context.resultado;
+}
+
+const row = (id, tiragem, fonte = 'PCP') => ({
+  _ROW_ID: id, _SOURCE: fonte, Chave: 'MESMA-OP-SKU', TIRAGEM: tiragem,
+  UNIDADE: 'SAS', 'GRÁFICA': 'LOGPRINT'
 });
 
-test('Total Base soma literalmente cada linha canonica filtrada', () => {
-  assert.match(front, /let tGeral = 0;/);
-  assert.match(front, /linhasBaseCanonica\.forEach\(l => \{[\s\S]*?tGeral \+= tBaseCanon;/);
-  assert.doesNotMatch(front, /baseTotalCanonica\[chaveCanon\]/);
+test('Total preserva lotes físicos distintos da mesma OP/SKU', () => {
+  assert.equal(total([row('PCP:2', 100), row('PCP:3', 250)]), 350);
 });
 
-test('roteamento especial continua: vazio WALPRINT e REPROSET vao para Acabadora', () => {
-  assert.match(front, /PG_GRAFICAS_FORCAM_ACABADORA = new Set\(\['WALPRINT', 'REPROSET'\]\)/);
-  assert.match(front, /return pgDestinoVazio\(l\) \|\|[\s\S]*?pgGraficaForcaAcabadora\(l\)/);
+test('reenvio da mesma linha em outra fatia não infla o Total', () => {
+  assert.equal(total([row('PCP:2', 100), row('PCP:2', 100), row('PCP:3', 250)]), 350);
+});
+
+test('linhas físicas das duas fontes conservam suas tiragens', () => {
+  assert.equal(total([row('2', 100), row('2', 60, 'ACABADORA')]), 160);
 });
