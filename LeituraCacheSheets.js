@@ -24,53 +24,6 @@ function pgFonteExternaCache_(nomes) {
   return null;
 }
 
-// Enriquecimento leve da Produção pela aba Especificacao do arquivo PCPs.
-// Lê somente as três colunas necessárias, sem carregar as 84 colunas da aba.
-function pgLerEspecificacaoPersonalizacao_() {
-  var id = PG_ARQUIVO_PCPS;
-  var meta = pgMetadadosPlanilhaCache_(id);
-  if (meta.nomes.indexOf('Especificacao') < 0) {
-    console.warn('[cache] Especificacao ausente no arquivo PCPs; filtros de personalizacao ficam como Não.');
-    return Object.create(null);
-  }
-
-  var resposta = Sheets.Spreadsheets.Values.batchGet(id, {
-    ranges: [
-      "'Especificacao'!B2:B",  // 1. ID_Código SKU
-      "'Especificacao'!Q2:Q",  // 2. INF_Cliente personalizado
-      "'Especificacao'!BU2:BU" // 11. REF_Tipo de personalização
-    ],
-    valueRenderOption: 'UNFORMATTED_VALUE'
-  });
-  var ranges = resposta.valueRanges || [];
-  var skus = (ranges[0] && ranges[0].values) || [];
-  var clientes = (ranges[1] && ranges[1].values) || [];
-  var capas = (ranges[2] && ranges[2].values) || [];
-  var mapa = Object.create(null);
-  var max = Math.max(skus.length, clientes.length, capas.length);
-
-  function norm(v) {
-    return String(v == null ? '' : v)
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .trim().replace(/\s+/g, ' ').toUpperCase();
-  }
-
-  for (var i = 0; i < max; i++) {
-    var sku = String((skus[i] && skus[i][0]) || '').trim().toUpperCase();
-    if (!sku) continue;
-    var clienteSim = norm(clientes[i] && clientes[i][0]) === 'SIM';
-    var capaSim = norm(capas[i] && capas[i][0]) === 'CAPA PERSONALIZADA';
-    var atual = mapa[sku] || { clientePersonalizado: false, capaPersonalizada: false };
-    // Se houver SKU repetido, qualquer ocorrência positiva torna o atributo Sim.
-    atual.clientePersonalizado = atual.clientePersonalizado || clienteSim;
-    atual.capaPersonalizada = atual.capaPersonalizada || capaSim;
-    mapa[sku] = atual;
-  }
-
-  console.log('[cache] Especificacao: ' + Object.keys(mapa).length + ' SKUs indexados para personalizacao');
-  return mapa;
-}
-
 // Mostra o que existe no arquivo externo: nomes de abas, tamanho e os tipos da
 // primeira linha de dados. Serve para conferir se os nomes batem.
 function diagnosticarFonteExterna() {

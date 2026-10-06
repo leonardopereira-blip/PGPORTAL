@@ -100,16 +100,10 @@ function getDadosDashboard() {
 function _processarDadosDashboardBruto() {
   pgValidarCabecalhosDashboard_();
   var result = [];
-  var personalizacaoPorSku = typeof pgLerEspecificacaoPersonalizacao_ === 'function'
-    ? pgLerEspecificacaoPersonalizacao_()
-    : Object.create(null);
 
   function limparHeader(h) { return h ? String(h).trim() : ""; }
-  function aplicarEspecificacao(obj) {
-    var sku = String(obj["SKU_REAL"] || obj["SKU"] || obj["Produto"] || obj["Item"] || "").trim().toUpperCase();
-    var esp = sku ? personalizacaoPorSku[sku] : null;
-    obj["CLIENTE_PERSONALIZADO"] = esp && esp.clientePersonalizado ? "Sim" : "Não";
-    obj["CAPA_PERSONALIZADA"] = esp && esp.capaPersonalizada ? "Sim" : "Não";
+  function personalizacaoSimNao(valor) {
+    return String(valor == null ? "" : valor).trim().toUpperCase() === "SIM" ? "Sim" : "Não";
   }
  
   var safeIsoDate = function(valData) {
@@ -184,7 +178,8 @@ function _processarDadosDashboardBruto() {
              if(op && sku) obj["Chave"] = op + "_" + sku;
         }
         if(obj["Chave"]) {
-          aplicarEspecificacao(obj);
+          obj["CLIENTE_PERSONALIZADO"] = personalizacaoSimNao(dataPCP[i][136]); // EG
+          obj["CAPA_PERSONALIZADA"] = personalizacaoSimNao(dataPCP[i][137]); // EH
           obj["_SOURCE"] = "PCP";
           result.push(obj);
         }
@@ -251,7 +246,8 @@ function _processarDadosDashboardBruto() {
         obj["Chave"] = pgCorrigirPrefixoSasWaysAcab_(obj["Chave"]);
 
         if(obj["Chave"]) {
-          aplicarEspecificacao(obj);
+          obj["CLIENTE_PERSONALIZADO"] = personalizacaoSimNao(dataAcab[i][88]); // CK
+          obj["CAPA_PERSONALIZADA"] = personalizacaoSimNao(dataAcab[i][89]); // CL
           obj["_SOURCE"] = "ACABADORA";
           result.push(obj);
         }
