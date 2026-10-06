@@ -6,6 +6,8 @@
     #abaMetaArmazem .ma-kpi.alt{background:linear-gradient(135deg,#1e40af,#0f766e)}
     #abaMetaArmazem .ma-kpi.warn{background:linear-gradient(135deg,#7c2d12,#b45309)}
     #abaMetaArmazem .ma-kpi.neutral{background:linear-gradient(135deg,#334155,#475569)}
+    #abaMetaArmazem .ma-kpi-legendas{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:12px;row-gap:2px}
+    #abaMetaArmazem .ma-kpi-aging{white-space:nowrap}
     #abaMetaArmazem .ma-pill{padding:8px 12px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#475569;font-weight:800;font-size:11px;transition:.15s}
     #abaMetaArmazem .ma-pill[aria-pressed=true]{background:#1e40af;color:#fff;border-color:#1d4ed8;box-shadow:0 4px 14px #1d4ed825}
     #abaMetaArmazem .ma-select{width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;background:#fff;color:#0f172a;font-size:12px;font-weight:700}
@@ -541,9 +543,28 @@
       return i;
     });
   }
-  function card(rotulo, valor, sub, classe) {
+  function agingMetaArmazem(items){
+    var dentro=0,fora=0,diasAntecipados=0,diasAtrasados=0;
+    items.forEach(function(item){
+      var meta=new Date(item.metaAplicada+'T12:00:00Z').getTime();
+      if(!isFinite(meta))return;
+      window.pgMADiasEntrega(item).forEach(function(parcela){
+        var entrega=new Date(parcela.data+'T12:00:00Z').getTime(),peso=volume(parcela.volume);
+        if(!isFinite(entrega)||!peso)return;
+        var dias=Math.round((entrega-meta)/86400000);
+        if(dias<=0){dentro+=peso;diasAntecipados-=dias*peso;}
+        else{fora+=peso;diasAtrasados+=dias*peso;}
+      });
+    });
+    return {antecipacao:dentro?diasAntecipados/dentro:null,atraso:fora?diasAtrasados/fora:null};
+  }
+  function fmtDiasAging(v){
+    return v==null?'–':new Intl.NumberFormat('pt-BR',{maximumFractionDigits:1}).format(v)+' dias';
+  }
+  function card(rotulo, valor, sub, classe, aging) {
     return '<div class="ma-kpi '+(classe||'')+'"><p class="text-[10px] uppercase tracking-wider font-black opacity-75">'+escapeHTML(rotulo)+'</p>'+
-      '<div class="text-2xl md:text-3xl font-black tabular-nums mt-2">'+valor+'</div><p class="text-[10px] mt-2 opacity-85">'+sub+'</p></div>';
+      '<div class="text-2xl md:text-3xl font-black tabular-nums mt-2">'+valor+'</div><div class="ma-kpi-legendas text-[10px] mt-2 opacity-85"><span>'+sub+'</span>'+
+      (aging?'<span class="ma-kpi-aging" title="Média em dias corridos, ponderada pela tiragem, em relação à meta aplicada de cada item.">'+escapeHTML(aging)+'</span>':'')+'</div></div>';
   }
   function fmtPrazo(iso){return /^\d{4}-\d{2}-\d{2}$/.test(iso)?iso.slice(8)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4):iso;}
   // Cada registro vem da própria linha que alimenta a visão, sem reagrupar por SKU.
@@ -932,6 +953,7 @@
     var items=estado.tipoMaterial==='TODOS'?base:base.filter(function(l){return l.tipo===estado.tipoMaterial;});
     items=volumesVisao(items);
     var resultado={cenario:estado.cenario,itens:items,total:soma(items)};
+    resultado.aging=agingMetaArmazem(resultado.itens);
     resultado.auditoria=montarAuditoria(resultado.itens,resultado.cenario);
     // Publicar o resultado completo antes de renderizar qualquer componente.
     window.pgMAVisaoAtual=resultado;
@@ -944,8 +966,8 @@
     aviso.classList.toggle('hidden',!aviso.textContent);
     document.getElementById('maKPIs').innerHTML=
       card('Tiragem total CD',fmt(total.total,!!items.length),items.length+' linhas PCP + acabadoras (sem duplicidade)','')+
-      card('Dentro da meta',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
-      card('Fora da meta',fmt(total.pos,!!items.length),'Após a meta aplicável à marca e ao cenário','warn')+
+      card('Dentro da meta',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt','Antecipação média: '+fmtDiasAging(resultado.aging.antecipacao))+
+      card('Fora da meta',fmt(total.pos,!!items.length),'Após a meta aplicável à marca e ao cenário','warn','Atraso médio: '+fmtDiasAging(resultado.aging.atraso))+
       card('Sem previsão',fmt(total.semData,!!items.length),'Sem data de entrega utilizável','neutral');
     document.getElementById('maThPrevisto').textContent='Dentro da meta';
     document.getElementById('maThPos').textContent='Fora da meta';
