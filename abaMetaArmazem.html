@@ -778,9 +778,31 @@
     matriz(window.pgMAUltimosItens||[]);
     if(root)root.scrollLeft=pos;
   };
+  function rotuloTipoMaterial(v) {
+    return String(v||'').toLowerCase().split('|').map(function(parte){
+      var p=parte.trim();
+      return p?p.charAt(0).toUpperCase()+p.slice(1):p;
+    }).join(' | ');
+  }
+  function atualizarFiltroTipoMaterial(base) {
+    var select=document.getElementById('maTipoMaterial');
+    if(!select)return;
+    var tipos=Array.from(new Set((base||[]).map(function(x){return x.tipo;}).filter(Boolean)))
+      .sort(function(a,b){return a.localeCompare(b,'pt-BR',{numeric:true});});
+    if(estado.tipoMaterial!=='TODOS'&&tipos.indexOf(estado.tipoMaterial)<0)estado.tipoMaterial='TODOS';
+    select.innerHTML='';
+    select.add(new Option('Todos','TODOS'));
+    tipos.forEach(function(tipo){select.add(new Option(rotuloTipoMaterial(tipo),tipo));});
+    select.value=estado.tipoMaterial;
+  }
+  window.pgMATipoMaterial=function(tipo) {
+    estado.tipoMaterial=tipo||'TODOS';
+    window.processarMetaArmazem();
+  };
   window.pgMAMatrizModo=function(modo) {
     if(['marca','marcaSerie','graficaMarca'].indexOf(modo)<0)return;
     estado.matrizModo=modo;estado.matrizExpandida=false;
+    var select=document.getElementById('maVisao');if(select)select.value=modo;
     matriz(window.pgMAUltimosItens||[]);
   };
   window.pgMAAlternarOutros=function() {
@@ -876,9 +898,12 @@
   window.processarMetaArmazem=function(){
     var base=dadosBase(), aviso=document.getElementById('maAviso');
     if(!aviso)return;
-    // Marca, série e gráfica seguem exclusivamente os filtros gerais do portal.
+    // Marca, série e gráfica seguem os filtros gerais do portal.
+    // Tipo de material é um recorte local desta visão.
     document.querySelectorAll('[data-ma-cenario]').forEach(function(btn){btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-cenario')===estado.cenario));});
-    var items=base;
+    var visao=document.getElementById('maVisao');if(visao)visao.value=estado.matrizModo;
+    atualizarFiltroTipoMaterial(base);
+    var items=estado.tipoMaterial==='TODOS'?base:base.filter(function(l){return l.tipo===estado.tipoMaterial;});
     var total=soma(items);
     var missing=items.filter(function(l){return l.semData>0;}).length;
     aviso.classList.toggle('hidden',!missing);
