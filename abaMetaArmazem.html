@@ -175,7 +175,7 @@
     <p id="maComparativoNota" class="text-[10px] text-slate-500 mt-2"></p>
   </div>
 <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa TIRAGEM COLETADA na data de Entrega_TP. Só o saldo pendente usa Coleta Início/Fim (re)plan + SLA. Baseline não participa do cálculo.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa TIRAGEM COLETADA na data de Entrega_TP. Só o saldo pendente usa Final (re)Plan + SLA. Sem início planejado, o saldo fica integralmente nessa data; com intervalo válido, segue o rateio. Baseline não participa do cálculo.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
       <thead><tr><th>Grupo</th><th>Meta original / exceção</th><th>Volume total</th><th id="maThPrevisto">Dentro da meta</th><th id="maThPos">Fora da meta</th><th>Sem previsão</th><th>Realizado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
@@ -370,7 +370,7 @@
     if(!fim)return null;
     if(inicioAusente){
       var dentro=fim<=meta;
-      return {inicio:fim,fim:fim,dias:1,antes:dentro?1:0,fracao:dentro?1:0,entregaUnica:true};
+      return {inicio:fim,fim:fim,dias:1,antes:dentro?1:0,fracao:dentro?1:0,entregaUnica:true,motivo:'sem-inicio'};
     }
     return rateioDiasUteis(inicio,fim,meta);
   }
@@ -378,6 +378,13 @@
     var cenario=opcoes&&(opcoes.cenario==='com'||opcoes.cenario==='sem')?opcoes.cenario:estado.cenario;
     var base=window.pgBaseGeralReportExecutiva||window.dadosGlobais||[];
     base=base.filter(function(l){return !(window.pgSolicitacaoCancelada&&window.pgSolicitacaoCancelada(l));});
+    // Exclusão desta visão pelo destino, sem filtrar a gráfica de origem.
+    base=base.filter(function(l){
+      var acabadora=typeof window.pgEhFonteAcabadora==='function'?window.pgEhFonteAcabadora(l):
+        [l._SOURCE,l.BASE,l._base].some(function(v){return normal(v).indexOf('ACAB')>=0;});
+      var destino=acabadora?(l['CD DESTINO']||l.CD_FINAL||l.CD||l.CK||''):(l.CD_MAPA??'');
+      return normal(destino)!=='WALPRINT';
+    });
     if(typeof window.pgLinhasUnicas==='function')base=window.pgLinhasUnicas(base);
     if(typeof window.pgUnirTotalSemDuplicidade!=='function'){
       console.warn('[META ARMAZEM] Regra canônica de CD indisponível.');return [];
@@ -401,20 +408,22 @@
       // Meta Armazém:
       // - realizado = TIRAGEM COLETADA classificada pela data real de Entrega_TP;
       // - somente o saldo ainda pendente usa o planejamento;
-      // - planejamento usa APENAS início/fim (re)plan, nunca baseline;
-      // - (re)plan ausente ou fim anterior ao início é inválido.
+      // - planejamento usa Final (re)plan + SLA, nunca baseline ou Coleta Fim Real;
+      // - sem início, o saldo fica integralmente na entrega prevista pelo fim;
+      // - início preenchido inválido ou posterior ao fim invalida o intervalo.
       var inicioRaw=campo('Coleta/Internalização de estoque inicial (re) plan');
       var fimReplanRaw=campo('Coleta/Internalização de estoque final (re) plan');
+      var inicioAusente=inicioRaw==null||String(inicioRaw).trim()==='';
+      var fimAusente=fimReplanRaw==null||String(fimReplanRaw).trim()==='';
       var inicioColeta=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(inicioRaw):data(inicioRaw);
       var fimReplanColeta=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(fimReplanRaw):data(fimReplanRaw);
-      var replanValido=!!inicioColeta&&!!fimReplanColeta&&fimReplanColeta>=inicioColeta;
-      var motivoReplan=!inicioColeta||!fimReplanColeta?'(re)plan ausente':
-        fimReplanColeta<inicioColeta?'Coleta Fim (re)plan anterior ao início':'';
-      var inicioPlan=replanValido&&typeof window.pgDataPlanoEntregaSLA==='function'?
+      var replanValido=!!fimReplanColeta&&(inicioAusente||!!inicioColeta&&fimReplanColeta>=inicioColeta);
+      var motivoReplan=fimAusente?'Sem data (re)Plan':!replanValido?'Intervalo de entrega invertido ou inválido.':'';
+      var inicioPlan=replanValido&&!inicioAusente&&typeof window.pgDataPlanoEntregaSLA==='function'?
         window.pgDataPlanoEntregaSLA(l,inicioColeta):null;
       var dtPlan=replanValido&&typeof window.pgDataPlanoEntregaSLA==='function'?
         window.pgDataPlanoEntregaSLA(l,fimReplanColeta):null;
-      if(replanValido&&(!inicioPlan||!dtPlan))motivoReplan='SLA da rota ausente ou inválido';
+      if(replanValido&&(!dtPlan||!inicioAusente&&!inicioPlan))motivoReplan='Rota sem SLA válido na Matriz_SLA.';
 
       var coletadaBruta=Math.min(total,volume(campo('TIRAGEM COLETADA')));
       var entregaTPRaw=campo('Entrega_TP')||l.DATA_EA||'';
@@ -428,19 +437,21 @@
       var realDentro=function(meta){return realizado>0&&dtEntregaTP<=meta?realizado:0;};
       var realFora=function(meta){return realizado>0&&dtEntregaTP>meta?realizado:0;};
 
-      var rateio=pendentePlanejado>0&&replanValido&&inicioPlan&&dtPlan?
-        rateioPlanejado(l,inicioPlan,dtPlan,alvo,false):null;
+      var rateio=pendentePlanejado>0&&replanValido&&(inicioAusente||inicioPlan)&&dtPlan?
+        rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioAusente):null;
       var previstoOriginal=realDentro(alvo)+(rateio?pendentePlanejado*rateio.fracao:0);
       var previstoFere=previstoOriginal,previstoNaoFere=previstoOriginal;
       if(elegivel){
-        var rateioAcordo=pendentePlanejado>0&&replanValido&&inicioPlan&&dtPlan?
-          rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,false):null;
+        var rateioAcordo=pendentePlanejado>0&&replanValido&&(inicioAusente||inicioPlan)&&dtPlan?
+          rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,inicioAusente):null;
         previstoNaoFere=realDentro(dataAcordada)+(rateioAcordo?pendentePlanejado*rateioAcordo.fracao:0);
       }
-      var rateioAplicado=pendentePlanejado>0&&replanValido&&inicioPlan&&dtPlan?
-        rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,false):null;
+      var rateioAplicado=pendentePlanejado>0&&replanValido&&(inicioAusente||inicioPlan)&&dtPlan?
+        rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioAusente):null;
       var previsto=cenario==='sem'?previstoFere:previstoNaoFere;
       var semData=pendentePlanejado>0&&!rateioAplicado?pendentePlanejado:0;
+      var statusSemPrevisao=semData>0&&fimAusente?'Sem data (re)Plan':'Sem previsão';
+      if(semData>0&&!motivoReplan)motivoReplan='Intervalo de entrega invertido ou inválido.';
       var pos=Math.max(0,total-previsto-semData);
       var conhecido=semData===0;
 
@@ -462,9 +473,9 @@
         ate15:ate15,apos15:apos15,excecao:excecao,
         posi:elegivel,alvo:alvo,dtPlan:dtPlan,rateio:rateio,
         rateioDia:rateio&&!rateio.entregaUnica?pendentePlanejado/rateio.dias:null,
-        linha:l,inicioColeta:inicioColeta,inicioAusente:!inicioColeta,inicioPlan:inicioPlan,
+        linha:l,inicioColeta:inicioColeta,inicioAusente:inicioAusente,inicioPlan:inicioPlan,
         fimReplanColeta:fimReplanColeta,fimColetaUsada:replanValido?fimReplanColeta:null,
-        origemColeta:origemColeta,replanValido:replanValido,motivoReplan:motivoReplan,
+        origemColeta:origemColeta,replanValido:replanValido,motivoReplan:motivoReplan,statusSemPrevisao:statusSemPrevisao,
         pendentePlanejado:pendentePlanejado,
         posiPropria:posiPropria,dataAcordada:dataAcordada,metaAplicada:metaAplicada,rateioAplicado:rateioAplicado,
         combinadoAdicional:combinadoAdicional,conhecido:conhecido,
@@ -535,15 +546,19 @@
       var mesmoDia=!!r&&r.motivo==='mesmo-dia';
       var regra=i.pendentePlanejado<=0?'100% realizado pela Entrega_TP':
         !i.replanValido?'Saldo pendente sem (re)plan válido':
-        mesmoDia?'Saldo pendente em entrega única':
+        !r?'Saldo pendente sem previsão de entrega':
+        mesmoDia||i.inicioAusente?'Saldo pendente em entrega única':
         semDU?'Saldo pendente em entrega única (sem DU)':'Saldo pendente rateado por dias úteis';
-      var situacao=i.semData>0?'Sem previsão':i.previsto>0&&i.pos>0?'Parcialmente dentro da meta':i.pos>0?'Fora da meta':'Dentro da meta';
+      var situacao=i.semData>0?i.statusSemPrevisao:i.previsto>0&&i.pos>0?'Parcialmente dentro da meta':i.pos>0?'Fora da meta':'Dentro da meta';
       var notas=[];
       if(i.coletadaBruta>0&&!i.realizadoTem)notas.push('TIRAGEM COLETADA sem Entrega_TP válida: volume voltou para o planejamento.');
-      if(i.pendentePlanejado>0&&!i.replanValido)notas.push(i.motivoReplan||'(re)plan inválido.');
-      if(i.pendentePlanejado>0&&i.replanValido&&(!i.inicioPlan||!i.dtPlan))notas.push('SLA da rota ausente ou inválido.');
+      if(i.semData>0)notas.push(i.motivoReplan||'Intervalo de entrega invertido ou inválido.');
       if(i.realizado>0&&i.dtEntregaTP)notas.push('Realizado classificado pela Entrega_TP.');
-      if(i.pendentePlanejado>0&&i.replanValido)notas.push('Somente o saldo pendente usa o (re)plan.');
+      if(i.pendentePlanejado>0&&r){
+        notas.push('Somente o saldo pendente usa Final (re)Plan + Matriz_SLA.');
+        if(i.inicioAusente)notas.push('Início planejado vazio: saldo pendente integral na entrega prevista pelo fim (re)plan + SLA, sem rateio.');
+        else if(mesmoDia)notas.push('Início e fim planejados no mesmo dia: saldo pendente integral nessa data + SLA, sem rateio.');
+      }
       if(l._PG_TOTAL_HIBRIDO)notas.push('Volume da PCP_ACABADORAS: TIRAGEM A ENTREGAR (total por CD).');
       return [String(campo('KIT')??''),String(l.SKU_REAL||campo('SKU')||''),
         String(l.DESC_REAL||campo('DESCRIÇÃO')||campo('DESCRICAO')||l.PRODUTO||''),

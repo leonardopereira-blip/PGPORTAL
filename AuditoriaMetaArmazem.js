@@ -133,7 +133,7 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
     sheet.getRange(2, 30, n, 7).setNumberFormat('@');
     sheet.getRange(2, 1, n, colunas.length).setValues(normalizadas);
     sheet.getRange(1, indice_('Tiragem total')).setNote('Volumes arredondados para unidades inteiras. Fora da meta é o saldo de total menos dentro e sem previsão; o percentual usa os volumes exportados.');
-    sheet.getRange(1, indice_('Entrega fim prevista')).setNote('Data de coleta final usada + SLA em dias corridos. A coleta usa o replanejado; quando vazio, usa a baseline.');
+    sheet.getRange(1, indice_('Entrega fim prevista')).setNote('Saldo pendente: Final (re)Plan + Matriz_SLA em dias corridos. Sem início, entrega integral nessa data; sem fim, Sem data (re)Plan. O realizado usa Entrega_TP. Confirmação CD, Coleta Fim Real e baseline não participam do cálculo.');
     sheet.getRange(1, indice_('DU totais')).setNote('Rateio para todas as gráficas e acabadoras somente quando o fim é posterior ao início; inclui ambas as datas e exclui fins de semana e feriados nacionais usados na visão. No mesmo dia ou sem início, entrega integral na data final, sem rateio.');
     SpreadsheetApp.flush();
   } catch (erroFormato) {

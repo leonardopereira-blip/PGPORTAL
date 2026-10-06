@@ -16,7 +16,7 @@ test('Meta Armazem usa TIRAGEM COLETADA com Entrega_TP como realizado', () => {
 
 test('somente o saldo nao realizado usa o replan', () => {
   assert.match(source, /pendentePlanejado=Math\.max\(0,total-realizado\)/);
-  assert.match(source, /rateio=pendentePlanejado>0&&replanValido&&inicioPlan&&dtPlan/);
+  assert.match(source, /rateio=pendentePlanejado>0&&replanValido&&\(inicioAusente\|\|inicioPlan\)&&dtPlan/);
   assert.match(source, /pendentePlanejado\*rateio\.fracao/);
   assert.match(source, /rateioDia:rateio&&!rateio\.entregaUnica\?pendentePlanejado\/rateio\.dias:null/);
 });
@@ -29,8 +29,8 @@ test('coletado sem Entrega_TP volta ao planejamento em vez de Sem previsao', () 
 });
 
 test('Meta Armazem nao usa baseline e invalida replan ausente ou invertido', () => {
-  assert.match(source, /replanValido=!!inicioColeta&&!!fimReplanColeta&&fimReplanColeta>=inicioColeta/);
-  assert.match(source, /fimReplanColeta<inicioColeta\?'Coleta Fim \(re\)plan anterior ao início'/);
+  assert.match(source, /replanValido=!!fimReplanColeta&&\(inicioAusente\|\|!!inicioColeta&&fimReplanColeta>=inicioColeta\)/);
+  assert.match(source, /fimAusente\?'Sem data \(re\)Plan':!replanValido\?'Intervalo de entrega invertido ou inválido\.'/);
   assert.doesNotMatch(source, /COLETA\/INTERNALIZAÇÃO FIM BASELINE/);
   assert.doesNotMatch(source, /Coleta\/Internalização de estoque Final Real/);
 });
