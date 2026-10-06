@@ -709,17 +709,13 @@ window.exportarSkusFiltradosSheets = function() {
                 ['carregarDashboardPorMes', 'DADOS_PCP_CACHE', () => carregarDashboardPorMes(m => { window.PG_DASHBOARD_PROGRESSO = m; })],
                 ['getEmailUsuario', 'PG_USER_EMAIL']
             ];
+            // Carregamento inicial: SOMENTE Produção.
+            // Pré-Produção, Qualidade e Reentradas permanecem independentes e carregam sob demanda.
             const fontesBackground = [
                 ['getMatrizSLAPortal', 'PG_MATRIZ_SLA'],
                 ['getForecastsColetaPortal', 'PG_FORECAST_COLETA'],
                 ['getDadosCockpit_Cache', 'DADOS_COCKPIT_INICIAL'],
-                ['getDadosPreProducao_Cache', 'DADOS_PREPROD_CACHE'],
-                ['getDadosMapaSaida_Cache', 'MAPA_SAIDA_CACHE'],
-                ['getDadosQualidade_Cache', 'DADOS_QUALIDADE_CACHE'],
-                ['getDadosPPM_Cache', 'DADOS_PPM_CACHE'],
-                ['getDadosAlocacao_Cache', 'DADOS_ALOCACAO_CACHE'],
-                ['getDadosChamados_Cache', 'DADOS_CHAMADOS_CACHE'],
-                ['getDadosInspecaoCDs_Cache', 'DADOS_INSPECOES_CACHE']
+                ['getDadosMapaSaida_Cache', 'MAPA_SAIDA_CACHE']
             ];
             const totalFontes = fontesCriticas.length + fontesBackground.length;
             const resultados = {}, falhas = [];
