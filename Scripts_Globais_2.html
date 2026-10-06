@@ -768,9 +768,19 @@ window.pgAnexarDadosDashboard = function(fatia) {
     
     // A Prioridade não está aqui porque ela é "calculada", não puxa do Excel puro
     window.mapCamposProducao = {
-    'Gráfica': 'GRÁFICA', 'Marca': 'UNIDADE', 'CD Destino': 'CD DESTINO',
+    'Gráfica': 'GRÁFICA', 'Marca': 'UNIDADE', 'CD Destino': 'CD_MAPA',
     'Ciclo': 'CICLO', 'Envio': 'ENVIO', 'Congelado': 'Congelado'
 };
+    // PCP usa exclusivamente CD_MAPA. PCP_ACABADORAS não possui esse campo,
+    // então mantém seu CD final próprio apenas para a linha da fonte Acabadora.
+    window.pgValorFiltroProducao = function(l, categoria) {
+        if (categoria !== 'CD Destino') return l[window.mapCamposProducao[categoria]];
+        const fonteAcab = [l?._SOURCE, l?.BASE, l?._base]
+            .some(v => String(v || '').toUpperCase().includes('ACAB'));
+        return fonteAcab
+            ? (l['CD DESTINO'] ?? l.CD_FINAL ?? l.CD ?? '')
+            : (l.CD_MAPA ?? '');
+    };
 
     window.toggleFilterMenuGeral = function(idCat, event) {
         if(event) event.stopPropagation();
@@ -829,7 +839,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
         if(window.dadosGlobais) {
             window.dadosGlobais.forEach(l => {
                 Object.keys(window.mapCamposProducao).forEach(k => {
-                    let val = String(l[window.mapCamposProducao[k]] || "").trim();
+                    let val = String(window.pgValorFiltroProducao(l, k) || "").trim();
                     if(!val || val === "undefined" || val === "-") {
                         if (k === 'CD Destino') return;
                         val = "(Vazio)";
@@ -985,7 +995,7 @@ function aplicarFiltros() {
     const categorias = Object.keys(selFilters);
     const passaCategorias = l => categorias.every(k => {
         if (k === 'Prioridade') return selFilters[k].has(window.obterPrioridade(l, tRef));
-        let v = String(l[window.mapCamposProducao[k]] || '').trim();
+        let v = String(window.pgValorFiltroProducao(l, k) || '').trim();
         if (!v || v === 'undefined' || v === '-') v = '(Vazio)';
         return selFilters[k].has(v);
     });
@@ -3440,8 +3450,9 @@ let tRef = document.getElementById('filtroReferencia').value;
         return pgChecarV56(grid[grupo] || {}, brutoOriginal, brutoFonte,
             tipo + ':' + grupo);
     };
-    const pgTotalBrutoV56 = pgChecarV56(fTotais, tGeral,
-        pgReferenciaV56('geral', 'GERAL'), 'TOTAL GERAL');
+    // O Total Base do Funil é SEMPRE a base canônica já filtrada.
+    // A referência V56 continua disponível para auditoria/grupos, mas nunca substitui o total geral.
+    const pgTotalBrutoV56 = tGeral;
     // Auditoria nao interfere em filtros, porcentagens, cronologia ou dados.
     window.pgAuditoriaBrutoV56 = {
         totalCanonico:tGeral, totalBruto:pgTotalBrutoV56,
@@ -9759,11 +9770,18 @@ window.exportarDivergenciasColetas = function() {
         let meta = pgMetaLinhaCache.get(l);
         if (meta) return meta;
 
+        const fonteAcabadora = [l._SOURCE, l.BASE, l._base].some(v => pgNorm(v).includes('ACAB'));
+        // Na PCP, CD_MAPA é soberano para filtro e roteamento.
+        // Não há fallback para CD DESTINO original: vazio em CD_MAPA continua vazio
+        // e, portanto, pertence ao fluxo Acabadora.
+        const cdPCP = fonteAcabadora
+            ? (l['CD DESTINO'] || l['CD_FINAL'] || l['CD'] || l['CK'] || '')
+            : (l['CD_MAPA'] ?? '');
         meta = {
             grafica: pgNorm(l['GRAFICA_FINAL'] || l['GRÁFICA'] || l['GRAFICA'] || l['BQ'] || ''),
-            cd: pgNorm(l['CD_FINAL'] || l['CD DESTINO'] || l['CD'] || l['CK'] || ''),
-            rota: pgNorm(l['CD DESTINO'] || l['CD_FINAL'] || l['CD'] || l['CK'] || ''),
-            fonteAcabadora: [l._SOURCE, l.BASE, l._base].some(v => pgNorm(v).includes('ACAB'))
+            cd: pgNorm(cdPCP),
+            rota: pgNorm(cdPCP),
+            fonteAcabadora: fonteAcabadora
         };
 
         pgMetaLinhaCache.set(l, meta);
