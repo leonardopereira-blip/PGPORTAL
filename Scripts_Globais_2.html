@@ -3217,22 +3217,18 @@ let tRef = document.getElementById('filtroReferencia').value;
         Object.entries(pgAcabPorGraficaV46.porGrupo).map(([k, v]) => [k, v.den]));
     const totalAcabamento = pgAcabPorMarcaV46.total.den;
 
-    const baseTotalCanonica = {};
     const baseMarcaCanonica = {};
     const baseGraficaCanonica = {};
+    let tGeral = 0;
 
+    // Total Base = soma literal das linhas que sobreviveram aos filtros/roteamento.
+    // Não deduplica por chave: se a base possui duas linhas, as duas entram,
+    // exatamente como na soma do Google Sheets.
     linhasBaseCanonica.forEach(l => {
         const tBaseCanon = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"] || 0);
         if (tBaseCanon <= 0) return;
 
-        const srcCanon = l["_SOURCE"] === "ACABADORA" ? "acab" : "pcp";
-        const chaveOperacional = getKey(l);
-        // O roteamento já retirou a transferência PCP. A identidade da linha
-        // evita reenvios sem colapsar lotes distintos da mesma OP/SKU.
-        const chaveCanon = chaveOperacional;
-        if (baseTotalCanonica[chaveCanon] !== undefined) return;
-
-        baseTotalCanonica[chaveCanon] = tBaseCanon;
+        tGeral += tBaseCanon;
         const marcaCanon = String(l["MARCA_FINAL"] || l["UNIDADE"] || "N/A").toUpperCase();
         const graficaCanon = String(l["GRAFICA_FINAL"] || l["GRÁFICA"] || "N/A").toUpperCase();
         baseMarcaCanonica[marcaCanon] = (baseMarcaCanonica[marcaCanon] || 0) + tBaseCanon;
@@ -3258,7 +3254,7 @@ let tRef = document.getElementById('filtroReferencia').value;
     Object.keys(mGrid).forEach(m => { mGrid[m].total = baseMarcaCanonica[m] || 0; });
     Object.keys(gGrid).forEach(g => { gGrid[g].total = baseGraficaCanonica[g] || 0; });
 
-    let tGeral = Object.values(baseTotalCanonica).reduce((a,b)=>a+b, 0);
+
 
     // ORIGEM = ACABADORA: a aba começa operacionalmente após O.C.
     // Portanto Env. Arq até O.C. aparecem como 100% do Total Base da PCP_ACABADORAS.
