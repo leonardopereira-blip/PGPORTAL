@@ -6079,7 +6079,18 @@ window.processarEvolucao = function() {
     
     function iniciarAbaQualidadePPM() {
         if (!window.DADOS_PPM_CACHE || window.DADOS_PPM_CACHE.length === 0) {
-            console.log("Dados de PPM vazios.");
+            if(window.setLoading) window.setLoading(true, "Carregando Matriz PPM...");
+            google.script.run
+                .withSuccessHandler((dados) => {
+                    window.DADOS_PPM_CACHE = dados || [];
+                    if(window.setLoading) window.setLoading(false);
+                    processarQualidadePPM();
+                })
+                .withFailureHandler((e) => {
+                    if(window.setLoading) window.setLoading(false);
+                    console.error('[QUALIDADE] Falha ao carregar PPM:', e);
+                })
+                .getDadosPPM();
             return;
         }
         processarQualidadePPM();
