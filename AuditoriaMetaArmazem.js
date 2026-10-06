@@ -2,18 +2,18 @@
 function gerarPlanilhaMetaArmazemAuditavel(payload) {
   var colunas = [
     'Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio','OP',
-    'Tiragem total','Dentro da meta','Fora da meta','Sem previsão','% dentro da meta',
-    'Coleta início (re)plan','Coleta fim real','Coleta fim (re)plan','Coleta fim baseline','Coleta fim usada',
-    'Origem da data de coleta','SLA (dias corridos)','Entrega início usada','Entrega fim prevista','Data realizada CD',
+    'Tiragem total','Tiragem coletada','Dentro da meta','Fora da meta','Sem previsão','% dentro da meta',
+    'Entrega TP real','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
+    'Origem do cálculo','SLA (dias corridos)','Entrega início prevista','Entrega fim prevista',
     'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
     'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
     'Fonte','ID da linha','Chave','Cenário'
   ];
   var datas = [
-    'Coleta início (re)plan','Coleta fim real','Coleta fim (re)plan','Coleta fim baseline','Coleta fim usada',
-    'Entrega início usada','Entrega fim prevista','Data realizada CD','Meta original','Prazo combinado Posi','Meta aplicada'
+    'Entrega TP real','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
+    'Entrega início prevista','Entrega fim prevista','Meta original','Prazo combinado Posi','Meta aplicada'
   ];
-  var quantidades = ['Tiragem total','Dentro da meta','Fora da meta','Sem previsão','Tiragem por DU'];
+  var quantidades = ['Tiragem total','Tiragem coletada','Dentro da meta','Fora da meta','Sem previsão','Tiragem por DU'];
   var inteiros = ['SLA (dias corridos)','DU totais','DU dentro da meta','DU fora da meta'];
   var percentuais = ['% dentro da meta'];
   var avisos = [];
@@ -109,13 +109,13 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
     var header = sheet.getRange(1, 1, 1, colunas.length);
     header.setBackground('#0c2340').setFontColor('#ffffff').setFontWeight('bold').setWrap(true);
     sheet.getRange(1, 10, 1, 5).setBackground('#c54c18');
-    sheet.getRange(1, 15, 1, 11).setBackground('#284081');
-    sheet.getRange(1, 26, 1, 4).setBackground('#c54c18');
+    sheet.getRange(1, 15, 1, 12).setBackground('#284081');
+    sheet.getRange(1, 27, 1, 4).setBackground('#c54c18');
     sheet.setRowHeight(1, 48);
     sheet.setColumnWidths(1, colunas.length, 140);
     var larguras = {
       'Kit':160,'SKU':160,'Descrição':340,'Marca':130,'Série':110,'Gráfica':160,
-      'CD destino':130,'Envio':90,'OP':110,'Origem da data de coleta':190,
+      'CD destino':130,'Envio':90,'OP':110,'Origem do cálculo':190,
       'Regra aplicada':220,'Situação':150,'Motivo / observação':340,
       'Fonte':140,'ID da linha':150,'Chave':250,'Cenário':240
     };
