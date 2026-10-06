@@ -966,7 +966,7 @@
     aviso.classList.toggle('hidden',!aviso.textContent);
     document.getElementById('maKPIs').innerHTML=
       card('Tiragem total CD',fmt(total.total,!!items.length),items.length+' linhas PCP + acabadoras (sem duplicidade)','')+
-      card('Dentro da meta',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt','Antecipação média: '+fmtDiasAging(resultado.aging.antecipacao))+
+      card('Dentro da meta',fmt(total.previsto,!!items.length),pct(total.previsto,total.total)+' da tiragem','alt')+
       card('Fora da meta',fmt(total.pos,!!items.length),'Após a meta aplicável à marca e ao cenário','warn','Atraso médio: '+fmtDiasAging(resultado.aging.atraso))+
       card('Sem previsão',fmt(total.semData,!!items.length),'Sem data de entrega utilizável','neutral');
     document.getElementById('maThPrevisto').textContent='Dentro da meta';
