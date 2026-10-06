@@ -9708,9 +9708,8 @@ window.exportarDivergenciasColetas = function() {
 <script>
 (function() {
     const PG_ACABADORAS = ['HR', 'EMBALARTE', 'TRATTO', 'FELK', 'ANTILHAS'];
-    // Regra operacional de roteamento: estas gráficas seguem pelo fluxo Acabadora
-    // mesmo quando CD_MAPA está preenchido com um CD.
-    const PG_GRAFICAS_FORCAM_ACABADORA = new Set(['WALPRINT', 'REPROSET']);
+    // A exceção pertence ao destino informado em CD_MAPA, nunca à gráfica de origem.
+    const PG_DESTINOS_FORCAM_ACABADORA = new Set(['WALPRINT', 'REPROSET']);
 
     const PG_PESSOAS = {
         'joao.alberti@arcoeducacao.com.br': {
@@ -9810,22 +9809,23 @@ window.exportarDivergenciasColetas = function() {
     // Roteamento do Destino:
     // - PCP lê SOMENTE CD_MAPA.
     // - CD_MAPA vazio => Acabadora.
-    // - WALPRINT / REPROSET => Acabadora, mesmo com CD_MAPA preenchido.
+    // - Destino WALPRINT / REPROSET em CD_MAPA => Acabadora.
+    // - A gráfica de origem WALPRINT / REPROSET não muda o destino.
     // - Demais linhas seguem a classificação normal pelo CD_MAPA.
     function pgDestinoVazio(l) {
         return !pgCdDestinoRoteamento(l);
     }
-    function pgGraficaForcaAcabadora(l) {
+    function pgDestinoForcaAcabadora(l) {
         return !window.pgEhFonteAcabadora(l) &&
-            PG_GRAFICAS_FORCAM_ACABADORA.has(pgGraficaLinha(l));
+            PG_DESTINOS_FORCAM_ACABADORA.has(pgCdDestinoRoteamento(l));
     }
     function pgEhAcabadora(l) {
         if (window.pgEhFonteAcabadora(l)) return false;
         return pgDestinoVazio(l) ||
-            pgGraficaForcaAcabadora(l) ||
+            pgDestinoForcaAcabadora(l) ||
             PG_ACABADORAS.includes(pgCdDestinoRoteamento(l));
     }
-    window.pgGraficaForcaAcabadora = pgGraficaForcaAcabadora;
+    window.pgDestinoForcaAcabadora = pgDestinoForcaAcabadora;
     window.pgEhDestinoAcabadora = pgEhAcabadora;
     window.pgEhDestinoCD = l => !pgEhAcabadora(l);
     window.pgAcabadoraDaLista = l => PG_ACABADORAS.includes(pgGraficaLinha(l));
@@ -9839,7 +9839,7 @@ window.exportarDivergenciasColetas = function() {
     window.pgEhDestinoAcabadoraGraficaFiltro = function(l) {
         if (window.pgEhFonteAcabadora(l)) return false;
         return pgDestinoVazio(l) ||
-            pgGraficaForcaAcabadora(l) ||
+            pgDestinoForcaAcabadora(l) ||
             PG_ACABADORAS_GRAFICA_FILTRO.has(pgCdDestinoRoteamento(l));
     };
 

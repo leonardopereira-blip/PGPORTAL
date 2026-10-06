@@ -12,7 +12,7 @@ test('CD Destino visual usa CD_MAPA', () => {
   assert.match(source, /: \(l\.CD_MAPA \?\? ''\)/);
 });
 
-test('roteamento PCP manda vazio WALPRINT e REPROSET para Acabadora', () => {
+test('roteamento PCP usa WALPRINT e REPROSET no destino, preservando as graficas de origem', () => {
   const inicio = source.indexOf("    const PG_ACABADORAS = ['HR'");
   const fim = source.indexOf('    function pgCasaGrafica(', inicio);
   assert.ok(inicio >= 0 && fim > inicio);
@@ -28,11 +28,15 @@ test('roteamento PCP manda vazio WALPRINT e REPROSET para Acabadora', () => {
     CD_MAPA: cdMapa
   });
 
-  assert.equal(w.pgEhDestinoAcabadora(row('WALPRINT', 'CD JDI')), true);
-  assert.equal(w.pgEhDestinoAcabadora(row('REPROSET', 'CD FOR')), true);
+  assert.equal(w.pgEhDestinoAcabadora(row('WALPRINT', 'CD JDI')), false);
+  assert.equal(w.pgEhDestinoAcabadora(row('REPROSET', 'CD FOR')), false);
+  assert.equal(w.pgEhDestinoAcabadora(row('LOGPRINT', 'WALPRINT')), true);
+  assert.equal(w.pgEhDestinoAcabadora(row('LOGPRINT', 'REPROSET')), true);
   assert.equal(w.pgEhDestinoAcabadora(row('LOGPRINT', '')), true);
-  assert.equal(w.pgEhDestinoCD(row('WALPRINT', 'CD JDI')), false);
-  assert.equal(w.pgEhDestinoCD(row('REPROSET', 'CD FOR')), false);
+  assert.equal(w.pgEhDestinoCD(row('WALPRINT', 'CD JDI')), true);
+  assert.equal(w.pgEhDestinoCD(row('REPROSET', 'CD FOR')), true);
+  assert.equal(w.pgEhDestinoCD(row('LOGPRINT', 'WALPRINT')), false);
+  assert.equal(w.pgEhDestinoCD(row('LOGPRINT', 'REPROSET')), false);
   assert.equal(w.pgEhDestinoCD(row('LOGPRINT', '')), false);
   assert.equal(w.pgEhDestinoCD(row('LOGPRINT', 'CD JDI')), true);
 });

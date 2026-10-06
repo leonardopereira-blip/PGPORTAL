@@ -142,14 +142,51 @@ test('CD especifico exclui vazio desmarcado; Marcar Todos o restaura', () => {
   assert.deepEqual(Array.from(p.w.dadosTotalCanonico), [vazio, jdi, forCD]);
 });
 
-test('WALPRINT e REPROSET seguem para Acabadora mesmo com CD_MAPA preenchido', () => {
+test('grafica WALPRINT e REPROSET conserva destino CD quando CD_MAPA e um CD', () => {
   const walprint = pcp('walprint', 'WALPRINT');
   const reproset = pcp('reproset', 'REPROSET', 'CD FOR');
   const direto = pcp('direto');
   const p = portal([walprint, reproset, direto], 'TODOS', 'ACAB');
-  assert.deepEqual(p.linhas, [walprint, reproset]);
+  assert.deepEqual(p.linhas, []);
+  p.selecionar('TODOS', 'CD');
+  assert.deepEqual(p.linhas, [walprint, reproset, direto]);
+  assert.deepEqual(Array.from(p.w.dadosTotalCanonico), [walprint, reproset, direto]);
+  assert.deepEqual(Array.from(p.w.dadosBaseTPPortal), [walprint, reproset, direto]);
+  p.w.checkOnlyGeral('Gráfica', 'WALPRINT');
+  assert.deepEqual(p.linhas, [walprint]);
+  p.w.checkAllGeral('Gráfica', true);
+  p.selecionar('GRAFICA', 'CD');
+  assert.deepEqual(p.linhas, [walprint, reproset, direto]);
+});
+
+test('somente destino WALPRINT REPROSET ou vazio encaminha a excecao para Acabadora', () => {
+  const destinoWalprint = pcp('dest-walprint', 'LOGPRINT', 'WALPRINT');
+  const destinoReproset = pcp('dest-reproset', 'LEOGRAF', 'REPROSET');
+  const vazio = pcp('vazio', 'WALPRINT', '');
+  const direto = pcp('direto', 'REPROSET');
+  direto['CD DESTINO'] = 'WALPRINT'; // O destino original nao substitui CD_MAPA.
+  const p = portal([destinoWalprint, destinoReproset, vazio, direto], 'TODOS', 'ACAB');
+  assert.deepEqual(p.linhas, [destinoWalprint, destinoReproset, vazio]);
+  assert.deepEqual(Array.from(p.w.dadosTotalCanonico), [destinoWalprint, destinoReproset, vazio]);
+  for (const linha of [destinoWalprint, destinoReproset, vazio]) {
+    assert.equal(p.w.pgEhDestinoAcabadoraGraficaFiltro(linha), true);
+  }
+  assert.equal(p.w.pgEhDestinoAcabadoraGraficaFiltro(direto), false);
   p.selecionar('TODOS', 'CD');
   assert.deepEqual(p.linhas, [direto]);
+  p.selecionar('TODOS', 'TODOS');
+  assert.deepEqual(p.linhas, [destinoWalprint, destinoReproset, vazio, direto]);
+});
+
+test('soma CD inclui os volumes WALPRINT e REPROSET da conferencia de 24,7 mi', () => {
+  const outrasGraficas = { ...pcp('outras'), TIRAGEM: 20755938.2 };
+  const walprint = { ...pcp('walprint', 'WALPRINT'), TIRAGEM: 972994 };
+  const reproset = { ...pcp('reproset', 'REPROSET'), TIRAGEM: 750521 };
+  const hr = { ...acabadora('acabadoras', 'HR'), TIRAGEM: 2268095 };
+  const p = portal([outrasGraficas, walprint, reproset, hr], 'TODOS', 'CD');
+  assert.equal(p.w.dadosTotalCanonico.reduce((s, l) => s + l.TIRAGEM, 0), 24747548.2);
+  assert.equal(p.w.pgBaseGeralReportExecutiva.filter(l =>
+    p.w.pgLinhaDoDestino(l, 'CD', 'TODOS')).reduce((s, l) => s + l.TIRAGEM, 0), 24747548.2);
 });
 
 test('Origem Todas exclui KN Raizes e Athos da PCP_ACABADORAS em qualquer destino', () => {
