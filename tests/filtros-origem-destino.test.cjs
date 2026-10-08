@@ -260,3 +260,109 @@ test('nova fatia conserva vazio desmarcado e respeita selecao de CD especifico',
   assert.deepEqual(p.linhas, [primeira, segunda]);
   assert.deepEqual(Array.from(p.w.dadosTotalCanonico), [primeira, segunda]);
 });
+
+test('destino OCEANO segue para Acabadora sem alterar a grafica OCEANO nem a lista oficial', () => {
+  const destinoOceano = { ...pcp('destino-oceano', 'LOGPRINT', ' Oceano '), TIRAGEM: 123 };
+  const graficaOceano = { ...pcp('grafica-oceano', 'OCEANO'), TIRAGEM: 321 };
+  const hr = { ...acabadora('hr-oficial', 'HR'), 'TIRAGEM A ENTREGAR (total por CD)': 80 };
+  const todas = [destinoOceano, graficaOceano, hr];
+  const p = portal(todas, 'TODOS', 'CD');
+
+  assert.deepEqual(p.linhas, [graficaOceano, hr]);
+  assert.deepEqual(Array.from(p.w.dadosTotalCanonico), [graficaOceano, hr]);
+  assert.deepEqual(Array.from(p.w.dadosBaseTPPortal), [graficaOceano, hr]);
+  assert.equal(p.w.pgEhDestinoAcabadora(destinoOceano), true);
+  assert.equal(p.w.pgEhDestinoAcabadoraGraficaFiltro(destinoOceano), true);
+  assert.equal(p.w.pgEhDestinoCD(graficaOceano), true);
+  p.selecionar('TODOS', 'ACAB');
+  assert.deepEqual(p.linhas, [destinoOceano]);
+  p.selecionar('GRAFICA', 'ACAB');
+  assert.deepEqual(p.linhas, [destinoOceano]);
+  assert.deepEqual(Array.from(p.w.dadosBaseTPPortal), [destinoOceano]);
+  p.selecionar('GRAFICA', 'CD');
+  assert.deepEqual(p.linhas, [graficaOceano]);
+  p.selecionar('TODOS', 'TODOS');
+  assert.deepEqual(p.linhas, todas);
+  assert.equal(p.w.dadosTotalCanonico.reduce((s, l) => s + l.TIRAGEM, 0), 544);
+  assert.equal(p.w.pgAcabadoraDaLista(acabadora('oceano-fonte', 'OCEANO')), false);
+  assert.equal(p.w.pgAcabadoraDaLista(hr), true);
+  p.w.arredondar = Number;
+  assert.deepEqual(Array.from(p.w.pgUnirTotalSemDuplicidade(todas), l => l._ROW_ID),
+    ['grafica-oceano', 'hr-oficial:total-todas']);
+  assert.equal(p.w.pgUnirTotalSemDuplicidade(todas).reduce((s, l) => s + l.TIRAGEM, 0), 401);
+});
+
+test('filtro unico distingue KN e Raizes pelo original da mesma familia sem alterar roteamento', () => {
+  const linhas = [
+    { ...pcp('kn-cd', 'LOGPRINT', 'KN'), CD_DESTINO: 'KN' },
+    { ...pcp('kn-acab-visual', 'LOGPRINT', 'KN'), CD_DESTINO: 'KN ACABADORA' },
+    { ...pcp('raizes-cd', 'LOGPRINT', 'RAIZES'), CD_DESTINO: 'Raízes' },
+    { ...pcp('raizes-acab-visual', 'LOGPRINT', 'RAIZES'), CD_DESTINO: 'RAIZES ACABADORA' },
+    { ...pcp('kn-rota-acab', 'LOGPRINT', 'KN ACABADORA'), CD_DESTINO_PCP_ORIGINAL: 'KN' },
+    { ...pcp('raizes-rota-acab', 'LOGPRINT', 'RAIZES ACABADORA'), CD_DESTINO_PCP_ORIGINAL: 'Raízes' }
+  ];
+  const p = portal(linhas);
+  assert.deepEqual(p.checks.get('CDDestino').map(cb => cb.value),
+    ['KN', 'KN ACABADORA', 'RAÍZES', 'RAÍZES ACABADORA']);
+  assert.equal(p.checks.has('CD_DESTINO'), false);
+  assert.equal(Object.hasOwn(p.w.mapCamposProducao, 'CD_DESTINO'), false);
+  p.w.checkOnlyGeral('CDDestino', 'KN ACABADORA');
+  assert.deepEqual(p.linhas, [linhas[1]]);
+  p.w.checkOnlyGeral('CDDestino', 'RAÍZES ACABADORA');
+  assert.deepEqual(p.linhas, [linhas[3]]);
+  p.w.checkAllGeral('CDDestino', true);
+  for (const l of linhas) {
+    const semOriginal = { ...l };
+    delete semOriginal.CD_DESTINO;
+    delete semOriginal.CD_DESTINO_PCP_ORIGINAL;
+    assert.equal(p.w.pgEhDestinoAcabadora(l), p.w.pgEhDestinoAcabadora(semOriginal));
+    assert.equal(p.w.pgEhDestinoAcabadoraGraficaFiltro(l),
+      p.w.pgEhDestinoAcabadoraGraficaFiltro(semOriginal));
+  }
+  assert.equal(p.w.pgEhDestinoAcabadoraGraficaFiltro(linhas[1]), false);
+  assert.equal(p.w.pgEhDestinoAcabadoraGraficaFiltro(linhas[3]), false);
+  p.selecionar('GRAFICA', 'ACAB');
+  assert.deepEqual(p.linhas, [linhas[4], linhas[5]]);
+});
+
+test('caixa acento e espacos consolidam destino; outros mapas e vazios preservam a soberania', () => {
+  const raizes = [' raízes ', 'RAIZES', 'Raízes'].map((nome, i) =>
+    ({ ...pcp(`raizes-${i}`, 'LOGPRINT', nome), CD_DESTINO: 'OUTRO DESTINO' }));
+  const cdJdi = [' cd jdi ', 'CD JDI', 'Cd  Jdi'].map((nome, i) =>
+    ({ ...pcp(`jdi-${i}`, 'LOGPRINT', nome), CD_DESTINO: 'KN ACABADORA' }));
+  const knFamiliaDiferente = { ...pcp('kn-outro-original', 'LOGPRINT', 'kn'), CD_DESTINO: 'RAIZES ACABADORA' };
+  const raizesFamiliaDiferente = { ...pcp('raizes-outro-original', 'LOGPRINT', 'raízes'), CD_DESTINO: 'KN ACABADORA' };
+  const vazio = { ...pcp('vazio-original-preenchido', 'LOGPRINT', ''), CD_DESTINO: 'CD JDI' };
+  const oceano = { ...pcp('oceano-original-cd', 'LOGPRINT', 'OCEANO'), CD_DESTINO: 'CD JDI' };
+  const p = portal([...raizes, ...cdJdi, knFamiliaDiferente, raizesFamiliaDiferente, vazio, oceano]);
+
+  assert.deepEqual(p.checks.get('CDDestino').map(cb => cb.value),
+    ['(Vazio)', 'CD JDI', 'KN', 'OCEANO', 'RAÍZES']);
+  p.w.checkOnlyGeral('CDDestino', 'RAÍZES');
+  assert.deepEqual(p.linhas, [...raizes, raizesFamiliaDiferente]);
+  p.w.checkOnlyGeral('CDDestino', 'CD JDI');
+  assert.deepEqual(p.linhas, cdJdi);
+  p.w.checkOnlyGeral('CDDestino', 'KN');
+  assert.deepEqual(p.linhas, [knFamiliaDiferente]);
+  p.w.checkOnlyGeral('CDDestino', '(Vazio)');
+  assert.deepEqual(p.linhas, [vazio]);
+  assert.equal(p.w.pgEhDestinoAcabadora(vazio), true);
+  assert.equal(p.w.pgEhDestinoAcabadora(oceano), true);
+});
+
+test('nova fatia mantém destino normalizado desmarcado e a seleção da mesma familia', () => {
+  const kn = { ...pcp('kn-inicial', 'LOGPRINT', 'KN'), CD_DESTINO: 'KN' };
+  const raizes = pcp('raizes-inicial', 'LOGPRINT', 'Raízes');
+  const novaRaizes = pcp('raizes-nova', 'LOGPRINT', '  RAIZES  ');
+  const novoKn = { ...pcp('kn-novo', 'LOGPRINT', 'kn'), CD_DESTINO: ' kn ' };
+  const p = portal([kn, raizes]);
+  p.w.checkOnlyGeral('CDDestino', 'KN');
+  p.anexar([novaRaizes, novoKn]);
+
+  assert.deepEqual(p.checks.get('CDDestino').map(cb => [cb.value, cb.checked]),
+    [['KN', true], ['RAÍZES', false]]);
+  assert.deepEqual(p.linhas, [kn, novoKn]);
+  assert.deepEqual(Array.from(p.w.dadosTotalCanonico), [kn, novoKn]);
+  p.w.checkAllGeral('CDDestino', true);
+  assert.deepEqual(p.linhas, [kn, raizes, novaRaizes, novoKn]);
+});

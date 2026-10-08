@@ -46,7 +46,7 @@ function salvarJSONNoDrive(nomeArquivo, dadosObjeto) {
   }
 }
 
-function lerJSONDoDrive(nomeArquivo) {
+function lerJSONDoDrive(nomeArquivo, falharSeErro) {
   try {
     var pasta = DriveApp.getFolderById(PASTA_CACHE_ID); 
     var arquivos = pasta.getFilesByName(nomeArquivo);
@@ -57,6 +57,7 @@ function lerJSONDoDrive(nomeArquivo) {
     return "[]"; 
   } catch (e) {
     Logger.log("Erro ao ler " + nomeArquivo + ": " + e.toString());
+    if (falharSeErro) throw new Error('Falha ao ler ' + nomeArquivo + ': ' + String(e.message || e));
     return "[]";
   }
 }
@@ -210,7 +211,7 @@ function pgRemoverFatiasObsoletas_(mesesValidos) {
 
 function getDadosDashboardIndice() {
   var json = lerDoCacheRAM('DADOS_DASHBOARD_INDICE');
-  if (!json) json = lerJSONDoDrive(CACHE_DASHBOARD_INDICE);
+  if (!json) json = lerJSONDoDrive(CACHE_DASHBOARD_INDICE, true);
   if (json && json !== "[]") {
     try {
       var indice = JSON.parse(json);
@@ -230,12 +231,96 @@ function getDadosDashboardMes(mes) {
   if (!/^(\d{4}-\d{2}|sem-data)$/.test(chave)) throw new Error('Mes invalido: ' + mes);
   var json = lerDoCacheRAM(pgChaveRamMesDashboard_(chave));
   if (json && json !== "[]") return json;
-  json = lerJSONDoDrive(pgArquivoMesDashboard_(chave));
+  json = lerJSONDoDrive(pgArquivoMesDashboard_(chave), true);
   if (json && json !== "[]") {
     salvarNoCacheRAM(pgChaveRamMesDashboard_(chave), json);
     return json;
   }
   throw new Error('Fatia ' + pgArquivoMesDashboard_(chave) + ' indisponivel.');
+}
+
+// Transporta os mesmos JSONs em respostas pequenas. O manifesto reutiliza os
+// chunks de 45 mil caracteres do cache mensal e confere seu conteudo antes de
+// servir cada parte, inclusive quando uma atualizacao ocorre durante a leitura.
+const PG_DASHBOARD_PARTE_MAX = 500000;
+const PG_DASHBOARD_CHUNK_RAM = 45000;
+
+function pgHashParteDashboard_(texto) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texto, Utilities.Charset.UTF_8)
+    .map(function(byte) { return ('0' + (byte & 255).toString(16)).slice(-2); }).join('');
+}
+
+function pgPrepararPartesDashboard_(mes) {
+  var json = getDadosDashboardMes(mes);
+  if (!Array.isArray(JSON.parse(json))) throw new Error('Fatia mensal invalida: ' + mes);
+  var manifesto = { identidade: pgHashParteDashboard_(json), totalCaracteres: json.length, hashes: [] };
+  for (var inicio = 0; inicio < json.length; inicio += PG_DASHBOARD_CHUNK_RAM) {
+    manifesto.hashes.push(pgHashParteDashboard_(json.substring(inicio, inicio + PG_DASHBOARD_CHUNK_RAM)));
+  }
+  if (salvarNoCacheRAM(pgChaveRamMesDashboard_(mes), json)) {
+    try {
+      CacheService.getScriptCache().put(pgChaveRamMesDashboard_(mes) + '_partes_manifesto',
+        JSON.stringify(manifesto), 21600);
+    } catch (e) {} // O cache em RAM e opcional; a resposta continua completa.
+  }
+  return { json: json, manifesto: manifesto };
+}
+
+function getDadosDashboardMesParte(mes, inicio, identidadeEsperada) {
+  var chave = String(mes || '').trim();
+  if (!/^(\d{4}-\d{2}|sem-data)$/.test(chave)) throw new Error('Mes invalido: ' + mes);
+  if (!Number.isSafeInteger(inicio) || inicio < 0) throw new Error('Inicio da parte invalido.');
+  var esperado = String(identidadeEsperada || '');
+  var cache;
+  var manifesto;
+  var jsonParte;
+  try {
+    cache = CacheService.getScriptCache();
+    manifesto = JSON.parse(cache.get(pgChaveRamMesDashboard_(chave) + '_partes_manifesto') || 'null');
+  } catch (e) {}
+  if (!manifesto || !Array.isArray(manifesto.hashes) ||
+      !/^[a-f0-9]{64}$/.test(String(manifesto.identidade || '')) ||
+      !Number.isSafeInteger(manifesto.totalCaracteres) || manifesto.totalCaracteres < 1 ||
+      manifesto.hashes.length !== Math.ceil(manifesto.totalCaracteres / PG_DASHBOARD_CHUNK_RAM)) {
+    manifesto = null;
+  }
+  if (manifesto && esperado && manifesto.identidade !== esperado) {
+    throw new Error('O cache do mes mudou durante o carregamento: ' + chave);
+  }
+  if (manifesto && inicio < manifesto.totalCaracteres) {
+    var fim = Math.min(inicio + PG_DASHBOARD_PARTE_MAX, manifesto.totalCaracteres);
+    var primeiro = Math.floor(inicio / PG_DASHBOARD_CHUNK_RAM);
+    var ultimo = Math.floor((fim - 1) / PG_DASHBOARD_CHUNK_RAM);
+    var keys = [];
+    for (var i = primeiro; i <= ultimo; i++) keys.push(pgChaveRamMesDashboard_(chave) + '_chunk_' + i);
+    try {
+      var chunks = cache.getAll(keys);
+      var partes = [];
+      for (var j = 0; j < keys.length; j++) {
+        var chunk = chunks[keys[j]];
+        if (typeof chunk !== 'string' || pgHashParteDashboard_(chunk) !== manifesto.hashes[primeiro + j]) {
+          partes = null;
+          break;
+        }
+        partes.push(chunk);
+      }
+      if (partes) jsonParte = partes.join('').substring(inicio - primeiro * PG_DASHBOARD_CHUNK_RAM,
+        fim - primeiro * PG_DASHBOARD_CHUNK_RAM);
+    } catch (e) {}
+  }
+  if (jsonParte === undefined) {
+    var preparado = pgPrepararPartesDashboard_(chave);
+    manifesto = preparado.manifesto;
+    if (esperado && manifesto.identidade !== esperado) {
+      throw new Error('O cache do mes mudou durante o carregamento: ' + chave);
+    }
+    if (inicio >= manifesto.totalCaracteres) throw new Error('Inicio fora da fatia mensal: ' + chave);
+    jsonParte = preparado.json.substring(inicio, inicio + PG_DASHBOARD_PARTE_MAX);
+  }
+  var proximo = inicio + jsonParte.length;
+  return { mes: chave, inicio: inicio, totalCaracteres: manifesto.totalCaracteres,
+    identidade: manifesto.identidade, json: jsonParte,
+    proximo: proximo < manifesto.totalCaracteres ? proximo : null };
 }
 
 // Junta todas as fatias. Usado por chamadores antigos; o portal carrega mes a mes.

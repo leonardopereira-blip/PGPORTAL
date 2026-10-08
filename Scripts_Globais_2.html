@@ -768,28 +768,43 @@ window.pgAnexarDadosDashboard = function(fatia) {
     // 1. Adicionamos a Prioridade com as opções fixas para garantir a ordem de visualização
     window.listasMultiProducao = {
     'Prioridade': new Set(['1. 🚨 Backlog (Atrasado)', '2. 🔴 0 a 7 Dias', '3. 🟡 8 a 15 Dias', '4. 🟢 +15 Dias', '5. ⚪ (Sem Data)']),
-    'Gráfica': new Set(), 'Marca': new Set(), 'CD Destino': new Set(), 'CD_DESTINO': new Set(),
+    'Gráfica': new Set(), 'Marca': new Set(), 'CD Destino': new Set(),
     'Ciclo': new Set(), 'Envio': new Set(), 'Congelado': new Set(),
     'Cliente personalizado': new Set(), 'Capa personalizada': new Set()
 };
     
     // A Prioridade não está aqui porque ela é "calculada", não puxa do Excel puro
     window.mapCamposProducao = {
-    'Gráfica': 'GRÁFICA', 'Marca': 'UNIDADE', 'CD Destino': 'CD_MAPA', 'CD_DESTINO': 'CD_DESTINO',
+    'Gráfica': 'GRÁFICA', 'Marca': 'UNIDADE', 'CD Destino': 'CD_MAPA',
     'Ciclo': 'CICLO', 'Envio': 'ENVIO', 'Congelado': 'Congelado',
     'Cliente personalizado': 'CLIENTE_PERSONALIZADO',
     'Capa personalizada': 'CAPA_PERSONALIZADA'
 };
-    // PCP usa exclusivamente CD_MAPA. PCP_ACABADORAS não possui esse campo,
-    // então mantém seu CD final próprio apenas para a linha da fonte Acabadora.
+    // O filtro visual distingue CD e Acabadora de KN/Raízes pelo destino original.
+    // Roteamento e cálculos continuam usando exclusivamente CD_MAPA na PCP.
+    window.pgNormalizarDestinoFiltro = function(valor) {
+        const nome = String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .trim().replace(/\s+/g, ' ').toUpperCase();
+        if (nome === 'RAIZES') return 'RAÍZES';
+        if (nome === 'RAIZES ACABADORA') return 'RAÍZES ACABADORA';
+        return nome;
+    };
     window.pgValorFiltroProducao = function(l, categoria) {
-        if (categoria === 'CD_DESTINO') return l.CD_DESTINO ?? l.CD_DESTINO_PCP_ORIGINAL ?? l['CD DESTINO'] ?? '';
         if (categoria !== 'CD Destino') return l[window.mapCamposProducao[categoria]];
         const fonteAcab = [l?._SOURCE, l?.BASE, l?._base]
             .some(v => String(v || '').toUpperCase().includes('ACAB'));
-        return fonteAcab
+        const mapa = window.pgNormalizarDestinoFiltro(fonteAcab
             ? (l['CD DESTINO'] ?? l.CD_FINAL ?? l.CD ?? '')
-            : (l.CD_MAPA ?? '');
+            : (l.CD_MAPA ?? ''));
+        if (fonteAcab) return mapa;
+        const original = window.pgNormalizarDestinoFiltro(
+            l.CD_DESTINO ?? l.CD_DESTINO_PCP_ORIGINAL ?? l['CD DESTINO'] ?? '');
+        const familia = valor => {
+            if (valor === 'KN' || valor === 'KN ACABADORA') return 'KN';
+            if (valor === 'RAÍZES' || valor === 'RAÍZES ACABADORA') return 'RAÍZES';
+            return '';
+        };
+        return familia(mapa) && familia(mapa) === familia(original) ? original : mapa;
     };
 
     window.toggleFilterMenuGeral = function(idCat, event) {
@@ -9713,7 +9728,7 @@ window.exportarDivergenciasColetas = function() {
 (function() {
     const PG_ACABADORAS = ['HR', 'EMBALARTE', 'TRATTO', 'FELK', 'ANTILHAS'];
     // A exceção pertence ao destino informado em CD_MAPA, nunca à gráfica de origem.
-    const PG_DESTINOS_FORCAM_ACABADORA = new Set(['WALPRINT', 'REPROSET']);
+    const PG_DESTINOS_FORCAM_ACABADORA = new Set(['WALPRINT', 'REPROSET', 'OCEANO']);
 
     const PG_PESSOAS = {
         'joao.alberti@arcoeducacao.com.br': {
@@ -9813,8 +9828,8 @@ window.exportarDivergenciasColetas = function() {
     // Roteamento do Destino:
     // - PCP lê SOMENTE CD_MAPA.
     // - CD_MAPA vazio => Acabadora.
-    // - Destino WALPRINT / REPROSET em CD_MAPA => Acabadora.
-    // - A gráfica de origem WALPRINT / REPROSET não muda o destino.
+    // - Destino WALPRINT / REPROSET / OCEANO em CD_MAPA => Acabadora.
+    // - O nome da gráfica de origem não muda o destino.
     // - Demais linhas seguem a classificação normal pelo CD_MAPA.
     function pgDestinoVazio(l) {
         return !pgCdDestinoRoteamento(l);

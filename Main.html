@@ -591,19 +591,23 @@ window.exportarSkusFiltradosSheets = function() {
             google.script.run.registrarAcessoUsuario();
         });
 
-        // O cache do dashboard e fatiado por mes da coleta final (re) plan: cada RPC traz uma fatia,
+        // O cache do dashboard e fatiado por mes da coleta final (re) plan: cada RPC traz parte de uma fatia,
         // e a tela só é liberada depois que todas as fatias estiverem completas.
         const PG_DASH_LS_PREFIXO = 'PG_DASH_MES_';
         const PG_DASH_LS_INDICE = 'PG_DASH_INDICE';
 
-        function pgGuardarFatiaLocal(mes, json) {
-            try { localStorage.setItem(PG_DASH_LS_PREFIXO + mes, json); return true; }
+        function pgChaveFatiaLocal(mes, indice) {
+            return PG_DASH_LS_PREFIXO + String(indice.geradoEm || '') + ':' + mes;
+        }
+
+        function pgGuardarFatiaLocal(mes, json, indice) {
+            try { localStorage.setItem(pgChaveFatiaLocal(mes, indice), json); return true; }
             catch (e) { return false; } // cota estourada: seguimos sem copia local deste mes
         }
 
-        function pgLimparFatiasLocais(mesesValidos) {
+        function pgLimparFatiasLocais(mesesValidos, indice) {
             try {
-                const validos = new Set((mesesValidos || []).map(m => PG_DASH_LS_PREFIXO + m));
+                const validos = new Set((mesesValidos || []).map(m => pgChaveFatiaLocal(m, indice)));
                 Object.keys(localStorage)
                     .filter(k => k.indexOf(PG_DASH_LS_PREFIXO) === 0 && !validos.has(k))
                     .forEach(k => localStorage.removeItem(k));
@@ -615,13 +619,17 @@ window.exportarSkusFiltradosSheets = function() {
             const dados = [];
             try {
                 const indice = JSON.parse(localStorage.getItem(PG_DASH_LS_INDICE) || 'null');
-                const meses = (indice && indice.meses || []).map(item => item.mes);
+                const meses = indice && indice.meses || [];
                 if (!meses.length) return [];
-                for (const mes of meses) {
-                    const json = localStorage.getItem(PG_DASH_LS_PREFIXO + mes);
+                for (const item of meses) {
+                    const json = localStorage.getItem(pgChaveFatiaLocal(item.mes, indice));
                     if (!json) return []; // não libera cache local incompleto
-                    dados.push.apply(dados, JSON.parse(json));
+                    const fatia = JSON.parse(json);
+                    if (!Array.isArray(fatia) ||
+                        (Number.isSafeInteger(item.registros) && fatia.length !== item.registros)) return [];
+                    dados.push.apply(dados, fatia);
                 }
+                if (Number.isSafeInteger(indice.registros) && dados.length !== indice.registros) return [];
             } catch (e) {
                 return [];
             }
@@ -633,43 +641,73 @@ window.exportarSkusFiltradosSheets = function() {
             const rpc = (nome, ...args) => new Promise((resolve, reject) => {
                 google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[nome](...args);
             });
-            const comRetry = async (nome, ...args) => {
+            const comRetry = async (operacao, tentativas = 3) => {
                 let ultimoErro;
-                for (let i = 0; i < 3; i++) {
-                    try { return await rpc(nome, ...args); }
+                for (let i = 0; i < tentativas; i++) {
+                    try { return await operacao(); }
                     catch (erro) {
                         ultimoErro = erro;
-                        await new Promise(r => setTimeout(r, 600 * (i + 1)));
+                        if (i + 1 < tentativas) await new Promise(r => setTimeout(r, 600 * (i + 1)));
                     }
                 }
                 throw ultimoErro;
             };
 
-            const indice = JSON.parse(await comRetry('getDadosDashboardIndice'));
+            const indice = await comRetry(async () => JSON.parse(await rpc('getDadosDashboardIndice')));
             const meses = (indice.meses || []).map(m => m.mes);
             if (!meses.length) throw new Error('Indice do dashboard sem meses.');
             window.PG_DASHBOARD_INDICE = indice;
             window.PG_DASHBOARD_COMPLETO = false;
             window.PG_DASHBOARD_RESTO = null;
-            try { localStorage.setItem(PG_DASH_LS_INDICE, JSON.stringify(indice)); } catch (e) {}
-            pgLimparFatiasLocais(meses);
+
+            const carregarMes = async item => {
+                let inicio = 0, identidade = '', totalCaracteres;
+                const partes = [];
+                while (inicio !== null) {
+                    const parte = await comRetry(() => rpc('getDadosDashboardMesParte', item.mes, inicio, identidade), 2);
+                    if (!parte || parte.mes !== item.mes || parte.inicio !== inicio ||
+                        typeof parte.json !== 'string' || !parte.json.length || parte.json.length > 500000 ||
+                        !Number.isSafeInteger(parte.totalCaracteres) || parte.totalCaracteres < 1 ||
+                        typeof parte.identidade !== 'string' || !parte.identidade) {
+                        throw new Error('Parte mensal invalida: ' + item.mes);
+                    }
+                    if (identidade && (parte.identidade !== identidade || parte.totalCaracteres !== totalCaracteres)) {
+                        throw new Error('O cache do mes mudou durante o carregamento: ' + item.mes);
+                    }
+                    identidade = parte.identidade;
+                    totalCaracteres = parte.totalCaracteres;
+                    const fim = inicio + parte.json.length;
+                    if (fim > totalCaracteres ||
+                        (parte.proximo === null ? fim !== totalCaracteres : parte.proximo !== fim || fim >= totalCaracteres)) {
+                        throw new Error('Parte mensal incompleta: ' + item.mes);
+                    }
+                    partes.push(parte.json);
+                    inicio = parte.proximo;
+                }
+                const json = partes.join('');
+                const fatia = JSON.parse(json);
+                if (!Array.isArray(fatia) ||
+                    (Number.isSafeInteger(item.registros) && fatia.length !== item.registros)) {
+                    throw new Error('Quantidade de registros diferente do indice: ' + item.mes);
+                }
+                return { json, fatia };
+            };
 
             const fatias = new Array(meses.length);
             const falhas = [];
             let proximo = 0;
             let concluidos = 0;
-            const qtdWorkers = Math.min(3, meses.length);
+            let copiasLocaisCompletas = true;
+            const qtdWorkers = Math.min(2, meses.length);
 
             const worker = async () => {
                 while (true) {
                     const i = proximo++;
                     if (i >= meses.length) return;
                     try {
-                        const json = await comRetry('getDadosDashboardMes', meses[i]);
-                        const fatia = JSON.parse(json);
-                        if (!Array.isArray(fatia)) throw new Error('Fatia mensal inválida: ' + meses[i]);
+                        const { json, fatia } = await comRetry(() => carregarMes(indice.meses[i]));
                         fatias[i] = fatia;
-                        pgGuardarFatiaLocal(meses[i], json);
+                        if (!pgGuardarFatiaLocal(meses[i], json, indice)) copiasLocaisCompletas = false;
                     } catch (erro) {
                         falhas.push({ mes: meses[i], erro: String(erro) });
                     } finally {
@@ -681,11 +719,20 @@ window.exportarSkusFiltradosSheets = function() {
 
             await Promise.all(Array.from({ length: qtdWorkers }, () => worker()));
             if (falhas.length) {
-                throw new Error('Falha ao carregar os meses: ' + falhas.map(f => f.mes).join(', '));
+                throw new Error('Falha ao carregar os meses: ' + falhas.map(f => f.mes + ' (' + f.erro + ')').join('; '));
             }
 
             const todos = [];
             fatias.forEach(fatia => todos.push.apply(todos, fatia));
+            if (Number.isSafeInteger(indice.registros) && todos.length !== indice.registros) {
+                throw new Error('Quantidade total de registros diferente do indice do dashboard.');
+            }
+            if (copiasLocaisCompletas) {
+                try {
+                    localStorage.setItem(PG_DASH_LS_INDICE, JSON.stringify(indice));
+                    pgLimparFatiasLocais(meses, indice);
+                } catch (e) {}
+            }
             window.PG_DASHBOARD_COMPLETO = true;
             if (aviso) aviso('');
             console.info('[DASHBOARD] Todas as fatias carregadas antes de liberar o portal:', todos.length, 'registros');
@@ -784,13 +831,20 @@ window.exportarSkusFiltradosSheets = function() {
                         if (valorSalvo.length) {
                             resultados[chave] = valorSalvo;
                             window[chave] = valorSalvo;
+                            window.PG_DASHBOARD_INDICE = JSON.parse(localStorage.getItem(PG_DASH_LS_INDICE));
+                            window.PG_DASHBOARD_COMPLETO = true;
                             console.warn('[CARREGAMENTO] Dashboard via fatias salvas no navegador por falha no RPC:', erro);
-                            return;
+                            showToast('Exibindo a ultima copia completa salva neste navegador.', 'info', 'Cache local');
+                        } else {
+                            falhas.push({ nome, erro: String(erro) });
+                            console.warn('[CARREGAMENTO BG]', nome, erro);
+                            if (obrigatoria) throw erro;
                         }
+                    } else {
+                        falhas.push({ nome, erro: String(erro) });
+                        console.warn('[CARREGAMENTO BG]', nome, erro);
+                        if (obrigatoria) throw erro;
                     }
-                    falhas.push({ nome, erro: String(erro) });
-                    console.warn('[CARREGAMENTO BG]', nome, erro);
-                    if (obrigatoria) throw erro;
                 }
                 window.PG_PERFORMANCE.fontesMs[nome] = Math.round(performance.now() - t);
                 completas++; status();
@@ -844,7 +898,7 @@ window.exportarSkusFiltradosSheets = function() {
             } catch (erro) {
                 clearInterval(timer);
                 window.pgCarregamentoInicial = false;
-                if (msg) msg.textContent = 'Não foi possível carregar todos os dados. Atualize para tentar novamente.';
+                if (msg) msg.textContent = 'Não foi possível carregar todos os dados. ' + String(erro.message || erro) + '. Atualize para tentar novamente.';
                 console.error('[CARREGAMENTO]', erro);
             }
         }
