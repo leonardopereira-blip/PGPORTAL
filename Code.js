@@ -1016,7 +1016,11 @@ function getDadosMapaSaida() {
 
       mapaSKU[skuChave].push(evento);
     }
+    // Forecast e parcelas pertencem a mesma geracao do cache. Nunca consultar
+    // a planilha durante a abertura do portal para completar este payload.
+    mapaSKU.__forecastTP = pgChavesForecastTP_();
     mapaSKU.__agendaTPCompleta = true;
+    mapaSKU.__agendaTPGeradoEm = new Date().toISOString();
     return mapaSKU;
    
   } catch (e) {

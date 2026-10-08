@@ -455,6 +455,10 @@ function atualizarCacheQualidade() {
   pgAtualizarArquivoCache_('cache_qualidade.json', getDadosQualidade);
 }
 
+function atualizarCacheMapa() {
+  pgAtualizarArquivoCache_('cache_mapa.json', getDadosMapaSaida);
+}
+
 function atualizarTodoOCache() {
   var falhas = [];
   try {
@@ -492,14 +496,14 @@ function getDadosChamados_Cache() { return JSON.parse(lerJSONDoDrive("cache_cham
 function getDadosCockpit_Cache() { return JSON.parse(lerJSONDoDrive("cache_cockpit.json")); }
 function getDadosInspecaoCDs_Cache() { return JSON.parse(lerJSONDoDrive("cache_inspecoes.json")); }
 function getDadosMapaSaida_Cache() {
-  var json = lerJSONDoDrive("cache_mapa.json");
-  if (!json || json === "[]") return {};
   try {
+    var json = lerJSONDoDrive("cache_mapa.json", true);
+    if (!json || json === "[]") throw new Error('cache_mapa.json nao encontrado. Execute atualizarCacheMapa.');
     var mapa = JSON.parse(json);
     return pgComplementarEventosTPMapa_(mapa, json);
   } catch (e) {
-    console.error('[cache] Mapa de Saida: JSON invalido, seguindo sem mapa: ' + e.message);
-    return {};
+    console.error('[cache] Mapa de Saida: ' + e.message);
+    return { __agendaTPCompleta: false, __erroAgendaTP: e.message };
   }
 }
 function buscarHistoricoObsGiro_Cache() { return buscarHistoricoObsGiro(); }

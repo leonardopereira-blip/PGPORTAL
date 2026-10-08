@@ -8,11 +8,10 @@ var PG_FONTES_EXTERNAS = {
   'PCP_ACABADORAS': PG_ARQUIVO_PCPS,
   'Base_Cockpit_Status': PG_ARQUIVO_PCPS,
   'Base_OTIF': PG_ARQUIVO_PCPS,
-  'Internalização': PG_ARQUIVO_PCPS,
-  'MAPA DE SAÍDA': PG_ARQUIVO_PCPS,
-  'MAPA DE SAIDA': PG_ARQUIVO_PCPS,
-  'MAPA DE SAIDA ': PG_ARQUIVO_PCPS
+  'Internalização': PG_ARQUIVO_PCPS
 };
+
+// O MAPA DE SAIDA pertence a planilha vinculada, nao ao arquivo dos PCPs.
 
 // O snapshot por copia ja contem todas as abas em valores, entao ele tem
 // precedencia sobre a fonte externa.
