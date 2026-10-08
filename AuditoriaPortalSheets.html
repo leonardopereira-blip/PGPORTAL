@@ -35,10 +35,15 @@
         const chave = primeira([l.JOIN_KEY, l.Chave, l.CHAVE]) ||
             (l._PG_TP_LINHA ? (window.pgEhFonteAcabadora(l) ? 'PCP Acabadora!' : 'PCP!') + l._PG_TP_LINHA : '');
         const origem = window.pgEhFonteAcabadora(l) ? 'PCP Acabadora' : 'PCP';
+        // O destino original foi preservado pelo backend para a auditoria.
+        // Este fallback identifica a linha sem mudar CD_MAPA, filtros ou calculos.
+        const destino = primeira([window.pgValorFiltroProducao(l, 'CD Destino'),
+            l.CD_DESTINO_PCP_ORIGINAL, l.CD_DESTINO, campo(l, 'CD DESTINO'),
+            l.CD_FINAL, l.CD, l.CK]);
         const valores = [texto(kit), texto(l.SKU_REAL || campo(l, 'SKU')),
             texto(l.GRAFICA_FINAL || campo(l, 'GRÁFICA') || l.GRAFICA),
             texto(l.MARCA_FINAL || campo(l, 'UNIDADE') || l.MARCA),
-            texto(window.pgValorFiltroProducao(l, 'CD Destino')),
+            texto(window.pgNormalizarDestinoFiltro(destino)),
             origem, texto(l._PG_TP_LINHA), texto(chave)];
         const ausentes = valores.slice(0, 5).map((v, i) => !v ? cabecalho[i] : '').filter(Boolean);
         if (ausentes.length) throw new Error('Campos obrigatórios ausentes na origem: ' +
@@ -228,6 +233,7 @@
             ['Aba aberta', texto(visivel)], ['Cache do mapa', texto(window.MAPA_SAIDA_CACHE?.__agendaTPGeradoEm)],
             ['Como somar', 'Filtre Visão + Indicador na aba Parcelas por data e some Quantidade. Tiragem total e Mapa solicitado ficam nas abas de base, sem inventar uma data. Cada aba representa seu próprio recorte; não some abas diferentes.'],
             ['Datas', 'Datas de coleta e entrega reais ficam vazias enquanto não existirem. As previstas usam Replan e o fallback do portal. Formação de kit traz a data real quando existente, senão a planejada.'],
+            ['Destino na auditoria', 'Quando o destino do filtro está vazio, a identificação usa o destino original preservado da mesma linha do PCP. Os filtros, cruzamentos e volumes continuam usando as regras do portal.'],
             ['Kit planejado na tabela', 'Mantém o critério do portal, incluindo a antecedência de três dias. Kit planejado por data traz o calendário completo.'],
             ['Mapa solicitado', 'TIRAGEM COLETADA da fórmula PCP. Mapa agendado usa as parcelas pendentes O − AN; são indicadores diferentes.']];
         if (visaoAtual) filtros.push(['Período da curva', visaoAtual.inicio + ' até ' + visaoAtual.fim]);
