@@ -591,7 +591,8 @@ window.exportarSkusFiltradosSheets = function() {
             google.script.run.registrarAcessoUsuario();
         });
 
-        // O cache do dashboard e fatiado por mes da coleta final (re) plan: cada RPC traz parte de uma fatia,
+        // O cache do dashboard e fatiado por mes da coleta final (re) plan.
+        // Meses completos usam uma RPC; o transporte em partes recupera somente respostas que falharem.
         // e a tela só é liberada depois que todas as fatias estiverem completas.
         const PG_DASH_LS_PREFIXO = 'PG_DASH_MES_';
         const PG_DASH_LS_INDICE = 'PG_DASH_INDICE';
@@ -660,7 +661,15 @@ window.exportarSkusFiltradosSheets = function() {
             window.PG_DASHBOARD_COMPLETO = false;
             window.PG_DASHBOARD_RESTO = null;
 
-            const carregarMes = async item => {
+            const validarFatiaMes = (item, json) => {
+                const fatia = JSON.parse(json);
+                if (!Array.isArray(fatia) ||
+                    (Number.isSafeInteger(item.registros) && fatia.length !== item.registros)) {
+                    throw new Error('Quantidade de registros diferente do indice: ' + item.mes);
+                }
+                return { json, fatia };
+            };
+            const carregarMesEmPartes = async item => {
                 let inicio = 0, identidade = '', totalCaracteres;
                 const partes = [];
                 while (inicio !== null) {
@@ -684,13 +693,15 @@ window.exportarSkusFiltradosSheets = function() {
                     partes.push(parte.json);
                     inicio = parte.proximo;
                 }
-                const json = partes.join('');
-                const fatia = JSON.parse(json);
-                if (!Array.isArray(fatia) ||
-                    (Number.isSafeInteger(item.registros) && fatia.length !== item.registros)) {
-                    throw new Error('Quantidade de registros diferente do indice: ' + item.mes);
+                return validarFatiaMes(item, partes.join(''));
+            };
+            const carregarMes = async item => {
+                try {
+                    return validarFatiaMes(item, await rpc('getDadosDashboardMes', item.mes));
+                } catch (erro) {
+                    console.warn('[DASHBOARD] Recuperando mes em partes:', item.mes, erro);
+                    return carregarMesEmPartes(item);
                 }
-                return { json, fatia };
             };
 
             const fatias = new Array(meses.length);
@@ -698,7 +709,7 @@ window.exportarSkusFiltradosSheets = function() {
             let proximo = 0;
             let concluidos = 0;
             let copiasLocaisCompletas = true;
-            const qtdWorkers = Math.min(2, meses.length);
+            const qtdWorkers = Math.min(3, meses.length);
 
             const worker = async () => {
                 while (true) {
@@ -767,8 +778,13 @@ window.exportarSkusFiltradosSheets = function() {
             const totalFontes = fontesCriticas.length + fontesBackground.length;
             const resultados = {}, falhas = [];
             let completas = 0;
+            let preparandoPainel = false;
             window.PG_PERFORMANCE = { fontesMs: {} };
             const status = () => {
+                if (preparandoPainel) {
+                    if (msg) msg.textContent = `Dados completos. Preparando o painel (${((performance.now() - inicio) / 1000).toFixed(1)}s)...`;
+                    return;
+                }
                 const detalhe = window.PG_DASHBOARD_PROGRESSO ? ` — ${window.PG_DASHBOARD_PROGRESSO}` : '';
                 if (msg) msg.textContent = `Carregando dados: ${completas}/${totalFontes} bases (${((performance.now() - inicio) / 1000).toFixed(1)}s)${detalhe}`;
                 if (bar) bar.style.width = Math.round(completas / totalFontes * 90) + '%';
@@ -858,7 +874,12 @@ window.exportarSkusFiltradosSheets = function() {
                 if (email.toLowerCase() !== 'leonardo.pereira@arcoeducacao.com.br') {
                     document.querySelectorAll('#btnEnviarPendencias').forEach(b => b.style.display = 'none');
                 }
-                if (msg) msg.textContent = 'Preparando os dados e o painel...';
+                preparandoPainel = true;
+                status();
+                // Permite pintar a etapa atual antes do processamento sincrono do painel.
+                await new Promise(resolve => window.requestAnimationFrame
+                    ? window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))
+                    : setTimeout(resolve, 0));
                 const processamento = performance.now();
                 iniciarDashboard(window.DADOS_PCP_CACHE);
                 window.PG_PERFORMANCE.processamentoInicialMs = Math.round(performance.now() - processamento);

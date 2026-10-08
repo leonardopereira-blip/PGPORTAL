@@ -69,6 +69,9 @@ test('carrega todos os meses e preserva cada registro antes de liberar o dashboa
   assert.deepEqual(JSON.parse(JSON.stringify(resultado)), Object.values(dados).flat());
   assert.equal(p.contexto.window.PG_DASHBOARD_COMPLETO, true);
   assert.deepEqual(JSON.parse(JSON.stringify(p.local())), Object.values(dados).flat());
+  assert.equal(p.chamadas.filter(c => c.nome === 'getDadosDashboardMes').length, 2);
+  assert.equal(p.chamadas.filter(c => c.nome === 'getDadosDashboardMesParte').length, 0,
+    'Meses que chegam completos devem manter o transporte direto');
 });
 
 test('erro permanente preserva a causa e impede liberar dashboard incompleto', async () => {
@@ -101,6 +104,7 @@ test('repete resposta invalida e falha transitória sem duplicar registros', asy
   let tentativasIndice = 0, tentativasParte = 0;
   const p = portal((nome, ...args) => {
     if (nome === 'getDadosDashboardIndice' && tentativasIndice++ === 0) return '{';
+    if (nome === 'getDadosDashboardMes') throw new Error('Falha no transporte mensal');
     if (nome === 'getDadosDashboardMesParte' && args[1] === 100 && tentativasParte++ === 0) {
       throw new Error('Servidor temporariamente indisponível');
     }
@@ -152,6 +156,7 @@ test('22 MB atravessam Main e backend em partes limitadas, preservando todos os 
   const tamanhos = [];
   const p = portal((nome, ...args) => {
     if (nome === 'getDadosDashboardIndice') return servidor.responder(nome, ...args);
+    if (nome === 'getDadosDashboardMes') throw new Error('Falha no transporte de resposta grande');
     const parte = b.contexto.getDadosDashboardMesParte(...args);
     tamanhos.push(parte.json.length);
     return parte;
@@ -163,6 +168,53 @@ test('22 MB atravessam Main e backend em partes limitadas, preservando todos os 
   assert.equal(b.leiturasDrive, 1, 'Os demais trechos devem reutilizar os chunks mensais');
   assert.deepEqual(JSON.parse(JSON.stringify(resultado)), linhas);
   assert.equal(p.contexto.window.PG_DASHBOARD_COMPLETO, true);
+});
+
+test('controlador pinta processamento e só libera overlay depois de iniciar o painel com dados completos', async () => {
+  const servidor = mensal({ '2026-11': [{ id: 'novembro' }], '2026-10': [{ id: 'outubro' }] });
+  const p = portal((nome, ...args) => {
+    if (nome.startsWith('getDadosDashboard')) return servidor.responder(nome, ...args);
+    if (nome === 'getEmailUsuario') return 'usuario@exemplo.com';
+    return {};
+  });
+  const classes = new Set();
+  const elementos = {
+    globalLoading: { classList: { add: c => classes.add(c), remove: c => classes.delete(c) } },
+    loadingBar: { style: {} }, loadingMsg: { textContent: '' }, userEmail: { textContent: '' }
+  };
+  const frames = [];
+  let inicializacoes = 0;
+  Object.assign(p.contexto, {
+    document: { getElementById: id => elementos[id] || null, querySelectorAll: () => [] },
+    performance: { now: () => 1000 }, setInterval: () => 1, clearInterval() {},
+    showToast() {}, atualizarRodapeDatas() {}, formatarNum: n => String(n),
+    iniciarDashboard(dados) {
+      inicializacoes++;
+      assert.equal(classes.has('hidden'), false);
+      assert.match(elementos.loadingMsg.textContent, /Dados completos\. Preparando o painel/);
+      assert.deepEqual(JSON.parse(JSON.stringify(dados)), [{ id: 'novembro' }, { id: 'outubro' }]);
+    }
+  });
+  p.contexto.console.error = () => {};
+  p.contexto.window.requestAnimationFrame = callback => frames.push(callback);
+  const start = source.indexOf('        async function carregarSistema()');
+  const end = source.indexOf('        function navegarView(', start);
+  vm.runInContext(source.slice(start, end), p.contexto);
+  const carregamento = p.contexto.carregarSistema();
+  await new Promise(setImmediate);
+  assert.equal(p.contexto.window.PG_DASHBOARD_COMPLETO, true);
+  assert.equal(inicializacoes, 0);
+  assert.equal(classes.has('hidden'), false);
+  assert.match(elementos.loadingMsg.textContent, /Preparando o painel/);
+  assert.equal(frames.length, 1);
+  frames.shift()();
+  await new Promise(setImmediate);
+  assert.equal(inicializacoes, 0);
+  frames.shift()();
+  await carregamento;
+  assert.equal(inicializacoes, 1);
+  assert.equal(classes.has('hidden'), true);
+  assert.equal(p.contexto.window.pgCarregamentoInicial, false);
 });
 
 test('evicção de chunk recupera a mesma fatia sem perder trecho', () => {
