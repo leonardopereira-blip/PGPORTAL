@@ -822,6 +822,9 @@ window.exportarSkusFiltradosSheets = function() {
                     if (valor == null) throw new Error('Resposta vazia');
                     resultados[chave] = valor;
                     window[chave] = valor;
+                    if (chave === 'MAPA_SAIDA_CACHE' && typeof window.pgAtualizarDatasTPDoMapa === 'function') {
+                        window.pgAtualizarDatasTPDoMapa();
+                    }
                     // O dashboard guarda copia local por fatia dentro de carregarDashboardPorMes.
                     if (chave === 'DADOS_COCKPIT_INICIAL' && typeof renderCockpit === 'function') renderCockpit(valor);
                     if (chave === 'PG_MATRIZ_SLA' && window.dadosGlobais) {
@@ -881,9 +884,15 @@ window.exportarSkusFiltradosSheets = function() {
                 preparandoPainel = true;
                 status();
                 // Permite pintar a etapa atual antes do processamento sincrono do painel.
-                await new Promise(resolve => window.requestAnimationFrame
-                    ? window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))
-                    : setTimeout(resolve, 0));
+                await new Promise(resolve => {
+                    // Uma aba sem quadros de pintura nao deve prender a abertura.
+                    if (!window.requestAnimationFrame) { setTimeout(resolve, 0); return; }
+                    const limite = setTimeout(resolve, 200);
+                    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+                        clearTimeout(limite);
+                        resolve();
+                    }));
+                });
                 const processamento = performance.now();
                 iniciarDashboard(window.DADOS_PCP_CACHE);
                 window.PG_PERFORMANCE.processamentoInicialMs = Math.round(performance.now() - processamento);

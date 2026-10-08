@@ -469,13 +469,26 @@ window.pgVolumesColetaUnificadosV37 = function(linha, corte = dtHojeISO) {
         }
     }
 
+    if (!base.eventos || base.mapaReferencia !== window.MAPA_SAIDA_CACHE) {
+        const eventos = (tipo, data) => typeof window.pgEventosTPLinha === 'function'
+            ? window.pgEventosTPLinha(linha, tipo, dtHojeISO,
+                data ? base.bruto : 0, data)
+            : (data && base.bruto > 0 ? [{ data, volume: base.bruto }] : []);
+        base.eventos = { coleta: eventos('coleta', base.coletaTP), entrega: eventos('entrega', base.entregaTP) };
+        base.mapaReferencia = window.MAPA_SAIDA_CACHE;
+    }
+    const eventosColetaTP = base.eventos.coleta;
+    const eventosEntregaTP = base.eventos.entrega;
+    const ate = lista => lista.reduce((s, e) => s + (e.data <= corte ? e.volume : 0), 0);
     return {
         bruto: base.bruto,
         mapa: base.bruto,
         mapaAgendado: base.mapaAgendado,
         agendado: base.mapaAgendado && base.mapaAgendado >= corte ? base.bruto : 0,
-        coleta: base.coletaTP && base.coletaTP <= corte ? base.bruto : 0,
-        entrega: base.entregaTP && base.entregaTP <= corte ? base.bruto : 0,
+        coleta: ate(eventosColetaTP),
+        entrega: ate(eventosEntregaTP),
+        eventosColetaTP,
+        eventosEntregaTP,
         coletaTP: base.coletaTP,
         entregaTP: base.entregaTP
     };
@@ -1527,9 +1540,9 @@ window.pgObterResumoColeta = function() {
     // Em TODAS + TODOS ela contém PCP + PCP_ACABADORAS completos.
     const base = window.dadosBaseForecastColeta || window.dadosTotalCanonico || [];
     const cache = window.pgCacheResumoColeta;
-    if (cache && cache.base === base && cache.hoje === dtHojeISO) return cache.resumo;
+    if (cache && cache.base === base && cache.hoje === dtHojeISO && cache.mapa === window.MAPA_SAIDA_CACHE) return cache.resumo;
     const resumo = window.pgCalcularColetaFunil(base, dtHojeISO);
-    window.pgCacheResumoColeta = { base, hoje: dtHojeISO, resumo };
+    window.pgCacheResumoColeta = { base, hoje: dtHojeISO, mapa: window.MAPA_SAIDA_CACHE, resumo };
     window.pgResumoColetaFunil = resumo;
     return resumo;
 };
@@ -1576,6 +1589,7 @@ window.pgPrazoLinhaV35 = function(linha, hoje) {
     const data = n => window.pgNormalizarDataColeta(c(n), hoje);
     // Cabeçalho REAL: DT_Vencido. Não existe DT_Vencida.
     const dtVencido = data('DT_Vencido');
+    const volumes = window.pgVolumesColetaUnificadosV37(linha, hoje);
     return {
         linha,
         vencida: window.pgNumeroPrazoV35(c('TIRAGEM VENCIDA')),
@@ -1584,6 +1598,7 @@ window.pgPrazoLinhaV35 = function(linha, hoje) {
         dtAVencer: data('Dt_a_vencer'),
         coletadaBruta: window.pgNumeroPrazoV35(c('TIRAGEM COLETADA')),
         dtColeta: data('Coleta_TP'),
+        eventosColeta: volumes.eventosColetaTP,
         dtMapaAgendado: data('Mapa_Agendado')
     };
 };
@@ -1593,8 +1608,9 @@ window.pgSaldoPrazoV35 = function(r, limite, hoje = dtHojeISO) {
     // Corte ÚNICO para todas as parcelas: histórico cresce até hoje e
     // fica congelado nos dias futuros (inclusive no modo acumulado).
     const corte = limite > hoje ? hoje : limite;
-    const coletada = r.dtColeta && r.dtColeta <= corte
-        ? r.coletadaBruta : 0;
+    const coletada = Array.isArray(r.eventosColeta)
+        ? r.eventosColeta.reduce((s, e) => s + (e.data <= corte ? e.volume : 0), 0)
+        : (r.dtColeta && r.dtColeta <= corte ? r.coletadaBruta : 0);
     const vencidaSemData = r.vencida > 0 && !r.dtVencida ? r.vencida : 0;
     const vencidaDatada = r.dtVencida && r.dtVencida <= corte ? r.vencida : 0;
     const aVencerDatada = r.dtAVencer && r.dtAVencer <= corte ? r.aVencer : 0;
@@ -1815,11 +1831,9 @@ window.pgCalcularColetaFunil = function(base, hoje) {
             out.realizadoDatado +=
                 coletadaReal;
 
-            somar(
-                dtReal,
-                'real',
-                coletadaReal
-            );
+            volumeColeta.eventosColetaTP.forEach(e => {
+                if (e.data <= hoje) somar(e.data, 'real', e.volume);
+            });
         } else if (mapaSolicitado > 0) {
             out.mapaSemColetaTP +=
                 mapaSolicitado;
@@ -1854,6 +1868,7 @@ window.pgCalcularColetaFunil = function(base, hoje) {
             dtMapaAgendado,
             volumeMapaAgendado,
             dtReal,
+            eventosReal: volumeColeta.eventosColetaTP.filter(e => e.data <= hoje),
             prazo: registroPrazo
         });
 
@@ -1915,8 +1930,10 @@ window.pgItensColetaDia = function(resumo, dia, hoje, inicioPeriodo = dia, inclu
         const usado = consumido.get(r.pcp) || 0;
         // No saldo atual, o volume coletado independe da data. A data só
         // limita a reconstrução histórica e os pontos da curva realizada.
-        const coletaDisponivel = limiteReal >= hoje || (r.dtReal && r.dtReal <= limiteReal);
-        const disponivel = coletaDisponivel ? Math.max(0, r.coletada - usado) : 0;
+        const coletaDisponivel = Array.isArray(r.eventosReal)
+            ? r.eventosReal.reduce((s, e) => s + (e.data <= limiteReal ? e.volume : 0), 0)
+            : (limiteReal >= hoje || (r.dtReal && r.dtReal <= limiteReal) ? r.coletada : 0);
+        const disponivel = Math.max(0, coletaDisponivel - usado);
         const abatido = Math.min(r.tiragem, disponivel);
         if (r.pcp) consumido.set(r.pcp, usado + abatido);
         const saldo = r.tiragem - abatido;
@@ -3902,11 +3919,15 @@ let tRef = document.getElementById('filtroReferencia').value;
                     unifiedDates.add(dtP);
                 }
 
-                if (dtR && tFaseReal > 0) {
-                    dataSeries[fId].real[dtR] =
-                        (dataSeries[fId].real[dtR] || 0) + tFaseReal;
-                    unifiedDates.add(dtR);
-                }
+                const parcelas = tFaseReal > 0 && ['col_tp', 'ent_tp'].includes(fId)
+                    ? window.pgVolumesColetaUnificadosV37(l, hojeISO)[
+                        fId === 'col_tp' ? 'eventosColetaTP' : 'eventosEntregaTP']
+                    : (dtR && tFaseReal > 0 ? [{ data: dtR, volume: tFaseReal }] : []);
+                parcelas.forEach(e => {
+                    dataSeries[fId].real[e.data] =
+                        (dataSeries[fId].real[e.data] || 0) + e.volume;
+                    unifiedDates.add(e.data);
+                });
             });
         });
 
@@ -8232,6 +8253,7 @@ window.iniciarAbaOKRQ2 = function() {
                     }
                     
                     window.MAPA_SAIDA_CACHE = dados || {};
+                    window.pgAtualizarDatasTPDoMapa?.();
                     if(loading) loading.classList.add('hidden');
                     window.processarOKRQ2(); // Processa os dados
                 })
@@ -8593,6 +8615,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 return;
             }
             window.MAPA_SAIDA_CACHE = dados || {};
+            window.pgAtualizarDatasTPDoMapa?.();
             console.log("✅ Mapa de Saída pronto em segundo plano!");
             
             // 🎯 CORREÇÃO 3: Verificando se a variável existe corretamente
@@ -10973,8 +10996,10 @@ window.processarReportExecutiva = function() {
         // Mantém o Planejado original integralmente.
         const baseReal = baseCenario;
         baseReal.forEach(l => {
-            const real = typeof window.pgVolumesColetaUnificadosV37 === 'function'
-                ? window.pgVolumesColetaUnificadosV37(l, hojeIso)[tipoReal]
+            const volumes = typeof window.pgVolumesColetaUnificadosV37 === 'function'
+                ? window.pgVolumesColetaUnificadosV37(l, hojeIso) : null;
+            const real = volumes
+                ? volumes[tipoReal]
                 : (() => {
                     const dt = window.pgNormalizarDataColeta(
                         window.pgCampoColeta(l, campoReal), hojeIso);
@@ -10984,7 +11009,11 @@ window.processarReportExecutiva = function() {
             const dataReal = window.pgNormalizarDataColeta(
                 window.pgCampoColeta(l, campoReal), hojeIso);
             if (!dataReal || dataReal > hojeIso) return;
-            eventosReal.push({ linha: l, pcp: l, dtReal: dataReal, coletada: real });
+            const parcelas = volumes
+                ? volumes[tipoReal === 'entrega' ? 'eventosEntregaTP' : 'eventosColetaTP'].filter(e => e.data <= hojeIso)
+                : [{ data: dataReal, volume: real }];
+            parcelas.forEach(e => eventosReal.push({ linha: l, pcp: l,
+                dtReal: e.data, coletada: e.volume, codigoMapa: e.codigoMapa || '' }));
             const m = chaveLinha(l);
             add(porMarca, m, 'real', real);
             total.real += real;
@@ -11742,7 +11771,8 @@ window.pgExportarVisaoCompletaV37 = function(dataCorte, titulo, elemento, resumo
         window.pgCorrigirChaveMarcaSasWays?.(l);
         const p = r.prazo || window.pgPrazoLinhaV35(l, dtHojeISO);
         const quantidade = p.vencida + p.aVencer;
-        const real = p.dtColeta && p.dtColeta <= corteReal ? p.coletadaBruta : 0;
+        const eventos = window.pgEventosRealRegistroTP(r);
+        const real = window.pgSomaEventosTP(eventos, corteReal);
         const gap = Math.max(0, quantidade - real);
         const saldo = window.pgSaldoPrazoV35(p, corte, dtHojeISO);
         const volumePlanCurva = r.dtPlan && r.dtPlan <= corte
@@ -11765,9 +11795,11 @@ window.pgExportarVisaoCompletaV37 = function(dataCorte, titulo, elemento, resumo
             String(l.ENVIO || l.Envio || ''),
             String(l.JOIN_KEY || l.Chave || l.CHAVE || ''),
             p.dtVencida || '', p.dtAVencer || '', dataPlan,
-            real > 0 ? p.dtColeta : '',
+            eventos.filter(e => e.data <= corteReal).map(e => e.data)
+                .filter((d, i, datas) => datas.indexOf(d) === i).join(' / '),
             p.vencida, p.aVencer, quantidade, bruto,
-            p.dtColeta || '', p.dtMapaAgendado || '', r.dtPlan || '',
+            eventos.map(e => e.data).filter((d, i, datas) => datas.indexOf(d) === i).join(' / '),
+            p.dtMapaAgendado || '', r.dtPlan || '',
             tiragemReplan, volumePlanCurva, real, saldo.vencido,
             gap
         ];
@@ -11779,7 +11811,7 @@ window.pgExportarVisaoCompletaV37 = function(dataCorte, titulo, elemento, resumo
     const esperadoPlan = (resumo.registros || []).reduce((sum,r) =>
         sum + (r.dtPlan && r.dtPlan <= corte ? Number(r.tiragem || 0) : 0), 0);
     const esperadoReal = (resumo.registros || []).reduce((sum,r) =>
-        sum + (r.dtReal && r.dtReal <= corteReal ? Number(r.coletada || 0) : 0), 0);
+        sum + window.pgSomaEventosTP(window.pgEventosRealRegistroTP(r), corteReal), 0);
     console.info('[EXTRACAO UNICA V37]', {
         titulo, corte, linhas: linhas.length-1,
         planPlanilha: totais[index('Plan na Curva')], esperadoPlan,
@@ -11874,7 +11906,7 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
         let baseV=0,planV=0,realV=0,agendaV=0,semDataV=0;
         if(usarBase)baseV=volumeBase(l);
         if(usarPlan){const entra=planDia?r.dtPlan===ponto:(r.dtPlan&&cortePlan&&r.dtPlan<=cortePlan);if(entra)planV=Math.max(0,Number(r.tiragem||0));}
-        if(usarReal){const entra=realDia?r.dtReal===ponto:(r.dtReal&&corteReal&&r.dtReal<=corteReal);if(entra)realV=Math.max(0,Number(r.coletada||0));}
+        if(usarReal)realV=window.pgSomaEventosTP(window.pgEventosRealRegistroTP(r),realDia?ponto:corteReal,realDia?'dia':'ate');
         if(usarAgenda){const d=r.dtMapaAgendado;const entra=agendaDia?d===ponto:d&&(!dataAgendaIni||d>=dataAgendaIni)&&(!dataAgendaFim||d<=dataAgendaFim);if(entra)agendaV=Math.max(0,Number(r.volumeMapaAgendado||0));}
         if(usarSemData){const p=r.prazo||(window.pgPrazoLinhaV35?window.pgPrazoLinhaV35(l,hoje):null);if(p&&window.pgSaldoPrazoV35)semDataV=Math.max(0,Number(window.pgSaldoPrazoV35(p,hoje,hoje).semData||0));}
         if(!(baseV||planV||realV||agendaV||semDataV))return;
@@ -11889,7 +11921,7 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
             replan:isoCampo(l,'Coleta/Internalização de estoque final (re) plan'),
             baseline:isoCampo(l,'COLETA/INTERNALIZAÇÃO FIM BASELINE'),
             dtPlan:r.dtPlan||'',dtVencida:p?.dtVencida||'',dtAVencer:p?.dtAVencer||'',
-            coletaTP:p?.dtColeta||r.dtReal||'',mapaAgendado:p?.dtMapaAgendado||r.dtMapaAgendado||'',
+            coletaTP:window.pgEventosRealRegistroTP(r).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),mapaAgendado:p?.dtMapaAgendado||r.dtMapaAgendado||'',
             tiragemVencida:Number(p?.vencida||0),aVencer:Number(p?.aVencer||0),tiragemColetada:Number(p?.coletadaBruta||r.coletada||0),
             base:baseV,plan:planV,real:realV,agenda:agendaV,semData:semDataV,backlog:backlogV
         });
@@ -11959,7 +11991,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
         const planFim=r.dtPlan&&r.dtPlan<=fim?tiragem:0;
         const futuroPeriodo=r.dtPlan&&r.dtPlan>corte&&r.dtPlan<=fim?tiragem:0;
         const futuroApos=r.dtPlan&&r.dtPlan>fim?tiragem:0;
-        const realHoje=r.dtReal&&r.dtReal<=corte?Math.max(0,Number(r.coletada||0)):0;
+        const realHoje=window.pgSomaEventosTP(window.pgEventosRealRegistroTP(r),corte);
         const backlogLinha=planHoje-realHoje;
         const saldoPrazo=window.pgSaldoPrazoV35&&p?window.pgSaldoPrazoV35(p,corte,hoje):{vencido:0,semData:0};
         const mapaAgendado=r.dtMapaAgendado&&r.dtMapaAgendado>=inicio&&r.dtMapaAgendado<=fim
@@ -11984,7 +12016,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
             String(l?.['SÉRIE']||l?.['Série']||l?.SERIE||''),String(l?.ENVIO||l?.Envio||''),
             isoCampo(l,'Coleta/Internalização de estoque final (re) plan'),
             isoCampo(l,'COLETA/INTERNALIZAÇÃO FIM BASELINE'),r.dtPlan||'',
-            p?.dtVencida||'',p?.dtAVencer||'',p?.dtColeta||r.dtReal||'',p?.dtMapaAgendado||r.dtMapaAgendado||'',
+            p?.dtVencida||'',p?.dtAVencer||'',window.pgEventosRealRegistroTP(r).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),p?.dtMapaAgendado||r.dtMapaAgendado||'',
             Math.round(base),Math.round(tiragem),Math.round(p?.vencida||0),Math.round(p?.aVencer||0),Math.round(p?.coletadaBruta||r.coletada||0),
             Math.round(planHoje),Math.round(futuroPeriodo),Math.round(realHoje),Math.round(backlogLinha),
             Math.round(saldoPrazo.vencido||0),Math.round(saldoPrazo.semData||0),Math.round(mapaAgendado),situacao

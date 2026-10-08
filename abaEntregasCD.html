@@ -402,7 +402,8 @@
 
     window.pgCalcularEntregaCDFunil = function(base, hoje) {
         const anterior = cacheResumos.get(base);
-        if (anterior && anterior.hoje === hoje && anterior.matriz === window.PG_MATRIZ_SLA) return anterior.resumo;
+        if (anterior && anterior.hoje === hoje && anterior.matriz === window.PG_MATRIZ_SLA &&
+            anterior.mapa === window.MAPA_SAIDA_CACHE) return anterior.resumo;
         const resumo = {
             tipo: 'entrega', total: 0, esperadoHoje: 0, pendenteVencido: 0,
             realizado: 0, realizadoDatado: 0, mapaSolicitado: 0,
@@ -425,6 +426,11 @@
             const volumes = window.pgVolumesColetaUnificadosV37(linha, hoje);
             const dtReal = volumes.entregaTP;
             const entregue = volumes.entrega;
+            const eventosReal = Array.isArray(volumes.eventosEntregaTP)
+                ? volumes.eventosEntregaTP.filter(e => e.data <= hoje)
+                : typeof window.pgEventosTPLinha === 'function'
+                    ? window.pgEventosTPLinha(linha, 'entrega', hoje, entregue, dtReal)
+                    : entregue > 0 && dtReal ? [{data: dtReal, volume: entregue}] : [];
             const dtAgendaColeta = !acabadora
                 ? volumes.mapaAgendado : null;
             const dtMapaAgendado = dtAgendaColeta
@@ -438,7 +444,8 @@
                 dtVencida: dtPlan && dtPlan <= hoje ? dtPlan : null,
                 aVencer: dtPlan && dtPlan > hoje ? tiragem : 0,
                 dtAVencer: dtPlan && dtPlan > hoje ? dtPlan : null,
-                coletadaBruta: volumes.bruto, dtColeta: dtReal, dtMapaAgendado
+                coletadaBruta: volumes.bruto, dtColeta: dtReal, dtMapaAgendado,
+                eventosColeta: eventosReal
             };
             const saldo = window.pgSaldoPrazoV35(prazo, hoje, hoje);
             resumo.total += volumeBase;
@@ -451,12 +458,12 @@
             resumo.pendenteVencido += saldo.vencido;
             resumo.prazosRegistros.push(prazo);
             resumo.registros.push({
-                linha, pcp: linha, dtPlan, dtReal, tiragem, volumeBase,
+                linha, pcp: linha, dtPlan, dtReal, tiragem, volumeBase, eventosReal,
                 coletada: entregue, entregue, mapaSolicitado: volumes.mapa,
                 dtMapaAgendado, volumeMapaAgendado, prazo,
                 motivo: dtPlan ? 'Coleta (re)plan ou baseline + Matriz_SLA' : 'Sem previsão de entrega: verificar coleta planejada e rota Matriz_SLA'
             });
-            somarDia(dtReal, 'real', entregue);
+            eventosReal.forEach(evento => somarDia(evento.data, 'real', evento.volume));
             somarDia(dtMapaAgendado, 'agendado', volumeMapaAgendado);
             if (!dtPlan) resumo.semPlano += tiragem;
             else {
@@ -464,7 +471,7 @@
                 if (dtPlan <= hoje) resumo.esperadoHoje += tiragem;
             }
         });
-        cacheResumos.set(base, {hoje, matriz: window.PG_MATRIZ_SLA, resumo});
+        cacheResumos.set(base, {hoje, matriz: window.PG_MATRIZ_SLA, mapa: window.MAPA_SAIDA_CACHE, resumo});
         return resumo;
     };
 
@@ -477,7 +484,9 @@
         const linhas = (resumo?.registros || []).map(r => {
             const l = r.linha || r.pcp;
             const plan = r.dtPlan && r.dtPlan <= corte ? r.tiragem : 0;
-            const real = r.dtReal && r.dtReal <= corteReal ? r.coletada : 0;
+            const real = Array.isArray(r.eventosReal)
+                ? r.eventosReal.reduce((soma, evento) => soma + (evento.data && evento.data <= corteReal ? evento.volume : 0), 0)
+                : r.dtReal && r.dtReal <= corteReal ? r.coletada : 0;
             return [
                 l.MARCA_FINAL || campo(l, 'MARCA') || l.UNIDADE || '',
                 l.GRAFICA_FINAL || campo(l, 'GRÁFICA') || l.GRAFICA || '',
@@ -488,7 +497,8 @@
                 campo(l, 'KIT') || campo(l, 'Kit') || '',
                 campo(l, 'OP') || '', campo(l, 'ENVIO') || campo(l, 'Envio') || '',
                 window.pgDataPlanoColetaLinha(l) || '',
-                window.pgDiasSLALinha(l) ?? '', r.dtPlan || '', r.dtReal || '',
+                window.pgDiasSLALinha(l) ?? '', r.dtPlan || '',
+                (r.eventosReal || []).map(e => e.data).filter((d, i, datas) => datas.indexOf(d) === i).join(' / ') || r.dtReal || '',
                 Math.round(r.tiragem), Math.round(plan), Math.round(real),
                 Math.max(0, Math.round(plan) - Math.round(real))
             ];

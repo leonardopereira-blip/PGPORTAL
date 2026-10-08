@@ -442,10 +442,20 @@
       var dtEntregaTP=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(entregaTPRaw):data(entregaTPRaw);
       var realizadoTem=coletadaBruta>0&&!!dtEntregaTP;
       var realizado=realizadoTem?coletadaBruta:0;
+      // A formula continua soberana. Um volume limitado ao total desta visao
+      // conserva a data antiga, pois nao existe evidencia para repartir o limite.
+      var eventosReal=realizado>0&&dtEntregaTP?[{data:dtEntregaTP,volume:realizado}]:[];
+      var hojeEventos=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toLocaleDateString('en-CA');
+      if(realizado>0&&dtEntregaTP<=hojeEventos&&campo('Entrega_TP')&&
+         coletadaBruta===volume(campo('TIRAGEM COLETADA'))&&typeof window.pgEventosTPLinha==='function'){
+        eventosReal=window.pgEventosTPLinha(l,'entrega',hojeEventos,realizado,dtEntregaTP);
+      }
 
       // Se existe volume coletado sem Entrega_TP válida, ele não vira "Sem previsão" automaticamente:
       // volta para o planejamento, exatamente como qualquer volume ainda não classificável como realizado.
       var pendentePlanejado=Math.max(0,total-realizado);
+      // Os indicadores e cenarios publicados conservam a classificacao atual.
+      // As parcelas apenas detalham as datas, sem reinterpretar os totais da meta.
       var realDentro=function(meta){return realizado>0&&dtEntregaTP<=meta?realizado:0;};
       var realFora=function(meta){return realizado>0&&dtEntregaTP>meta?realizado:0;};
 
@@ -480,7 +490,7 @@
         marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),
         total:total,previsto:previsto,pos:pos,semData:semData,real:real,realTem:realTem,
         realCD:realizado,realCDTem:realizadoTem,dtRealCD:dtEntregaTP,
-        realizado:realizado,realizadoTem:realizadoTem,coletadaBruta:coletadaBruta,dtEntregaTP:dtEntregaTP,
+        realizado:realizado,realizadoTem:realizadoTem,coletadaBruta:coletadaBruta,dtEntregaTP:dtEntregaTP,eventosReal:eventosReal,
         metaArmDate:alvo,
         ate15:ate15,apos15:apos15,excecao:excecao,
         posi:elegivel,alvo:alvo,dtPlan:dtPlan,rateio:rateio,
@@ -503,7 +513,12 @@
     if(!item)return [];
     var parcelas=[];
     var real=volume(item.realCD),pendente=volume(item.pendentePlanejado);
-    if(real>0&&item.dtRealCD)parcelas.push({data:item.dtRealCD,volume:real,realizado:true});
+    if(real>0&&item.dtRealCD){
+      var eventos=Array.isArray(item.eventosReal)?item.eventosReal:[];
+      if(eventos.length&&eventos.reduce(function(s,e){return s+e.volume;},0)===real){
+        eventos.forEach(function(e){parcelas.push({data:e.data,volume:e.volume,realizado:true});});
+      }else parcelas.push({data:item.dtRealCD,volume:real,realizado:true});
+    }
     if(!pendente)return parcelas;
     var rateio=item.rateioAplicado||item.rateio;
     if(!item.dtPlan||!rateio)return parcelas;

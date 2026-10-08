@@ -220,6 +220,7 @@ test('controlador pinta processamento e só libera overlay depois de iniciar o p
   Object.assign(p.contexto, {
     document: { getElementById: id => elementos[id] || null, querySelectorAll: () => [] },
     performance: { now: () => 1000 }, setInterval: () => 1, clearInterval() {},
+    setTimeout: (fn, ms) => ms === 200 ? setTimeout(fn, ms) : queueMicrotask(fn), clearTimeout,
     showToast() {}, atualizarRodapeDatas() {}, formatarNum: n => String(n),
     iniciarDashboard(dados) {
       inicializacoes++;

@@ -894,36 +894,113 @@ function getDadosCaixas() {
 
 function getDadosMapaSaida() {
   try {
-    var data = pgLerAbaCache_(['MAPA DE SAÍDA', 'MAPA DE SAIDA', 'MAPA DE SAIDA '], 42);
+    // AT/AU guardam as datas TP e AX o envio usado pela formula do PCP.
+    var data = pgLerAbaCache_(['MAPA DE SAÍDA', 'MAPA DE SAIDA', 'MAPA DE SAIDA '], 50);
     var mapaSKU = {};
     var hoje = new Date();
-    hoje.setHours(23, 59, 59, 999); 
+    var hojeTP = Utilities.formatDate(hoje, 'America/Sao_Paulo', 'yyyy-MM-dd');
+    hoje.setHours(23, 59, 59, 999);
+
+    var texto = function(val) { return String(val == null ? '' : val).trim(); };
+    var quantidadeTP = function(val) {
+      if (val === '' || val == null || (typeof val !== 'number' && typeof val !== 'string')) return null;
+      var numero = val;
+      if (typeof numero === 'string') {
+        numero = numero.trim();
+        if (!numero) return null;
+        if (numero.indexOf(',') >= 0) numero = numero.replace(/\./g, '').replace(',', '.');
+        else if (/^-?\d{1,3}(\.\d{3})+$/.test(numero)) numero = numero.replace(/\./g, '');
+      }
+      numero = Number(numero);
+      return isFinite(numero) ? numero : null;
+    };
+    var interpretarDataTP = function(val) {
+      if (val instanceof Date) {
+        return isNaN(val.getTime()) ? null : Utilities.formatDate(val, 'America/Sao_Paulo', 'yyyy-MM-dd');
+      }
+      // Os seriais sao datas civis da planilha, nao instantes em UTC.
+      if (typeof val === 'number') {
+        if (!isFinite(val) || val < 1 || val > 73050) return null;
+        return new Date(Date.UTC(1899, 11, 30) + Math.floor(val) * 86400000).toISOString().slice(0, 10);
+      }
+      var s = texto(val);
+      var iso = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/.exec(s);
+      var br = iso ? null : /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(s);
+      if (!iso && !br) return null;
+      var ano = Number(iso ? iso[1] : br[3]);
+      var mes = Number(iso ? iso[2] : br[2]);
+      var dia = Number(iso ? iso[3] : br[1]);
+      var hora = Number((iso ? iso[4] : br[4]) || 0);
+      var minuto = Number((iso ? iso[5] : br[5]) || 0);
+      var segundo = Number((iso ? iso[6] : br[6]) || 0);
+      var calendario = new Date(Date.UTC(ano, mes - 1, dia));
+      if (calendario.getUTCFullYear() !== ano || calendario.getUTCMonth() !== mes - 1 ||
+          calendario.getUTCDate() !== dia || hora > 23 || minuto > 59 || segundo > 59) return null;
+      if (iso && iso[7]) {
+        var instante = new Date(s);
+        return isNaN(instante.getTime()) ? null : Utilities.formatDate(instante, 'America/Sao_Paulo', 'yyyy-MM-dd');
+      }
+      return calendario.toISOString().slice(0, 10);
+    };
+    var datasTPCache = Object.create(null);
+    var dataTP = function(val) {
+      var chave = val instanceof Date ? 'date:' + val.getTime() : typeof val + ':' + val;
+      if (!Object.prototype.hasOwnProperty.call(datasTPCache, chave)) {
+        datasTPCache[chave] = interpretarDataTP(val);
+      }
+      return datasTPCache[chave];
+    };
+
+    // Parser e campos antigos continuam iguais para as telas que usam P/AA.
+    var processarData = function(val) {
+      if (val instanceof Date) return val;
+      if (typeof val === 'string' && val.trim() !== '') {
+        var d = new Date(val);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    };
     
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
       var skuChave = String(row[41] || "").trim(); // Coluna AP
       if (!skuChave) continue;
       if (!mapaSKU[skuChave]) mapaSKU[skuChave] = [];
-     
-      var processarData = function(val) {
-        if (val instanceof Date) return val;
-        if (typeof val === 'string' && val.trim() !== "") {
-          var d = new Date(val);
-          return isNaN(d.getTime()) ? null : d;
-        }
-        return null;
-      };
       
       var dtColeta = processarData(row[15]);  // Coluna P
       var dtEntrega = processarData(row[26]); // Coluna AA
-      
-      if (dtColeta && dtColeta > hoje) continue;
-      
-      mapaSKU[skuChave].push({
+      var evento = {
         vol: parseFloat(row[14]) || 0, // Coluna O
         dataColeta: dtColeta ? dtColeta.toISOString().split('T')[0] : null,
-        dataEntrega: dtEntrega ? dtEntrega.toISOString().split('T')[0] : null
-      });
+        dataEntrega: dtEntrega ? dtEntrega.toISOString().split('T')[0] : null,
+        eventoTPVersao: 1,
+        chaveMapa: skuChave,
+        linhaMapa: i + 1,
+        codigoMapa: texto(row[4]), // E: COD MP
+        marca: texto(row[0]), // A: UN PCP
+        destino: texto(row[1]), // B: CD PCP, destino aceito pela formula
+        grafica: texto(row[2]), // C: GRAFICA PCP
+        kit: texto(row[10]), // K: COD KIT; nao elimina parcelas do mesmo SKU
+        sku: texto(row[11]), // L: SKU
+        envioRaw: texto(row[7]), // H: envio original
+        envio: texto(row[49]), // AX: envio normalizado pela planilha
+        volumeColetado: quantidadeTP(row[39]), // AN: Volume Coletado
+        coletaTP: dataTP(row[45]), // AT: Coleta_TP
+        entregaTP: dataTP(row[46]), // AU: Entrega_TP
+        statusTP: texto(row[47]) // AV: Status_TP
+      };
+
+      if (dtColeta && dtColeta > hoje) {
+        // P futuro segue fora das arrays antigas. A visao por eventos pode usar
+        // AT realizado sem mudar a selecao das telas que dependem de P/AA.
+        if (evento.coletaTP && evento.coletaTP <= hojeTP) {
+          if (!mapaSKU.__eventosTPAdicionais) mapaSKU.__eventosTPAdicionais = [];
+          mapaSKU.__eventosTPAdicionais.push(evento);
+        }
+        continue;
+      }
+
+      mapaSKU[skuChave].push(evento);
     }
     return mapaSKU;
    
