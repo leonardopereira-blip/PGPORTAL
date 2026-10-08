@@ -99,6 +99,14 @@
         return { ...id, chave: chave([...id.partes, id.envio]),
             completa: id.partes.every(textoCompleto) && textoCompleto(id.envio) };
     };
+    // Identificacao do KIT usa o mesmo cruzamento do volume; nao altera quantidades ou datas.
+    window.pgKitsMapaTPLinha = function(linha) {
+        const id = identidadeAgenda(linha), indice = indexarMapa(window.MAPA_SAIDA_CACHE);
+        if (!id.completa || !indice) return [];
+        return [...new Set((indice.grupos.get(chave(id.partes)) || [])
+            .filter(r => r.envio === id.envio)
+            .map(r => String(r.evento.kit || '').trim()).filter(Boolean))];
+    };
     let cacheAgenda;
     function obterAgenda(hoje) {
         const mapa = window.MAPA_SAIDA_CACHE;

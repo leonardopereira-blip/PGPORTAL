@@ -3049,6 +3049,7 @@ window.processarFunil = function() {
     window.renderColetaFinalFunil();
 let tRef = document.getElementById('filtroReferencia').value;
     let mGrid = {}; let gGrid = {}; let fTotais = {};
+    const linhasKitAuditoriaPortal = [];
 
     let elsCb = document.querySelectorAll('.chk-fase-funil:checked');
     let fasesAtivasIds = Array.from(elsCb).map(cb => cb.value);
@@ -3175,6 +3176,9 @@ let tRef = document.getElementById('filtroReferencia').value;
                 const planoTP = ['col_mapa', 'col_tp', 'ent_tp', 'ent_cd'].includes(f.id);
                 const tPlan = planoTP ? window.arredondar(l['TIRAGEM'] || 0) : tBase;
                 let isMetaVencida = dtP && diasAtrasoFunil >= (planoTP ? 0 : 3);
+                if (f.id === 'kit') linhasKitAuditoriaPortal.push({ linha: l, volume: tBase,
+                    dtPlan: dtP, dtReal: window.pgDataRealFaseFunil(l, f),
+                    plan: isMetaVencida ? tPlan : 0, real: isReal ? tFaseReal : 0 });
                 if (dtP && dtP < dtHojeISO && (!isReal || tFaseReal < tBase)) {
                     const pendente = Math.max(0, tBase - (isReal ? tFaseReal : 0));
                     [fTotais[f.id], mGrid[m][f.id], gGrid[g][f.id]].forEach(c => {
@@ -3376,6 +3380,10 @@ let tRef = document.getElementById('filtroReferencia').value;
         });
     }
     
+    window.pgKitFunilAuditoriaPortal = fTotais.kit ? { linhas: linhasKitAuditoriaPortal,
+        total: { den: fTotais.kit.base, plan: fTotais.kit.planAtHoje, real: fTotais.kit.real },
+        corte: dtHojeISO, base: window.pgBaseGeralReportExecutiva } : null;
+
     // V37: quadro bruto, matrizes e curva NÃO recalculam Coleta TP em universos diferentes.
     // O recorte único é resumo.registros, obtido por dadosBaseForecastColeta.
     const resumoColetaUnico = window.pgObterResumoColeta();
@@ -10972,6 +10980,7 @@ window.processarReportExecutiva = function() {
 
     const kitPorMarca = {};
     const kitTotal = novoAgg();
+    const linhasKitReportAuditoriaPortal = [];
 
     if (faseKitReportV58) {
         baseKitReportV58.forEach(l => {
@@ -10990,6 +10999,9 @@ window.processarReportExecutiva = function() {
 
             const dtPlan = window.pgDataPlanoFaseFunil(l, faseKitReportV58, tRef);
             const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
+            linhasKitReportAuditoriaPortal.push({ linha: l, volume, dtPlan, dtReal,
+                plan: dtPlan && dias !== null && dias >= 3 ? volume : 0,
+                real: dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, faseKitReportV58) ? volume : 0 });
             if (dtPlan && dias !== null && dias >= 3) {
                 add(kitPorMarca, grupo, 'plan', volume);
                 kitTotal.plan += volume;
@@ -11098,13 +11110,16 @@ window.processarReportExecutiva = function() {
             }
         });
 
-        return { porMarca, total, eventosPlano, eventosReal };
+        return { porMarca, total, eventosPlano, eventosReal, linhas: baseCenario };
     };
 
     const entTodos = calcularEntrega('GRAFICA', 'TODOS');
     const entCD = calcularEntrega('TODOS', 'CD');
     // Entrega TP usa a base CD, plano de coleta + Matriz_SLA e real datado em Entrega_TP.
     const entTP = calcularEntrega('TODOS', 'CD', 'entrega');
+    window.pgReportAuditoriaPortal = { base: baseGeral, corte: hojeIso,
+        kit: { linhas: linhasKitReportAuditoriaPortal, total: kitTotal, corte: hojeIso },
+        coletaCD: entCD, coletaTodos: entTodos, entregaTP: entTP };
 
     // Fonte única: as porcentagens do gráfico são as mesmas colunas
     // Coletados (Plan/Real) - CD do TOTAL GERAL da tabela.

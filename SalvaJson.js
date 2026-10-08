@@ -737,6 +737,18 @@ function gerarPlanilhaReportExecutiva(payload) {
     if (!abas.length) {
       throw new Error("Nenhuma aba recebida para exportação.");
     }
+    if (payload.auditoriaPortal) {
+      abas.forEach(function(spec) {
+        (spec.linhas || []).forEach(function(linha, indice) {
+          var obrigatorias = spec.colunasObrigatorias || [];
+          if (linha.length !== spec.cabecalho.length || linha.some(function(v) {
+            return v == null || (typeof v === 'number' && !isFinite(v));
+          }) || obrigatorias.some(function(c) { return String(linha[c]).trim() === ''; })) {
+            throw new Error('Dados incompletos em ' + spec.nome + ', linha ' + (indice + 2) + '.');
+          }
+        });
+      });
+    }
 
     var nomeBase = String(payload.nome || "Report_Executiva")
       .replace(/[\\\/:*?"<>|#%]+/g, "_")
@@ -747,6 +759,7 @@ function gerarPlanilhaReportExecutiva(payload) {
 
     var ss = SpreadsheetApp.create(nomeArquivo);
     var primeira = ss.getActiveSheet();
+    if (payload.auditoriaPortal) ss.setSpreadsheetTimeZone('America/Sao_Paulo');
 
     function nomeAbaSeguro_(nome, indice) {
       var n = String(nome || ("Aba_" + (indice + 1)))
@@ -763,6 +776,13 @@ function gerarPlanilhaReportExecutiva(payload) {
 
       var cabecalho = Array.isArray(spec.cabecalho) ? spec.cabecalho : [];
       var linhas = Array.isArray(spec.linhas) ? spec.linhas : [];
+      if (payload.auditoriaPortal) {
+        var nLinhas = linhas.length + 1, nColunas = cabecalho.length;
+        if (sheet.getMaxRows() < nLinhas) sheet.insertRowsAfter(sheet.getMaxRows(), nLinhas - sheet.getMaxRows());
+        if (sheet.getMaxRows() > nLinhas) sheet.deleteRows(nLinhas + 1, sheet.getMaxRows() - nLinhas);
+        if (sheet.getMaxColumns() < nColunas) sheet.insertColumnsAfter(sheet.getMaxColumns(), nColunas - sheet.getMaxColumns());
+        if (sheet.getMaxColumns() > nColunas) sheet.deleteColumns(nColunas + 1, sheet.getMaxColumns() - nColunas);
+      }
 
       if (cabecalho.length) {
         sheet.getRange(1, 1, 1, cabecalho.length).setValues([cabecalho]);
@@ -777,11 +797,27 @@ function gerarPlanilhaReportExecutiva(payload) {
         var normalizadas = linhas.map(function(l) {
           var linha = Array.isArray(l) ? l.slice(0, cabecalho.length) : [];
           while (linha.length < cabecalho.length) linha.push("");
+          if (payload.auditoriaPortal) linha = linha.map(function(v, coluna) {
+            if ((spec.colunasData || []).indexOf(coluna) >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(v))) {
+              return new Date(v + 'T12:00:00-03:00');
+            }
+            return typeof v === 'string' && v.charAt(0) === '=' ? "'" + v : v;
+          });
           return linha;
         });
 
         sheet.getRange(2, 1, normalizadas.length, cabecalho.length)
           .setValues(normalizadas);
+        if (payload.auditoriaPortal) {
+          (spec.colunasData || []).forEach(function(c) {
+            sheet.getRange(2, c + 1, normalizadas.length, 1).setNumberFormat('dd/mm/yyyy');
+          });
+          (spec.colunasNumero || []).forEach(function(c) {
+            sheet.getRange(2, c + 1, normalizadas.length, 1).setNumberFormat('#,##0.##########');
+          });
+          sheet.getDataRange().createFilter();
+          sheet.setFrozenColumns(Math.min(2, cabecalho.length));
+        }
       }
 
       if (cabecalho.length) {
