@@ -11,6 +11,7 @@ on:
       - appsscript.json
       - .clasp.json
       - .github/workflows/atualizar-testes.yml
+      - tools/gerar-cache-tp-dev.cjs
 
 permissions:
   contents: read
@@ -61,6 +62,11 @@ jobs:
 
       - name: Atualizar codigo usado nos testes
         run: node node_modules/@google/clasp/build/src/index.js push --force < /dev/null
+
+      - name: Gerar cache de parcelas exclusivo do DEV
+        env:
+          TEST_SCRIPT_ID: ${{ vars.PGPORTAL_TESTES_SCRIPT_ID }}
+        run: node tools/gerar-cache-tp-dev.cjs
 
       - name: Registrar atualizacao
         run: |

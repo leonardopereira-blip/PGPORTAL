@@ -380,6 +380,7 @@
         const resultado = { cargaConcluida: window.PG_MAPA_TP_CARGA_CONCLUIDA === true,
             parcelasDisponiveis: agenda.disponivel, avisoAgendado: window.pgStatusAgendaTP().aviso,
             erroCargaParcelas: window.MAPA_SAIDA_CACHE?.__erroAgendaTP || window.MAPA_SAIDA_CACHE?.__forecastTP?.erro || '',
+            cacheParcelasGeradoEm: window.MAPA_SAIDA_CACHE?.__agendaTPGeradoEm || '',
             motivos: Object.values(motivos), totais, meses: Object.values(meses),
             agendadoPorData: Object.values(porData).sort((a,b) => a.data.localeCompare(b.data)),
             parcelasDescartadas: Object.values(agenda.descartes),
