@@ -794,7 +794,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
     
     // A Prioridade não está aqui porque ela é "calculada", não puxa do Excel puro
     window.mapCamposProducao = {
-    'Gráfica': 'GRÁFICA', 'Marca': 'UNIDADE', 'CD Destino': 'CD_MAPA',
+    'Gráfica': 'GRAFICA_FINAL', 'Marca': 'UNIDADE', 'CD Destino': 'CD_MAPA',
     'Ciclo': 'CICLO', 'Envio': 'ENVIO', 'Congelado': 'Congelado',
     'Cliente personalizado': 'CLIENTE_PERSONALIZADO',
     'Capa personalizada': 'CAPA_PERSONALIZADA'
@@ -809,6 +809,9 @@ window.pgAnexarDadosDashboard = function(fatia) {
         return nome;
     };
     window.pgValorFiltroProducao = function(l, categoria) {
+        // Mesmo fornecedor canonico usado pelos consolidados. O cabecalho bruto
+        // GRÁFICA pode colidir com outras colunas na importacao da planilha.
+        if (categoria === 'Gráfica') return l.GRAFICA_FINAL || l['GRÁFICA'] || l.GRAFICA || '';
         if (categoria !== 'CD Destino') return l[window.mapCamposProducao[categoria]];
         const fonteAcab = [l?._SOURCE, l?.BASE, l?._base]
             .some(v => String(v || '').toUpperCase().includes('ACAB'));
