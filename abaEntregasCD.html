@@ -418,6 +418,7 @@
             if (!resumo.dias.has(dia)) resumo.dias.set(dia, {esperado: 0, real: 0, agendado: 0});
             resumo.dias.get(dia)[tipo] += volume;
         };
+        const chavesAgendaUsadas = new Set();
         (base || []).forEach(linha => {
             if (window.pgSolicitacaoCancelada?.(linha)) return;
             const acabadora = ehAcabadora(linha);
@@ -432,16 +433,18 @@
                 : typeof window.pgEventosTPLinha === 'function'
                     ? window.pgEventosTPLinha(linha, 'entrega', hoje, entregue, dtReal)
                     : entregue > 0 && dtReal ? [{data: dtReal, volume: entregue}] : [];
-            const dtAgendaColeta = !acabadora
-                ? volumes.mapaAgendado : null;
-            const dtMapaAgendado = dtAgendaColeta
+            const dtAgendaColeta = volumes.mapaAgendado;
+            const dtMapaAgendadoLegado = dtAgendaColeta
                 ? window.pgDataPlanoEntregaSLA(linha, dtAgendaColeta) : null;
             const agendaColeta = Array.isArray(volumes.eventosAgendados) ? volumes.eventosAgendados
                 : dtAgendaColeta ? [{ data: dtAgendaColeta, volume: volumes.bruto }] : [];
-            const eventosAgendados = !acabadora ? agendaColeta
+            const chaveAgenda = volumes.eventosAgendados?.conciliacao?.chaveAgenda;
+            const eventosAgendados = !chaveAgenda || !chavesAgendaUsadas.has(chaveAgenda) ? agendaColeta
                 .filter(e => e.data >= hoje)
                 .map(e => ({ ...e, data: window.pgDataPlanoEntregaSLA(linha, e.data) }))
                 .filter(e => e.data && e.data >= hoje) : [];
+            if (eventosAgendados.length && chaveAgenda) chavesAgendaUsadas.add(chaveAgenda);
+            const dtMapaAgendado = eventosAgendados[0]?.data || dtMapaAgendadoLegado;
             const volumeMapaAgendado = eventosAgendados.reduce((s, e) => s + e.volume, 0);
             // Mantém o contrato do gráfico compartilhado; dtColeta representa Entrega_TP nesta visão.
             const prazo = {

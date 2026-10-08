@@ -183,6 +183,7 @@ function _processarDadosDashboardBruto() {
           obj["CLIENTE_PERSONALIZADO"] = personalizacaoSimNao(dataPCP[i][136]); // EG
           obj["CAPA_PERSONALIZADA"] = personalizacaoSimNao(dataPCP[i][137]); // EH
           obj["_SOURCE"] = "PCP";
+          obj['_PG_TP_LINHA'] = i + 1;
           result.push(obj);
         }
       }
@@ -252,6 +253,7 @@ function _processarDadosDashboardBruto() {
           obj["CLIENTE_PERSONALIZADO"] = personalizacaoSimNao(dataAcab[i][88]); // CK
           obj["CAPA_PERSONALIZADA"] = personalizacaoSimNao(dataAcab[i][89]); // CL
           obj["_SOURCE"] = "ACABADORA";
+          obj['_PG_TP_LINHA'] = i + 1;
           result.push(obj);
         }
       }
@@ -965,8 +967,7 @@ function getDadosMapaSaida() {
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
       var skuChave = String(row[41] || "").trim(); // Coluna AP
-      if (!skuChave) continue;
-      if (!mapaSKU[skuChave]) mapaSKU[skuChave] = [];
+      if (skuChave && !mapaSKU[skuChave]) mapaSKU[skuChave] = [];
       
       var dtColeta = processarData(row[15]);  // Coluna P
       var dtEntrega = processarData(row[26]); // Coluna AA
@@ -993,6 +994,16 @@ function getDadosMapaSaida() {
         statusTP: texto(row[47]) // AV: Status_TP
       };
 
+      // AP nao participa da chave da formula. Agenda tambem recebe essas linhas,
+      // sem inclui-las nas listas usadas por Coleta TP/Entrega TP realizadas.
+      if (!skuChave) {
+        if (evento.volumeSolicitado !== null || evento.marca || evento.sku) {
+          if (!mapaSKU.__parcelasAgendaSemAP) mapaSKU.__parcelasAgendaSemAP = [];
+          mapaSKU.__parcelasAgendaSemAP.push(evento);
+        }
+        continue;
+      }
+
       if (dtColeta && dtColeta > hoje) {
         // P futuro segue fora das arrays antigas. A visao por eventos pode usar
         // AT realizado sem mudar a selecao das telas que dependem de P/AA.
@@ -1005,6 +1016,7 @@ function getDadosMapaSaida() {
 
       mapaSKU[skuChave].push(evento);
     }
+    mapaSKU.__agendaTPCompleta = true;
     return mapaSKU;
    
   } catch (e) {

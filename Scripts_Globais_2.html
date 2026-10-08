@@ -149,7 +149,7 @@
 
         if (!pgChavesLinhas.has(l)) {
             const fonte = l._SOURCE || l.BASE || l._base || 'PCP';
-            const chave = l._ROW_ID || JSON.stringify(Object.keys(l).sort().map(k => [k, l[k]]));
+            const chave = l._ROW_ID || JSON.stringify(Object.keys(l).filter(k => k !== '_PG_TP_LINHA').sort().map(k => [k, l[k]]));
             pgChavesLinhas.set(l, fonte + '|' + chave);
         }
         return pgChavesLinhas.get(l);
@@ -441,7 +441,7 @@ window.pgDataPlanoEntregaSLA = function(l, coletaPlanejada = window.pgDataPlanoC
 
 // Fonte única para Mapa Solicitado, Mapa Agendado, Coleta TP, Entrega TP e curva diária.
 // Mapa Solicitado = coluna TIRAGEM COLETADA inteira.
-// Mapa Agendado = esse mesmo volume somente quando Mapa_Agendado (EB) >= corte.
+// Mapa Agendado = saldo O - AN por parcela AR, atribuida uma vez a sua chave PCP.
 // Coleta TP/Entrega TP preservam suas próprias datas operacionais.
 // Não usa DATA_EA nem Data_Coleta_Mapa.
 const pgCacheVolumesColetaV37 = new WeakMap();
@@ -469,15 +469,18 @@ window.pgVolumesColetaUnificadosV37 = function(linha, corte = dtHojeISO) {
         }
     }
 
-    if (!base.eventos || base.mapaReferencia !== window.MAPA_SAIDA_CACHE) {
+    if (!base.eventos || base.mapaReferencia !== window.MAPA_SAIDA_CACHE ||
+        base.baseAgenda !== window.dadosGlobais || base.tamanhoAgenda !== window.dadosGlobais?.length) {
         const eventos = (tipo, data) => typeof window.pgEventosTPLinha === 'function'
             ? window.pgEventosTPLinha(linha, tipo, dtHojeISO,
                 data ? base.bruto : 0, data)
             : (data && base.bruto > 0 ? [{ data, volume: base.bruto }] : []);
         base.eventos = { coleta: eventos('coleta', base.coletaTP), entrega: eventos('entrega', base.entregaTP),
-            agendado: base.coletaTP ? eventos('agendado-pendente', base.coletaTP)
-                : eventos('agendado', base.mapaAgendado) };
+            agendado: window.pgEventosAgendaMapaLinha(linha, dtHojeISO, base.bruto,
+                base.coletaTP ? null : base.mapaAgendado) };
         base.mapaReferencia = window.MAPA_SAIDA_CACHE;
+        base.baseAgenda = window.dadosGlobais;
+        base.tamanhoAgenda = window.dadosGlobais?.length;
     }
     const eventosColetaTP = base.eventos.coleta;
     const eventosEntregaTP = base.eventos.entrega;
@@ -1769,6 +1772,7 @@ window.pgCalcularColetaFunil = function(base, hoje) {
         out.dias.get(dia)[tipo] += n;
     };
 
+    const chavesAgendaUsadas = new Set();
     (base || []).forEach(l => {
         if (window.pgSolicitacaoCancelada(l)) return;
 
@@ -1812,12 +1816,12 @@ window.pgCalcularColetaFunil = function(base, hoje) {
         out.mapaSolicitado += mapaSolicitado;
 
         // Agenda futura é um compromisso, NÃO uma coleta concluída.
-        // Somente PCP: usa o volume de Mapa Solicitado ainda sem Coleta_TP.
-        const dtMapaAgendado = !linhaAcabadora
-            ? volumeColeta.mapaAgendado
-            : null;
-        const eventosAgendados = !linhaAcabadora
+        // PCP e PCP Acabadora: cada saldo O - AN usa sua propria data AR.
+        const chaveAgenda = volumeColeta.eventosAgendados.conciliacao?.chaveAgenda;
+        const eventosAgendados = !chaveAgenda || !chavesAgendaUsadas.has(chaveAgenda)
             ? volumeColeta.eventosAgendados.filter(e => e.data >= hoje) : [];
+        if (eventosAgendados.length && chaveAgenda) chavesAgendaUsadas.add(chaveAgenda);
+        const dtMapaAgendado = eventosAgendados[0]?.data || null;
         const volumeMapaAgendado = eventosAgendados.reduce((s, e) => s + e.volume, 0);
         if (volumeMapaAgendado > 0) {
             out.mapaAgendadoTotal += volumeMapaAgendado;
@@ -2505,7 +2509,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
         `<span>${tituloPlanejado}: <b>${fmt(planoNoPonto)} (${pctBase(planoNoPonto)})</b></span>` +
         `<span>${tituloRealizado}: <b>${fmt(realizadoResumo)} (${pctBase(realizadoResumo)})</b></span>` +
         `<span>${tituloForecastFim}: <b>${fmt(forecastFim)} (${pctBase(forecastFim)})</b></span>` +
-        `<span>${acumulado ? nomeAgendadoAcumulado + ' até ' + labelData(fim) : nomeAgendado + ' no período'}: <b>${fmt(acumulado ? somaAte('agendado', fim) : totalAgendadoPeriodo)}</b></span>` +
+        `<span>${acumulado ? nomeAgendadoAcumulado + ' até ' + labelData(fim) : nomeAgendado + ' no período'}: <b>${window.pgStatusAgendaTP?.().aviso || fmt(acumulado ? somaAte('agendado', fim) : totalAgendadoPeriodo)}</b></span>` +
         `<span>Backlog líquido: <b>${fmt(backlogAtual)}</b></span>`;
 
     // Números-resumo também extraem seu próprio período com o mesmo formato.
