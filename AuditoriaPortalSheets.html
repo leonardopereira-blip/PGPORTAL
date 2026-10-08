@@ -245,7 +245,7 @@
         abas.push({ nome: 'Filtros e critérios', cabecalho: ['Campo', 'Valor'], linhas: filtros });
         return abas.filter(a => a.linhas.length);
     };
-    window.pgAbrirAuditoriaPortalSheets = function (botao) {
+    window.pgBaixarAuditoriaPortalXlsx = async function (botao) {
         if (window.pgCarregamentoInicial || !window.dadosGlobais?.length) {
             alert('Aguarde o carregamento completo dos dados do portal.'); return;
         }
@@ -254,27 +254,24 @@
             return;
         }
         if (botao.disabled) return;
-        let abas;
+        const rotulo = botao.textContent;
+        botao.disabled = true; botao.textContent = 'Gerando XLSX…';
         try {
+            await new Promise(resolve => setTimeout(resolve, 0));
             window.processarFunil();
             window.processarReportExecutiva();
-            abas = window.pgMontarAuditoriaPortalSheets();
-        } catch (e) { alert('Não foi possível montar a auditoria: ' + e.message); return; }
-        const novaAba = window.open('about:blank', '_blank');
-        const rotulo = botao.textContent;
-        botao.disabled = true; botao.textContent = 'Criando auditoria…';
-        const concluir = () => { botao.disabled = false; botao.textContent = rotulo; };
-        const falhar = e => { concluir(); if (novaAba) novaAba.close();
-            alert('Não foi possível criar a auditoria: ' + (e?.message || e)); };
-        google.script.run.withSuccessHandler(res => {
-            if (!res?.success) { falhar(res?.error || 'Erro ao criar o Sheets.'); return; }
-            concluir();
-            const link = document.getElementById('linkAuditoriaPortalSheets');
-            link.href = res.url; link.hidden = false;
-            if (novaAba) novaAba.location.href = res.url;
-        }).withFailureHandler(falhar).gerarPlanilhaReportExecutiva({
-            nome: 'Auditoria_Portal_PG', usuarioEmail: window.reUsuarioEmail(), auditoriaPortal: true, abas
-        });
+            const abas = window.pgMontarAuditoriaPortalSheets();
+            const arquivo = window.pgGerarExcelAbas(abas);
+            const url = URL.createObjectURL(arquivo);
+            const link = document.createElement('a');
+            link.href = url; link.download = 'Auditoria_Portal_PG_' + dtHojeISO + '.xlsx';
+            document.body.appendChild(link); link.click(); link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (e) {
+            alert('Não foi possível baixar a auditoria: ' + (e?.message || e));
+        } finally {
+            botao.disabled = false; botao.textContent = rotulo;
+        }
     };
 })();
 </script>

@@ -10,8 +10,7 @@
             </div>
             
             <div class="flex items-center gap-3">
-                <button id="btnAuditoriaPortalSheets" type="button" onclick="pgAbrirAuditoriaPortalSheets(this)" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1">📊 Abrir auditoria no Sheets</button>
-                <a id="linkAuditoriaPortalSheets" hidden target="_blank" rel="noopener" class="text-xs font-bold text-emerald-800 underline">Abrir auditoria criada</a>
+                <button id="btnAuditoriaPortalXlsx" type="button" onclick="pgBaixarAuditoriaPortalXlsx(this)" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1">📊 Baixar auditoria XLSX</button>
                 <div class="bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-200 shadow-sm flex items-center gap-2 flex-shrink-0">
                     <span class="text-[10px] font-bold text-indigo-800 uppercase tracking-wide">Base de Prazo:</span>
                     <select id="filtroReferencia" class="bg-white border border-indigo-300 text-indigo-900 rounded p-1 text-xs font-bold focus:ring-indigo-500" onchange="aplicarFiltros()"><option value="replan">📅 Planejado (Re-Plan)</option><option value="baseline">🎯 Original (Baseline)</option></select>

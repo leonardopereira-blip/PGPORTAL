@@ -171,7 +171,11 @@
     }
     var nomes = base.cabecalho;
     var letras = nomes.map(function (_, j) { return coluna(j + 1); });
-    var estilos = nomes.map(tipo);
+    var estilos = nomes.map(function (nome, indice) {
+      if ((base.colunasData || []).indexOf(indice) >= 0) return 3;
+      if ((base.colunasNumero || []).indexOf(indice) >= 0) return 4;
+      return tipo(nome);
+    });
     var larguras = nomes.map(largura);
     var ultima = letras[letras.length - 1] + Math.max(1, base.linhas.length + 1);
     var rows = ['<row r="1" ht="48" customHeight="1">' + nomes.map(function (n, j) {
