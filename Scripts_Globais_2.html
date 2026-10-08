@@ -2400,6 +2400,12 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     }
 
     const mapaDias = new Map(Array.from(resumo.dias.entries()));
+    const coletadoOutroDiaPorPlan = new Map();
+    if (!entregaCD) (resumo.registros || []).forEach(r => {
+        const volume = window.pgColetadoOutroDiaRegistroTP(r, dtHojeISO);
+        if (volume > 0) coletadoOutroDiaPorPlan.set(r.dtPlan,
+            (coletadoOutroDiaPorPlan.get(r.dtPlan) || 0) + volume);
+    });
 
     // Dias sem planejado e sem realizado não precisam aparecer.
     const pontos = todosPontos.filter(d => {
@@ -2476,6 +2482,12 @@ window.renderColetaFinalFunil = function(sufixo = '') {
         backlogAtual
     }));
     const planejadoVisao = comparativoVisao.map(p => p.plan);
+    const coletadoOutroDiaVisao = pontos.map(d => {
+        if (!acumulado) return coletadoOutroDiaPorPlan.get(d) || 0;
+        let total = 0;
+        coletadoOutroDiaPorPlan.forEach((volume, dtPlan) => { if (dtPlan <= d) total += volume; });
+        return total;
+    });
     const realizadoVisao = comparativoVisao.map(p => p.real);
     const backlogVisao = comparativoVisao.map(p => p.gap);
     const percentualVisao = comparativoVisao.map(p => p.percentual);
@@ -2590,6 +2602,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
         return `<div class="rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-center">
             ${bot('dia', labelData(d), 'text-[11px] font-bold text-slate-700')}
             ${bot('plan', 'Plan' + (acumulado ? ' acum.' : '') + ' ' + fmt(planejadoVisao[idx]), 'text-[10px] text-blue-700')}
+            ${coletadoOutroDiaVisao[idx] > 0 ? bot('coletadoOutroDia', 'Do Plan, já coletado em outros dias ' + fmt(coletadoOutroDiaVisao[idx]), 'text-[10px] font-semibold text-slate-600') : ''}
             ${bot('backlog', (acumulado ? 'Backlog acum. ' : 'Gap do dia ') + fmt(backlogVisao[idx]), 'text-[10px] text-red-600')}
             ${d <= dtHojeISO ? bot('real', 'Real' + (acumulado ? ' acum.' : '') + ' ' + fmt(realizadoVisao[idx]), 'text-[10px] text-emerald-700') : ''}
             ${agendadoVisao[idx] > 0 ? bot('agendado', nomeAgendado + (acumulado ? ' acum.' : '') + ' ' + fmt(agendadoVisao[idx]), 'text-[10px] font-bold text-violet-700') : ''}
@@ -2645,6 +2658,23 @@ window.renderColetaFinalFunil = function(sufixo = '') {
                 pl.x = centro - desvio;
                 if (bk) bk.x = pl.x;
                 ag.x = centro + desvio;
+            });
+        }
+    };
+
+    const pluginColetadoOutroDia = {
+        id: 'pgColetadoOutroDia',
+        beforeDatasetsDraw(chart) {
+            if (entregaCD) return;
+            const plan = chart.getDatasetMeta(0);
+            const coletado = chart.getDatasetMeta(4);
+            coletado.data.forEach((barra, i) => {
+                const azul = plan.data[i];
+                if (!azul) return;
+                // Mesmo lugar e largura do Plan, inclusive apos a compactacao.
+                // Stack proprio: nao acrescenta volume nem altura ao planejado.
+                barra.x = azul.x;
+                barra.width = azul.width;
             });
         }
     };
@@ -2818,7 +2848,19 @@ window.renderColetaFinalFunil = function(sufixo = '') {
                     borderRadius: 4,
                     categoryPercentage: 0.82,
                     barPercentage: 0.88
-                }
+                },
+                ...(!entregaCD ? [{
+                    type: 'bar',
+                    label: 'Do Plan, já coletado em outros dias',
+                    data: coletadoOutroDiaVisao.map(n => n > 0 ? n : null),
+                    backgroundColor: 'rgba(203, 213, 225, 0.72)',
+                    borderColor: '#64748b',
+                    borderWidth: 1,
+                    stack: 'coletadoOutroDia',
+                    grouped: false,
+                    order: 0,
+                    borderRadius: 4
+                }] : [])
             ]
         },
 
@@ -2827,10 +2869,10 @@ window.renderColetaFinalFunil = function(sufixo = '') {
             maintainAspectRatio: false,
             animation: false,
             onClick(event, active, chart) {
-                const items = chart.getElementsAtEventForMode(event, 'nearest', {intersect:true}, true);
+                const items = chart.getElementsAtEventForMode(event, 'point', {intersect:true}, true);
                 if (!items.length) return;
-                const el = items[0];
-                const tipo = ['plan', 'backlog', 'real', 'agendado'][el.datasetIndex];
+                const el = items.find(i => i.datasetIndex === 4) || items[0];
+                const tipo = ['plan', 'backlog', 'real', 'agendado', 'coletadoOutroDia'][el.datasetIndex];
                 if (!tipo) return;
                 window.pgExtrairPontoColetaV35(sufixo, el.index, tipo, chart.canvas);
             },
@@ -2855,6 +2897,12 @@ window.renderColetaFinalFunil = function(sufixo = '') {
                             // PG_TOOLTIP_PERCENTUAL_V54
                             const idx = c.dataIndex;
 
+                            if (c.datasetIndex === 4) {
+                                const percentual = planejadoVisao[idx] > 0
+                                    ? coletadoOutroDiaVisao[idx] / planejadoVisao[idx] * 100 : 0;
+                                return 'Do Plan, já coletado em outros dias: ' + fmt(coletadoOutroDiaVisao[idx]) +
+                                    ' (' + percentual.toLocaleString('pt-BR', {maximumFractionDigits: 1}) + '% do Plan; até ' + labelData(dtHojeISO) + ')';
+                            }
                             if (c.datasetIndex === 0) {
                                 return (acumulado ? 'Planejado acumulado: ' : 'Planejado do dia: ') +
                                     fmt(planejadoVisao[idx]) + ' (' + pctBase(planejadoVisao[idx]) + ')';
@@ -2928,6 +2976,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
 
         plugins: [
             pluginColunasCompactasV37,
+            pluginColetadoOutroDia,
             pluginConexao,
             pluginAlinhamentoCards
         ]
@@ -11872,7 +11921,12 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
     let cortePlan=null,corteReal=null,dataAgendaIni=null,dataAgendaFim=null;
     let planDia=false,realDia=false,agendaDia=false,backlogFuturoZero=false;
 
-    if(tipo==='base'){titulo='Base do filtro atual';descricao='Mesmo conjunto de linhas usado pelo portal para formar a base desta visão.';usarBase=true;}
+    if(tipo==='coletadoOutroDia'){
+        usarPlan=usarReal=true;
+        titulo='Do Plan, já coletado em outros dias '+(acumulado?'até ':'de ')+fmtData(ponto);
+        descricao='Parcelas já coletadas até '+fmtData(hoje)+' em datas diferentes do Plan. Volume limitado ao planejado de cada linha; não soma novamente ao Real.';
+    }
+    else if(tipo==='base'){titulo='Base do filtro atual';descricao='Mesmo conjunto de linhas usado pelo portal para formar a base desta visão.';usarBase=true;}
     else if(tipo==='planPeriodo'){cortePlan=visao.fim<=hoje?visao.fim:hoje;titulo='Planejado acumulado até '+fmtData(cortePlan);descricao='(Re)plan preenchido; quando vazio, fallback para baseline.';usarPlan=true;}
     else if(tipo==='forecastFim'){cortePlan=visao.fim;titulo='Forecast acumulado até '+fmtData(cortePlan);descricao='Planejamento acumulado até o fim do período selecionado.';usarPlan=true;}
     else if(tipo==='realTotal'||tipo==='realPeriodo'){corteReal=visao.fim<=hoje?visao.fim:hoje;titulo='Coletado acumulado até '+fmtData(corteReal);descricao='TIRAGEM COLETADA com Coleta_TP válida até o corte.';usarReal=true;}
@@ -11910,6 +11964,12 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
         if(usarBase)baseV=volumeBase(l);
         if(usarPlan){const entra=planDia?r.dtPlan===ponto:(r.dtPlan&&cortePlan&&r.dtPlan<=cortePlan);if(entra)planV=Math.max(0,Number(r.tiragem||0));}
         if(usarReal)realV=window.pgSomaEventosTP(window.pgEventosRealRegistroTP(r),realDia?ponto:corteReal,realDia?'dia':'ate');
+        if(tipo==='coletadoOutroDia'){
+            const entra=acumulado?r.dtPlan&&r.dtPlan<=ponto:r.dtPlan===ponto;
+            realV=entra?window.pgColetadoOutroDiaRegistroTP(r,hoje):0;
+            if(!realV)return;
+            planV=Math.max(0,Number(r.tiragem||0));
+        }
         if(usarAgenda)agendaV=window.pgEventosAgendaRegistroTP(r).reduce((s,e)=>{
             const entra=agendaDia?e.data===ponto:(!dataAgendaIni||e.data>=dataAgendaIni)&&(!dataAgendaFim||e.data<=dataAgendaFim);
             return s+(entra?e.volume:0);
@@ -11927,7 +11987,7 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
             replan:isoCampo(l,'Coleta/Internalização de estoque final (re) plan'),
             baseline:isoCampo(l,'COLETA/INTERNALIZAÇÃO FIM BASELINE'),
             dtPlan:r.dtPlan||'',dtVencida:p?.dtVencida||'',dtAVencer:p?.dtAVencer||'',
-            coletaTP:window.pgEventosRealRegistroTP(r).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),mapaAgendado:window.pgDatasAgendaRegistroTP(r),
+            coletaTP:window.pgEventosRealRegistroTP(r).filter(e=>tipo!=='coletadoOutroDia'||(e.data<=hoje&&e.data!==r.dtPlan)).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),mapaAgendado:window.pgDatasAgendaRegistroTP(r),
             tiragemVencida:Number(p?.vencida||0),aVencer:Number(p?.aVencer||0),tiragemColetada:Number(p?.coletadaBruta||r.coletada||0),
             base:baseV,plan:planV,real:realV,agenda:agendaV,semData:semDataV,backlog:backlogV
         });

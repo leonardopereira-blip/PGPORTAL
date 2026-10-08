@@ -305,6 +305,17 @@
     window.pgEventosRealRegistroTP = function(registro) {
         return Array.isArray(registro?.eventosReal) ? registro.eventosReal : vetorLegado(registro?.coletada, registro?.dtReal);
     };
+    // Parcela do Plan ja atendida fora de sua data, sem somar outra vez ao Real.
+    window.pgColetadoOutroDiaRegistroTP = function(registro, hoje) {
+        const dtPlan = data(registro?.dtPlan), corte = data(hoje);
+        const plan = numero(registro?.tiragem);
+        if (!dtPlan || !corte || plan === null || plan <= 0) return 0;
+        const foraDoDia = window.pgEventosRealRegistroTP(registro).reduce((s, e) => {
+            const dt = data(e?.data), volume = numero(e?.volume);
+            return s + (dt && dt <= corte && dt !== dtPlan && volume !== null && volume > 0 ? volume : 0);
+        }, 0);
+        return Math.min(plan, foraDoDia);
+    };
     window.pgEventosAgendaRegistroTP = function(registro) {
         return Array.isArray(registro?.eventosAgendados) ? registro.eventosAgendados
             : vetorLegado(registro?.volumeMapaAgendado, registro?.dtMapaAgendado);
