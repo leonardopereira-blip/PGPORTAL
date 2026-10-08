@@ -40,7 +40,8 @@ function portal(responder, salvo = {}) {
   vm.runInContext(source.slice(inicio, fim), contexto);
   return { contexto, armazenamento, chamadas,
     carregar: () => contexto.carregarDashboardPorMes(),
-    local: () => Array.from(contexto.pgLerDashboardLocal()) };
+    local: (indiceEsperado = contexto.window.PG_DASHBOARD_INDICE) =>
+      Array.from(contexto.pgLerDashboardLocal(indiceEsperado)) };
 }
 
 function mensal(meses, geradoEm = '2026-10-08T10:00:00.000Z') {
@@ -96,7 +97,39 @@ test('falha de uma nova geração mantém a cópia local completa anterior', asy
   servidor = mensal({ '2026-11': [{ id: 'nov-novo' }], '2026-10': [{ id: 'out-novo' }] }, 'nova');
   falhar = true;
   await assert.rejects(p.carregar());
-  assert.deepEqual(JSON.parse(JSON.stringify(p.local())), [{ id: 'nov-antigo' }, { id: 'out-antigo' }]);
+  assert.deepEqual(p.local(), [], 'Geracao anterior nao pode substituir a atual');
+  const indiceSalvo = JSON.parse(p.armazenamento.PG_DASH_INDICE);
+  assert.equal(indiceSalvo.geradoEm, 'antiga');
+  assert.deepEqual(JSON.parse(JSON.stringify(p.local(indiceSalvo))), [{ id: 'nov-antigo' }, { id: 'out-antigo' }]);
+});
+
+test('copia local so pode recuperar uma falha quando pertence ao indice atual confirmado', async () => {
+  const servidor = mensal({ '2026-10': [{ id: 'outubro' }] });
+  let falhar = false;
+  const p = portal((nome, ...args) => {
+    if (falhar && nome !== 'getDadosDashboardIndice') throw new Error('Falha no transporte');
+    return servidor.responder(nome, ...args);
+  });
+  await p.carregar();
+  falhar = true;
+  await assert.rejects(p.carregar());
+  assert.deepEqual(JSON.parse(JSON.stringify(p.local())), [{ id: 'outubro' }]);
+});
+
+test('falha na leitura do indice impede usar referencia anterior como se fosse atual', async () => {
+  const servidor = mensal({ '2026-10': [{ id: 'outubro' }] });
+  let falhar = false;
+  const p = portal((nome, ...args) => {
+    if (falhar && nome === 'getDadosDashboardIndice') throw new Error('Indice indisponivel');
+    return servidor.responder(nome, ...args);
+  });
+  await p.carregar();
+  const indiceSalvo = p.armazenamento.PG_DASH_INDICE;
+  falhar = true;
+  await assert.rejects(p.carregar());
+  assert.equal(p.contexto.window.PG_DASHBOARD_INDICE, null);
+  assert.deepEqual(p.local(), []);
+  assert.equal(p.armazenamento.PG_DASH_INDICE, indiceSalvo);
 });
 
 test('repete resposta invalida e falha transitória sem duplicar registros', async () => {

@@ -616,11 +616,13 @@ window.exportarSkusFiltradosSheets = function() {
             } catch (e) {}
         }
 
-        function pgLerDashboardLocal() {
+        function pgLerDashboardLocal(indiceEsperado) {
             const dados = [];
+            if (!indiceEsperado || !indiceEsperado.geradoEm) return [];
             try {
                 const indice = JSON.parse(localStorage.getItem(PG_DASH_LS_INDICE) || 'null');
-                const meses = indice && indice.meses || [];
+                if (!indice || indice.geradoEm !== indiceEsperado.geradoEm) return [];
+                const meses = indiceEsperado.meses || [];
                 if (!meses.length) return [];
                 for (const item of meses) {
                     const json = localStorage.getItem(pgChaveFatiaLocal(item.mes, indice));
@@ -630,7 +632,7 @@ window.exportarSkusFiltradosSheets = function() {
                         (Number.isSafeInteger(item.registros) && fatia.length !== item.registros)) return [];
                     dados.push.apply(dados, fatia);
                 }
-                if (Number.isSafeInteger(indice.registros) && dados.length !== indice.registros) return [];
+                if (Number.isSafeInteger(indiceEsperado.registros) && dados.length !== indiceEsperado.registros) return [];
             } catch (e) {
                 return [];
             }
@@ -639,6 +641,10 @@ window.exportarSkusFiltradosSheets = function() {
 
         // O portal só é liberado depois que TODAS as fatias mensais foram baixadas e consolidadas.
         async function carregarDashboardPorMes(aviso) {
+            // Sem indice atual confirmado, uma copia anterior nao prova a geracao servida.
+            window.PG_DASHBOARD_INDICE = null;
+            window.PG_DASHBOARD_COMPLETO = false;
+            window.PG_DASHBOARD_RESTO = null;
             const rpc = (nome, ...args) => new Promise((resolve, reject) => {
                 google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[nome](...args);
             });
@@ -658,8 +664,6 @@ window.exportarSkusFiltradosSheets = function() {
             const meses = (indice.meses || []).map(m => m.mes);
             if (!meses.length) throw new Error('Indice do dashboard sem meses.');
             window.PG_DASHBOARD_INDICE = indice;
-            window.PG_DASHBOARD_COMPLETO = false;
-            window.PG_DASHBOARD_RESTO = null;
 
             const validarFatiaMes = (item, json) => {
                 const fatia = JSON.parse(json);
@@ -843,14 +847,14 @@ window.exportarSkusFiltradosSheets = function() {
                     }
                 } catch (erro) {
                     if (chave === 'DADOS_PCP_CACHE') {
-                        const valorSalvo = pgLerDashboardLocal();
+                        const valorSalvo = pgLerDashboardLocal(window.PG_DASHBOARD_INDICE);
                         if (valorSalvo.length) {
                             resultados[chave] = valorSalvo;
                             window[chave] = valorSalvo;
                             window.PG_DASHBOARD_INDICE = JSON.parse(localStorage.getItem(PG_DASH_LS_INDICE));
                             window.PG_DASHBOARD_COMPLETO = true;
                             console.warn('[CARREGAMENTO] Dashboard via fatias salvas no navegador por falha no RPC:', erro);
-                            showToast('Exibindo a ultima copia completa salva neste navegador.', 'info', 'Cache local');
+                            showToast('Exibindo a copia completa da mesma atualizacao salva neste navegador.', 'info', 'Cache local');
                         } else {
                             falhas.push({ nome, erro: String(erro) });
                             console.warn('[CARREGAMENTO BG]', nome, erro);
