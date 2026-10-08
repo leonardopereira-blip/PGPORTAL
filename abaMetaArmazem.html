@@ -658,6 +658,7 @@
     setTimeout(function(){URL.revokeObjectURL(url);},1000);
   };
   window.pgMAExportarAuditoria=async function(botao){
+    if(window.pgTPExportacaoPronta&&!window.pgTPExportacaoPronta())return;
     if(window.pgMAExportandoAuditoria)return;
     window.pgMAExportandoAuditoria=true;
     var anterior=botao?botao.textContent:'';

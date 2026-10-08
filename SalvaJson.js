@@ -62,7 +62,7 @@ function lerJSONDoDrive(nomeArquivo, falharSeErro) {
   }
 }
 
-function salvarNoCacheRAM(chave, dados) {
+function salvarNoCacheRAM(chave, dados, duracao) {
   try {
     if (typeof pgPreparacaoCache_ !== 'undefined' && pgPreparacaoCache_) return true;
     var cache = CacheService.getScriptCache();
@@ -76,8 +76,9 @@ function salvarNoCacheRAM(chave, dados) {
       cacheData[chave + '_chunk_' + i] = chunk;
     }
 
-    cache.putAll(cacheData, 21600); // 6 horas de retenção
-    cache.put(chave + '_metadata', numChunks.toString(), 21600);
+    var segundos = duracao || 21600;
+    cache.putAll(cacheData, segundos);
+    cache.put(chave + '_metadata', numChunks.toString(), segundos);
     return true;
   } catch(e) {
     Logger.log("Erro ao salvar RAM Cache: " + e.toString());
@@ -494,7 +495,8 @@ function getDadosMapaSaida_Cache() {
   var json = lerJSONDoDrive("cache_mapa.json");
   if (!json || json === "[]") return {};
   try {
-    return JSON.parse(json);
+    var mapa = JSON.parse(json);
+    return pgComplementarEventosTPMapa_(mapa, json);
   } catch (e) {
     console.error('[cache] Mapa de Saida: JSON invalido, seguindo sem mapa: ' + e.message);
     return {};

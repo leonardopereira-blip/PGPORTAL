@@ -777,7 +777,7 @@ window.exportarSkusFiltradosSheets = function() {
                 ['getMatrizSLAPortal', 'PG_MATRIZ_SLA'],
                 ['getForecastsColetaPortal', 'PG_FORECAST_COLETA'],
                 ['getDadosCockpit_Cache', 'DADOS_COCKPIT_INICIAL'],
-                ['getDadosMapaSaida_Cache', 'MAPA_SAIDA_CACHE']
+                ['getDadosMapaSaida_Cache', 'MAPA_SAIDA_CACHE', () => window.pgCarregarMapaTPCache()]
             ];
             const totalFontes = fontesCriticas.length + fontesBackground.length;
             const resultados = {}, falhas = [];

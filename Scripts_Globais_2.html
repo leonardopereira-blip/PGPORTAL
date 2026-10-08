@@ -474,7 +474,9 @@ window.pgVolumesColetaUnificadosV37 = function(linha, corte = dtHojeISO) {
             ? window.pgEventosTPLinha(linha, tipo, dtHojeISO,
                 data ? base.bruto : 0, data)
             : (data && base.bruto > 0 ? [{ data, volume: base.bruto }] : []);
-        base.eventos = { coleta: eventos('coleta', base.coletaTP), entrega: eventos('entrega', base.entregaTP) };
+        base.eventos = { coleta: eventos('coleta', base.coletaTP), entrega: eventos('entrega', base.entregaTP),
+            agendado: base.coletaTP ? eventos('agendado-pendente', base.coletaTP)
+                : eventos('agendado', base.mapaAgendado) };
         base.mapaReferencia = window.MAPA_SAIDA_CACHE;
     }
     const eventosColetaTP = base.eventos.coleta;
@@ -484,7 +486,8 @@ window.pgVolumesColetaUnificadosV37 = function(linha, corte = dtHojeISO) {
         bruto: base.bruto,
         mapa: base.bruto,
         mapaAgendado: base.mapaAgendado,
-        agendado: base.mapaAgendado && base.mapaAgendado >= corte ? base.bruto : 0,
+        agendado: base.eventos.agendado.reduce((s, e) => s + (e.data >= corte ? e.volume : 0), 0),
+        eventosAgendados: base.eventos.agendado,
         coleta: ate(eventosColetaTP),
         entrega: ate(eventosEntregaTP),
         eventosColetaTP,
@@ -1813,12 +1816,12 @@ window.pgCalcularColetaFunil = function(base, hoje) {
         const dtMapaAgendado = !linhaAcabadora
             ? volumeColeta.mapaAgendado
             : null;
-        const volumeMapaAgendado = (
-            dtMapaAgendado && !dtReal
-        ) ? volumeColeta.agendado : 0;
+        const eventosAgendados = !linhaAcabadora
+            ? volumeColeta.eventosAgendados.filter(e => e.data >= hoje) : [];
+        const volumeMapaAgendado = eventosAgendados.reduce((s, e) => s + e.volume, 0);
         if (volumeMapaAgendado > 0) {
             out.mapaAgendadoTotal += volumeMapaAgendado;
-            somar(dtMapaAgendado, 'agendado', volumeMapaAgendado);
+            eventosAgendados.forEach(e => somar(e.data, 'agendado', e.volume));
         }
 
         if (coletadaReal > 0) {
@@ -1867,6 +1870,7 @@ window.pgCalcularColetaFunil = function(base, hoje) {
             mapaSolicitado,
             dtMapaAgendado,
             volumeMapaAgendado,
+            eventosAgendados,
             dtReal,
             eventosReal: volumeColeta.eventosColetaTP.filter(e => e.data <= hoje),
             prazo: registroPrazo
@@ -8239,8 +8243,7 @@ window.iniciarAbaOKRQ2 = function() {
                 loading.innerText = '⏳ Sincronizando Mapa de Saída...';
             }
             
-            google.script.run
-                .withSuccessHandler(function(dados) {
+            window.pgCarregarMapaTPCache().then(function(dados) {
                     // Verifica se o backend mandou um erro disfarçado
                     if (dados && dados._ERRO_CRITICO) {
                         if(loading) {
@@ -8256,8 +8259,7 @@ window.iniciarAbaOKRQ2 = function() {
                     window.pgAtualizarDatasTPDoMapa?.();
                     if(loading) loading.classList.add('hidden');
                     window.processarOKRQ2(); // Processa os dados
-                })
-                .withFailureHandler(function(erro) {
+                }, function(erro) {
                     // Se o Google Script der Timeout ou erro fatal de conexão
                     if(loading) {
                         loading.classList.remove('animate-pulse', 'bg-amber-50', 'text-amber-600', 'border-amber-200');
@@ -8265,8 +8267,7 @@ window.iniciarAbaOKRQ2 = function() {
                         loading.innerText = '❌ Falha de conexão com o Google Sheets.';
                     }
                     console.error("Erro Fatal no Google Script:", erro);
-                })
-                .getDadosMapaSaida_Cache();
+                });
         } else {
             window.processarOKRQ2();
         }
@@ -8608,8 +8609,7 @@ document.addEventListener("DOMContentLoaded", function() {
     if (window.MAPA_SAIDA_CACHE && Object.keys(window.MAPA_SAIDA_CACHE).length) return;
     console.log("Iniciando busca do Mapa de Saída em background...");
     
-    google.script.run
-        .withSuccessHandler(function(dados) {
+    window.pgCarregarMapaTPCache().then(function(dados) {
             if (dados && dados._ERRO_CRITICO) {
                 console.error("Erro no background: ", dados._ERRO_CRITICO);
                 return;
@@ -8622,11 +8622,9 @@ document.addEventListener("DOMContentLoaded", function() {
             if (typeof window.processarOKRQ2 === 'function' && typeof dadosFiltrados !== 'undefined' && dadosFiltrados && dadosFiltrados.length > 0) {
                 window.processarOKRQ2();
             }
-        })
-        .withFailureHandler(function(erro) {
+        }, function(erro) {
             console.error("Falha ao carregar Mapa em background:", erro);
-        })
-        .getDadosMapaSaida_Cache();
+        });
 });
 
 // =========================================================================
@@ -11745,6 +11743,7 @@ window.reUsuarioEmail = function() {
 // Planilha única, usada pelo Funil e Report Executiva.
 // Cada linha física mantém sua identidade; nunca associa marcas apenas por SKU.
 window.pgExportarVisaoCompletaV37 = function(dataCorte, titulo, elemento, resumoFiltro = null) {
+    if (window.pgTPExportacaoPronta && !window.pgTPExportacaoPronta()) return;
     const resumo = resumoFiltro || window.pgObterResumoColeta();
     const corte = String(dataCorte || dtHojeISO).slice(0, 10);
     const corteReal = corte > dtHojeISO ? dtHojeISO : corte;
@@ -11799,7 +11798,7 @@ window.pgExportarVisaoCompletaV37 = function(dataCorte, titulo, elemento, resumo
                 .filter((d, i, datas) => datas.indexOf(d) === i).join(' / '),
             p.vencida, p.aVencer, quantidade, bruto,
             eventos.map(e => e.data).filter((d, i, datas) => datas.indexOf(d) === i).join(' / '),
-            p.dtMapaAgendado || '', r.dtPlan || '',
+            window.pgDatasAgendaRegistroTP(r), r.dtPlan || '',
             tiragemReplan, volumePlanCurva, real, saldo.vencido,
             gap
         ];
@@ -11907,7 +11906,10 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
         if(usarBase)baseV=volumeBase(l);
         if(usarPlan){const entra=planDia?r.dtPlan===ponto:(r.dtPlan&&cortePlan&&r.dtPlan<=cortePlan);if(entra)planV=Math.max(0,Number(r.tiragem||0));}
         if(usarReal)realV=window.pgSomaEventosTP(window.pgEventosRealRegistroTP(r),realDia?ponto:corteReal,realDia?'dia':'ate');
-        if(usarAgenda){const d=r.dtMapaAgendado;const entra=agendaDia?d===ponto:d&&(!dataAgendaIni||d>=dataAgendaIni)&&(!dataAgendaFim||d<=dataAgendaFim);if(entra)agendaV=Math.max(0,Number(r.volumeMapaAgendado||0));}
+        if(usarAgenda)agendaV=window.pgEventosAgendaRegistroTP(r).reduce((s,e)=>{
+            const entra=agendaDia?e.data===ponto:(!dataAgendaIni||e.data>=dataAgendaIni)&&(!dataAgendaFim||e.data<=dataAgendaFim);
+            return s+(entra?e.volume:0);
+        },0);
         if(usarSemData){const p=r.prazo||(window.pgPrazoLinhaV35?window.pgPrazoLinhaV35(l,hoje):null);if(p&&window.pgSaldoPrazoV35)semDataV=Math.max(0,Number(window.pgSaldoPrazoV35(p,hoje,hoje).semData||0));}
         if(!(baseV||planV||realV||agendaV||semDataV))return;
 
@@ -11921,7 +11923,7 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
             replan:isoCampo(l,'Coleta/Internalização de estoque final (re) plan'),
             baseline:isoCampo(l,'COLETA/INTERNALIZAÇÃO FIM BASELINE'),
             dtPlan:r.dtPlan||'',dtVencida:p?.dtVencida||'',dtAVencer:p?.dtAVencer||'',
-            coletaTP:window.pgEventosRealRegistroTP(r).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),mapaAgendado:p?.dtMapaAgendado||r.dtMapaAgendado||'',
+            coletaTP:window.pgEventosRealRegistroTP(r).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),mapaAgendado:window.pgDatasAgendaRegistroTP(r),
             tiragemVencida:Number(p?.vencida||0),aVencer:Number(p?.aVencer||0),tiragemColetada:Number(p?.coletadaBruta||r.coletada||0),
             base:baseV,plan:planV,real:realV,agenda:agendaV,semData:semDataV,backlog:backlogV
         });
@@ -11994,8 +11996,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
         const realHoje=window.pgSomaEventosTP(window.pgEventosRealRegistroTP(r),corte);
         const backlogLinha=planHoje-realHoje;
         const saldoPrazo=window.pgSaldoPrazoV35&&p?window.pgSaldoPrazoV35(p,corte,hoje):{vencido:0,semData:0};
-        const mapaAgendado=r.dtMapaAgendado&&r.dtMapaAgendado>=inicio&&r.dtMapaAgendado<=fim
-            ? Math.max(0,Number(r.volumeMapaAgendado||0)):0;
+        const mapaAgendado=window.pgEventosAgendaRegistroTP(r).reduce((s,e)=>s+(e.data>=inicio&&e.data<=fim?e.volume:0),0);
         let situacao='Sem plano';
         if(r.dtPlan){
             if(r.dtPlan>corte)situacao='Futuro';
@@ -12016,7 +12017,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
             String(l?.['SÉRIE']||l?.['Série']||l?.SERIE||''),String(l?.ENVIO||l?.Envio||''),
             isoCampo(l,'Coleta/Internalização de estoque final (re) plan'),
             isoCampo(l,'COLETA/INTERNALIZAÇÃO FIM BASELINE'),r.dtPlan||'',
-            p?.dtVencida||'',p?.dtAVencer||'',window.pgEventosRealRegistroTP(r).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),p?.dtMapaAgendado||r.dtMapaAgendado||'',
+            p?.dtVencida||'',p?.dtAVencer||'',window.pgEventosRealRegistroTP(r).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),window.pgDatasAgendaRegistroTP(r),
             Math.round(base),Math.round(tiragem),Math.round(p?.vencida||0),Math.round(p?.aVencer||0),Math.round(p?.coletadaBruta||r.coletada||0),
             Math.round(planHoje),Math.round(futuroPeriodo),Math.round(realHoje),Math.round(backlogLinha),
             Math.round(saldoPrazo.vencido||0),Math.round(saldoPrazo.semData||0),Math.round(mapaAgendado),situacao
@@ -12028,7 +12029,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
     const mapaSolicitado=Math.max(0,Number(resumo.mapaSolicitado||0));
     const mapaSemColeta=Math.max(0,Number(resumo.mapaSemColetaTP||0));
     const agendadoQuadrinho=visao.acumulado
-        ? registros.reduce((s,r)=>s+(r.dtMapaAgendado&&r.dtMapaAgendado<=fim?Math.max(0,Number(r.volumeMapaAgendado||0)):0),0)
+        ? registros.reduce((s,r)=>s+window.pgSomaEventosTP(window.pgEventosAgendaRegistroTP(r),fim),0)
         : mapaAgendadoPeriodo;
     const pct=v=>totalBase>0?(Number(v||0)/totalBase*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%':'—';
     const origem=document.getElementById('pgFiltroOrigem')?.value||'TODOS';
@@ -12080,6 +12081,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
 };
 
 window.pgBaixarAuditoriaPontoColetaV56=function(){
+    if(window.pgTPExportacaoPronta&&!window.pgTPExportacaoPronta())return;
     const visao=window.pgAuditoriaVisaoAtualV56;
     if(!visao)return;
     if(typeof window.pgGerarExcelAbas!=='function'){alert('Exportador XLSX não carregado.');return;}

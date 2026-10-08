@@ -147,6 +147,7 @@ function _processarDadosDashboardBruto() {
         if(dataPCP[i].length > 2)   obj["META_OKR_POS"] = safeIsoDate(dataPCP[i][2]);
         if(dataPCP[i].length > 3)   obj["META_COLETA_D"] = safeIsoDate(dataPCP[i][3]);
         if(dataPCP[i].length > 16)  obj["Chave"] = dataPCP[i][16] || "";                 
+        obj['_PG_TP_CHAVE_FORECAST'] = String(dataPCP[i][6] || '').trim(); // G: PROCX K/T
         if(dataPCP[i].length > 46)  obj["META_ARM_POS"] = safeIsoDate(dataPCP[i][46]);   
         if(dataPCP[i].length > 68)  obj["GRAFICA_FINAL"] = String(dataPCP[i][68] || "").trim().toUpperCase(); 
         if(dataPCP[i].length > 74)  obj["SKU_REAL"] = dataPCP[i][74] || "";              
@@ -973,7 +974,7 @@ function getDadosMapaSaida() {
         vol: parseFloat(row[14]) || 0, // Coluna O
         dataColeta: dtColeta ? dtColeta.toISOString().split('T')[0] : null,
         dataEntrega: dtEntrega ? dtEntrega.toISOString().split('T')[0] : null,
-        eventoTPVersao: 1,
+        eventoTPVersao: 2,
         chaveMapa: skuChave,
         linhaMapa: i + 1,
         codigoMapa: texto(row[4]), // E: COD MP
@@ -985,6 +986,8 @@ function getDadosMapaSaida() {
         envioRaw: texto(row[7]), // H: envio original
         envio: texto(row[49]), // AX: envio normalizado pela planilha
         volumeColetado: quantidadeTP(row[39]), // AN: Volume Coletado
+        volumeSolicitado: quantidadeTP(row[14]), // O: tiragem antes de Coleta_TP
+        dataAgendada: dataTP(row[43]), // AR: Data_Agendada, sem MAXIFS
         coletaTP: dataTP(row[45]), // AT: Coleta_TP
         entregaTP: dataTP(row[46]), // AU: Entrega_TP
         statusTP: texto(row[47]) // AV: Status_TP
@@ -993,7 +996,7 @@ function getDadosMapaSaida() {
       if (dtColeta && dtColeta > hoje) {
         // P futuro segue fora das arrays antigas. A visao por eventos pode usar
         // AT realizado sem mudar a selecao das telas que dependem de P/AA.
-        if (evento.coletaTP && evento.coletaTP <= hojeTP) {
+        if (evento.coletaTP || evento.dataAgendada) {
           if (!mapaSKU.__eventosTPAdicionais) mapaSKU.__eventosTPAdicionais = [];
           mapaSKU.__eventosTPAdicionais.push(evento);
         }

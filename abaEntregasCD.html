@@ -336,6 +336,7 @@
     };
 
     window.pgBaixarBaseEntregasCD = function() {
+        if (window.pgTPExportacaoPronta && !window.pgTPExportacaoPronta()) return;
         if (!baseAtivaEntregasCD.length) {
             alert('Nenhum registro disponível para exportar nesta visão.');
             return;
@@ -435,9 +436,13 @@
                 ? volumes.mapaAgendado : null;
             const dtMapaAgendado = dtAgendaColeta
                 ? window.pgDataPlanoEntregaSLA(linha, dtAgendaColeta) : null;
-            const volumeMapaAgendado = dtAgendaColeta && dtAgendaColeta >= hoje &&
-                dtMapaAgendado && dtMapaAgendado >= hoje && !dtReal
-                ? volumes.bruto : 0;
+            const agendaColeta = Array.isArray(volumes.eventosAgendados) ? volumes.eventosAgendados
+                : dtAgendaColeta ? [{ data: dtAgendaColeta, volume: volumes.bruto }] : [];
+            const eventosAgendados = !acabadora ? agendaColeta
+                .filter(e => e.data >= hoje)
+                .map(e => ({ ...e, data: window.pgDataPlanoEntregaSLA(linha, e.data) }))
+                .filter(e => e.data && e.data >= hoje) : [];
+            const volumeMapaAgendado = eventosAgendados.reduce((s, e) => s + e.volume, 0);
             // Mantém o contrato do gráfico compartilhado; dtColeta representa Entrega_TP nesta visão.
             const prazo = {
                 linha, vencida: !dtPlan || dtPlan <= hoje ? tiragem : 0,
@@ -460,11 +465,11 @@
             resumo.registros.push({
                 linha, pcp: linha, dtPlan, dtReal, tiragem, volumeBase, eventosReal,
                 coletada: entregue, entregue, mapaSolicitado: volumes.mapa,
-                dtMapaAgendado, volumeMapaAgendado, prazo,
+                dtMapaAgendado, volumeMapaAgendado, eventosAgendados, prazo,
                 motivo: dtPlan ? 'Coleta (re)plan ou baseline + Matriz_SLA' : 'Sem previsão de entrega: verificar coleta planejada e rota Matriz_SLA'
             });
             eventosReal.forEach(evento => somarDia(evento.data, 'real', evento.volume));
-            somarDia(dtMapaAgendado, 'agendado', volumeMapaAgendado);
+            eventosAgendados.forEach(e => somarDia(e.data, 'agendado', e.volume));
             if (!dtPlan) resumo.semPlano += tiragem;
             else {
                 somarDia(dtPlan, 'esperado', tiragem);
@@ -476,6 +481,7 @@
     };
 
     window.pgExportarVisaoEntregaCD = function(dataCorte, titulo, elemento, resumo) {
+        if (window.pgTPExportacaoPronta && !window.pgTPExportacaoPronta()) return;
         const corte = String(dataCorte || hojePortal()).slice(0, 10);
         const corteReal = corte > hojePortal() ? hojePortal() : corte;
         const cabecalho = ['Marca', 'Gráfica', 'Série', 'SKU', 'Descrição', 'CD destino',
