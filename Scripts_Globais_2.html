@@ -10701,7 +10701,7 @@ window.processarReportExecutiva = function() {
                 ? volumes[tipoReal === 'entrega' ? 'eventosEntregaTP' : 'eventosColetaTP'].filter(e => e.data <= hojeIso)
                 : [{ data: dataReal, volume: real }];
             parcelas.forEach(e => eventosReal.push({ linha: l, pcp: l,
-                dtReal: e.data, coletada: e.volume, codigoMapa: e.codigoMapa || '' }));
+                dtReal: e.data, coletada: e.volume, codigoMapa: e.codigoMapa || '', linhaMapa: e.linhaMapa || '' }));
             const m = chaveLinha(l);
             add(porMarca, m, 'real', real);
             total.real += real;
@@ -10893,6 +10893,20 @@ window.processarReportExecutiva = function() {
 // REPORT EXECUTIVA — CURVA DE ENTREGAS PREVISTA / SEMANAL
 // Usa pgObterResumoColeta(): mesma regra de Plan/Forecast já existente.
 // ============================================================================
+// Compatibilidade do fechamento reportado antes da divisao por datas.
+// Somente 01/10 pode usar a data legada do PCP; os eventos reais nao sao alterados.
+window.pgCriterioFechamentoSetembroV60 = 'MINIFS do PCP para coletas de 01/10/2026; demais coletas pela data real';
+window.pgDataFechamentoSetembroV60 = function(linha, dataReal, hoje = dtHojeISO) {
+    if (!dataReal || dataReal > hoje || dataReal > '2026-10-01') return '';
+    if (dataReal <= '2026-09-30') return dataReal;
+    const dataPCP = window.pgNormalizarDataColeta(window.pgCampoColeta(linha, 'Coleta_TP'), hoje);
+    return dataPCP && dataPCP <= '2026-09-30' ? dataPCP : '';
+};
+window.pgEventosFechamentoSetembroV60 = function(fonte) {
+    return (fonte.eventosReal || []).map(r => ({ ...r,
+        dtFechamento: window.pgDataFechamentoSetembroV60(r.linha || r.pcp, r.dtReal, fonte.hoje)
+    })).filter(r => r.dtFechamento && Number(r.coletada || 0) > 0);
+};
 window.renderReportExecutivaCurvaSemanal = function() {
     const canvas = document.getElementById('reCurvaEntregas');
     if (!canvas || typeof Chart === 'undefined') return;
@@ -11011,7 +11025,8 @@ window.renderReportExecutivaCurvaSemanal = function() {
     window.reCurvaPeriodos = periodos.map(p => ({
         ...p, corte: cortePlanoPeriodo(p),
         cortePlano: cortePlanoPeriodo(p),
-        corteReal: corteRealPeriodo(p)
+        corteReal: corteRealPeriodo(p),
+        fechamentoSetembro: p.fim === '2026-09-30' && p.fim < hojeIso
     }));
 
     const acumuladoAte = (fimIso, campoData, campoVolume, limitarHoje) => {
@@ -11029,6 +11044,7 @@ window.renderReportExecutivaCurvaSemanal = function() {
     const realPct = [];
     const metaVolume = [];
     const realVolume = [];
+    const eventosFechamentoSetembro = window.pgEventosFechamentoSetembroV60(fonte);
     const acumuladoHistorico = corte => eventosHistoricos.reduce((soma, r) =>
         soma + (r.dtPlan && r.dtPlan <= corte
             ? Math.max(0, Number(r.tiragem || 0)) : 0), 0);
@@ -11052,7 +11068,9 @@ window.renderReportExecutivaCurvaSemanal = function() {
             ? total
             : metaCalculada;
 
-        const real = acumuladoAte(corteReal, 'dtReal', 'coletada', true);
+        const real = p.fim === '2026-09-30' && p.fim < hojeIso
+            ? eventosFechamentoSetembro.reduce((s, r) => s + Number(r.coletada || 0), 0)
+            : acumuladoAte(corteReal, 'dtReal', 'coletada', true);
         metaVolume.push(meta);
         realVolume.push(real);
 
@@ -11343,7 +11361,9 @@ window.renderReportExecutivaCurvaSemanal = function() {
                                 : realVolume[context.dataIndex];
                             const bruto = Math.round(Number(n || 0)).toLocaleString('pt-BR');
                             const base = Math.round(total).toLocaleString('pt-BR');
-                            return `${context.dataset.label}: ${Number(context.raw).toFixed(1)}% (${bruto} / ${base})`;
+                            const criterio = context.datasetIndex === 1 &&
+                                window.reCurvaPeriodos[context.dataIndex]?.fechamentoSetembro ? ' (MINIFS PCP)' : '';
+                            return `${context.dataset.label}${criterio}: ${Number(context.raw).toFixed(1)}% (${bruto} / ${base})`;
                         }
                     }
                 }
@@ -12180,20 +12200,26 @@ window.reExtrairCurvaPonto = function(indice, elemento) {
         : (fonte.eventosPlano || []);
     const planos = planoFonte.filter(r =>
         r.dtPlan && r.dtPlan <= cortePlano && Number(r.tiragem || 0) > 0);
-    const reais = (fonte.eventosReal || []).filter(r =>
-        r.dtReal && r.dtReal <= corteReal && Number(r.coletada || 0) > 0);
+    const fechamentoSetembro = periodo.fechamentoSetembro === true;
+    const reais = fechamentoSetembro ? window.pgEventosFechamentoSetembroV60(fonte) :
+        (fonte.eventosReal || []).filter(r =>
+            r.dtReal && r.dtReal <= corteReal && Number(r.coletada || 0) > 0);
     const saldos = new Map();
     reais.forEach(r => {
         const k = chave(r.linha || r.pcp);
         if (!saldos.has(k)) saldos.set(k, []);
         saldos.get(k).push({r, saldo: Number(r.coletada || 0)});
     });
-    const criarLinha = (l, plan, real, dtPlan, dtReal, indicador) =>
-        window.reLinhaExportacao(l, {
+    const criarLinha = (l, plan, real, dtPlan, dtReal, indicador, evento) => {
+        const row = window.reLinhaExportacao(l, {
             grupo: 'Meta', indicador, cenario: 'Origem Todas / Destino CD',
             acumuladoAte: cortePlano, dtPlan: dtPlan || '', dtReal: dtReal || '',
             volumePlan: plan, volumeReal: real, gap: Math.max(0, plan - real)
         });
+        if (fechamentoSetembro) row.push(evento?.dtFechamento || '',
+            window.pgCriterioFechamentoSetembroV60, evento?.codigoMapa || '', evento?.linhaMapa || '');
+        return row;
+    };
     const linhas = [];
     planos.forEach(p => {
         const l = p.linha || p.pcp;
@@ -12204,14 +12230,19 @@ window.reExtrairCurvaPonto = function(indice, elemento) {
             const n = Math.min(restante, item.saldo);
             restante -= n; item.saldo -= n; alocado += n;
             dataReal = item.r.dtReal || dataReal;
+            if (fechamentoSetembro) linhas.push(criarLinha(l, n, n,
+                p.dtPlan, item.r.dtReal, 'Fechamento setembro', item.r));
         });
-        linhas.push(criarLinha(l, Number(p.tiragem || 0), alocado,
+        if (fechamentoSetembro) {
+            if (restante > 0) linhas.push(criarLinha(l, restante, 0,
+                p.dtPlan, '', 'Planejado sem coleta no fechamento'));
+        } else linhas.push(criarLinha(l, Number(p.tiragem || 0), alocado,
             p.dtPlan, dataReal, 'Curva de Entregas Prevista'));
     });
     // Realizado excedente fica explicito em vez de sumir da extracao.
     saldos.forEach(lista => lista.forEach(item => {
         if (item.saldo > 0) linhas.push(criarLinha(item.r.linha || item.r.pcp,
-            0, item.saldo, '', item.r.dtReal, 'Realizado excedente'));
+            0, item.saldo, '', item.r.dtReal, 'Realizado excedente', item.r));
     }));
     const cab = window.reCabecalhoExportacao || [];
     const ip = cab.indexOf('Volume Plan'), ir = cab.indexOf('Volume Real');
@@ -12228,7 +12259,9 @@ window.reExtrairCurvaPonto = function(indice, elemento) {
     if (!linhas.length) { alert('Sem itens neste ponto.'); return; }
     window.reCriarSheets('Report_Executiva_Curva_' +
         String(periodo.label || cortePlano).replace(/[^A-Za-z0-9_-]+/g, '_'),
-        [{nome: 'Meta_Azul', cabecalho: window.reCabecalhoExportacao, linhas}], elemento);
+        [{nome: 'Meta_Azul', cabecalho: fechamentoSetembro
+            ? [...cab, 'Data considerada no fechamento de setembro', 'Critério do fechamento', 'Código mapa', 'Linha mapa']
+            : cab, linhas}], elemento);
 };
 
 </script>

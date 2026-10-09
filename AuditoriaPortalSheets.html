@@ -6,7 +6,8 @@
         'Mapa solicitado', 'Data de coleta TP', 'Data de entrega TP', 'Tiragem entregue TP',
         'Replan formação de kit', 'Data realizada formação de kit', 'Planejado formação de kit',
         'Realizado formação de kit', 'Data mapa agendado', 'Mapa agendado',
-        'Data planejada usada no portal', 'Data planejada kit usada no portal', 'Origem', 'Linha PCP'];
+        'Data planejada usada no portal', 'Data planejada kit usada no portal', 'Origem', 'Linha PCP',
+        'Data considerada no fechamento de setembro', 'Tiragem no fechamento de setembro', 'Critério do fechamento de setembro'];
     const campo = (l, n) => window.pgCampoPrazoV35(l, n);
     const texto = v => {
         const s = String(v ?? '').trim();
@@ -65,7 +66,7 @@
             if (!dias.has(data)) dias.set(data, { plan: 0, real: 0, agenda: 0 });
             dias.get(data)[indicador] += volume;
         };
-        let entregaEsperada = 0, planEsperado = 0, kitPlanEsperado = 0;
+        let entregaEsperada = 0, planEsperado = 0, kitPlanEsperado = 0, fechamentoEsperado = 0;
         registros.forEach((registro, l) => {
             const r = registro.coleta, k = registro.kit;
             const volumes = r ? window.pgVolumesColetaUnificadosV37(l, hoje) : null;
@@ -85,10 +86,18 @@
                     const chave = tipo === 'agenda' ? 'agenda:' + (e.linhaMapa || i) :
                         e.linhaMapa ? 'mapa:' + e.linhaMapa : eventos.length === 1 ? 'pcp' : tipo + ':' + i;
                     if (!parcelas.has(chave)) parcelas.set(chave, { coleta: 0, entrega: 0, agenda: 0,
-                        dtColeta: '', dtEntrega: '', dtAgenda: '' });
+                        dtColeta: '', dtEntrega: '', dtAgenda: '', dtFechamento: '', fechamento: 0 });
                     const p = parcelas.get(chave);
                     p[tipo] += numero(e.volume);
                     p[tipo === 'coleta' ? 'dtColeta' : tipo === 'entrega' ? 'dtEntrega' : 'dtAgenda'] = e.data;
+                    if (tipo === 'coleta') {
+                        const dataFechamento = window.pgDataFechamentoSetembroV60(l, e.data, hoje);
+                        if (dataFechamento) {
+                            p.dtFechamento = dataFechamento;
+                            p.fechamento += numero(e.volume);
+                            fechamentoEsperado += numero(e.volume);
+                        }
+                    }
                 });
             }
             adicionar('coleta', coletas);
@@ -113,7 +122,9 @@
                     p.dtColeta, p.dtEntrega, p.entrega, replanKit, realKit,
                     kitPlan, primeiraParcela && k ? numero(k.real) : 0,
                     p.dtAgenda, p.agenda, r?.dtPlan || '', k?.dtPlan || '',
-                    window.pgEhFonteAcabadora(l) ? 'PCP Acabadora' : 'PCP', texto(l._PG_TP_LINHA)]);
+                    window.pgEhFonteAcabadora(l) ? 'PCP Acabadora' : 'PCP', texto(l._PG_TP_LINHA),
+                    p.dtFechamento || '', p.fechamento || 0,
+                    p.dtFechamento ? window.pgCriterioFechamentoSetembroV60 : '']);
                 somarDia(r?.dtPlan, 'plan', plan);
                 somarDia(p.dtColeta, 'real', p.coleta);
                 somarDia(p.dtAgenda, 'agenda', p.agenda);
@@ -136,6 +147,7 @@
         conferir('Entrega TP', soma(13), entregaEsperada);
         conferir('Mapa agendado', soma(19), resumo.mapaAgendadoTotal);
         conferir('Planejado formação de kit', soma(16), kitPlanEsperado);
+        conferir('Fechamento setembro', soma(25), fechamentoEsperado);
         if (kit) {
             conferir('Realizado formação de kit', soma(17), kit.total.real);
             conferir('Planejado formação de kit no corte do portal', linhas.reduce((s, l) =>
@@ -152,8 +164,8 @@
             planejado: soma(7), realizado: soma(8), tiragemTotal: soma(9), mapaSolicitado: soma(10),
             entregueTP: soma(13), mapaAgendado: soma(19), realizadoKit: soma(17) });
         return [{ nome: 'Auditoria Portal PG', cabecalho, linhas,
-            colunasData: [5, 6, 11, 12, 14, 15, 18, 20, 21],
-            colunasNumero: [7, 8, 9, 10, 13, 16, 17, 19] }];
+            colunasData: [5, 6, 11, 12, 14, 15, 18, 20, 21, 24],
+            colunasNumero: [7, 8, 9, 10, 13, 16, 17, 19, 25] }];
     };
     window.pgBaixarAuditoriaPortalXlsx = async function (botao) {
         if (window.pgCarregamentoInicial || !window.dadosGlobais?.length) {
