@@ -988,7 +988,7 @@
     }catch(e){console.error('[META ARMAZEM] Screenshot:',e);window.alert('Não foi possível capturar a matriz: '+e.message);}
   };
   function comparativoMeta(items,total){
-    var planejado=items.reduce(function(a,x){return a+x.previsto;},0);
+    // O comparativo mostra volume físico, não previsões dentro ou fora da meta.
     var comData=items.filter(function(x){return !!x.metaArmDate;});
     var semData=items.length-comData.length;
     var datas=Array.from(new Set(comData.map(function(x){return x.metaArmDate;}))).sort();
@@ -1001,10 +1001,14 @@
         '<div class="ma-compare-bar mt-2"><span style="width:'+p+'%;background:'+cor+'"></span></div>'+
         '<p class="text-[10px] text-slate-500 mt-2">'+sub+(disponivel&&total.total?' · '+pct(n,total.total)+' do total':'')+'</p></div>';
     }
+    // Mesmo universo e mesmo realizado de Entrega_TP utilizados nos demais componentes
+    // desta visão e na base auditável. Nunca substituir por "dentro da meta".
+    var entregueTP=Math.max(0,total.realCD||0);
+    var emAberto=Math.max(0,total.total-entregueTP);
     document.getElementById('maComparativo').innerHTML=
-      box('Real + previsto',planejado,'Volume realizado e saldo previsto dentro da '+(estado.cenario==='sem'?'meta original':'meta acordada'),'#418EDE',!!items.length)+
-      box('Realizado',total.realCD,'Tiragem entregue com Entrega_TP válida até hoje','#0f766e',total.realCDTem)+
-      box('Meta Armazém',total.total,'Volume total esperado no CD para os itens filtrados','#FA4616',!!items.length);
+      box('Realizado',entregueTP,'Tiragem entregue por Entrega_TP até hoje','#0f766e',!!items.length)+
+      box('A realizar',emAberto,'Tiragem total menos Entrega_TP realizada','#418EDE',!!items.length)+
+      box('Tiragem total',total.total,'Total do CD para os itens filtrados, sem duplicidade','#FA4616',!!items.length);
     document.getElementById('maComparativoNota').textContent=dataNota+
       (semData?' · '+semData+' linha(s) sem data de meta.':'')+
       ' · Não duplica PCP direto e PCP_ACABADORAS.';
