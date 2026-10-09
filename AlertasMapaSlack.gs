@@ -2,6 +2,28 @@
 // Configure PG_MAPA_SLACK_WORKFLOW_TESTE_URL nas propriedades do script DEV.
 // Nenhum gatilho e criado; o envio de email existente permanece independente.
 
+function pgAMSlackDividirDetalhes_(detalhes) {
+  // Cada unidade e um cabecalho, um item inteiro ou as notas finais.
+  var unidades = detalhes.split(/\n\n(?=📅 Agendado hoje · pendente(?:\n|$)|🚚 Coletado hoje(?:\n|$)|Agendado hoje considera somente agendamentos ainda pendentes\.)/);
+  var blocos = [], atual = '', maiorItem = 0, maiorUnidade = 0, itensAcimaDoLimite = 0;
+  unidades.forEach(function(unidade) {
+    var tamanho = unidade.length;
+    maiorUnidade = Math.max(maiorUnidade, tamanho);
+    if (/^(📅 Agendado hoje · pendente|🚚 Coletado hoje)(?:\n|$)/.test(unidade)) {
+      maiorItem = Math.max(maiorItem, tamanho);
+      if (tamanho > 2500) itensAcimaDoLimite++;
+    }
+    if (atual && atual.length + 2 + tamanho > 2500) {
+      blocos.push(atual);
+      atual = unidade;
+    } else {
+      atual += (atual ? '\n\n' : '') + unidade;
+    }
+  });
+  if (atual) blocos.push(atual);
+  return { blocos: blocos, maiorItem: maiorItem, maiorUnidade: maiorUnidade, itensAcimaDoLimite: itensAcimaDoLimite };
+}
+
 function prepararAlertaMapaSlackHoje() {
   var report = prepararAlertaMapaHoje();
   var linhas = String(report.body || '').replace(/\r\n/g, '\n').split('\n');
@@ -52,17 +74,26 @@ function prepararAlertaMapaSlackHoje() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(report.dia) || !report.resumo || !report.resumo.agenda || !report.resumo.coleta) {
     throw new Error('Os indicadores do report estao incompletos. Nenhum teste foi enviado ao Slack.');
   }
-  // Contrato plano: somente estes oito campos de texto, sem HTML ou recorte de detalhes.
-  return {
+  var divisao = pgAMSlackDividirDetalhes_(secao(detalhesInicio, rodapeInicio));
+  if (divisao.maiorUnidade > 2500) {
+    throw new Error('Um item, cabecalho ou nota dos detalhes excede 2.500 caracteres. Nenhum texto foi truncado; ajuste o formato antes do teste no Slack.');
+  }
+  if (divisao.blocos.length > 13) {
+    throw new Error('O report precisa de ' + divisao.blocos.length + ' blocos de detalhes de ate 2.500 caracteres, mas o Workflow comporta 13. Nenhum texto foi truncado ou enviado ao Slack.');
+  }
+  // Contrato plano: sete campos fixos e treze campos de detalhes, sem HTML.
+  var payload = {
     data: report.dia.slice(8) + '/' + report.dia.slice(5, 7) + '/' + report.dia.slice(0, 4),
     agendado_hoje: indicador(report.resumo.agenda),
     coletado_hoje: indicador(report.resumo.coleta),
     resumo: secao(resumoInicio + 1, graficasInicio),
     conferencia: conferencia,
     graficas: graficas,
-    detalhes: secao(detalhesInicio, rodapeInicio),
+    detalhes: divisao.blocos[0] || '',
     conferido_em: conferidoEm
   };
+  for (var i = 1; i < 13; i++) payload['detalhes_' + ('0' + (i + 1)).slice(-2)] = divisao.blocos[i] || '';
+  return payload;
 }
 
 function enviarAlertaMapaSlackTeste() {
@@ -71,14 +102,21 @@ function enviarAlertaMapaSlackTeste() {
     throw new Error('Configure PG_MAPA_SLACK_WORKFLOW_TESTE_URL com o webhook do Workflow de teste no script DEV.');
   }
   var payload = prepararAlertaMapaSlackHoje();
-  // Duas etapas: resumo principal e detalhes em resposta na conversa.
+  // Resumo principal e ate treze respostas, todas filhas da mensagem principal.
+  // Campos vazios dos detalhes devem ser ignorados pelas condicoes do Workflow.
+  Object.keys(payload).forEach(function(campo) {
+    if (typeof payload[campo] !== 'string' || payload[campo].length > 2500) {
+      throw new Error('O campo ' + campo + ' precisa ser texto com ate 2.500 caracteres. Nenhum texto foi truncado ou enviado ao Slack.');
+    }
+  });
   // Reserva 2.000 caracteres por mensagem para os titulos fixos do Workflow.
   // O limite geral de uma mensagem no Slack e 40.000 caracteres.
-  var tamanhoResumo = Object.keys(payload).filter(function(campo) { return campo !== 'detalhes'; }).reduce(function(total, campo) {
+  var camposResumo = ['data', 'agendado_hoje', 'coletado_hoje', 'resumo', 'conferencia', 'graficas', 'conferido_em'];
+  var tamanhoResumo = camposResumo.reduce(function(total, campo) {
     return total + payload[campo].length;
   }, 0);
-  if (tamanhoResumo > 38000 || payload.detalhes.length > 38000) {
-    throw new Error('O report completo excede o orcamento de 38.000 caracteres de uma etapa do Workflow. Ajuste o Workflow antes de enviar; nenhum texto foi truncado.');
+  if (tamanhoResumo > 38000) {
+    throw new Error('O resumo excede o orcamento de 38.000 caracteres da mensagem principal. Ajuste o Workflow antes de enviar; nenhum texto foi truncado.');
   }
   var resposta;
   try {
@@ -120,25 +158,13 @@ function enviarAlertaMapaEmailESlackTeste() {
 function diagnosticarTamanhoAlertaMapaSlack() {
   var payload = prepararAlertaMapaSlackHoje(), tamanhosPorCampo = {};
   Object.keys(payload).forEach(function(campo) { tamanhosPorCampo[campo] = payload[campo].length; });
-  // Simula blocos por item; cabecalho e notas tambem permanecem completos.
-  var unidades = payload.detalhes.split(/\n\n(?=📅 Agendado hoje · pendente(?:\n|$)|🚚 Coletado hoje(?:\n|$)|Agendado hoje considera somente agendamentos ainda pendentes\.)/);
-  var tamanhos = [], atual = 0, maiorItem = 0, itensAcimaDoLimite = 0;
-  unidades.forEach(function(unidade) {
-    var tamanho = unidade.length;
-    if (/^(📅 Agendado hoje · pendente|🚚 Coletado hoje)(?:\n|$)/.test(unidade)) {
-      maiorItem = Math.max(maiorItem, tamanho);
-      if (tamanho > 2500) itensAcimaDoLimite++;
-    }
-    if (atual && atual + 2 + tamanho > 2500) {
-      tamanhos.push(atual);
-      atual = tamanho;
-    } else {
-      atual += (atual ? 2 : 0) + tamanho;
-    }
-  });
-  if (atual) tamanhos.push(atual);
+  var blocos = [payload.detalhes];
+  for (var i = 2; i <= 13; i++) blocos.push(payload['detalhes_' + ('0' + i).slice(-2)]);
+  blocos = blocos.filter(function(bloco) { return bloco !== ''; });
+  var divisao = pgAMSlackDividirDetalhes_(blocos.join('\n\n'));
   var diagnostico = { tamanhosPorCampo: tamanhosPorCampo, blocosDetalhes2500: {
-    quantidade: tamanhos.length, tamanhos: tamanhos, maiorItem: maiorItem, itensAcimaDoLimite: itensAcimaDoLimite
+    quantidade: blocos.length, tamanhos: blocos.map(function(bloco) { return bloco.length; }),
+    maiorItem: divisao.maiorItem, itensAcimaDoLimite: divisao.itensAcimaDoLimite
   } };
   console.log(JSON.stringify(diagnostico));
   return diagnostico;
