@@ -23,7 +23,6 @@ function prepararAlertaMapaSlackHoje() {
   if (linhas[graficasInicio + 1] !== cabecalhoGraficas) {
     throw new Error('Os campos das graficas no report mudaram. Confira o formato antes do teste no Slack.');
   }
-  var camposGrafica = cabecalhoGraficas.split(' | ').slice(1);
   var graficas = linhas.slice(graficasInicio + 2, conferenciaInicio).filter(function(linha) {
     return linha.trim() !== '';
   }).map(function(linha) {
@@ -35,9 +34,12 @@ function prepararAlertaMapaSlackHoje() {
     if (!nome || valores.some(function(v) { return !/^\d[\d.]*$/.test(v); })) {
       throw new Error('Uma grafica do report tem campos inesperados. Nenhum teste foi enviado ao Slack.');
     }
-    return ['Gráfica: ' + nome].concat(camposGrafica.map(function(campo, i) {
-      return campo + ': ' + valores[i];
-    })).join('\n');
+    return [
+      'Gráfica: ' + nome + ' · Mapas: ' + valores[0],
+      'Tiragem agendada hoje: ' + valores[1] + ' · Tiragem coletada hoje: ' + valores[2],
+      'Itens fora do PCP: ' + valores[3] + ' · Itens para conferir: ' + valores[4] +
+        ' · Tiragem a mais: ' + valores[5] + ' · Tiragem a menos: ' + valores[6]
+    ].join('\n');
   }).join('\n\n');
   var conferencia = secao(conferenciaInicio + 1, detalhesInicio);
   if (conferencia.split('\n').length !== 4) {
@@ -112,4 +114,32 @@ function enviarAlertaMapaEmailESlackTeste() {
       String(erroSlack && erroSlack.message || 'Falha no teste do Slack.'));
   }
   return { email: email, slack: slack };
+}
+
+// Diagnostico manual: prepara uma vez e registra somente comprimentos, sem enviar.
+function diagnosticarTamanhoAlertaMapaSlack() {
+  var payload = prepararAlertaMapaSlackHoje(), tamanhosPorCampo = {};
+  Object.keys(payload).forEach(function(campo) { tamanhosPorCampo[campo] = payload[campo].length; });
+  // Simula blocos por item; cabecalho e notas tambem permanecem completos.
+  var unidades = payload.detalhes.split(/\n\n(?=📅 Agendado hoje · pendente(?:\n|$)|🚚 Coletado hoje(?:\n|$)|Agendado hoje considera somente agendamentos ainda pendentes\.)/);
+  var tamanhos = [], atual = 0, maiorItem = 0, itensAcimaDoLimite = 0;
+  unidades.forEach(function(unidade) {
+    var tamanho = unidade.length;
+    if (/^(📅 Agendado hoje · pendente|🚚 Coletado hoje)(?:\n|$)/.test(unidade)) {
+      maiorItem = Math.max(maiorItem, tamanho);
+      if (tamanho > 2500) itensAcimaDoLimite++;
+    }
+    if (atual && atual + 2 + tamanho > 2500) {
+      tamanhos.push(atual);
+      atual = tamanho;
+    } else {
+      atual += (atual ? 2 : 0) + tamanho;
+    }
+  });
+  if (atual) tamanhos.push(atual);
+  var diagnostico = { tamanhosPorCampo: tamanhosPorCampo, blocosDetalhes2500: {
+    quantidade: tamanhos.length, tamanhos: tamanhos, maiorItem: maiorItem, itensAcimaDoLimite: itensAcimaDoLimite
+  } };
+  console.log(JSON.stringify(diagnostico));
+  return diagnostico;
 }
