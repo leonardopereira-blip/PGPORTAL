@@ -7,7 +7,7 @@
     const texto = valor => Array.isArray(valor) ? valor.join(', ') : String(valor ?? '').trim();
     const chave = valor => texto(valor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
     const numero = valor => Number.isFinite(Number(valor)) ? Number(valor) : 0;
-    const fmt = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    const fmt = valor => Math.ceil(numero(valor)).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
     const esc = valor => texto(valor).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const rotulos = { OK: 'Dados iguais ao PCP', SEM_PCP: 'SKU fora do PCP', DADOS_DIFERENTES: 'Dados diferentes',
         SEM_IDENTIDADE: 'Dados faltando no mapa', SEM_MAPA: 'PCP sem mapa' };

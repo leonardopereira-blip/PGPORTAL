@@ -28,7 +28,7 @@ function pgAMCSVAlerta_(linhas) {
 }
 function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
   var c = PG_ALERTAS_MAPA_CORES, esc = pgAMEscapeAlerta_;
-  var fmt = function(n) { return Number(n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); };
+  var fmt = function(n) { return Math.ceil(Number(n || 0)).toLocaleString('pt-BR', { maximumFractionDigits: 0 }); };
   var texto = function(v) { return String(v == null ? '' : v).trim(); };
   var data = function(v) { var s = texto(v); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.slice(8) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : s || '—'; };
   var rotulos = { OK: 'Dados iguais ao PCP', SEM_PCP: 'SKU fora do PCP', DADOS_DIFERENTES: 'Dados diferentes', SEM_IDENTIDADE: 'Dados faltando no mapa', SEM_MAPA: 'PCP sem mapa' };
