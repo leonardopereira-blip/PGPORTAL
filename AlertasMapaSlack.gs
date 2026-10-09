@@ -24,8 +24,115 @@ function pgAMSlackDividirDetalhes_(detalhes) {
   return { blocos: blocos, maiorItem: maiorItem, maiorUnidade: maiorUnidade, itensAcimaDoLimite: itensAcimaDoLimite };
 }
 
-function prepararAlertaMapaSlackHoje() {
-  var report = prepararAlertaMapaHoje();
+function pgAMSlackLerCampos_(linha, rotulos) {
+  var falha = function() { throw new Error('Um item do report tem campos inesperados ou ambiguos. Nenhum detalhe foi omitido; confira o formato antes do teste no Slack.'); };
+  if (linha.indexOf(rotulos[0]) !== 0) falha();
+  rotulos.slice(1).forEach(function(rotulo) { if (linha.split(rotulo).length !== 2) falha(); });
+  var resto = linha.slice(rotulos[0].length), valores = [];
+  rotulos.slice(1).forEach(function(rotulo) {
+    var posicao = resto.indexOf(rotulo);
+    if (posicao < 0) falha();
+    valores.push(resto.slice(0, posicao));
+    resto = resto.slice(posicao + rotulo.length);
+  });
+  valores.push(resto);
+  if (valores.some(function(valor) { return valor === ''; })) falha();
+  return valores;
+}
+
+function pgAMSlackCompactarDetalhes_(detalhes, quantidadeEsperada) {
+  var linhas = detalhes.split('\n'), titulo = linhas.shift();
+  var inicioNotas = linhas.indexOf('Agendado hoje considera somente agendamentos ainda pendentes. Coletado hoje segue a data da coleta realizada.');
+  if (inicioNotas < 0) throw new Error('As notas dos detalhes do report mudaram. Confira o formato antes do teste no Slack.');
+  var notas = linhas.slice(inicioNotas).join('\n');
+  var corpo = linhas.slice(0, inicioNotas).join('\n').replace(/^\n+|\n+$/g, '');
+  var originais = corpo === 'Nenhum item com movimento hoje.' ? [] : corpo.split(/\n\n(?=📅 Agendado hoje · pendente(?:\n|$)|🚚 Coletado hoje(?:\n|$))/);
+  if (originais.length !== quantidadeEsperada) {
+    throw new Error('A contagem de itens dos detalhes difere do report original. Nenhum item foi omitido; confira o formato antes do teste no Slack.');
+  }
+  var conferencias = { 'Dados iguais ao PCP': 'OK', 'SKU fora do PCP': 'FP', 'Dados diferentes': 'DD',
+    'Dados faltando no mapa': 'DM', 'PCP sem mapa': 'PM' };
+  var usadosConferencia = Object.create(null), usadosMovimento = Object.create(null);
+  var grupos = [], porGrupo = Object.create(null), maiorItemRaw = 0;
+  // Valores permanecem literais; aspas distinguem valores que contem o separador.
+  var valor = function(v) { return / · |[\r\n";\[\]]/.test(v) ? JSON.stringify(v) : v; };
+  originais.forEach(function(original) {
+    maiorItemRaw = Math.max(maiorItemRaw, original.length);
+    var item = original.split('\n');
+    if (item.length < 7 || item.length > 9 || !/^(📅 Agendado hoje · pendente|🚚 Coletado hoje)$/.test(item[0])) {
+      throw new Error('Um item dos detalhes tem formato inesperado. Nenhum item foi omitido; confira o report antes do teste no Slack.');
+    }
+    var local = pgAMSlackLerCampos_(item[1], ['Gráfica: ', ' | Marca: ', ' | CD destino: ']);
+    var identidade = pgAMSlackLerCampos_(item[2], ['SKU: ', ' | Kit: ', ' | Envio: ']);
+    var mapa = pgAMSlackLerCampos_(item[3], ['Código mapa: ']);
+    var datas = pgAMSlackLerCampos_(item[4], ['Agendamento: ', ' | Coleta: ', ' | Entrega: ']);
+    var tiragens = pgAMSlackLerCampos_(item[5], ['Tiragem agendada hoje: ', ' | Tiragem coletada hoje: ']);
+    var status = pgAMSlackLerCampos_(item[6], ['Conferência: ', ' | Status coleta PCP: ']);
+    var movimento = item[0] === '📅 Agendado hoje · pendente' ? 'A' : 'C';
+    usadosMovimento[movimento] = true;
+    var conferencia = Object.prototype.hasOwnProperty.call(conferencias, status[0]) ? conferencias[status[0]] : null;
+    if (conferencia) usadosConferencia[status[0]] = true;
+    else conferencia = JSON.stringify(status[0]);
+    var linha = identidade.concat(mapa).map(valor).concat([
+      '[' + datas.map(valor).join(';') + ']', '[' + tiragens.map(valor).join(';') + ']',
+      movimento, conferencia, valor(status[1])
+    ]).join(' · ');
+    var opcionais = Object.create(null);
+    item.slice(7).forEach(function(opcional) {
+      var tipo = opcional.indexOf('Classificação no mapa: ') === 0 ? 'classificacao' : opcional.indexOf('Conferir: ') === 0 ? 'conferir' : '';
+      if (!tipo || opcionais[tipo]) throw new Error('Os campos opcionais de um item mudaram. Nenhum detalhe foi omitido; confira o report antes do teste no Slack.');
+      opcionais[tipo] = true;
+      linha += '\n' + opcional;
+    });
+    var chave = JSON.stringify(local);
+    if (!porGrupo[chave]) {
+      porGrupo[chave] = { chave: chave, cabecalho: 'Gráfica: ' + valor(local[0]) + ' · Marca: ' + valor(local[1]) + ' · CD destino: ' + valor(local[2]), itens: [] };
+      grupos.push(porGrupo[chave]);
+    }
+    porGrupo[chave].itens.push(linha);
+  });
+  var legenda = ['Campos: SKU · Kit · Envio · Código mapa · [Agendamento;Coleta;Entrega] · [Tiragem agendada hoje;Tiragem coletada hoje] · Movimento · Conferência · Status coleta PCP.'];
+  var movimentos = [];
+  if (usadosMovimento.A) movimentos.push('A=📅 Agendado hoje · pendente');
+  if (usadosMovimento.C) movimentos.push('C=🚚 Coletado hoje');
+  if (movimentos.length) legenda.push('Movimento: ' + movimentos.join('; ') + '.');
+  var listaConferencias = Object.keys(usadosConferencia).map(function(texto) { return conferencias[texto] + '=' + texto; });
+  if (listaConferencias.length) legenda.push('Conferência: ' + listaConferencias.join('; ') + '. Outros valores entre aspas são literais.');
+  var base = titulo + (originais.length ? '\n' + legenda.join('\n') : '\nNenhum item com movimento hoje.');
+  var blocos = [], itensPorBloco = [], atual = base, quantidadeAtual = 0, ultimoGrupo = '';
+  var maiorItem = 0, maiorUnidade = base.length, itensAcimaDoLimite = 0, quantidadeCompactada = 0;
+  var fechar = function() { blocos.push(atual); itensPorBloco.push(quantidadeAtual); };
+  grupos.forEach(function(grupo) {
+    grupo.itens.forEach(function(item) {
+      var unidade = base + '\n\n' + grupo.cabecalho + '\n' + item;
+      maiorItem = Math.max(maiorItem, item.length);
+      maiorUnidade = Math.max(maiorUnidade, unidade.length);
+      if (unidade.length > 2500) itensAcimaDoLimite++;
+      var acrescimo = (ultimoGrupo === grupo.chave ? '\n' : '\n\n' + grupo.cabecalho + '\n') + item;
+      if (atual.length + acrescimo.length > 2500 && quantidadeAtual) {
+        fechar(); atual = unidade; quantidadeAtual = 1;
+      } else {
+        atual += acrescimo; quantidadeAtual++;
+      }
+      ultimoGrupo = grupo.chave;
+      quantidadeCompactada++;
+    });
+  });
+  if (atual.length + 2 + notas.length > 2500) {
+    fechar(); atual = titulo + '\n\n' + notas; quantidadeAtual = 0;
+  } else atual += '\n\n' + notas;
+  maiorUnidade = Math.max(maiorUnidade, titulo.length + 2 + notas.length);
+  fechar();
+  if (quantidadeCompactada !== quantidadeEsperada || itensPorBloco.reduce(function(total, n) { return total + n; }, 0) !== quantidadeEsperada) {
+    throw new Error('A compactacao nao preservou a contagem de itens do report. Nenhum teste foi enviado ao Slack.');
+  }
+  return { blocos: blocos, itensPorBloco: itensPorBloco, quantidadeItens: quantidadeCompactada,
+    maiorItem: maiorItem, maiorUnidade: maiorUnidade, itensAcimaDoLimite: itensAcimaDoLimite,
+    rawCaracteres: detalhes.length, rawBlocos: pgAMSlackDividirDetalhes_(detalhes).blocos.map(function(bloco) { return bloco.length; }),
+    maiorItemRaw: maiorItemRaw };
+}
+
+function pgAMSlackAnalisarAlerta_(report) {
   var linhas = String(report.body || '').replace(/\r\n/g, '\n').split('\n');
   var resumoInicio = linhas.indexOf('RESUMO RÁPIDO');
   var graficasInicio = linhas.indexOf('TODAS AS GRÁFICAS DO DIA');
@@ -74,25 +181,31 @@ function prepararAlertaMapaSlackHoje() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(report.dia) || !report.resumo || !report.resumo.agenda || !report.resumo.coleta) {
     throw new Error('Os indicadores do report estao incompletos. Nenhum teste foi enviado ao Slack.');
   }
-  var divisao = pgAMSlackDividirDetalhes_(secao(detalhesInicio, rodapeInicio));
-  if (divisao.maiorUnidade > 2500) {
-    throw new Error('Um item, cabecalho ou nota dos detalhes excede 2.500 caracteres. Nenhum texto foi truncado; ajuste o formato antes do teste no Slack.');
-  }
-  if (divisao.blocos.length > 13) {
-    throw new Error('O report precisa de ' + divisao.blocos.length + ' blocos de detalhes de ate 2.500 caracteres, mas o Workflow comporta 13. Nenhum texto foi truncado ou enviado ao Slack.');
-  }
-  // Contrato plano: sete campos fixos e treze campos de detalhes, sem HTML.
-  var payload = {
+  if (!Array.isArray(report.detalhes)) throw new Error('A lista de itens do report esta indisponivel para conferir a compactacao.');
+  return { detalhes: pgAMSlackCompactarDetalhes_(secao(detalhesInicio, rodapeInicio), report.detalhes.length), campos: {
     data: report.dia.slice(8) + '/' + report.dia.slice(5, 7) + '/' + report.dia.slice(0, 4),
     agendado_hoje: indicador(report.resumo.agenda),
     coletado_hoje: indicador(report.resumo.coleta),
     resumo: secao(resumoInicio + 1, graficasInicio),
     conferencia: conferencia,
     graficas: graficas,
-    detalhes: divisao.blocos[0] || '',
     conferido_em: conferidoEm
-  };
-  for (var i = 1; i < 13; i++) payload['detalhes_' + ('0' + (i + 1)).slice(-2)] = divisao.blocos[i] || '';
+  } };
+}
+
+function prepararAlertaMapaSlackHoje() {
+  var analise = pgAMSlackAnalisarAlerta_(prepararAlertaMapaHoje()), divisao = analise.detalhes;
+  if (divisao.maiorUnidade > 2500) {
+    throw new Error('Um item compacto, com legenda e cabecalho, ou as notas excede 2.500 caracteres. Nenhum texto foi truncado; confira o diagnostico antes de enviar.');
+  }
+  if (divisao.blocos.length > 6) {
+    throw new Error('O report compacto preserva ' + divisao.quantidadeItens + ' itens e precisa de ' + divisao.blocos.length +
+      ' blocos de ate 2.500 caracteres, mas o Workflow comporta 6. Nenhum texto foi truncado ou enviado ao Slack.');
+  }
+  // Treze campos mantidos por compatibilidade; somente os seis primeiros sao usados.
+  var payload = analise.campos;
+  payload.detalhes = divisao.blocos[0] || '';
+  for (var i = 1; i < 13; i++) payload['detalhes_' + ('0' + (i + 1)).slice(-2)] = i < 6 ? divisao.blocos[i] || '' : '';
   return payload;
 }
 
@@ -102,7 +215,7 @@ function enviarAlertaMapaSlackTeste() {
     throw new Error('Configure PG_MAPA_SLACK_WORKFLOW_TESTE_URL com o webhook do Workflow de teste no script DEV.');
   }
   var payload = prepararAlertaMapaSlackHoje();
-  // Resumo principal e ate treze respostas, todas filhas da mensagem principal.
+  // Resumo principal e ate seis respostas, todas filhas da mensagem principal.
   // Campos vazios dos detalhes devem ser ignorados pelas condicoes do Workflow.
   Object.keys(payload).forEach(function(campo) {
     if (typeof payload[campo] !== 'string' || payload[campo].length > 2500) {
@@ -156,15 +269,22 @@ function enviarAlertaMapaEmailESlackTeste() {
 
 // Diagnostico manual: prepara uma vez e registra somente comprimentos, sem enviar.
 function diagnosticarTamanhoAlertaMapaSlack() {
-  var payload = prepararAlertaMapaSlackHoje(), tamanhosPorCampo = {};
-  Object.keys(payload).forEach(function(campo) { tamanhosPorCampo[campo] = payload[campo].length; });
-  var blocos = [payload.detalhes];
-  for (var i = 2; i <= 13; i++) blocos.push(payload['detalhes_' + ('0' + i).slice(-2)]);
-  blocos = blocos.filter(function(bloco) { return bloco !== ''; });
-  var divisao = pgAMSlackDividirDetalhes_(blocos.join('\n\n'));
-  var diagnostico = { tamanhosPorCampo: tamanhosPorCampo, blocosDetalhes2500: {
-    quantidade: blocos.length, tamanhos: blocos.map(function(bloco) { return bloco.length; }),
-    maiorItem: divisao.maiorItem, itensAcimaDoLimite: divisao.itensAcimaDoLimite
+  // Analisa antes dos limites de envio: excesso de capacidade tambem precisa ser medido.
+  var analise = pgAMSlackAnalisarAlerta_(prepararAlertaMapaHoje()), divisao = analise.detalhes, tamanhosPorCampo = {};
+  Object.keys(analise.campos).forEach(function(campo) { tamanhosPorCampo[campo] = analise.campos[campo].length; });
+  for (var i = 0; i < 13; i++) {
+    var campo = i === 0 ? 'detalhes' : 'detalhes_' + ('0' + (i + 1)).slice(-2);
+    tamanhosPorCampo[campo] = i < 6 && divisao.blocos[i] ? divisao.blocos[i].length : 0;
+  }
+  var diagnostico = { tamanhosPorCampo: tamanhosPorCampo, detalhesOriginais: {
+    caracteres: divisao.rawCaracteres, itens: divisao.quantidadeItens, quantidadeBlocos2500: divisao.rawBlocos.length,
+    tamanhosBlocos: divisao.rawBlocos, maiorItem: divisao.maiorItemRaw
+  }, blocosDetalhes2500: {
+    caracteres: divisao.blocos.reduce(function(total, bloco) { return total + bloco.length; }, 0),
+    quantidade: divisao.blocos.length, tamanhos: divisao.blocos.map(function(bloco) { return bloco.length; }),
+    itens: divisao.quantidadeItens, itensPorBloco: divisao.itensPorBloco, maiorItem: divisao.maiorItem,
+    maiorUnidadeComCabecalho: divisao.maiorUnidade, itensAcimaDoLimite: divisao.itensAcimaDoLimite,
+    capacidadeWorkflow: 6, excedeCapacidade: divisao.blocos.length > 6 || divisao.maiorUnidade > 2500
   } };
   console.log(JSON.stringify(diagnostico));
   return diagnostico;
