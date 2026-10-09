@@ -466,17 +466,22 @@
         window.pgVolumesColetaUnificadosV37(l,corteEventos):null;
       var parcelasTP=volumesTP&&Array.isArray(volumesTP.eventosEntregaTP)?volumesTP.eventosEntregaTP:[];
       var realizado=0,eventosReal=[];
-      // Preserva o teto desta visão, consumindo somente as parcelas já entregues,
-      // da mais antiga para a mais recente, sem antecipar o solicitado inteiro.
+      // A Entrega TP usa exatamente as parcelas da fonte unificada do Funil.
+      // Não limitar novamente por TIRAGEM COLETADA ou pelo total desta visão:
+      // esses tetos adicionais descartavam entregas válidas do numerador.
       parcelasTP.map(function(e){return {data:data(e.data),volume:volume(e.volume)};})
         .filter(function(e){return e.data&&e.data<=corteEventos&&e.volume>0;})
         .sort(function(a,b){return a.data.localeCompare(b.data);})
         .forEach(function(e){
-          var quantidade=Math.min(e.volume,Math.max(0,coletadaBruta-realizado));
-          if(!quantidade)return;
-          eventosReal.push({data:e.data,volume:quantidade});
-          realizado+=quantidade;
+          eventosReal.push({data:e.data,volume:e.volume});
+          realizado+=e.volume;
         });
+      // Verificação de integridade: não esconder anomalias de base por um teto local.
+      if(realizado>total){
+        console.warn('[META ARMAZEM] Entrega TP acima da tiragem total da linha',{
+          sku:l.SKU_REAL||l.SKU,total:total,entregaTP:realizado
+        });
+      }
       var realizadoTem=realizado>0;
       var dtEntregaTP=realizadoTem?eventosReal[eventosReal.length-1].data:'';
 
