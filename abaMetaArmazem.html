@@ -11,6 +11,12 @@
     #abaMetaArmazem .ma-pill{padding:8px 12px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#475569;font-weight:800;font-size:11px;transition:.15s}
     #abaMetaArmazem .ma-pill[aria-pressed=true]{background:#1e40af;color:#fff;border-color:#1d4ed8;box-shadow:0 4px 14px #1d4ed825}
     #abaMetaArmazem .ma-select{width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;background:#fff;color:#0f172a;font-size:12px;font-weight:700}
+    #abaMetaArmazem .ma-tipos{position:relative}
+    #abaMetaArmazem .ma-tipos summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+    #abaMetaArmazem .ma-tipos summary::-webkit-details-marker{display:none}
+    #abaMetaArmazem .ma-tipos-menu{position:absolute;top:100%;left:0;right:0;margin-top:4px;z-index:15;background:#fff;border:1px solid #b7cbe2;border-radius:10px;box-shadow:0 12px 24px #0c234026;padding:10px}
+    #abaMetaArmazem .ma-tipos-list{max-height:190px;overflow:auto;margin-top:8px}
+    #abaMetaArmazem .ma-tipos-list label{display:flex;gap:9px;align-items:center;padding:5px 3px;cursor:pointer;color:#0c2340;font-size:12px;font-weight:600}
     #abaMetaArmazem .ma-bar{height:8px;overflow:hidden;border-radius:999px;background:#e2e8f0}
     #abaMetaArmazem .ma-bar > b{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#2563eb,#14b8a6)}
     #abaMetaArmazem .ma-heat{min-width:96px;text-align:center;border-radius:9px;padding:7px 5px;font-size:11px;font-weight:800}
@@ -117,9 +123,12 @@
       </div>
     </div>
     <div class="p-4 md:p-5 space-y-4">
-      <div class="flex flex-wrap gap-2" role="group" aria-label="Cenário de entrega">
-        <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="true" onclick="window.pgMACenario('sem')">Combinado Posi Fere a Meta</button>
-        <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="false" onclick="window.pgMACenario('com')">Combinado Posi não fere a meta</button>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap gap-2" role="group" aria-label="Cenário de entrega">
+          <button type="button" class="ma-pill" data-ma-cenario="sem" aria-pressed="false" onclick="window.pgMACenario('sem')">Combinado Posi Fere a Meta</button>
+          <button type="button" class="ma-pill" data-ma-cenario="com" aria-pressed="true" onclick="window.pgMACenario('com')">Combinado Posi não fere a meta</button>
+        </div>
+        <button type="button" class="ma-pill" id="maZerarSemPrevisao" aria-pressed="false" onclick="window.pgMAZerarSemPrevisao()" title="Simula somente as linhas sem previsão, usando a maior data entre Coleta Fim Baseline e a Meta Armazém aplicada">Zerar sem previsão</button>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label class="text-[10px] font-black uppercase tracking-wide text-slate-600">Visão
@@ -129,11 +138,18 @@
             <option value="graficaMarca">Gráfica × Marca</option>
           </select>
         </label>
-        <label class="text-[10px] font-black uppercase tracking-wide text-slate-600">Tipo de material
-          <select id="maTipoMaterial" class="ma-select mt-1 normal-case" onchange="window.pgMATipoMaterial(this.value)">
-            <option value="TODOS">Todos</option>
-          </select>
-        </label>
+        <div class="text-[10px] font-black uppercase tracking-wide text-slate-600">Tipo de material
+          <details id="maTiposDropdown" class="ma-tipos mt-1 normal-case">
+            <summary class="ma-select"><span id="maTipoMaterialResumo">Todos</span><span aria-hidden="true">▾</span></summary>
+            <div class="ma-tipos-menu">
+              <div class="flex gap-2">
+                <button type="button" class="ma-pill flex-1" onclick="window.pgMATipoMaterialTodos()">Marcar tudo</button>
+                <button type="button" class="ma-pill flex-1" onclick="window.pgMATipoMaterialNenhum()">Desmarcar tudo</button>
+              </div>
+              <div id="maTipoMaterialLista" class="ma-tipos-list"></div>
+            </div>
+          </details>
+        </div>
       </div>
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-t border-slate-200 pt-3">
         <div><h3 class="text-xs font-black">Base auditável</h3><p class="text-[10px] text-slate-500 mt-1">Kit, SKU, descrição, marca, série e todas as datas do cálculo. Segue os filtros e o cenário desta visão.</p></div>
@@ -177,7 +193,7 @@
     <p id="maComparativoNota" class="text-[10px] text-slate-500 mt-2"></p>
   </div>
 <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa a tiragem entregue nas respectivas datas de Entrega_TP, até hoje. Só o saldo pendente usa Final (re)Plan + SLA. Sem início planejado, o saldo fica integralmente nessa data; com intervalo válido, segue o rateio. Baseline não participa do cálculo.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa a tiragem entregue nas respectivas datas de Entrega_TP, até hoje. Só o saldo pendente usa Final (re)Plan + SLA. Sem início planejado, o saldo fica integralmente nessa data; com intervalo válido, segue o rateio. O baseline só é usado quando a simulação 'Zerar sem previsão' estiver ligada e faltar previsão válida.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
       <thead><tr><th>Grupo</th><th>Meta original / exceção</th><th>Volume total</th><th id="maThPrevisto">Dentro da meta</th><th id="maThPos">Fora da meta</th><th>Sem previsão</th><th>Realizado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
@@ -249,7 +265,7 @@
     if (f.length !== 8) throw new Error('Regra Combinado Posi inválida: ' + s);
     return { marca: f[0], segmento: f[1], serie: f[2], tipo: f[3], datas: f.slice(4) };
   });
-  var estado = {cenario:'sem',matrizModo:'marcaSerie',matrizExpandida:false,ordemPrioridade:null,tipoMaterial:'TODOS'};
+  var estado = {cenario:'com',matrizModo:'marcaSerie',matrizExpandida:false,ordemPrioridade:null,tiposMateriais:null,tiposDisponiveis:[],zerarSemPrevisao:false};
   var META = '2026-10-15';
   var META_WAYS = '2026-11-30';
   var META_GEE = '2026-11-12';
@@ -420,17 +436,20 @@
       // Meta Armazém:
       // - realizado = parcelas de entrega TP até o corte, cada uma na sua data real;
       // - somente o saldo ainda pendente usa o planejamento;
-      // - planejamento usa Final (re)plan + SLA, nunca baseline ou Coleta Fim Real;
+      // - planejamento normal usa Final (re)plan + SLA, nunca Coleta Fim Real;
+      // - início e fim invertidos são corrigidos somente nesta visão;
       // - sem início, o saldo fica integralmente na entrega prevista pelo fim;
-      // - início preenchido inválido ou posterior ao fim invalida o intervalo.
+      // - simulação opcional de sem previsão usa max(baseline, meta aplicada), sem modificar a origem.
       var inicioRaw=campo('Coleta/Internalização de estoque inicial (re) plan');
       var fimReplanRaw=campo('Coleta/Internalização de estoque final (re) plan');
       var inicioAusente=inicioRaw==null||String(inicioRaw).trim()==='';
       var fimAusente=fimReplanRaw==null||String(fimReplanRaw).trim()==='';
       var inicioColeta=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(inicioRaw):data(inicioRaw);
       var fimReplanColeta=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(fimReplanRaw):data(fimReplanRaw);
+      var datasInvertidas=!!inicioColeta&&!!fimReplanColeta&&fimReplanColeta<inicioColeta;
+      if(datasInvertidas){var trocarData=inicioColeta;inicioColeta=fimReplanColeta;fimReplanColeta=trocarData;}
       var replanValido=!!fimReplanColeta&&(inicioAusente||!!inicioColeta&&fimReplanColeta>=inicioColeta);
-      var motivoReplan=fimAusente?'Sem data (re)Plan':!replanValido?'Intervalo de entrega invertido ou inválido.':'';
+      var motivoReplan=fimAusente?'Sem data (re)Plan':!replanValido?'Intervalo de entrega inválido.':'';
       var inicioPlan=replanValido&&!inicioAusente&&typeof window.pgDataPlanoEntregaSLA==='function'?
         window.pgDataPlanoEntregaSLA(l,inicioColeta):null;
       var dtPlan=replanValido&&typeof window.pgDataPlanoEntregaSLA==='function'?
@@ -464,17 +483,33 @@
       var realDentro=function(meta){return eventosReal.reduce(function(s,e){return s+(e.data<=meta?e.volume:0);},0);};
       var realFora=function(meta){return eventosReal.reduce(function(s,e){return s+(e.data>meta?e.volume:0);},0);};
 
-      var rateio=pendentePlanejado>0&&replanValido&&(inicioAusente||inicioPlan)&&dtPlan?
-        rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioAusente):null;
+      var rateioOriginalValido=pendentePlanejado>0&&replanValido&&(inicioAusente||inicioPlan)&&dtPlan?
+        rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioAusente):null;
+      // A simulação atua apenas quando falta uma previsão calculável para o saldo.
+      // A data simulada é de ENTREGA: max(Coleta Fim Baseline, meta aplicada),
+      // sem aplicar SLA adicional, conforme a comparação solicitada.
+      var simular=opcoes&&typeof opcoes.zerarSemPrevisao==='boolean'?opcoes.zerarSemPrevisao:estado.zerarSemPrevisao;
+      var fallbackAplicado=!!simular&&pendentePlanejado>0&&!rateioOriginalValido;
+      var dataFallback='';
+      if(fallbackAplicado){
+        var baselineData=window.pgNormalizarDataColeta?
+          window.pgNormalizarDataColeta(campo('COLETA/INTERNALIZAÇÃO FIM BASELINE')):
+          data(campo('COLETA/INTERNALIZAÇÃO FIM BASELINE'));
+        dataFallback=baselineData&&baselineData>metaAplicada?baselineData:metaAplicada;
+        inicioPlan=dataFallback;dtPlan=dataFallback;
+      }
+      var inicioUnico=inicioAusente||fallbackAplicado;
+      var podeRatear=pendentePlanejado>0&&(fallbackAplicado||replanValido)&&(inicioUnico||inicioPlan)&&dtPlan;
+      var rateio=podeRatear?rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioUnico):null;
       var previstoOriginal=realDentro(alvo)+(rateio?pendentePlanejado*rateio.fracao:0);
       var previstoFere=previstoOriginal,previstoNaoFere=previstoOriginal;
       if(elegivel){
-        var rateioAcordo=pendentePlanejado>0&&replanValido&&(inicioAusente||inicioPlan)&&dtPlan?
-          rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,inicioAusente):null;
+        var rateioAcordo=podeRatear?
+          rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,inicioUnico):null;
         previstoNaoFere=realDentro(dataAcordada)+(rateioAcordo?pendentePlanejado*rateioAcordo.fracao:0);
       }
-      var rateioAplicado=pendentePlanejado>0&&replanValido&&(inicioAusente||inicioPlan)&&dtPlan?
-        rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioAusente):null;
+      var rateioAplicado=podeRatear?
+        rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioUnico):null;
       var previsto=cenario==='sem'?previstoFere:previstoNaoFere;
       var semData=pendentePlanejado>0&&!rateioAplicado?pendentePlanejado:0;
       var statusSemPrevisao=semData>0&&fimAusente?'Sem data (re)Plan':'Sem previsão';
@@ -489,7 +524,8 @@
       var excecao=cenario==='com'?Math.max(0,previstoNaoFere-previstoOriginal):0;
       var real=realDentro(metaAplicada);
       var realTem=realizadoTem;
-      var origemColeta=realizadoTem?(pendentePlanejado>0?'Entrega TP + (re)plan':'Entrega TP'):
+      var origemColeta=fallbackAplicado?(realizadoTem?'Entrega TP + simulação baseline/meta':'Simulação baseline/meta'):
+        realizadoTem?(pendentePlanejado>0?'Entrega TP + (re)plan':'Entrega TP'):
         (pendentePlanejado>0&&rateioAplicado?'(re)plan':'Sem previsão');
       return {
         marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),
@@ -501,8 +537,9 @@
         posi:elegivel,alvo:alvo,dtPlan:dtPlan,rateio:rateio,
         rateioDia:rateio&&!rateio.entregaUnica?pendentePlanejado/rateio.dias:null,
         linha:l,inicioColeta:inicioColeta,inicioAusente:inicioAusente,inicioPlan:inicioPlan,
-        fimReplanColeta:fimReplanColeta,fimColetaUsada:replanValido?fimReplanColeta:null,
+        fimReplanColeta:fimReplanColeta,fimColetaUsada:fallbackAplicado?dataFallback:(replanValido?fimReplanColeta:null),
         origemColeta:origemColeta,replanValido:replanValido,motivoReplan:motivoReplan,statusSemPrevisao:statusSemPrevisao,
+        datasInvertidas:datasInvertidas,fallbackAplicado:fallbackAplicado,dataFallback:dataFallback,
         slaDias:typeof window.pgDiasSLALinha==='function'?window.pgDiasSLALinha(l):null,
         pendentePlanejado:pendentePlanejado,
         posiPropria:posiPropria,dataAcordada:dataAcordada,metaAplicada:metaAplicada,rateioAplicado:rateioAplicado,
@@ -513,7 +550,7 @@
     }).filter(Boolean);
   }
   // A eficiência usa a mesma base e as mesmas metas, sem trocar o cenário desta tela.
-  window.pgMAObterItens=function(opcoes){return dadosBase(opcoes);};
+  window.pgMAObterItens=function(opcoes){return dadosBase(Object.assign({zerarSemPrevisao:false},opcoes||{}));};
   window.pgMADiasEntrega=function(item){
     if(!item)return [];
     var parcelas=[];
@@ -606,6 +643,7 @@
       var semDU=!!r&&r.motivo==='sem-dias-uteis';
       var mesmoDia=!!r&&r.motivo==='mesmo-dia';
       var regra=i.pendentePlanejado<=0?'100% realizado pela Entrega_TP':
+        i.fallbackAplicado?'Saldo pendente simulado: maior data entre baseline e meta aplicada':
         !i.replanValido?'Saldo pendente sem (re)plan válido':
         !r?'Saldo pendente sem previsão de entrega':
         mesmoDia||i.inicioAusente?'Saldo pendente em entrega única':
@@ -613,9 +651,11 @@
       var situacao=i.semData>0?i.statusSemPrevisao:i.previsto>0&&i.pos>0?'Parcialmente dentro da meta':i.pos>0?'Fora da meta':'Dentro da meta';
       var notas=[];
       if(i.coletadaBruta>0&&!i.realizadoTem)notas.push('Tiragem coletada sem entrega realizada até o corte: saldo no planejamento.');
-      if(i.semData>0)notas.push(i.motivoReplan||'Intervalo de entrega invertido ou inválido.');
+      if(i.semData>0)notas.push(i.motivoReplan||'Intervalo de entrega inválido.');
+      if(i.datasInvertidas)notas.push('Início e fim (re)plan invertidos na origem: exibidos corrigidos nesta visão.');
+      if(i.fallbackAplicado)notas.push('Zerar sem previsão ligado: data simulada = maior entre Coleta Fim Baseline e Meta Armazém aplicada, sem SLA adicional.');
       if(i.realizado>0&&i.dtEntregaTP)notas.push('Tiragem realizada nas respectivas datas de Entrega_TP.');
-      if(i.pendentePlanejado>0&&r){
+      if(i.pendentePlanejado>0&&r&&!i.fallbackAplicado){
         notas.push('Somente o saldo pendente usa Final (re)Plan + Matriz_SLA.');
         if(i.inicioAusente)notas.push('Início planejado vazio: saldo pendente integral na entrega prevista pelo fim (re)plan + SLA, sem rateio.');
         else if(mesmoDia)notas.push('Início e fim planejados no mesmo dia: saldo pendente integral nessa data + SLA, sem rateio.');
@@ -625,7 +665,7 @@
         String(l.DESC_REAL||campo('DESCRIÇÃO')||campo('DESCRICAO')||l.PRODUTO||''),
         i.marca,i.serie,i.grafica,i.cd,String(l.ENVIO||l.Envio||''),String(campo('OP')??''),
         i.total,i.coletadaBruta,i.previsto,i.pos,i.semData,i.total?i.previsto/i.total:0,
-        i.dtEntregaTP||'',dataFonte(inicioRaw),dataFonte(fimRaw),coletaFim,origem,sla===null?'':sla,
+        i.dtEntregaTP||'',dataFonte(i.inicioColeta||inicioRaw),dataFonte(i.fimReplanColeta||fimRaw),coletaFim,origem,sla===null?'':sla,
         r&&r.entregaUnica?i.dtPlan||'':i.inicioPlan||'',i.dtPlan||'',
         i.alvo,i.dataAcordada||'',i.metaAplicada,
         porDU?r.dias:'',porDU?r.antes:'',porDU?r.dias-r.antes:'',porDU&&i.pendentePlanejado?i.pendentePlanejado/r.dias:'',
@@ -849,18 +889,39 @@
     }).join(' | ');
   }
   function atualizarFiltroTipoMaterial(base) {
-    var select=document.getElementById('maTipoMaterial');
-    if(!select)return;
+    var lista=document.getElementById('maTipoMaterialLista');
+    if(!lista)return;
     var tipos=Array.from(new Set((base||[]).map(function(x){return x.tipo;}).filter(Boolean)))
       .sort(function(a,b){return a.localeCompare(b,'pt-BR',{numeric:true});});
-    if(estado.tipoMaterial!=='TODOS'&&tipos.indexOf(estado.tipoMaterial)<0)estado.tipoMaterial='TODOS';
-    select.innerHTML='';
-    select.add(new Option('Todos','TODOS'));
-    tipos.forEach(function(tipo){select.add(new Option(rotuloTipoMaterial(tipo),tipo));});
-    select.value=estado.tipoMaterial;
+    estado.tiposDisponiveis=tipos;
+    if(estado.tiposMateriais!==null){
+      estado.tiposMateriais=new Set(Array.from(estado.tiposMateriais).filter(function(tipo){return tipos.indexOf(tipo)>=0;}));
+    }
+    var selecionados=estado.tiposMateriais===null?tipos.length:estado.tiposMateriais.size;
+    var resumo=document.getElementById('maTipoMaterialResumo');
+    if(resumo)resumo.textContent=selecionados===tipos.length?'Todos ('+tipos.length+')':
+      !selecionados?'Nenhum selecionado':selecionados+' de '+tipos.length+' selecionados';
+    lista.innerHTML=tipos.map(function(tipo){
+      var marcado=estado.tiposMateriais===null||estado.tiposMateriais.has(tipo);
+      return '<label><input type="checkbox" value="'+escapeHTML(tipo)+'"'+(marcado?' checked':'')+
+        ' onchange="window.pgMATipoMaterial(this.value,this.checked)"><span>'+escapeHTML(rotuloTipoMaterial(tipo))+'</span></label>';
+    }).join('')||'<p class="text-xs text-slate-500 p-2">Sem tipos disponíveis.</p>';
   }
-  window.pgMATipoMaterial=function(tipo) {
-    estado.tipoMaterial=tipo||'TODOS';
+  window.pgMATipoMaterial=function(tipo,marcado) {
+    if(estado.tiposDisponiveis.indexOf(tipo)<0)return;
+    if(estado.tiposMateriais===null)estado.tiposMateriais=new Set(estado.tiposDisponiveis);
+    if(marcado)estado.tiposMateriais.add(tipo);else estado.tiposMateriais.delete(tipo);
+    if(estado.tiposMateriais.size===estado.tiposDisponiveis.length)estado.tiposMateriais=null;
+    window.processarMetaArmazem();
+  };
+  window.pgMATipoMaterialTodos=function(){
+    estado.tiposMateriais=null;window.processarMetaArmazem();
+  };
+  window.pgMATipoMaterialNenhum=function(){
+    estado.tiposMateriais=new Set();window.processarMetaArmazem();
+  };
+  window.pgMAZerarSemPrevisao=function(){
+    estado.zerarSemPrevisao=!estado.zerarSemPrevisao;
     window.processarMetaArmazem();
   };
   window.pgMAMatrizModo=function(modo) {
@@ -966,8 +1027,11 @@
     // Tipo de material é um recorte local desta visão.
     document.querySelectorAll('[data-ma-cenario]').forEach(function(btn){btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-cenario')===estado.cenario));});
     var visao=document.getElementById('maVisao');if(visao)visao.value=estado.matrizModo;
+    var zerarBtn=document.getElementById('maZerarSemPrevisao');
+    if(zerarBtn)zerarBtn.setAttribute('aria-pressed',String(estado.zerarSemPrevisao));
     atualizarFiltroTipoMaterial(base);
-    var items=estado.tipoMaterial==='TODOS'?base:base.filter(function(l){return l.tipo===estado.tipoMaterial;});
+    var items=estado.tiposMateriais===null?base:
+      base.filter(function(l){return estado.tiposMateriais.has(l.tipo);});
     items=volumesVisao(items);
     var resultado={cenario:estado.cenario,itens:items,total:soma(items)};
     resultado.aging=agingMetaArmazem(resultado.itens);
