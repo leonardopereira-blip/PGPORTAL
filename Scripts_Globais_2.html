@@ -2351,7 +2351,8 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     const faixa = elemento('diasColetaFunil');
 
     const fmt = n => Math.round(Number(n || 0)).toLocaleString('pt-BR');
-    const pctBase = n => (resumo.total > 0 ? Number(n || 0) / resumo.total * 100 : 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
+    let basePercentual = resumo.total;
+    const pctBase = n => (basePercentual > 0 ? Number(n || 0) / basePercentual * 100 : 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
     const addDays = (iso, dias) => {
         const d = new Date(iso + 'T00:00:00Z');
         d.setUTCDate(d.getUTCDate() + dias);
@@ -2401,6 +2402,8 @@ window.renderColetaFinalFunil = function(sufixo = '') {
         return;
     }
 
+    // A semana comeca na segunda, sem carregar saldos dos periodos anteriores.
+    const inicioAcumulado = modo === 'semana' ? inicio : null;
     const todosPontos = [];
     for (let d = inicio; d <= fim; d = addDays(d, 1)) {
         todosPontos.push(d);
@@ -2409,7 +2412,8 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     const mapaDias = new Map(Array.from(resumo.dias.entries()));
     const coletadoOutroDiaPorPlan = new Map();
     if (!entregaCD) (resumo.registros || []).forEach(r => {
-        const volume = window.pgColetadoOutroDiaRegistroTP(r, dtHojeISO);
+        if (inicioAcumulado && (!r.dtPlan || r.dtPlan < inicio || r.dtPlan > fim)) return;
+        const volume = window.pgColetadoOutroDiaRegistroTP(r, dtHojeISO, inicioAcumulado);
         if (volume > 0) coletadoOutroDiaPorPlan.set(r.dtPlan,
             (coletadoOutroDiaPorPlan.get(r.dtPlan) || 0) + volume);
     });
@@ -2425,6 +2429,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     const somaAte = (campo, limite, estritoMenor = false) => {
         let total = 0;
         mapaDias.forEach((obj, data) => {
+            if (inicioAcumulado && data < inicioAcumulado) return;
             if (estritoMenor ? data < limite : data <= limite) total += Number(obj?.[campo] || 0);
         });
         return total;
@@ -2516,24 +2521,25 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     // Não inclui datas futuras, mesmo quando o filtro vai até o fim do mês.
     const cortePlanejado = fim <= dtHojeISO ? fim : dtHojeISO;
     const planoNoPonto = somaAte('esperado', cortePlanejado);
-    const tituloPlanejado = `Planejado acumulado até ${labelData(cortePlanejado)}`;
+    const tituloPlanejado = `Planejado ${inicioAcumulado ? 'na semana' : 'acumulado'} até ${labelData(cortePlanejado)}`;
     // PG_RESUMO_FORECAST_FIM_V53_20260925: o forecast e acumulado ate o fim do filtro.
     const forecastFim = somaAte('esperado', fim);
-    const tituloForecastFim = `Forecast acumulado até ${labelData(fim)}`;
+    if (inicioAcumulado) basePercentual = forecastFim;
+    const tituloForecastFim = `Forecast ${inicioAcumulado ? 'da semana' : 'acumulado'} até ${labelData(fim)}`;
     const corteRealResumo = fim <= dtHojeISO ? fim : dtHojeISO;
     const realizadoResumo = somaAte('real', corteRealResumo);
-    const tituloRealizado = `${entregaCD ? 'Entregue' : 'Coletado'} acumulado até ${labelData(corteRealResumo)}`;
+    const tituloRealizado = `${entregaCD ? 'Entregue' : 'Coletado'} ${inicioAcumulado ? 'na semana' : 'acumulado'} até ${labelData(corteRealResumo)}`;
     elemento('resumoColetaFinalFunil').innerHTML =
-        `<span>Base ${nomeBase}: <b>${fmt(resumo.total)}</b></span>` +
+        `<span>${inicioAcumulado ? 'Planejado na semana' : 'Base ' + nomeBase}: <b>${fmt(inicioAcumulado ? forecastFim : resumo.total)}</b></span>` +
         `<span>${tituloPlanejado}: <b>${fmt(planoNoPonto)} (${pctBase(planoNoPonto)})</b></span>` +
         `<span>${tituloRealizado}: <b>${fmt(realizadoResumo)} (${pctBase(realizadoResumo)})</b></span>` +
         `<span>${tituloForecastFim}: <b>${fmt(forecastFim)} (${pctBase(forecastFim)})</b></span>` +
         `<span>${acumulado ? nomeAgendadoAcumulado + ' até ' + labelData(fim) : nomeAgendado + ' no período'}: <b>${window.pgStatusAgendaTP?.().aviso || fmt(acumulado ? somaAte('agendado', fim) : totalAgendadoPeriodo)}</b></span>` +
-        `<span>Backlog líquido: <b>${fmt(backlogAtual)}</b></span>`;
+        `<span>${inicioAcumulado ? 'Backlog da semana' : 'Backlog líquido'}: <b>${fmt(backlogAtual)}</b></span>`;
 
     // Números-resumo também extraem seu próprio período com o mesmo formato.
     const resumoElementos = Array.from(elemento('resumoColetaFinalFunil')?.children || []);
-    const tiposResumo = ['base', 'planPeriodo', 'realTotal', 'forecastFim', 'agendadoPeriodo', 'backlogAtual'];
+    const tiposResumo = [inicioAcumulado ? 'forecastFim' : 'base', 'planPeriodo', 'realTotal', 'forecastFim', 'agendadoPeriodo', 'backlogAtual'];
     resumoElementos.forEach((span, i) => {
         const tipo = tiposResumo[i];
         if (!tipo) return;
@@ -2566,6 +2572,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
         paiSemData.parentElement.insertBefore(painelSemData, paiSemData);
     }
     const qtdSemData = semDataAte(dtHojeISO);
+    painelSemData.classList.toggle('hidden', !!inicioAcumulado);
     const chaveSemData = sufixo || 'FUNIL';
     window.pgMostrarSemDataV35 = window.pgMostrarSemDataV35 || {};
     if (window.pgMostrarSemDataV35[chaveSemData] === undefined) {
@@ -2626,7 +2633,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     // O mesmo recorte e o mesmo livro de linhas alimentam gráfico e Sheets.
     window.pgExtracaoColetaV35 = window.pgExtracaoColetaV35 || {};
     window.pgExtracaoColetaV35[sufixo || 'FUNIL'] = {
-        pontos: pontos.slice(), acumulado, resumo, inicio, fim, corteRealResumo,
+        pontos: pontos.slice(), acumulado, resumo, inicio, fim, corteRealResumo, inicioAcumulado, modo,
         tipo: entregaCD ? 'entrega' : 'coleta', cd: contextoEntrega?.cd || ''
     };
     const labels = pontos.map(d => labelData(d));
@@ -11551,6 +11558,7 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
     const hoje = String(typeof dtHojeISO !== 'undefined' ? dtHojeISO : new Date().toISOString().slice(0, 10));
     const ponto = visao.pontos?.[indice] || hoje;
     const acumulado = !!visao.acumulado;
+    const inicioAcumulado = visao.inicioAcumulado || null;
     const fmtData = iso => iso ? iso.slice(8,10) + '/' + iso.slice(5,7) + '/' + iso.slice(0,4) : '';
     const norm = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toUpperCase();
     const num = v => {
@@ -11578,7 +11586,7 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
 
     let titulo='',descricao='';
     let usarPlan=false,usarReal=false,usarAgenda=false,usarBase=false,usarSemData=false,mostrarBacklog=false;
-    let cortePlan=null,corteReal=null,dataAgendaIni=null,dataAgendaFim=null;
+    let cortePlan=null,corteReal=null,dataAgendaIni=inicioAcumulado,dataAgendaFim=null;
     let planDia=false,realDia=false,agendaDia=false,backlogFuturoZero=false;
 
     if(tipo==='coletadoOutroDia'){
@@ -11609,6 +11617,7 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
     }
 
     const grupos=new Map(),detalhes=[];
+    if(inicioAcumulado) descricao+=' Somente desde '+fmtData(inicioAcumulado)+', sem saldo anterior.';
     const garantir=(l,rota)=>{
         const key=[fonte(l),grafica(l),unidade(l),rota.acabadora,rota.cd].join('\u001f');
         if(!grupos.has(key))grupos.set(key,{fonte:fonte(l),grafica:grafica(l),unidade:unidade(l),acabadora:rota.acabadora,cd:rota.cd,base:0,plan:0,real:0,agenda:0,semData:0});
@@ -11622,11 +11631,12 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
 
         let baseV=0,planV=0,realV=0,agendaV=0,semDataV=0;
         if(usarBase)baseV=volumeBase(l);
-        if(usarPlan){const entra=planDia?r.dtPlan===ponto:(r.dtPlan&&cortePlan&&r.dtPlan<=cortePlan);if(entra)planV=Math.max(0,Number(r.tiragem||0));}
-        if(usarReal)realV=window.pgSomaEventosTP(window.pgEventosRealRegistroTP(r),realDia?ponto:corteReal,realDia?'dia':'ate');
+        const eventosReal=window.pgEventosRealRegistroTP(r).filter(e=>!inicioAcumulado||e.data>=inicioAcumulado);
+        if(usarPlan){const entra=planDia?r.dtPlan===ponto:(r.dtPlan&&cortePlan&&r.dtPlan<=cortePlan&&(!inicioAcumulado||r.dtPlan>=inicioAcumulado));if(entra)planV=Math.max(0,Number(r.tiragem||0));}
+        if(usarReal)realV=window.pgSomaEventosTP(eventosReal,realDia?ponto:corteReal,realDia?'dia':'ate');
         if(tipo==='coletadoOutroDia'){
-            const entra=acumulado?r.dtPlan&&r.dtPlan<=ponto:r.dtPlan===ponto;
-            realV=entra?window.pgColetadoOutroDiaRegistroTP(r,hoje):0;
+            const entra=(acumulado?r.dtPlan&&r.dtPlan<=ponto:r.dtPlan===ponto)&&(!inicioAcumulado||r.dtPlan>=inicioAcumulado);
+            realV=entra?window.pgColetadoOutroDiaRegistroTP(r,hoje,inicioAcumulado):0;
             if(!realV)return;
             planV=Math.max(0,Number(r.tiragem||0));
         }
@@ -11647,7 +11657,7 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
             replan:isoCampo(l,'Coleta/Internalização de estoque final (re) plan'),
             baseline:isoCampo(l,'COLETA/INTERNALIZAÇÃO FIM BASELINE'),
             dtPlan:r.dtPlan||'',dtVencida:p?.dtVencida||'',dtAVencer:p?.dtAVencer||'',
-            coletaTP:window.pgEventosRealRegistroTP(r).filter(e=>tipo!=='coletadoOutroDia'||(e.data<=hoje&&e.data!==r.dtPlan)).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),mapaAgendado:window.pgDatasAgendaRegistroTP(r),
+            coletaTP:eventosReal.filter(e=>tipo!=='coletadoOutroDia'||(e.data<=hoje&&e.data!==r.dtPlan)).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),mapaAgendado:window.pgDatasAgendaRegistroTP(r),
             tiragemVencida:Number(p?.vencida||0),aVencer:Number(p?.aVencer||0),tiragemColetada:Number(p?.coletadaBruta||r.coletada||0),
             base:baseV,plan:planV,real:realV,agenda:agendaV,semData:semDataV,backlog:backlogV
         });
@@ -11673,6 +11683,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
     const hoje=String(typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toISOString().slice(0,10));
     const fim=visao.fim||hoje;
     const inicio=visao.inicio||hoje;
+    const inicioAcumulado=visao.inicioAcumulado||null;
     const corte=fim<=hoje?fim:hoje;
     const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toUpperCase();
     const campo=(l,n)=>window.pgCampoColeta?window.pgCampoColeta(l,n):l?.[n];
@@ -11713,11 +11724,12 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
         const p=r.prazo||(window.pgPrazoLinhaV35?window.pgPrazoLinhaV35(l,hoje):{});
         const base=volumeBase(l);
         const tiragem=Math.max(0,Number(r.tiragem||0));
-        const planHoje=r.dtPlan&&r.dtPlan<=corte?tiragem:0;
-        const planFim=r.dtPlan&&r.dtPlan<=fim?tiragem:0;
+        const planHoje=r.dtPlan&&r.dtPlan<=corte&&(!inicioAcumulado||r.dtPlan>=inicioAcumulado)?tiragem:0;
+        const planFim=r.dtPlan&&r.dtPlan<=fim&&(!inicioAcumulado||r.dtPlan>=inicioAcumulado)?tiragem:0;
         const futuroPeriodo=r.dtPlan&&r.dtPlan>corte&&r.dtPlan<=fim?tiragem:0;
-        const futuroApos=r.dtPlan&&r.dtPlan>fim?tiragem:0;
-        const realHoje=window.pgSomaEventosTP(window.pgEventosRealRegistroTP(r),corte);
+        const futuroApos=!inicioAcumulado&&r.dtPlan&&r.dtPlan>fim?tiragem:0;
+        const eventosReal=window.pgEventosRealRegistroTP(r).filter(e=>!inicioAcumulado||e.data>=inicioAcumulado);
+        const realHoje=window.pgSomaEventosTP(eventosReal,corte);
         const backlogLinha=planHoje-realHoje;
         const saldoPrazo=window.pgSaldoPrazoV35&&p?window.pgSaldoPrazoV35(p,corte,hoje):{vencido:0,semData:0};
         const mapaAgendado=window.pgEventosAgendaRegistroTP(r).reduce((s,e)=>s+(e.data>=inicio&&e.data<=fim?e.volume:0),0);
@@ -11741,7 +11753,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
             String(l?.['SÉRIE']||l?.['Série']||l?.SERIE||''),String(l?.ENVIO||l?.Envio||''),
             isoCampo(l,'Coleta/Internalização de estoque final (re) plan'),
             isoCampo(l,'COLETA/INTERNALIZAÇÃO FIM BASELINE'),r.dtPlan||'',
-            p?.dtVencida||'',p?.dtAVencer||'',window.pgEventosRealRegistroTP(r).map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),window.pgDatasAgendaRegistroTP(r),
+            p?.dtVencida||'',p?.dtAVencer||'',eventosReal.map(e=>e.data).filter((d,i,datas)=>datas.indexOf(d)===i).join(' / '),window.pgDatasAgendaRegistroTP(r),
             Math.round(base),Math.round(tiragem),Math.round(p?.vencida||0),Math.round(p?.aVencer||0),Math.round(p?.coletadaBruta||r.coletada||0),
             Math.round(planHoje),Math.round(futuroPeriodo),Math.round(realHoje),Math.round(backlogLinha),
             Math.round(saldoPrazo.vencido||0),Math.round(saldoPrazo.semData||0),Math.round(mapaAgendado),situacao
@@ -11753,9 +11765,10 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
     const mapaSolicitado=Math.max(0,Number(resumo.mapaSolicitado||0));
     const mapaSemColeta=Math.max(0,Number(resumo.mapaSemColetaTP||0));
     const agendadoQuadrinho=visao.acumulado
-        ? registros.reduce((s,r)=>s+window.pgSomaEventosTP(window.pgEventosAgendaRegistroTP(r),fim),0)
+        ? registros.reduce((s,r)=>s+window.pgSomaEventosTP(window.pgEventosAgendaRegistroTP(r).filter(e=>!inicioAcumulado||e.data>=inicioAcumulado),fim),0)
         : mapaAgendadoPeriodo;
-    const pct=v=>totalBase>0?(Number(v||0)/totalBase*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%':'—';
+    const basePercentual=inicioAcumulado?forecastFim:totalBase;
+    const pct=v=>basePercentual>0?(Number(v||0)/basePercentual*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%':'—';
     const origem=document.getElementById('pgFiltroOrigem')?.value||'TODOS';
     const destino=document.getElementById('pgFiltroDestino')?.value||'TODOS';
     const basePrazo=document.getElementById('filtroReferencia')?.value||'replan';
@@ -11767,6 +11780,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
         ['Contexto','Visão',visao.acumulado?'Acumulada':'Dia a dia','','','Modo atual do gráfico'],
         ['Contexto','Início do período',inicio,'',inicio,''],
         ['Contexto','Fim do período',fim,'',fim,''],
+        ...(inicioAcumulado?[['Contexto','Início do acumulado',inicioAcumulado,'',inicioAcumulado,'Somente a semana atual, sem saldo anterior']]:[]),
         ['Volume','Base',Math.round(totalBase),pct(totalBase),'','Base total desta visão'],
         ['Volume','Planejado acumulado até corte',Math.round(planAte),pct(planAte),corte,'Mesmo planejado do gráfico'],
         ['Volume','Coletado acumulado até corte',Math.round(realAte),pct(realAte),corte,'Somente Coleta_TP válida'],
