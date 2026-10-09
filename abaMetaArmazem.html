@@ -465,14 +465,16 @@
       var volumesTP=typeof window.pgVolumesColetaUnificadosV37==='function'?
         window.pgVolumesColetaUnificadosV37(l,corteEventos):null;
       var parcelasTP=volumesTP&&Array.isArray(volumesTP.eventosEntregaTP)?volumesTP.eventosEntregaTP:[];
+      // Mesmo realizado de Entrega TP do Funil, limitado apenas à tiragem da linha.
+      // Não usar TIRAGEM COLETADA como um segundo teto nem compensar atrasos entre linhas.
+      var limiteTP=Math.min(total,volume(volumesTP&&volumesTP.entrega));
       var realizado=0,eventosReal=[];
-      // Preserva o teto desta visão, consumindo somente as parcelas já entregues,
-      // da mais antiga para a mais recente, sem antecipar o solicitado inteiro.
+      // Preserva cada data real de entrega para a classificação dentro/fora da meta.
       parcelasTP.map(function(e){return {data:data(e.data),volume:volume(e.volume)};})
         .filter(function(e){return e.data&&e.data<=corteEventos&&e.volume>0;})
         .sort(function(a,b){return a.data.localeCompare(b.data);})
         .forEach(function(e){
-          var quantidade=Math.min(e.volume,Math.max(0,coletadaBruta-realizado));
+          var quantidade=Math.min(e.volume,Math.max(0,limiteTP-realizado));
           if(!quantidade)return;
           eventosReal.push({data:e.data,volume:quantidade});
           realizado+=quantidade;
