@@ -99,11 +99,19 @@ function pgAMSlackCompactarDetalhes_(detalhes, quantidadeEsperada) {
   var listaConferencias = Object.keys(usadosConferencia).map(function(texto) { return conferencias[texto] + '=' + texto; });
   if (listaConferencias.length) legenda.push('Conferência: ' + listaConferencias.join('; ') + '. Outros valores entre aspas são literais.');
   var base = titulo + (originais.length ? '\n' + legenda.join('\n') : '\nNenhum item com movimento hoje.');
+  var resumo = base, itensResumo = 0, ultimoGrupoResumo = '', resumoEncerrado = false;
+  var limiteResumo = 2300 - ('\n\nResumo dos detalhes: ' + quantidadeEsperada + ' de ' + quantidadeEsperada + ' itens.').length;
   var blocos = [], itensPorBloco = [], atual = base, quantidadeAtual = 0, ultimoGrupo = '';
   var maiorItem = 0, maiorUnidade = base.length, itensAcimaDoLimite = 0, quantidadeCompactada = 0;
   var fechar = function() { blocos.push(atual); itensPorBloco.push(quantidadeAtual); };
   grupos.forEach(function(grupo) {
     grupo.itens.forEach(function(item) {
+      if (!resumoEncerrado) {
+        var acrescimoResumo = (ultimoGrupoResumo === grupo.chave ? '\n' : '\n\n' + grupo.cabecalho + '\n') + item;
+        if (resumo.length + acrescimoResumo.length <= limiteResumo) {
+          resumo += acrescimoResumo; itensResumo++; ultimoGrupoResumo = grupo.chave;
+        } else resumoEncerrado = true;
+      }
       var unidade = base + '\n\n' + grupo.cabecalho + '\n' + item;
       maiorItem = Math.max(maiorItem, item.length);
       maiorUnidade = Math.max(maiorUnidade, unidade.length);
@@ -126,7 +134,8 @@ function pgAMSlackCompactarDetalhes_(detalhes, quantidadeEsperada) {
   if (quantidadeCompactada !== quantidadeEsperada || itensPorBloco.reduce(function(total, n) { return total + n; }, 0) !== quantidadeEsperada) {
     throw new Error('A compactacao nao preservou a contagem de itens do report. Nenhum teste foi enviado ao Slack.');
   }
-  return { blocos: blocos, itensPorBloco: itensPorBloco, quantidadeItens: quantidadeCompactada,
+  resumo += '\n\nResumo dos detalhes: ' + itensResumo + ' de ' + quantidadeEsperada + ' itens.';
+  return { resumo: resumo, itensResumo: itensResumo, blocos: blocos, itensPorBloco: itensPorBloco, quantidadeItens: quantidadeCompactada,
     maiorItem: maiorItem, maiorUnidade: maiorUnidade, itensAcimaDoLimite: itensAcimaDoLimite,
     rawCaracteres: detalhes.length, rawBlocos: pgAMSlackDividirDetalhes_(detalhes).blocos.map(function(bloco) { return bloco.length; }),
     maiorItemRaw: maiorItemRaw };
@@ -195,17 +204,11 @@ function pgAMSlackAnalisarAlerta_(report) {
 
 function prepararAlertaMapaSlackHoje() {
   var analise = pgAMSlackAnalisarAlerta_(prepararAlertaMapaHoje()), divisao = analise.detalhes;
-  if (divisao.maiorUnidade > 2500) {
-    throw new Error('Um item compacto, com legenda e cabecalho, ou as notas excede 2.500 caracteres. Nenhum texto foi truncado; confira o diagnostico antes de enviar.');
-  }
-  if (divisao.blocos.length > 6) {
-    throw new Error('O report compacto preserva ' + divisao.quantidadeItens + ' itens e precisa de ' + divisao.blocos.length +
-      ' blocos de ate 2.500 caracteres, mas o Workflow comporta 6. Nenhum texto foi truncado ou enviado ao Slack.');
-  }
-  // Treze campos mantidos por compatibilidade; somente os seis primeiros sao usados.
+  // Uma unica resposta curta; o fim e cortado entre itens completos, com aviso visivel.
+  // Os demais campos ficam vazios somente por compatibilidade com o Workflow.
   var payload = analise.campos;
-  payload.detalhes = divisao.blocos[0] || '';
-  for (var i = 1; i < 13; i++) payload['detalhes_' + ('0' + (i + 1)).slice(-2)] = i < 6 ? divisao.blocos[i] || '' : '';
+  payload.detalhes = divisao.resumo;
+  for (var i = 1; i < 13; i++) payload['detalhes_' + ('0' + (i + 1)).slice(-2)] = '';
   return payload;
 }
 
@@ -215,8 +218,7 @@ function enviarAlertaMapaSlackTeste() {
     throw new Error('Configure PG_MAPA_SLACK_WORKFLOW_TESTE_URL com o webhook do Workflow de teste no script DEV.');
   }
   var payload = prepararAlertaMapaSlackHoje();
-  // Resumo principal e ate seis respostas, todas filhas da mensagem principal.
-  // Campos vazios dos detalhes devem ser ignorados pelas condicoes do Workflow.
+  // Resumo principal e uma unica resposta curta com os primeiros itens completos.
   Object.keys(payload).forEach(function(campo) {
     if (typeof payload[campo] !== 'string' || payload[campo].length > 2500) {
       throw new Error('O campo ' + campo + ' precisa ser texto com ate 2.500 caracteres. Nenhum texto foi truncado ou enviado ao Slack.');
@@ -274,7 +276,7 @@ function diagnosticarTamanhoAlertaMapaSlack() {
   Object.keys(analise.campos).forEach(function(campo) { tamanhosPorCampo[campo] = analise.campos[campo].length; });
   for (var i = 0; i < 13; i++) {
     var campo = i === 0 ? 'detalhes' : 'detalhes_' + ('0' + (i + 1)).slice(-2);
-    tamanhosPorCampo[campo] = i < 6 && divisao.blocos[i] ? divisao.blocos[i].length : 0;
+    tamanhosPorCampo[campo] = i === 0 ? divisao.resumo.length : 0;
   }
   var diagnostico = { tamanhosPorCampo: tamanhosPorCampo, detalhesOriginais: {
     caracteres: divisao.rawCaracteres, itens: divisao.quantidadeItens, quantidadeBlocos2500: divisao.rawBlocos.length,
@@ -284,7 +286,7 @@ function diagnosticarTamanhoAlertaMapaSlack() {
     quantidade: divisao.blocos.length, tamanhos: divisao.blocos.map(function(bloco) { return bloco.length; }),
     itens: divisao.quantidadeItens, itensPorBloco: divisao.itensPorBloco, maiorItem: divisao.maiorItem,
     maiorUnidadeComCabecalho: divisao.maiorUnidade, itensAcimaDoLimite: divisao.itensAcimaDoLimite,
-    capacidadeWorkflow: 6, excedeCapacidade: divisao.blocos.length > 6 || divisao.maiorUnidade > 2500
+    capacidadeWorkflow: 1, itensNaResposta: divisao.itensResumo, respostaCaracteres: divisao.resumo.length
   } };
   console.log(JSON.stringify(diagnostico));
   return diagnostico;
