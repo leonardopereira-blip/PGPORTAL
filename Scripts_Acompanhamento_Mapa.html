@@ -18,8 +18,8 @@
         c.grafica, c.marca, c.destino, c.envio].filter(Boolean).join(' / ')).join(' | ');
     const comparacoes = g => (g.comparacoesPCP || []).map(c => [c.origem,c.statusColeta,
         'Tiragem ' + (c.volumeEsperadoPCP == null ? 'não informada' : fmt(c.volumeEsperadoPCP)),
-        'Coletado ' + (c.volumeColetadoPCP == null ? 'não informado' : fmt(c.volumeColetadoPCP)),
-        'A mais ' + fmt(c.volumeAMais),'A menos ' + fmt(c.volumeAMenos)].join(' / ')).join(' | ');
+        'Tiragem coletada ' + (c.volumeColetadoPCP == null ? 'não informada' : fmt(c.volumeColetadoPCP)),
+        'Tiragem a mais ' + fmt(c.volumeAMais),'Tiragem a menos ' + fmt(c.volumeAMenos)].join(' / ')).join(' | ');
     function aviso(mensagem) {
         const el = $('pgMapaAviso');
         if (el) { el.textContent = mensagem || ''; el.classList.toggle('hidden', !mensagem); }
@@ -67,7 +67,7 @@
                 // Uma falha não permite baixar a base anterior como se estivesse atualizada.
                 estado.dados = null; estado.grupos = [];
                 $('pgMapaCards').innerHTML = ''; $('pgMapaResumo').innerHTML = '';
-                $('pgMapaDetalhes').innerHTML = '<tr><td colspan="12" class="p-5 text-slate-500">Acompanhamento indisponível.</td></tr>';
+                $('pgMapaDetalhes').innerHTML = '<tr><td colspan="16" class="p-5 text-slate-500">Acompanhamento indisponível.</td></tr>';
                 $('pgMapaContagem').textContent = ''; $('pgMapaPagina').textContent = '';
                 aviso(estado.erro);
             } finally { ocupado(false); estado.carregando = null; }
@@ -117,11 +117,11 @@
         const detalhes = estado.dados.detalhes.filter(d => ids.has(d.grupoId));
         const r = resumo(estado.grupos, detalhes);
         const contarSKU = tipo => new Set(estado.grupos.filter(g=>status(g) === tipo).map(g=>g.sku).filter(Boolean)).size;
-        const cards = [ ['No mapa',r.mapa,fmt(r.mapas)+' mapas · '+fmt(r.linhas)+' linhas'], ['Com PCP',r.comPCP,fmt(contarSKU('OK'))+' SKUs com dados iguais'],
-            ['SKU fora do PCP',r.semPCP,fmt(contarSKU('SEM_PCP'))+' SKUs não encontrados nas duas abas'], ['Dados diferentes',r.diferentes,r.faltando ? fmt(r.faltando)+' itens com dados faltando' : 'CD, gráfica, marca ou envio'],
-            ['Coletado a mais',r.mais,fmt(estado.grupos.filter(g=>chave(g.statusColeta).includes('MAIS')).length)+' itens · status coleta do PCP'], ['Coletado a menos',r.menos,fmt(estado.grupos.filter(g=>chave(g.statusColeta).includes('MENOS')).length)+' itens · status coleta do PCP'],
-            ['PCP sem mapa',r.semMapa,'Tiragem prevista sem mapa correspondente'], ['Coletado no mapa',r.coletado,'Volume realizado, separado do solicitado'] ];
-        $('pgMapaCards').innerHTML = cards.map(([titulo,valor,sub]) => '<div class="rounded-xl border border-slate-200 bg-white p-4"><span class="text-xs font-bold text-slate-600">'+esc(titulo)+'</span><div class="text-2xl font-black text-slate-900 mt-1">'+fmt(valor)+'</div><p class="text-xs text-slate-500 mt-1">'+esc(sub)+'</p></div>').join('');
+        const cards = [ ['Tiragem no mapa',r.mapa,fmt(r.mapas)+' mapas · '+fmt(r.linhas)+' linhas'], ['Tiragem com PCP',r.comPCP,fmt(contarSKU('OK'))+' SKUs com dados iguais'],
+            ['Tiragem fora do PCP',r.semPCP,fmt(contarSKU('SEM_PCP'))+' SKUs não encontrados nas duas abas'], ['Tiragem com dados diferentes',r.diferentes,r.faltando ? fmt(r.faltando)+' itens com dados faltando' : 'CD, gráfica, marca ou envio'],
+            ['Tiragem coletada a mais',r.mais,fmt(estado.grupos.filter(g=>chave(g.statusColeta).includes('MAIS')).length)+' itens · status coleta do PCP'], ['Tiragem coletada a menos',r.menos,fmt(estado.grupos.filter(g=>chave(g.statusColeta).includes('MENOS')).length)+' itens · status coleta do PCP'],
+            ['Tiragem PCP sem mapa',r.semMapa,'Prevista no PCP, sem mapa correspondente'], ['Tiragem coletada no mapa',r.coletado,'Coleta realizada, separada da solicitada'] ];
+        $('pgMapaCards').innerHTML = cards.map(([titulo,valor,sub]) => '<div class="pg-am-card"><span class="pg-am-card-title">'+esc(titulo)+'</span><div class="pg-am-card-value">'+fmt(valor)+'</div><p>'+esc(sub)+'</p></div>').join('');
         const graficas = [...new Set(estado.grupos.map(g => texto(g.grafica)))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
         $('pgMapaResumo').innerHTML = graficas.map(g => {
             const rg = resumo(estado.grupos.filter(i => texto(i.grafica) === g), []);
@@ -132,17 +132,18 @@
     function desenharLinhas() {
         const inicio = estado.pagina * 100, linhas = estado.grupos.slice(inicio, inicio + 100);
         $('pgMapaDetalhes').innerHTML = linhas.map(g => {
-            const s = status(g), cor = s === 'OK' ? 'text-emerald-700' : s === 'SEM_MAPA' ? 'text-amber-700' : 'text-rose-700';
+            const s = status(g), cor = s === 'OK' ? 'pg-am-ok' : 'pg-am-conferir';
             const codigos = texto(g.codigosMapa), conferir = [texto(g.diferencas),g.notaFonte,
                 g.multiplasFontes ? comparacoes(g) : contexto(g)].filter(Boolean).join(' · ');
             return '<tr class="border-b border-slate-100 align-top"><td class="p-2 font-bold '+cor+'">'+esc(rotulos[s] || s)+'</td>'+
-                '<td class="p-2">'+esc(g.grafica || 'Gráfica não informada')+'<br>'+esc(g.marca || 'Marca não informada')+'<br>'+esc(g.destino || 'CD não informado')+'</td>'+
-                '<td class="p-2">'+esc(g.sku || 'SKU não informado')+'<br>'+esc(g.kit || 'Kit não informado')+'<br>'+esc(g.envio || 'Envio não informado')+'</td>'+
+                [g.grafica || 'Não informada',g.marca || 'Não informada',g.destino || 'Não informado',
+                    g.sku || 'Não informado',g.kit || 'Não informado',g.envio || 'Não informado']
+                    .map(v=>'<td class="p-2">'+esc(v)+'</td>').join('')+
                 '<td class="p-2 max-w-xs whitespace-normal">'+esc(codigos || 'Sem mapa')+'</td>'+
                 [g.volumeMapa,g.volumeColetado,g.volumeEsperadoPCP,g.volumeColetadoPCP].map(v=>'<td class="p-2 text-right">'+(v === null || v === undefined ? 'Não informado' : fmt(v))+'</td>').join('')+
-                '<td class="p-2">'+esc(g.statusColeta || 'Sem status no PCP')+'</td><td class="p-2 text-right font-bold text-rose-700">'+fmt(g.volumeAMais)+'</td><td class="p-2 text-right font-bold text-amber-700">'+fmt(g.volumeAMenos)+'</td>'+
+                '<td class="p-2">'+esc(g.statusColeta || 'Sem status no PCP')+'</td><td class="p-2 text-right font-bold">'+fmt(g.volumeAMais)+'</td><td class="p-2 text-right font-bold">'+fmt(g.volumeAMenos)+'</td>'+
                 '<td class="p-2 max-w-sm whitespace-normal">'+esc(conferir || [g.origemPCP,linhasPCP(g)].filter(Boolean).join(' · ') || 'SKU não encontrado no PCP')+'</td></tr>';
-        }).join('') || '<tr><td colspan="12" class="p-5 text-slate-500">Nenhum item para estes filtros.</td></tr>';
+        }).join('') || '<tr><td colspan="16" class="p-5 text-slate-500">Nenhum item para estes filtros.</td></tr>';
         $('pgMapaContagem').textContent = fmt(estado.grupos.length) + ' itens';
         $('pgMapaPagina').textContent = estado.grupos.length ? (inicio + 1) + '–' + Math.min(inicio+100,estado.grupos.length) + ' de ' + fmt(estado.grupos.length) : '0 itens';
         $('pgMapaAnterior').disabled = estado.pagina === 0;
@@ -158,10 +159,10 @@
     window.pgMontarBaseAcompanhamentoMapa = function () {
         if (!estado.dados || estado.carregando) throw new Error('Aguarde o acompanhamento terminar de carregar.');
         const cabecalho = ['Conferência','Gráfica','Marca','CD destino','SKU','Kit','Envio','Código mapa','Linha mapa',
-            'Volume mapa','Coletado no mapa','Data agendada','Data coleta TP','Data entrega TP','Classificação no mapa',
-            'Origem PCP','Linhas PCP','Tiragem PCP (uma vez por item)','Coletado PCP (uma vez por item)',
-            'Status coleta PCP','A mais (uma vez por item)','A menos (uma vez por item)','Diferenças nos dados','Dados no PCP','Atualização da origem',
-            'Comparação por aba PCP','Tiragem vencida PCP (uma vez por item)','Recebido Acabadora (uma vez por item)'];
+            'Tiragem no mapa','Tiragem coletada no mapa','Data agendada','Data coleta TP','Data entrega TP','Classificação no mapa',
+            'Origem PCP','Linhas PCP','Tiragem PCP (uma vez por item)','Tiragem coletada PCP (uma vez por item)',
+            'Status coleta PCP','Tiragem a mais (uma vez por item)','Tiragem a menos (uma vez por item)','Diferenças nos dados','Dados no PCP','Atualização da origem',
+            'Comparação por aba PCP','Tiragem vencida PCP (uma vez por item)','Tiragem recebida Acabadora (uma vez por item)'];
         const porGrupo = new Map();
         estado.dados.detalhes.forEach(d => { if (!porGrupo.has(d.grupoId)) porGrupo.set(d.grupoId, []); porGrupo.get(d.grupoId).push(d); });
         const linhas = [];
