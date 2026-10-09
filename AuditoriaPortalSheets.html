@@ -7,7 +7,7 @@
         'Replan formação de kit', 'Data realizada formação de kit', 'Planejado formação de kit',
         'Realizado formação de kit', 'Data mapa agendado', 'Mapa agendado',
         'Data planejada usada no portal', 'Data planejada kit usada no portal', 'Origem', 'Linha PCP',
-        'Data considerada no fechamento de setembro', 'Tiragem no fechamento de setembro', 'Critério do fechamento de setembro'];
+        'Data de fechamento de setembro', 'Tiragem no fechamento de setembro'];
     const campo = (l, n) => window.pgCampoPrazoV35(l, n);
     const texto = v => {
         const s = String(v ?? '').trim();
@@ -123,8 +123,7 @@
                     kitPlan, primeiraParcela && k ? numero(k.real) : 0,
                     p.dtAgenda, p.agenda, r?.dtPlan || '', k?.dtPlan || '',
                     window.pgEhFonteAcabadora(l) ? 'PCP Acabadora' : 'PCP', texto(l._PG_TP_LINHA),
-                    p.dtFechamento || '', p.fechamento || 0,
-                    p.dtFechamento ? window.pgCriterioFechamentoSetembroV60 : '']);
+                    p.dtFechamento || '', p.fechamento || 0]);
                 somarDia(r?.dtPlan, 'plan', plan);
                 somarDia(p.dtColeta, 'real', p.coleta);
                 somarDia(p.dtAgenda, 'agenda', p.agenda);

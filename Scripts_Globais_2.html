@@ -10902,7 +10902,6 @@ window.processarReportExecutiva = function() {
 // ============================================================================
 // Compatibilidade do fechamento reportado antes da divisao por datas.
 // Somente 01/10 pode usar a data legada do PCP; os eventos reais nao sao alterados.
-window.pgCriterioFechamentoSetembroV60 = 'MINIFS do PCP para coletas de 01/10/2026; demais coletas pela data real';
 window.pgDataFechamentoSetembroV60 = function(linha, dataReal, hoje = dtHojeISO) {
     if (!dataReal || dataReal > hoje || dataReal > '2026-10-01') return '';
     if (dataReal <= '2026-09-30') return dataReal;
@@ -11368,9 +11367,7 @@ window.renderReportExecutivaCurvaSemanal = function() {
                                 : realVolume[context.dataIndex];
                             const bruto = Math.round(Number(n || 0)).toLocaleString('pt-BR');
                             const base = Math.round(total).toLocaleString('pt-BR');
-                            const criterio = context.datasetIndex === 1 &&
-                                window.reCurvaPeriodos[context.dataIndex]?.fechamentoSetembro ? ' (MINIFS PCP)' : '';
-                            return `${context.dataset.label}${criterio}: ${Number(context.raw).toFixed(1)}% (${bruto} / ${base})`;
+                            return `${context.dataset.label}: ${Number(context.raw).toFixed(1)}% (${bruto} / ${base})`;
                         }
                     }
                 }
@@ -12231,7 +12228,7 @@ window.reExtrairCurvaPonto = function(indice, elemento) {
             volumePlan: plan, volumeReal: real, gap: Math.max(0, plan - real)
         });
         if (fechamentoSetembro) row.push(evento?.dtFechamento || '',
-            window.pgCriterioFechamentoSetembroV60, evento?.codigoMapa || '', evento?.linhaMapa || '');
+            evento?.codigoMapa || '', evento?.linhaMapa || '');
         return row;
     };
     const linhas = [];
@@ -12274,7 +12271,7 @@ window.reExtrairCurvaPonto = function(indice, elemento) {
     window.reCriarSheets('Report_Executiva_Curva_' +
         String(periodo.label || cortePlano).replace(/[^A-Za-z0-9_-]+/g, '_'),
         [{nome: 'Meta_Azul', cabecalho: fechamentoSetembro
-            ? [...cab, 'Data considerada no fechamento de setembro', 'Critério do fechamento', 'Código mapa', 'Linha mapa']
+            ? [...cab, 'Data de fechamento de setembro', 'Código mapa', 'Linha mapa']
             : cab, linhas}], elemento);
 };
 
