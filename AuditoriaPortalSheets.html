@@ -1,249 +1,159 @@
 <script>
 (function () {
     'use strict';
-    const SEM_DATA = '';
     const cabecalho = ['KIT', 'SKU', 'Gráfica', 'Marca', 'CD destino',
-        'Data vencida ou a vencer', 'Tiragem total', 'Mapa solicitado',
-        'Data de coleta TP', 'Data de entrega TP', 'Data de formação de kit',
-        'Data planejada de coleta', 'Tiragem planejada de coleta', 'Coletado TP',
-        'Entregue TP', 'Mapa agendado', 'Data planejada de formação de kit',
-        'Formação de kit planejada', 'Formação de kit realizada',
-        'Tiragem vencida', 'Tiragem a vencer', 'Origem', 'Linha PCP', 'Chave',
-        'Data prevista de entrega TP'];
-    const datasBase = [5, 8, 9, 10, 11, 16, 24];
-    const numerosBase = [6, 7, 12, 13, 14, 15, 17, 18, 19, 20];
-    const texto = (valor, falta = '') => {
-        const s = String(valor ?? '').trim();
-        return !s || ['-', 'N/A', 'undefined', 'null'].includes(s) ? falta : s;
+        'Data Replan', 'Data realizada', 'Planejado', 'Realizado', 'Tiragem total',
+        'Mapa solicitado', 'Data de coleta TP', 'Data de entrega TP', 'Tiragem entregue TP',
+        'Replan formação de kit', 'Data realizada formação de kit', 'Planejado formação de kit',
+        'Realizado formação de kit', 'Data mapa agendado', 'Mapa agendado',
+        'Data planejada usada no portal', 'Data planejada kit usada no portal', 'Origem', 'Linha PCP'];
+    const campo = (l, n) => window.pgCampoPrazoV35(l, n);
+    const texto = v => {
+        const s = String(v ?? '').trim();
+        return !s || ['-', 'N/A', 'undefined', 'null'].includes(s) ? '' : s;
     };
-    const numero = valor => {
-        const n = Number(valor || 0);
+    const numero = v => {
+        const n = Number(v || 0);
         if (!Number.isFinite(n)) throw new Error('Quantidade inválida na base do portal.');
         return n;
     };
-    const campo = (l, n) => window.pgCampoPrazoV35(l, n);
-    const primeira = valores => valores.find(v => v != null && String(v).trim() !== '') || '';
-    const iso = valor => window.pgNormalizarDataColeta(valor, dtHojeISO) || null;
-    const datasEventos = (eventos, fallback) => {
-        const datas = [...new Set((eventos || []).map(e => e.data).filter(Boolean))].sort();
-        return datas.length ? datas.join(' / ') : (iso(fallback) || SEM_DATA);
-    };
-    function identidade(l, eventos = []) {
-        const kitMapa = [...new Set(eventos.map(e => e.kit).filter(Boolean))].join(' / ');
+    const primeira = valores => valores.find(v => texto(v)) || '';
+    function dataReplan(l, nome) {
+        const valor = campo(l, nome);
+        if (valor == null || String(valor).trim() === '') return '';
+        const data = window.pgNormalizarDataColeta(valor, dtHojeISO);
+        if (!data) throw new Error('Replan preenchido com data inválida em ' +
+            (l._SOURCE || 'PCP') + ', linha ' + l._PG_TP_LINHA + ': ' + nome + '.');
+        return data;
+    }
+    function identidade(l, eventos) {
         const kit = primeira(['KIT', 'COD KIT', 'CÓDIGO KIT', 'COD_KIT'].map(n => campo(l, n))) ||
-            kitMapa || window.pgKitsMapaTPLinha(l).join(' / ');
-        const chave = primeira([l.JOIN_KEY, l.Chave, l.CHAVE]) ||
-            (l._PG_TP_LINHA ? (window.pgEhFonteAcabadora(l) ? 'PCP Acabadora!' : 'PCP!') + l._PG_TP_LINHA : '');
-        const origem = window.pgEhFonteAcabadora(l) ? 'PCP Acabadora' : 'PCP';
-        // O destino original foi preservado pelo backend para a auditoria.
-        // Este fallback identifica a linha sem mudar CD_MAPA, filtros ou calculos.
+            [...new Set(eventos.map(e => e.kit).filter(Boolean))].join(' / ') ||
+            window.pgKitsMapaTPLinha(l).join(' / ');
         const destino = primeira([window.pgValorFiltroProducao(l, 'CD Destino'),
-            l.CD_DESTINO_PCP_ORIGINAL, l.CD_DESTINO, campo(l, 'CD DESTINO'),
-            l.CD_FINAL, l.CD, l.CK]);
+            l.CD_DESTINO_PCP_ORIGINAL, l.CD_DESTINO, campo(l, 'CD DESTINO'), l.CD_FINAL, l.CD, l.CK]);
         const valores = [texto(kit), texto(l.SKU_REAL || campo(l, 'SKU')),
             texto(l.GRAFICA_FINAL || campo(l, 'GRÁFICA') || l.GRAFICA),
             texto(l.MARCA_FINAL || campo(l, 'UNIDADE') || l.MARCA),
-            texto(window.pgNormalizarDestinoFiltro(destino)),
-            origem, texto(l._PG_TP_LINHA), texto(chave)];
-        const ausentes = valores.slice(0, 5).map((v, i) => !v ? cabecalho[i] : '').filter(Boolean);
+            texto(window.pgNormalizarDestinoFiltro(destino))];
+        const ausentes = valores.map((v, i) => v ? '' : cabecalho[i]).filter(Boolean);
         if (ausentes.length) throw new Error('Campos obrigatórios ausentes na origem: ' +
-            ausentes.join(', ') + ' — ' + origem + ', linha ' + (l._PG_TP_LINHA || chave || 'não identificada') + '.');
+            ausentes.join(', ') + ' — ' + (l._SOURCE || 'PCP') + ', linha ' + l._PG_TP_LINHA + '.');
         return valores;
     }
-    function linhaBase(l, valores = {}, eventos = []) {
-        const id = identidade(l, eventos), p = window.pgPrazoLinhaV35(l, dtHojeISO);
-        const kit = FASES.find(f => f.id === 'kit');
-        const kitPlan = valores.dtKitPlan || (kit && window.pgDataPlanoFaseFunil(l, kit,
-            document.getElementById('filtroReferencia')?.value || 'replan')) || '';
-        const kitReal = valores.dtKitReal || (kit && window.pgDataRealFaseFunil(l, kit)) || '';
-        const volumes = window.pgVolumesColetaUnificadosV37(l, dtHojeISO);
-        const planColeta = window.pgDataPlanoColetaLinha(l) || '';
-        const prazo = [...new Set([p.dtVencida, p.dtAVencer].filter(Boolean))].join(' / ');
-        return [id[0], id[1], id[2], id[3], id[4],
-            prazo, numero(valores.base), numero(valores.mapa ?? volumes.mapa),
-            datasEventos(valores.eventosColeta ?? volumes.eventosColetaTP, campo(l, 'Coleta_TP')),
-            datasEventos(valores.eventosEntrega ?? volumes.eventosEntregaTP, campo(l, 'Entrega_TP')),
-            kitReal || kitPlan, planColeta, numero(valores.plan), numero(valores.real ?? volumes.coleta),
-            numero(valores.entrega ?? volumes.entrega), numero(valores.agenda ?? volumes.agendado), kitPlan,
-            numero(valores.kitPlan), numero(valores.kitReal), p.vencida, p.aVencer,
-            id[5], id[6], id[7], window.pgDataPlanoEntregaSLA(l) || ''];
-    }
     window.pgMontarAuditoriaPortalSheets = function () {
-        const abas = [], parcelas = [], conferencias = [], diarios = new Map(), totaisEventos = new Map();
         const hoje = dtHojeISO;
-        const adicionarAba = (nome, linhas) => {
-            if (linhas.length) abas.push({ nome, cabecalho, linhas,
-                colunasData: datasBase, colunasNumero: numerosBase, colunasObrigatorias: [0, 1, 2, 3, 4] });
-        };
-        function evento(visao, indicador, l, data, quantidade, detalhe = {}) {
-            const n = numero(quantidade);
-            if (!(n > 0)) return;
-            const totalKey = JSON.stringify([visao, indicador]);
-            totaisEventos.set(totalKey, (totaisEventos.get(totalKey) || 0) + n);
-            if (!data) return;
-            const id = identidade(l, [detalhe]);
-            const dt = data || SEM_DATA;
-            if (detalhe.kit) id[0] = texto(detalhe.kit);
-            parcelas.push([visao, indicador, dt, n, ...id.slice(0, 5),
-                id[5], id[6], id[7], texto(detalhe.motivo, 'Mesma regra do portal')]);
-            const k = JSON.stringify([visao, indicador, dt]);
-            if (!diarios.has(k)) diarios.set(k, [visao, indicador, dt, 0]);
-            diarios.get(k)[3] += n;
-        }
-        function conferir(visao, indicador, esperado, corte = null, modo = 'ate', inicio = null) {
-            const extraido = !corte ? (totaisEventos.get(JSON.stringify([visao, indicador])) || 0)
-                : Array.from(diarios.values()).reduce((s, r) => s + (r[0] === visao && r[1] === indicador &&
-                (!corte || (r[2] !== SEM_DATA && (modo === 'dia' ? r[2] === corte :
-                    r[2] <= corte && (!inicio || r[2] >= inicio)))) ? r[3] : 0), 0);
-            const diferenca = extraido - numero(esperado);
-            if (Math.abs(diferenca) > 0.000001) throw new Error('A auditoria não conciliou ' +
-                visao + ' / ' + indicador + ': diferença de ' + diferenca + '.');
-            conferencias.push([visao, indicador, inicio || 'Toda a base', corte || 'Toda a base',
-                numero(esperado), extraido, diferenca, 'Confere']);
-        }
-        const visivel = document.querySelector('.aba-conteudo:not(.hidden)')?.id;
-        const sufixo = visivel === 'abaGiroSemanal' || visivel === 'abaGiroSemanal_1' ? 'Giro' : 'FUNIL';
-        const visaoAtual = ['abaFunil', 'abaGiroSemanal', 'abaGiroSemanal_1'].includes(visivel)
+        const aba = document.querySelector('.aba-conteudo:not(.hidden)')?.id;
+        const sufixo = aba === 'abaGiroSemanal' ? 'Giro' : 'FUNIL';
+        const visao = ['abaFunil', 'abaGiroSemanal'].includes(aba)
             ? window.pgExtracaoColetaV35?.[sufixo] : null;
-        const resumo = visaoAtual?.tipo === 'coleta' ? visaoAtual.resumo : window.pgObterResumoColeta();
-        const visaoColeta = 'Coleta e entrega — filtros atuais';
-        const linhasColeta = [];
-        let entregaTotal = 0;
-        (resumo.registros || []).forEach(r => {
-            const l = r.linha || r.pcp;
-            const v = window.pgVolumesColetaUnificadosV37(l, hoje);
-            const real = window.pgEventosRealRegistroTP(r).filter(e => e.data <= hoje);
-            const entrega = v.eventosEntregaTP.filter(e => e.data <= hoje);
-            const agenda = window.pgEventosAgendaRegistroTP(r);
-            const acab = window.pgEhFonteAcabadora(l);
-            const base = window.reNumero(campo(l, acab ? 'TIRAGEM A ENTREGAR (total por CD)' : 'TIRAGEM'));
-            linhasColeta.push(linhaBase(l, { base: Math.max(0, base), mapa: r.mapaSolicitado,
-                dtPlan: r.dtPlan, plan: r.tiragem, real: r.coletada, entrega: v.entrega,
-                agenda: r.volumeMapaAgendado, eventosColeta: real, eventosEntrega: entrega },
-                [...real, ...entrega, ...agenda]));
-            evento(visaoColeta, 'Tiragem total', l, null, Math.max(0, base));
-            evento(visaoColeta, 'Mapa solicitado', l, null, r.mapaSolicitado);
-            evento(visaoColeta, 'Planejado de coleta', l, r.dtPlan, r.tiragem);
-            real.forEach(e => evento(visaoColeta, 'Coleta TP', l, e.data, e.volume,
-                { ...e, motivo: v.eventosColetaTP.conciliacao?.motivo }));
-            entrega.forEach(e => evento(visaoColeta, 'Entrega TP', l, e.data, e.volume,
-                { ...e, motivo: v.eventosEntregaTP.conciliacao?.motivo }));
-            agenda.forEach(e => evento(visaoColeta, 'Mapa agendado', l, e.data, e.volume,
-                { ...e, motivo: v.eventosAgendados.conciliacao?.motivo }));
-            evento(visaoColeta, 'Tiragem vencida', l, r.prazo.dtVencida, r.prazo.vencida);
-            evento(visaoColeta, 'Tiragem a vencer', l, r.prazo.dtAVencer, r.prazo.aVencer);
-            entregaTotal += v.entrega;
+        const resumo = visao?.tipo === 'coleta' ? visao.resumo : window.pgObterResumoColeta();
+        const kitFunil = window.pgKitFunilAuditoriaPortal;
+        const kitReport = window.pgReportAuditoriaPortal?.kit;
+        const kit = aba === 'abaReportExecutiva' ? kitReport :
+            (kitFunil?.base === window.pgBaseGeralReportExecutiva ? kitFunil : kitReport);
+        const registros = new Map();
+        (resumo.registros || []).forEach(r => registros.set(r.linha || r.pcp, { coleta: r }));
+        (kit?.linhas || []).forEach(r => {
+            if (!registros.has(r.linha)) registros.set(r.linha, {});
+            registros.get(r.linha).kit = r;
         });
-        adicionarAba('Coleta e entrega', linhasColeta);
-        conferir(visaoColeta, 'Tiragem total', resumo.total);
-        conferir(visaoColeta, 'Mapa solicitado', resumo.mapaSolicitado);
-        conferir(visaoColeta, 'Coleta TP', resumo.realizado, hoje);
-        conferir(visaoColeta, 'Entrega TP', entregaTotal, hoje);
-        conferir(visaoColeta, 'Planejado de coleta', resumo.esperadoHoje, hoje);
-        conferir(visaoColeta, 'Mapa agendado', resumo.mapaAgendadoTotal);
+        const linhas = [];
+        const dias = new Map();
+        const somarDia = (data, indicador, volume) => {
+            if (!data || !volume) return;
+            if (!dias.has(data)) dias.set(data, { plan: 0, real: 0, agenda: 0 });
+            dias.get(data)[indicador] += volume;
+        };
+        let entregaEsperada = 0, planEsperado = 0, kitPlanEsperado = 0;
+        registros.forEach((registro, l) => {
+            const r = registro.coleta, k = registro.kit;
+            const volumes = r ? window.pgVolumesColetaUnificadosV37(l, hoje) : null;
+            const coletas = r ? window.pgEventosRealRegistroTP(r).filter(e => e.data <= hoje) : [];
+            const entregas = volumes ? volumes.eventosEntregaTP.filter(e => e.data <= hoje) : [];
+            const agenda = r ? window.pgEventosAgendaRegistroTP(r) : [];
+            const id = identidade(l, [...coletas, ...entregas, ...agenda]);
+            const replan = dataReplan(l, 'Coleta/Internalização de estoque final (re) plan');
+            const replanKit = dataReplan(l, 'Formação de kit/Encaixotamento Final (re) plan');
+            const faseKit = FASES.find(f => f.id === 'kit');
+            const realKit = k?.dtReal || (faseKit && window.pgDataRealFaseFunil(l, faseKit)) || '';
+            const parcelas = new Map();
+            function adicionar(tipo, eventos) {
+                eventos.forEach((e, i) => {
+                    // Coleta e entrega só compartilham a parcela quando a linha do mapa é a mesma.
+                    // As datas legadas únicas pertencem à mesma linha agregada do PCP.
+                    const chave = tipo === 'agenda' ? 'agenda:' + (e.linhaMapa || i) :
+                        e.linhaMapa ? 'mapa:' + e.linhaMapa : eventos.length === 1 ? 'pcp' : tipo + ':' + i;
+                    if (!parcelas.has(chave)) parcelas.set(chave, { coleta: 0, entrega: 0, agenda: 0,
+                        dtColeta: '', dtEntrega: '', dtAgenda: '' });
+                    const p = parcelas.get(chave);
+                    p[tipo] += numero(e.volume);
+                    p[tipo === 'coleta' ? 'dtColeta' : tipo === 'entrega' ? 'dtEntrega' : 'dtAgenda'] = e.data;
+                });
+            }
+            adicionar('coleta', coletas);
+            adicionar('entrega', entregas);
+            adicionar('agenda', agenda);
+            if (!parcelas.size) parcelas.set('pcp', { coleta: 0, entrega: 0, agenda: 0,
+                dtColeta: '', dtEntrega: '', dtAgenda: '' });
+            const lista = Array.from(parcelas.values()).sort((a, b) =>
+                (a.dtColeta || a.dtEntrega || a.dtAgenda || '9999').localeCompare(
+                    b.dtColeta || b.dtEntrega || b.dtAgenda || '9999'));
+            const volumeBase = r ? Math.max(0, window.reNumero(campo(l,
+                window.pgEhFonteAcabadora(l) ? 'TIRAGEM A ENTREGAR (total por CD)' : 'TIRAGEM'))) : 0;
+            lista.forEach((p, i) => {
+                const primeiraParcela = i === 0;
+                // Volumes agregados ficam na primeira parcela da linha, sem rateio inventado.
+                // Replan permanece preenchido em todas as parcelas quando existe no PCP.
+                const plan = primeiraParcela && r ? numero(r.tiragem) : 0;
+                const kitPlan = primeiraParcela && k ? numero(k.volume) : 0;
+                linhas.push([...id, replan, p.dtColeta, plan, p.coleta,
+                    primeiraParcela ? volumeBase : 0,
+                    primeiraParcela && r ? numero(r.mapaSolicitado) : 0,
+                    p.dtColeta, p.dtEntrega, p.entrega, replanKit, realKit,
+                    kitPlan, primeiraParcela && k ? numero(k.real) : 0,
+                    p.dtAgenda, p.agenda, r?.dtPlan || '', k?.dtPlan || '',
+                    window.pgEhFonteAcabadora(l) ? 'PCP Acabadora' : 'PCP', texto(l._PG_TP_LINHA)]);
+                somarDia(r?.dtPlan, 'plan', plan);
+                somarDia(p.dtColeta, 'real', p.coleta);
+                somarDia(p.dtAgenda, 'agenda', p.agenda);
+            });
+            entregaEsperada += volumes ? volumes.entrega : 0;
+            planEsperado += r ? numero(r.tiragem) : 0;
+            kitPlanEsperado += k ? numero(k.volume) : 0;
+        });
+        const soma = coluna => linhas.reduce((s, l) => s + numero(l[coluna]), 0);
+        function conferir(nome, atual, esperado) {
+            if (Math.abs(atual - numero(esperado)) > 0.000001) throw new Error(
+                'A auditoria não conciliou ' + nome + ': diferença de ' + (atual - numero(esperado)) + '.');
+        }
+        conferir('Planejado', soma(7), planEsperado);
+        conferir('Planejado até hoje', linhas.reduce((s, l) =>
+            s + (l[20] && l[20] <= hoje ? numero(l[7]) : 0), 0), resumo.esperadoHoje);
+        conferir('Realizado', soma(8), resumo.realizado);
+        conferir('Tiragem total', soma(9), resumo.total);
+        conferir('Mapa solicitado', soma(10), resumo.mapaSolicitado);
+        conferir('Entrega TP', soma(13), entregaEsperada);
+        conferir('Mapa agendado', soma(19), resumo.mapaAgendadoTotal);
+        conferir('Planejado formação de kit', soma(16), kitPlanEsperado);
+        if (kit) {
+            conferir('Realizado formação de kit', soma(17), kit.total.real);
+            conferir('Planejado formação de kit no corte do portal', linhas.reduce((s, l) =>
+                s + (l[21] && calcDiffDiasISO(l[21], kit.corte || hoje) >= 3
+                    ? numero(l[16]) : 0), 0), kit.total.plan);
+        }
         (resumo.dias || new Map()).forEach((d, data) => {
-            conferir(visaoColeta, 'Planejado de coleta', d.esperado, data, 'dia');
-            conferir(visaoColeta, 'Coleta TP', d.real, data, 'dia');
-            conferir(visaoColeta, 'Mapa agendado', d.agendado, data, 'dia');
+            const exportado = dias.get(data) || { plan: 0, real: 0, agenda: 0 };
+            conferir('Planejado em ' + data, exportado.plan, d.esperado);
+            conferir('Realizado em ' + data, exportado.real, d.real);
+            conferir('Mapa agendado em ' + data, exportado.agenda, d.agendado);
         });
-        if (visaoAtual) {
-            const corte = visaoAtual.fim < hoje ? visaoAtual.fim : hoje;
-            conferir(visaoColeta, 'Planejado de coleta', (resumo.registros || []).reduce((s, r) =>
-                s + (r.dtPlan && r.dtPlan <= corte ? r.tiragem : 0), 0), corte);
-            conferir(visaoColeta, 'Coleta TP', (resumo.registros || []).reduce((s, r) =>
-                s + window.pgSomaEventosTP(window.pgEventosRealRegistroTP(r), corte), 0), corte);
-        }
-        function kit(nome, snapshot) {
-            if (!snapshot) return;
-            const linhas = [];
-            snapshot.linhas.forEach(r => {
-                linhas.push(linhaBase(r.linha, { base: r.volume, dtKitPlan: r.dtPlan,
-                    dtKitReal: r.dtReal, kitPlan: r.plan, kitReal: r.real }));
-                evento(nome, 'Tiragem total', r.linha, null, r.volume);
-                evento(nome, 'Kit planejado na tabela', r.linha, r.dtPlan, r.plan);
-                evento(nome, 'Kit realizado na tabela', r.linha, r.dtReal, r.real);
-                evento(nome, 'Kit planejado por data', r.linha, r.dtPlan, r.volume);
-            });
-            adicionarAba(nome, linhas);
-            conferir(nome, 'Tiragem total', snapshot.total.den);
-            conferir(nome, 'Kit planejado na tabela', snapshot.total.plan);
-            conferir(nome, 'Kit realizado na tabela', snapshot.total.real);
-        }
-        const snapshotFunil = window.pgKitFunilAuditoriaPortal;
-        if (snapshotFunil?.base === window.pgBaseGeralReportExecutiva) kit('Formação de kit — Funil', snapshotFunil);
-        const report = window.pgReportAuditoriaPortal;
-        if (!report || report.base !== window.pgBaseGeralReportExecutiva) {
-            throw new Error('Aguarde a atualização dos dados da Report Executiva.');
-        }
-        kit('Formação de kit — Report', report.kit);
-        [['Report — Coleta CD', report.coletaCD, 'Coleta TP'],
-         ['Report — Coleta todos', report.coletaTodos, 'Coleta TP'],
-         ['Report — Entrega TP', report.entregaTP, 'Entrega TP']].forEach(([nome, s, indicador]) => {
-            const linhas = new Map();
-            const obter = l => {
-                if (!linhas.has(l)) linhas.set(l, { base: 0, plan: 0, real: 0, entrega: 0,
-                    eventosColeta: [], eventosEntrega: [] });
-                return linhas.get(l);
-            };
-            s.linhas.forEach(l => {
-                const r = obter(l);
-                r.base = Math.max(0, window.reNumero(l.TIRAGEM ?? l.QUANTIDADE ?? 0));
-                r.mapa = window.pgVolumesColetaUnificadosV37(l, report.corte).mapa;
-                evento(nome, 'Tiragem total', l, null, r.base);
-            });
-            s.eventosPlano.forEach(e => {
-                const r = obter(e.linha); r.dtPlan = e.dtPlan; r.plan += e.tiragem;
-                evento(nome, 'Planejado', e.linha, e.dtPlan, e.tiragem);
-            });
-            s.eventosReal.forEach(e => {
-                const r = obter(e.linha), parcela = { data: e.dtReal, volume: e.coletada };
-                if (indicador === 'Coleta TP') { r.real += e.coletada; r.eventosColeta.push(parcela); }
-                else { r.entrega += e.coletada; r.eventosEntrega.push(parcela); }
-                evento(nome, indicador, e.linha, e.dtReal, e.coletada, e);
-            });
-            adicionarAba(nome, Array.from(linhas, ([l, r]) => linhaBase(l, r,
-                [...r.eventosColeta, ...r.eventosEntrega])));
-            conferir(nome, 'Tiragem total', s.total.den);
-            conferir(nome, 'Planejado', s.total.plan, report.corte);
-            conferir(nome, indicador, s.total.real, report.corte);
-        });
-        const porMes = new Map();
-        diarios.forEach(r => {
-            const mes = /^\d{4}-\d{2}-\d{2}$/.test(r[2]) ? r[2].slice(0, 7) : SEM_DATA;
-            const k = JSON.stringify([r[0], r[1], mes]);
-            if (!porMes.has(k)) porMes.set(k, [r[0], r[1], mes, 0]);
-            porMes.get(k)[3] += r[3];
-        });
-        abas.unshift({ nome: 'Conferência', cabecalho: ['Visão', 'Indicador', 'Início', 'Corte',
-            'Total do portal', 'Soma da auditoria', 'Diferença', 'Conferência'], linhas: conferencias,
-            colunasData: [2, 3], colunasNumero: [4, 5, 6] });
-        abas.push({ nome: 'Parcelas por data', cabecalho: ['Visão', 'Indicador', 'Data da parcela',
-            'Quantidade', 'KIT', 'SKU', 'Gráfica', 'Marca', 'CD destino',
-            'Origem', 'Linha PCP', 'Chave', 'Critério'], linhas: parcelas,
-            colunasData: [2], colunasNumero: [3], colunasObrigatorias: [0, 1, 3, 4, 5, 6, 7, 8] });
-        abas.push({ nome: 'Totais por data', cabecalho: ['Visão', 'Indicador', 'Data', 'Quantidade'],
-            linhas: Array.from(diarios.values()).sort((a, b) => a[2].localeCompare(b[2])),
-            colunasData: [2], colunasNumero: [3] });
-        abas.push({ nome: 'Totais por mês', cabecalho: ['Visão', 'Indicador', 'Mês', 'Quantidade'],
-            linhas: Array.from(porMes.values()).sort((a, b) => a[2].localeCompare(b[2])), colunasNumero: [3] });
-        const filtros = [['Gerado em', new Date().toLocaleString('pt-BR')], ['Data do portal', hoje],
-            ['Corte da Report Executiva', report.corte], ['Referência de prazo', document.getElementById('filtroReferencia')?.value || 'replan'],
-            ['Origem', document.getElementById('pgFiltroOrigem')?.value || 'TODOS'],
-            ['Destino', document.getElementById('pgFiltroDestino')?.value || 'TODOS'],
-            ['Aba aberta', texto(visivel)], ['Cache do mapa', texto(window.MAPA_SAIDA_CACHE?.__agendaTPGeradoEm)],
-            ['Como somar', 'Filtre Visão + Indicador na aba Parcelas por data e some Quantidade. Tiragem total e Mapa solicitado ficam nas abas de base, sem inventar uma data. Cada aba representa seu próprio recorte; não some abas diferentes.'],
-            ['Datas', 'Datas de coleta e entrega reais ficam vazias enquanto não existirem. As previstas usam Replan e o fallback do portal. Formação de kit traz a data real quando existente, senão a planejada.'],
-            ['Destino na auditoria', 'Quando o destino do filtro está vazio, a identificação usa o destino original preservado da mesma linha do PCP. Os filtros, cruzamentos e volumes continuam usando as regras do portal.'],
-            ['Kit planejado na tabela', 'Mantém o critério do portal, incluindo a antecedência de três dias. Kit planejado por data traz o calendário completo.'],
-            ['Mapa solicitado', 'TIRAGEM COLETADA da fórmula PCP. Mapa agendado usa as parcelas pendentes O − AN; são indicadores diferentes.']];
-        if (visaoAtual) filtros.push(['Período da curva', visaoAtual.inicio + ' até ' + visaoAtual.fim]);
-        Object.keys(window.listasMultiProducao || {}).forEach(cat => {
-            const id = cat.replace(/\s+/g, '').replace('.', '');
-            const selecionados = Array.from(document.querySelectorAll('.chk-geral-' + id + ':checked')).map(cb => cb.value);
-            filtros.push([cat, selecionados.length ? selecionados.join(' / ') : 'Nenhum selecionado']);
-        });
-        abas.push({ nome: 'Filtros e critérios', cabecalho: ['Campo', 'Valor'], linhas: filtros });
-        return abas.filter(a => a.linhas.length);
+        console.info('[AUDITORIA XLSX]', { abas: 1, linhas: linhas.length,
+            planejado: soma(7), realizado: soma(8), tiragemTotal: soma(9), mapaSolicitado: soma(10),
+            entregueTP: soma(13), mapaAgendado: soma(19), realizadoKit: soma(17) });
+        return [{ nome: 'Auditoria Portal PG', cabecalho, linhas,
+            colunasData: [5, 6, 11, 12, 14, 15, 18, 20, 21],
+            colunasNumero: [7, 8, 9, 10, 13, 16, 17, 19] }];
     };
     window.pgBaixarAuditoriaPortalXlsx = async function (botao) {
         if (window.pgCarregamentoInicial || !window.dadosGlobais?.length) {
