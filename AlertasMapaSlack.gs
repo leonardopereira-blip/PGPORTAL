@@ -5,12 +5,12 @@
 function pgAMSlackDividirDetalhes_(detalhes, limite) {
   limite = limite || 2500;
   // Cada unidade e um cabecalho, um item inteiro ou as notas finais.
-  var unidades = detalhes.split(/\n\n(?=📅 Agendado hoje · pendente(?:\n|$)|🚚 Coletado hoje(?:\n|$)|Agendado hoje considera somente agendamentos ainda pendentes\.)/);
+  var unidades = detalhes.split(/\n\n(?=📅 Agendado (?:hoje|a partir de hoje) · pendente(?:\n|$)|🚚 Coletado hoje(?:\n|$)|Agendado hoje considera somente agendamentos ainda pendentes\.)/);
   var blocos = [], atual = '', maiorItem = 0, maiorUnidade = 0, itensAcimaDoLimite = 0;
   unidades.forEach(function(unidade) {
     var tamanho = unidade.length;
     maiorUnidade = Math.max(maiorUnidade, tamanho);
-    if (/^(📅 Agendado hoje · pendente|🚚 Coletado hoje)(?:\n|$)/.test(unidade)) {
+    if (/^(📅 Agendado (?:hoje|a partir de hoje) · pendente|🚚 Coletado hoje)(?:\n|$)/.test(unidade)) {
       maiorItem = Math.max(maiorItem, tamanho);
       if (tamanho > 2500) itensAcimaDoLimite++;
     }
@@ -47,7 +47,7 @@ function pgAMSlackCompactarDetalhes_(detalhes, quantidadeEsperada) {
   if (inicioNotas < 0) throw new Error('As notas dos detalhes do report mudaram. Confira o formato antes do teste no Slack.');
   var notas = linhas.slice(inicioNotas).join('\n');
   var corpo = linhas.slice(0, inicioNotas).join('\n').replace(/^\n+|\n+$/g, '');
-  var originais = corpo === 'Nenhum item com movimento hoje.' ? [] : corpo.split(/\n\n(?=📅 Agendado hoje · pendente(?:\n|$)|🚚 Coletado hoje(?:\n|$))/);
+  var originais = corpo === 'Nenhum item com movimento hoje.' ? [] : corpo.split(/\n\n(?=📅 Agendado (?:hoje|a partir de hoje) · pendente(?:\n|$)|🚚 Coletado hoje(?:\n|$))/);
   if (originais.length !== quantidadeEsperada) {
     throw new Error('A contagem de itens dos detalhes difere do report original. Nenhum item foi omitido; confira o formato antes do teste no Slack.');
   }
@@ -60,16 +60,16 @@ function pgAMSlackCompactarDetalhes_(detalhes, quantidadeEsperada) {
   originais.forEach(function(original) {
     maiorItemRaw = Math.max(maiorItemRaw, original.length);
     var item = original.split('\n');
-    if (item.length < 7 || item.length > 9 || !/^(📅 Agendado hoje · pendente|🚚 Coletado hoje)$/.test(item[0])) {
+    if (item.length < 7 || item.length > 9 || !/^(📅 Agendado (?:hoje|a partir de hoje) · pendente|🚚 Coletado hoje)$/.test(item[0])) {
       throw new Error('Um item dos detalhes tem formato inesperado. Nenhum item foi omitido; confira o report antes do teste no Slack.');
     }
     var local = pgAMSlackLerCampos_(item[1], ['Gráfica: ', ' | Marca: ', ' | CD destino: ']);
     var identidade = pgAMSlackLerCampos_(item[2], ['SKU: ', ' | Kit: ', ' | Envio: ']);
     var mapa = pgAMSlackLerCampos_(item[3], ['Código mapa: ']);
     var datas = pgAMSlackLerCampos_(item[4], ['Agendamento: ', ' | Coleta: ', ' | Entrega: ']);
-    var tiragens = pgAMSlackLerCampos_(item[5], ['Tiragem agendada hoje: ', ' | Tiragem coletada hoje: ']);
+    var tiragens = pgAMSlackLerCampos_(item[5], ['Tiragem agendada: ', ' | Tiragem coletada hoje: ']);
     var status = pgAMSlackLerCampos_(item[6], ['Conferência: ', ' | Status coleta PCP: ']);
-    var movimento = item[0] === '📅 Agendado hoje · pendente' ? 'A' : 'C';
+    var movimento = item[0].indexOf('📅 Agendado ') === 0 ? 'A' : 'C';
     usadosMovimento[movimento] = true;
     var conferencia = Object.prototype.hasOwnProperty.call(conferencias, status[0]) ? conferencias[status[0]] : null;
     if (conferencia) usadosConferencia[status[0]] = true;
@@ -136,7 +136,7 @@ function pgAMSlackCompactarDetalhes_(detalhes, quantidadeEsperada) {
     throw new Error('A compactacao nao preservou a contagem de itens do report. Nenhum teste foi enviado ao Slack.');
   }
   resumo = pgAMSlackDividirDetalhes_(detalhes, limiteResumo).blocos[0];
-  itensResumo = (resumo.match(/^(?:📅 Agendado hoje · pendente|🚚 Coletado hoje)$/gm) || []).length;
+  itensResumo = (resumo.match(/^(?:📅 Agendado (?:hoje|a partir de hoje) · pendente|🚚 Coletado hoje)$/gm) || []).length;
   resumo += '\n\nResumo dos detalhes: ' + itensResumo + ' de ' + quantidadeEsperada + ' itens.';
   return { resumo: resumo, itensResumo: itensResumo, blocos: blocos, itensPorBloco: itensPorBloco, quantidadeItens: quantidadeCompactada,
     maiorItem: maiorItem, maiorUnidade: maiorUnidade, itensAcimaDoLimite: itensAcimaDoLimite,
@@ -151,7 +151,7 @@ function pgAMSlackAnalisarAlerta_(report) {
   var conferenciaInicio = linhas.indexOf('CONFERÊNCIA DA TIRAGEM DE HOJE');
   var detalhesInicio = -1, rodapeInicio = -1, conferidoEm = '';
   linhas.forEach(function(linha, i) {
-    if (/^DETALHES DOS MAPAS DO DIA \(/.test(linha)) detalhesInicio = i;
+    if (/^DETALHES DOS MAPAS PARA CONFERIR \(/.test(linha)) detalhesInicio = i;
     var rodape = /^Dados conferidos em (\d{2}\/\d{2}\/\d{4} \d{2}:\d{2})\.$/.exec(linha);
     if (rodape) { rodapeInicio = i; conferidoEm = rodape[1]; }
   });
@@ -205,8 +205,8 @@ function pgAMSlackAnalisarAlerta_(report) {
   } };
 }
 
-function prepararAlertaMapaSlackHoje() {
-  var analise = pgAMSlackAnalisarAlerta_(prepararAlertaMapaHoje()), divisao = analise.detalhes;
+function prepararAlertaMapaSlackHoje(report) {
+  var analise = pgAMSlackAnalisarAlerta_(report || prepararAlertaMapaHoje()), divisao = analise.detalhes;
   // Uma unica resposta curta; o fim e cortado entre itens completos, com aviso visivel.
   // Os demais campos ficam vazios somente por compatibilidade com o Workflow.
   var payload = analise.campos;
@@ -215,12 +215,12 @@ function prepararAlertaMapaSlackHoje() {
   return payload;
 }
 
-function enviarAlertaMapaSlackTeste() {
+function pgAMPrepararEnvioSlack_(report) {
   var url = String(PropertiesService.getScriptProperties().getProperty('PG_MAPA_SLACK_WORKFLOW_TESTE_URL') || '').trim();
   if (!/^https:\/\/hooks\.slack\.com\/triggers\/[^\s?#]+$/.test(url)) {
     throw new Error('Configure PG_MAPA_SLACK_WORKFLOW_TESTE_URL com o webhook do Workflow de teste no script DEV.');
   }
-  var payload = prepararAlertaMapaSlackHoje();
+  var payload = prepararAlertaMapaSlackHoje(report);
   // Resumo principal e uma unica resposta curta com os primeiros itens completos.
   Object.keys(payload).forEach(function(campo) {
     if (typeof payload[campo] !== 'string' || payload[campo].length > 2500) {
@@ -236,6 +236,17 @@ function enviarAlertaMapaSlackTeste() {
   if (tamanhoResumo > 38000) {
     throw new Error('O resumo excede o orcamento de 38.000 caracteres da mensagem principal. Ajuste o Workflow antes de enviar; nenhum texto foi truncado.');
   }
+  if (camposResumo.concat(['detalhes']).some(function(campo) { return !payload[campo].trim(); })) {
+    throw new Error('O relatorio do Slack ainda nao esta completo. Nenhuma mensagem foi enviada.');
+  }
+  return { url: url, payload: payload };
+}
+
+function enviarAlertaMapaSlackTeste() {
+  return pgAMEnviarSlackPreparado_(pgAMPrepararEnvioSlack_());
+}
+function pgAMEnviarSlackPreparado_(envio) {
+  var url = envio.url, payload = envio.payload;
   var resposta;
   try {
     resposta = UrlFetchApp.fetch(url, {
@@ -260,10 +271,17 @@ function enviarAlertaMapaSlackTeste() {
 
 // Entrada manual combinada para o DEV; nao substitui nem agenda o envio atual.
 function enviarAlertaMapaEmailESlackTeste() {
-  var email = enviarAlertaMapaHoje();
+  // Conclui o relatorio e valida os dois destinos antes do primeiro envio.
+  var destinatarios = PG_ALERTAS_MAPA_DESTINATARIOS.map(pgAMTexto_).filter(Boolean);
+  if (!destinatarios.length || destinatarios.some(function(e) { return !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(e); })) {
+    throw new Error('Configure destinatarios validos antes do envio combinado. Nenhuma mensagem foi enviada.');
+  }
+  var report = prepararAlertaMapaHoje();
+  var envioSlack = pgAMPrepararEnvioSlack_(report);
+  var email = pgAMEnviarEmailPreparado_(report, destinatarios);
   var slack;
   try {
-    slack = enviarAlertaMapaSlackTeste();
+    slack = pgAMEnviarSlackPreparado_(envioSlack);
   } catch (erroSlack) {
     throw new Error('O email ja foi enviado, mas o teste no Slack falhou. Nao repita o envio combinado; ' +
       'execute somente enviarAlertaMapaSlackTeste() para tentar o Slack novamente. Motivo: ' +

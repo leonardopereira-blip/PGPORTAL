@@ -26,6 +26,22 @@ function pgAMCSVAlerta_(linhas) {
     }).join(';');
   }).join('\r\n');
 }
+// O acompanhamento do portal continua geral. O alerta seleciona apenas mapas
+// pendentes de hoje em diante e coletas efetivamente realizadas hoje.
+function pgAMRecortarAlerta_(geral, dia) {
+  var diario = pgAMReportDia_(geral, dia), ids = Object.create(null);
+  diario.detalhes = geral.detalhes.filter(function(d) {
+    var coleta = pgAMData_(d.coletaTP), agenda = pgAMData_(d.dataAgendada);
+    var pendente = agenda && agenda >= dia && !(coleta && coleta <= dia);
+    var realizado = coleta === dia && ((d.volumeColetado || 0) > 0 || d.volumeColetado === null);
+    if (pendente || realizado) { ids[d.grupoId] = true; return true; }
+    return false;
+  });
+  diario.grupos = geral.grupos.filter(function(g) { return ids[g.id]; });
+  diario.resumoChavesTocadas = pgAMResumo_(diario.grupos, diario.detalhes);
+  return diario;
+}
+
 function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
   var c = PG_ALERTAS_MAPA_CORES, esc = pgAMEscapeAlerta_;
   var fmt = function(n) { return Math.ceil(Number(n || 0)).toLocaleString('pt-BR', { maximumFractionDigits: 0 }); };
@@ -83,12 +99,12 @@ function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
     ['Dados diferentes',agenda.volumeDivergente,coleta.volumeDivergente],
     ['Dados faltando no mapa',agenda.volumeSemIdentidade,coleta.volumeSemIdentidade]
   ];
-  var nota = 'Tiragem a mais e a menos: saldo atual dos itens com movimento hoje.';
+  var nota = 'Conferência: mapas pendentes agendados de hoje em diante e coletas realizadas hoje. Tiragem a mais e a menos segue o status atual desses itens no PCP.';
   var conferido = Utilities.formatDate(new Date(geradoEm), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm');
   var resumoLinhas = [
     '📅 Agendado para hoje: ' + fmt(agenda.mapas) + ' mapas · Tiragem: ' + fmt(agenda.volume) + '.',
     '🚚 Coletado hoje: ' + fmt(coleta.mapas) + ' mapas · Tiragem: ' + fmt(coleta.volume) + '.',
-    '🗺️ Mapas com movimento hoje: ' + fmt(Object.keys(mapas).length) + ' | Gráficas: ' + fmt(lista.length) + '.',
+    '🗺️ Mapas de hoje em diante para conferir: ' + fmt(Object.keys(mapas).length) + ' | Gráficas: ' + fmt(lista.length) + '.',
     '🔎 Itens fora do PCP: ' + fmt(resumo.ausentesPCP) + ' | Itens para conferir dados: ' + fmt(conferir) + '.',
     '➕ Tiragem a mais: ' + fmt(resumo.volumeAMais) + ' (' + fmt(resumo.gruposMais) + ' itens).',
     '➖ Tiragem a menos: ' + fmt(resumo.volumeAMenos) + ' (' + fmt(resumo.gruposMenos) + ' itens).'
@@ -100,7 +116,7 @@ function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
   if (!lista.length) plain.push('Nenhum agendamento pendente ou coleta realizada hoje.');
   plain.push('', 'CONFERÊNCIA DA TIRAGEM DE HOJE');
   categorias.forEach(function(row) { plain.push(row[0] + ': tiragem agendada ' + fmt(row[1]) + ' | tiragem coletada ' + fmt(row[2])); });
-  plain.push('', 'DETALHES DOS MAPAS DO DIA (' + fmt(Object.keys(mapas).length) + ' mapas)');
+  plain.push('', 'DETALHES DOS MAPAS PARA CONFERIR (' + fmt(Object.keys(mapas).length) + ' mapas)');
   var ordenadas = diario.detalhes.slice().sort(function(a,b) {
     return (graficaGrupo[a.grupoId] || '').localeCompare(graficaGrupo[b.grupoId] || '', 'pt-BR') || texto(a.sku).localeCompare(texto(b.sku), 'pt-BR') || Number(a.linhaMapa || 0) - Number(b.linhaMapa || 0);
   });
@@ -114,15 +130,15 @@ function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
   var htmlDetalhes = [];
   ordenadas.forEach(function(d,i) {
     var g = grupos[d.grupoId] || {}, m = movimento(d), nome = texto(d.grafica || d.graficaOriginal) || graficaGrupo[d.grupoId] || 'Gráfica não informada';
-    var evento = m.agenda ? '📅 Agendado hoje · pendente' : '🚚 Coletado hoje';
+    var evento = m.coleta ? '🚚 Coletado hoje' : d.dataAgendada === diario.dia ? '📅 Agendado hoje · pendente' : '📅 Agendado a partir de hoje · pendente';
     var classificacao = rotulos[d.statusComparacao || g.statusComparacao] || d.statusComparacao || g.statusComparacao || 'Não informado';
-    var agendada = m.agenda ? Number(d.volumeMapa || 0) : 0, coletada = m.coleta ? Number(d.volumeColetado || 0) : 0;
+    var agendada = !m.coleta ? Number(d.volumeMapa || 0) : 0, coletada = m.coleta ? Number(d.volumeColetado || 0) : 0;
     plain.push('', evento,
       'Gráfica: ' + nome + ' | Marca: ' + (d.marca || 'Não informada') + ' | CD destino: ' + (d.destino || 'Não informado'),
       'SKU: ' + (d.sku || 'Não informado') + ' | Kit: ' + (d.kit || 'Não informado') + ' | Envio: ' + (d.envio || 'Não informado'),
       'Código mapa: ' + (d.codigoMapa || 'Não informado'),
       'Agendamento: ' + data(d.dataAgendada) + ' | Coleta: ' + data(d.coletaTP) + ' | Entrega: ' + data(d.entregaTP),
-      'Tiragem agendada hoje: ' + fmt(agendada) + ' | Tiragem coletada hoje: ' + fmt(coletada),
+      'Tiragem agendada: ' + fmt(agendada) + ' | Tiragem coletada hoje: ' + fmt(coletada),
       'Conferência: ' + classificacao + ' | Status coleta PCP: ' + (g.statusColeta || 'Não informado'));
     if (d.statusNaoGrafico) plain.push('Classificação no mapa: ' + d.statusNaoGrafico);
     if (g.diferencas && g.diferencas.length) plain.push('Conferir: ' + g.diferencas.join(', '));
@@ -147,24 +163,24 @@ function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
     '<tr><td style="padding:0 20px 20px;"><h2 style="font-size:16px;font-weight:600;margin:0 0 10px;">Todas as gráficas do dia</h2>' +
     (lista.length ? tabela(['Gráfica','Mapas','Tiragem agendada hoje','Tiragem coletada hoje','Itens fora do PCP','Itens para conferir','Tiragem a mais','Tiragem a menos'],linhasGraficas) : '<p style="font-size:13px;">Nenhum agendamento pendente ou coleta realizada hoje.</p>') +
     '<p style="font-size:10px;line-height:1.6;color:' + c.secundario + ';">' + esc(nota) + ' Mapas são contados por gráfica; o total geral considera cada código uma vez.</p></td></tr>' +
-    '<tr><td style="padding:0 20px 20px;"><h2 style="font-size:16px;font-weight:600;margin:0 0 10px;">Detalhes dos mapas do dia · ' + esc(fmt(Object.keys(mapas).length)) + ' mapas</h2>' +
-    (htmlDetalhes.length ? tabela(['Gráfica','Marca','CD destino','SKU','Kit','Envio','Código mapa','Agendamento','Coleta','Entrega','Tiragem agendada hoje','Tiragem coletada hoje','Conferência','Status coleta PCP','Conferir no mapa'],htmlDetalhes.join('')) : '<p style="font-size:13px;">Nenhum item com movimento hoje.</p>') + '</td></tr>' +
+    '<tr><td style="padding:0 20px 20px;"><h2 style="font-size:16px;font-weight:600;margin:0 0 10px;">Mapas para conferir · hoje em diante · ' + esc(fmt(Object.keys(mapas).length)) + ' mapas</h2>' +
+    (htmlDetalhes.length ? tabela(['Gráfica','Marca','CD destino','SKU','Kit','Envio','Código mapa','Agendamento','Coleta','Entrega','Tiragem agendada','Tiragem coletada hoje','Conferência','Status coleta PCP','Conferir no mapa'],htmlDetalhes.join('')) : '<p style="font-size:13px;">Nenhum item com movimento hoje.</p>') + '</td></tr>' +
     '<tr><td style="padding:14px 20px;background:' + c.zebra + ';font-size:11px;color:' + c.secundario + ';">Dados conferidos em ' + esc(conferido) + '.</td></tr></table></td></tr></table></body></html>';
   return { body: plain.join('\n'), htmlBody: html };
 }
 function prepararAlertaMapaHoje() {
   var hoje = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd');
-  var view = getAcompanhamentoMapa(hoje);
+  var view = getAcompanhamentoMapa();
   var diaCache = function(v) {
     var d = new Date(v);
     return !v || isNaN(d.getTime()) ? '' : Utilities.formatDate(d, 'America/Sao_Paulo', 'yyyy-MM-dd');
   };
-  if (!view.disponivel || diaCache(view.geradoEm) !== hoje) view = atualizarAcompanhamentoMapa(hoje);
-  if (!view.disponivel || !view.reportDia) throw new Error('Acompanhamento indisponivel. Atualize os caches e o acompanhamento antes do report.');
+  if (!view.disponivel || diaCache(view.geradoEm) !== hoje) view = atualizarAcompanhamentoMapa();
+  if (!view.disponivel || !Array.isArray(view.detalhes)) throw new Error('Acompanhamento indisponivel. Atualize os caches e o acompanhamento antes do report.');
   if (diaCache(view.origemMapaGeradoEm) !== hoje || diaCache(view.origemPCPGeradoEm) !== hoje) {
     throw new Error('Os caches do Mapa e do PCP precisam ser atualizados hoje antes do envio. Nenhum email foi enviado.');
   }
-  var diario = view.reportDia, resumo = diario.resumoChavesTocadas;
+  var diario = pgAMRecortarAlerta_(view, hoje), resumo = diario.resumoChavesTocadas;
   if (diario.agenda.linhasQuantidadeAusente || diario.coleta.linhasQuantidadeAusente ||
       diario.grupos.some(function(g) { return g.quantidadesPCPConferidas === false; })) {
     throw new Error('Ha movimentos do dia sem quantidades validas para o report. Atualize ou confira os caches. Nenhum email foi enviado.');
@@ -181,7 +197,9 @@ function enviarAlertaMapaHoje() {
   if (destinatarios.some(function(e) { return !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(e); })) {
     throw new Error('Destinatario invalido em PG_ALERTAS_MAPA_DESTINATARIOS. Nenhum email foi enviado.');
   }
-  var report = prepararAlertaMapaHoje();
+  return pgAMEnviarEmailPreparado_(prepararAlertaMapaHoje(), destinatarios);
+}
+function pgAMEnviarEmailPreparado_(report, destinatarios) {
   var mensagem = { to: destinatarios.join(','), subject: report.subject, body: report.body, htmlBody: report.htmlBody };
   if (PG_ALERTAS_MAPA_ANEXAR_CSV) mensagem.attachments = [Utilities.newBlob(pgAMCSVAlerta_(report.detalhes),
     'text/csv', 'Mapa_eventos_' + report.dia + '.csv')];
