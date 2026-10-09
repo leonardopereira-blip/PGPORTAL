@@ -12,6 +12,12 @@
     const rotulos = { OK: 'Dados iguais ao PCP', SEM_PCP: 'SKU fora do PCP', DADOS_DIFERENTES: 'Dados diferentes',
         SEM_IDENTIDADE: 'Dados faltando no mapa', SEM_MAPA: 'PCP sem mapa' };
     const status = g => g.statusComparacao || 'SEM_IDENTIDADE';
+    const skuNoPCP = g => status(g) !== 'SEM_MAPA' && Boolean(texto(g.sku) && texto(g.sku) !== '-' &&
+        (g.candidatosPCP || []).length);
+    const dadosDivergentes = g => skuNoPCP(g) && !(g.candidatosPCP || []).some(c =>
+        ['destino','grafica','marca'].every(campo => texto(c[campo]) === texto(g[campo])));
+    const identidadeCompleta = g => ['sku','destino','grafica','marca'].every(campo =>
+        texto(g[campo]) && texto(g[campo]) !== '-');
     const linhasPCP = g => (g.linhasPCP || []).map(l => typeof l === 'object'
         ? [l.origem, l.linha && 'linha ' + l.linha].filter(Boolean).join(' ') : texto(l)).join(', ');
     const horario = valor => valor ? new Date(valor).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
@@ -143,11 +149,14 @@
             mapas: new Set(detalhes.map(d => texto(d.codigoMapa)).filter(Boolean)).size, linhas: detalhes.length, faltando: 0 };
         grupos.forEach(g => {
             const s = status(g), volume = numero(g.volumeMapa);
-            r.mapa += volume; r.coletado += numero(g.volumeColetado);
-            if (s === 'OK') r.comPCP += volume;
+            r.mapa += volume;
+            if (s === 'OK' && identidadeCompleta(g)) r.coletado += numero(g.volumeColetado);
+            if (skuNoPCP(g)) r.comPCP += volume;
             if (s === 'SEM_PCP') r.semPCP += volume;
-            if (s === 'DADOS_DIFERENTES' || s === 'SEM_IDENTIDADE') r.diferentes += volume;
-            if (s === 'SEM_IDENTIDADE') r.faltando++;
+            if (dadosDivergentes(g)) {
+                r.diferentes += volume;
+                if (s === 'SEM_IDENTIDADE') r.faltando++;
+            }
             if (s === 'SEM_MAPA') r.semMapa += numero(g.volumeEsperadoPCP);
             r.mais += numero(g.volumeAMais); r.menos += numero(g.volumeAMenos);
         });
@@ -168,10 +177,11 @@
         const detalhes = estado.dados.detalhes.filter(d => ids.has(d.grupoId));
         const r = resumo(estado.grupos, detalhes);
         const contarSKU = tipo => new Set(estado.grupos.filter(g=>status(g) === tipo).map(g=>g.sku).filter(Boolean)).size;
-        const cards = [ ['Tiragem no mapa',r.mapa,fmt(r.mapas)+' mapas'], ['Tiragem com PCP',r.comPCP,fmt(contarSKU('OK'))+' SKUs com dados iguais'],
-            ['Tiragem fora do PCP',r.semPCP,fmt(contarSKU('SEM_PCP'))+' SKUs não encontrados nas duas abas'], ['Tiragem com dados diferentes',r.diferentes,r.faltando ? fmt(r.faltando)+' itens com dados faltando' : 'CD, gráfica, marca ou envio'],
+        const skusNoPCP = new Set(estado.grupos.filter(skuNoPCP).map(g => g.sku)).size;
+        const cards = [ ['Mapa solicitado',r.mapa,fmt(r.mapas)+' mapas · Tiragem solicitada'], ['Tiragem corresponde ao PCP (cruzando SKU)',r.comPCP,fmt(skusNoPCP)+' SKUs encontrados no PCP ou PCP Acabadora'],
+            ['Tiragem fora do PCP',r.semPCP,fmt(contarSKU('SEM_PCP'))+' SKUs não encontrados nas duas abas'], ['Dados divergentes (CD, Gráfica ou Marca)',r.diferentes,r.faltando ? fmt(r.faltando)+' itens com dados faltando · Tiragem' : 'Tiragem com dados divergentes'],
             ['Tiragem coletada a mais',r.mais,fmt(estado.grupos.filter(g=>chave(g.statusColeta).includes('MAIS')).length)+' itens · status coleta do PCP'], ['Tiragem coletada a menos',r.menos,fmt(estado.grupos.filter(g=>chave(g.statusColeta).includes('MENOS')).length)+' itens · status coleta do PCP'],
-            ['Tiragem PCP sem mapa',r.semMapa,'Prevista no PCP, sem mapa correspondente'], ['Tiragem coletada no mapa',r.coletado,'Coleta realizada, separada da solicitada'] ];
+            ['Tiragem PCP sem mapa',r.semMapa,'Prevista no PCP, sem mapa correspondente'], ['Coletado real',r.coletado,'Tiragem coletada com dados iguais ao PCP'] ];
         $('pgMapaCards').innerHTML = cards.map(([titulo,valor,sub]) => '<div class="pg-am-card"><span class="pg-am-card-title">'+esc(titulo)+'</span><div class="pg-am-card-value">'+fmt(valor)+'</div><p>'+esc(sub)+'</p></div>').join('');
         const graficas = [...new Set(estado.grupos.map(g => texto(g.grafica)))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
         $('pgMapaResumo').innerHTML = graficas.map(g => {
