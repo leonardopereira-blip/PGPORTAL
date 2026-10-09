@@ -182,6 +182,7 @@ function prepararAlertaMapaHoje() {
   }
   var diario = pgAMRecortarAlerta_(view, hoje), resumo = diario.resumoChavesTocadas;
   if (diario.agenda.linhasQuantidadeAusente || diario.coleta.linhasQuantidadeAusente ||
+      diario.detalhes.some(function(d) { return d.volumeMapa === null; }) ||
       diario.grupos.some(function(g) { return g.quantidadesPCPConferidas === false; })) {
     throw new Error('Ha movimentos do dia sem quantidades validas para o report. Atualize ou confira os caches. Nenhum email foi enviado.');
   }
