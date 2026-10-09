@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Portal da Produção Gráfica</title>
-    <script src="https://cdn.tailwindcss.com">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 
-
+<script>
 
 // =========================================================
 // EXPORTAÇÃO EXATA DO QUE ESTÁ FILTRADO NA TELA DO GIRO
@@ -517,7 +519,7 @@ window.exportarSkusFiltradosSheets = function() {
                 <!-- BOTÕES "EM BREVE" -->
                 <button onclick="abrirGrafico('abaInspecaoCDs', this); iniciarAbaInspecaoCDs(); document.querySelector('.bg-slate-50.p-2.rounded-xl.shadow-sm.border')?.setHTMLUnsafe ? document.querySelector('.bg-slate-50.p-2.rounded-xl.shadow-sm.border').style.display='none' : document.getElementById('filtrosGlobaisPCP') ? document.getElementById('filtrosGlobaisPCP').style.display='none' : document.querySelector('.flex.flex-wrap.items-center.justify-between').style.display='none';" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🔎 Inspeções CDs</button>
                 <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-600 cursor-not-allowed text-left">🧐 Insp. Gráficas (Breve)</button>
-                <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-600 cursor-not-allowed text-left">📋 Gestão RNCs (Breve)</button>
+                <button onclick="abrirGrafico('abaRNCs', this); setTimeout(iniciarAbaRNCs, 100);" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📋 Gestão RNCs</button>
             </div>
         </div>
 

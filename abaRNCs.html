@@ -1,0 +1,223 @@
+<div id="abaRNCs" class="aba-conteudo hidden h-full flex flex-col" style="font-family: Arial, sans-serif;">
+    <div class="mb-6 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
+        <div>
+            <h2 class="text-xl font-bold text-slate-800">📊 ACOMPANHAMENTO DE RNCS</h2>
+            <p class="text-xs text-slate-500 mt-1">Gestão de não conformidades, status de tratativas e ofensores.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="bg-white border border-slate-200 p-1.5 rounded shadow-sm flex items-center gap-2">
+                <span class="text-[10px] font-bold text-slate-500 uppercase ml-1">Fornecedor:</span>
+                <select id="filtroRncFornecedor" onchange="processarRNCs()" class="bg-slate-50 border border-slate-200 text-indigo-700 rounded p-1 text-xs font-bold outline-none cursor-pointer"><option value="TODOS">Todos</option></select>
+            </div>
+            <div class="bg-white border border-slate-200 p-1.5 rounded shadow-sm flex items-center gap-2">
+                <span class="text-[10px] font-bold text-slate-500 uppercase ml-1">Marca:</span>
+                <select id="filtroRncMarca" onchange="processarRNCs()" class="bg-slate-50 border border-slate-200 text-indigo-700 rounded p-1 text-xs font-bold outline-none cursor-pointer"><option value="TODOS">Todas</option></select>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. CARDS DE STATUS (SLA) -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 w-full">
+        <div class="bg-white p-5 rounded-xl border-l-4 border-indigo-500 shadow-sm flex items-center justify-between">
+            <div>
+                <h3 class="text-[10px] font-bold text-indigo-700 uppercase tracking-widest mb-1">RNCs Abertas (Pendentes)</h3>
+                <p class="text-3xl font-black text-indigo-800" id="kpiRncAbertas">-</p>
+            </div>
+            <div class="text-indigo-200 text-4xl">📂</div>
+        </div>
+        <div class="bg-white p-5 rounded-xl border-l-4 border-rose-500 shadow-sm flex items-center justify-between">
+            <div>
+                <h3 class="text-[10px] font-bold text-rose-700 uppercase tracking-widest mb-1">RNCs Atrasadas</h3>
+                <p class="text-3xl font-black text-rose-800" id="kpiRncAtrasadas">-</p>
+            </div>
+            <div class="text-rose-200 text-4xl">🚨</div>
+        </div>
+        <div class="bg-white p-5 rounded-xl border-l-4 border-emerald-500 shadow-sm flex items-center justify-between">
+            <div>
+                <h3 class="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1">RNCs Respondidas</h3>
+                <p class="text-3xl font-black text-emerald-800" id="kpiRncRespondidas">-</p>
+            </div>
+            <div class="text-emerald-200 text-4xl">✅</div>
+        </div>
+    </div>
+
+    <!-- 2. GRÁFICOS DE ORIGEM (MARCA E FORNECEDOR) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">RNCS POR MARCA</h3>
+            <div class="relative h-64 w-full"><canvas id="graficoRncMarca"></canvas></div>
+        </div>
+        <div class="lg:col-span-2 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">VOLUME DE RNCS POR FORNECEDOR</h3>
+            <div class="relative h-64 w-full"><canvas id="graficoRncFornecedor"></canvas></div>
+        </div>
+    </div>
+
+    <!-- 3. PARETO DE OFENSORES -->
+    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-10">
+        <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 border-b border-slate-100 pb-2">PARETO DOS OFENSORES (DESVIOS)</h3>
+        <div class="relative h-80 w-full"><canvas id="graficoRncPareto"></canvas></div>
+    </div>
+</div>
+
+<script>
+window.filtrosRncIniciados = false;
+window.graficoRncMarca = null;
+window.graficoRncFornecedor = null;
+window.graficoRncPareto = null;
+
+if(typeof Chart !== 'undefined') { Chart.defaults.font.family = 'Arial, sans-serif'; }
+
+function iniciarAbaRNCs() {
+    if (!window.DADOS_RNC_CACHE || window.DADOS_RNC_CACHE.length === 0) return;
+    try { processarRNCs(); } catch (erro) { console.error("❌ ERRO AO MONTAR RNCs:", erro); }
+}
+
+function processarRNCs() {
+    if (!window.DADOS_RNC_CACHE) return;
+    let dados = window.DADOS_RNC_CACHE;
+
+    // Popula Filtros Iniciais
+    if (!window.filtrosRncIniciados) {
+        let forns = new Set(), marcas = new Set();
+        dados.forEach(l => {
+            let f = String(l["Fornecedor"] || "").trim(); let m = String(l["Marca"] || "").trim();
+            if(f && f !== "undefined") forns.add(f); if(m && m !== "undefined") marcas.add(m);
+        });
+        const preencherSelect = (id, set, label) => {
+            let el = document.getElementById(id); if(!el) return;
+            let html = `<option value="TODOS">${label}</option>`;
+            Array.from(set).sort().forEach(i => html += `<option value="${i}">${i}</option>`);
+            el.innerHTML = html;
+        };
+        preencherSelect('filtroRncFornecedor', forns, 'Todos os Fornecedores');
+        preencherSelect('filtroRncMarca', marcas, 'Todas as Marcas');
+        window.filtrosRncIniciados = true;
+    }
+
+    let fForn = document.getElementById('filtroRncFornecedor')?.value || "TODOS";
+    let fMarca = document.getElementById('filtroRncMarca')?.value || "TODOS";
+
+    // Variáveis de Contagem
+    let totalRnc = 0, qtdRespondidas = 0, qtdAtrasadas = 0;
+    let mapMarcas = {}, mapForn = {}, mapDesvios = {};
+
+    dados.forEach(l => {
+        let forn = String(l["Fornecedor"] || "").trim();
+        let marca = String(l["Marca"] || "").trim();
+        let status = String(l["Status RNC"] || "").trim();
+        let desvio = String(l["Desvio"] || "Não Informado").trim();
+
+        if (fForn !== "TODOS" && forn !== fForn) return;
+        if (fMarca !== "TODOS" && marca !== fMarca) return;
+
+        totalRnc++;
+
+        // Lógica de SLA
+        if (status === "✅ Respondida no Prazo" || status === "⚠️ Respondida com Atraso") {
+            qtdRespondidas++;
+        } else if (status === "🚨 Atrasada") {
+            qtdAtrasadas++;
+        }
+
+        // Mapeamentos para Gráficos
+        if (marca) { mapMarcas[marca] = (mapMarcas[marca] || 0) + 1; }
+        if (forn) { mapForn[forn] = (mapForn[forn] || 0) + 1; }
+        if (desvio) { mapDesvios[desvio] = (mapDesvios[desvio] || 0) + 1; }
+    });
+
+    let qtdAbertas = totalRnc - qtdRespondidas; // SINAL RESTAURADO
+
+    // Atualiza Cards
+    document.getElementById('kpiRncAbertas').innerText = qtdAbertas;
+    document.getElementById('kpiRncAtrasadas').innerText = qtdAtrasadas;
+    document.getElementById('kpiRncRespondidas').innerText = qtdRespondidas;
+
+    // Destrói gráficos antigos
+    if(window.graficoRncMarca) window.graficoRncMarca.destroy();
+    if(window.graficoRncFornecedor) window.graficoRncFornecedor.destroy();
+    if(window.graficoRncPareto) window.graficoRncPareto.destroy();
+
+    // 1. Gráfico de Marcas (Rosca)
+    let arrMarcas = Object.keys(mapMarcas).map(k => ({label: k, val: mapMarcas[k]})).sort((a,b) => b.val - a.val); // SINAL RESTAURADO
+    let ctxMarca = document.getElementById('graficoRncMarca')?.getContext('2d');
+    if (ctxMarca && arrMarcas.length > 0) {
+        window.graficoRncMarca = new Chart(ctxMarca, {
+            type: 'doughnut',
+            data: {
+                labels: arrMarcas.map(x => x.label),
+                datasets: [{ data: arrMarcas.map(x => x.val), backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'], borderWidth: 0 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+        });
+    }
+
+    // 2. Gráfico Fornecedores (Barras Horizontais)
+    let arrForn = Object.keys(mapForn).map(k => ({label: k, val: mapForn[k]})).sort((a,b) => b.val - a.val).slice(0, 10); // SINAL RESTAURADO
+    let ctxForn = document.getElementById('graficoRncFornecedor')?.getContext('2d');
+    if (ctxForn && arrForn.length > 0) {
+        window.graficoRncFornecedor = new Chart(ctxForn, {
+            type: 'bar',
+            data: {
+                labels: arrForn.map(x => x.label),
+                datasets: [{ label: 'Qtd RNCs', data: arrForn.map(x => x.val), backgroundColor: '#6366f1', borderRadius: 4 }]
+            },
+            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { display: true }, y: { grid: { display: false } } }, plugins: { legend: { display: false } } }
+        });
+    }
+
+    // 3. Pareto de Desvios
+    let arrPareto = Object.keys(mapDesvios).map(k => ({ desvio: k, val: mapDesvios[k] })).sort((a,b) => b.val - a.val); // SINAL RESTAURADO
+    if (arrPareto.length === 0) arrPareto = [{ desvio: 'Sem dados', val: 0 }];
+
+    let topPareto = arrPareto.slice(0, 15);
+    let totalPareto = arrPareto.reduce((s, d) => s + d.val, 0);
+    let acumulado = 0; let dataParetoAcum = [];
+
+    topPareto.forEach(d => {
+        acumulado += d.val;
+        dataParetoAcum.push(totalPareto > 0 ? (acumulado / totalPareto) * 100 : 0);
+    });
+
+    let ctxPareto = document.getElementById('graficoRncPareto')?.getContext('2d');
+    if (ctxPareto) {
+        window.graficoRncPareto = new Chart(ctxPareto, {
+            type: 'bar',
+            data: {
+                labels: topPareto.map(d => d.desvio.length > 25 ? d.desvio.substring(0, 25)+'...' : d.desvio),
+                datasets: [
+                    { type: 'line', label: '% Acumulado', data: dataParetoAcum, borderColor: '#f59e0b', backgroundColor: '#f59e0b', yAxisID: 'y1', tension: 0.3 },
+                    { type: 'bar', label: 'Qtd RNCs', data: topPareto.map(d => d.val), backgroundColor: '#ef4444', borderRadius: 4, yAxisID: 'y' }
+                ]
+            },
+            options: {
+                layout: { padding: { top: 35 } },
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { grid: { display: false } },
+                    y: { grid: { display: false } },
+                    y1: { position: 'right', min: 0, max: 120, grid: { display: false }, ticks: { callback: v => v+'%' } }
+                }, plugins: { legend: { position: 'bottom' } }
+            },
+            plugins: [{
+                id: 'legendaParetoRNC',
+                afterDatasetsDraw: function(chart) {
+                    let ctx = chart.ctx;
+                    chart.data.datasets.forEach((dataset, i) => {
+                        if (dataset.type === 'line') {
+                            let meta = chart.getDatasetMeta(i);
+                            if (!meta.hidden) {
+                                meta.data.forEach((element, index) => {
+                                    ctx.fillStyle = '#b45309'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+                                    let dataString = dataset.data[index].toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%';
+                                    ctx.fillText(dataString, element.x, element.y - 8); // SINAL RESTAURADO
+                                });
+                            }
+                        }
+                    });
+                }
+            }]
+        });
+    }
+}
+</script>

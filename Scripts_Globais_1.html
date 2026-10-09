@@ -1,4 +1,19 @@
 <script>
+// ==========================================
+// CACHE GESTÃO DE RNCs
+// ==========================================
+window.DADOS_RNC_CACHE = <?!= JSON.stringify(getDadosRNC()) ?>;
+
+window.filtrosRncIniciados = false;
+window.graficoRncMarca = null;
+window.graficoRncFornecedor = null;
+window.graficoRncPareto = null;
+
+function iniciarAbaRNCs() {
+    if (!window.DADOS_RNC_CACHE || window.DADOS_RNC_CACHE.length === 0) return;
+    try { processarRNCs(); } catch (erro) { console.error("❌ ERRO AO MONTAR RNCs:", erro); }
+}
+
 window.filtrosInspIniciados = false;
 window.graficoInspPareto = null;
 window.graficoInspGraficas = null;

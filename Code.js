@@ -746,6 +746,38 @@ function getDadosQualidade() {
   }
 }
 
+function getDadosRNC() {
+  try {
+    var data = pgLerAbaCache_('bd_rnc', 19);
+
+    if (data.length <= 1) return [];
+    var headers = data[0];
+    var result = [];
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (!row[0] && !row[1]) continue;
+
+      var obj = {};
+      for (var j = 0; j < headers.length; j++) {
+        var header = headers[j] ? String(headers[j]).trim() : "Col" + j;
+        var valor = row[j];
+        if (valor instanceof Date) {
+          obj[header] = valor.toISOString();
+        } else {
+          obj[header] = valor;
+        }
+      }
+      result.push(obj);
+    }
+    return result;
+  } catch (e) {
+    Logger.log("Erro RNC: " + e.toString());
+    if (e.cacheLeitura) throw e;
+    return [];
+  }
+}
+
 function getDadosPPM() {
   try {
     var data = pgLerAbaCache_('ppm_consolidado', 7);
