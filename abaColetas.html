@@ -22,6 +22,18 @@
     #abaColetas .pg-am-ok { color: #284081; }
     #abaColetas .pg-am-conferir { color: #0C2340; border-left: 3px solid #FA4616; }
     #abaColetas #pgMapaAviso { background: #FFF6EB; border-color: #FCB04E; color: #0C2340; }
+    #abaColetas .pg-am-multifiltro { position: relative; min-width: 160px; }
+    #abaColetas .pg-am-multifiltro summary { display: flex; justify-content: space-between; gap: 12px; padding: 8px; border: 1px solid #CBD5E1; border-radius: 4px; list-style: none; cursor: pointer; background: #FFF; }
+    #abaColetas .pg-am-multifiltro summary::-webkit-details-marker { display: none; }
+    #abaColetas .pg-am-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 50; width: 270px; padding: 10px; border: 1px solid #D9E7F5; border-radius: 8px; background: #FFF; box-shadow: 0 8px 20px #0C234020; }
+    #abaColetas .pg-am-menu input[type="search"] { width: 100%; padding: 7px; border: 1px solid #CBD5E1; border-radius: 4px; }
+    #abaColetas .pg-am-acoes { display: flex; justify-content: space-between; gap: 8px; margin: 8px 0; }
+    #abaColetas .pg-am-acoes button { color: #284081; text-decoration: underline; }
+    #abaColetas .pg-am-opcoes { max-height: 220px; overflow-y: auto; }
+    #abaColetas .pg-am-opcao { display: flex; align-items: flex-start; gap: 7px; padding: 6px; cursor: pointer; font-weight: 400; }
+    #abaColetas .pg-am-opcao[hidden] { display: none; }
+    #abaColetas .pg-am-opcao:hover { background: #F1F7FC; }
+    #abaColetas .pg-am-opcao input { margin-top: 2px; accent-color: #284081; }
 </style>
 <div id="abaColetas" class="aba-conteudo hidden">
     <div class="mb-4 flex flex-wrap justify-between items-start gap-3">
@@ -38,16 +50,29 @@
     <div id="pgMapaAviso" role="status" class="hidden rounded-lg border border-amber-200 bg-amber-50 p-3 mb-4 text-xs text-amber-900"></div>
     <div class="bg-white p-4 rounded-xl border border-slate-200 mb-4">
         <div class="flex flex-wrap items-end gap-3 text-xs">
-            <label class="flex flex-col gap-1 font-bold text-slate-600">Gráfica<select id="pgMapaFiltroGrafica" onchange="pgFiltrarAcompanhamentoMapa()" class="rounded border border-slate-300 p-2"><option value="">Todas</option></select></label>
-            <label class="flex flex-col gap-1 font-bold text-slate-600">Marca<select id="pgMapaFiltroMarca" onchange="pgFiltrarAcompanhamentoMapa()" class="rounded border border-slate-300 p-2"><option value="">Todas</option></select></label>
-            <label class="flex flex-col gap-1 font-bold text-slate-600">CD destino<select id="pgMapaFiltroDestino" onchange="pgFiltrarAcompanhamentoMapa()" class="rounded border border-slate-300 p-2"><option value="">Todos</option></select></label>
+            <label class="flex flex-col gap-1 font-bold text-slate-600">Destino<select id="pgMapaTipoDestino" onchange="pgFiltrarAcompanhamentoMapa()" class="rounded border border-slate-300 p-2"><option value="CD" selected>CD</option><option value="ACAB">Acabadora</option><option value="TODOS">Todos</option></select></label>
+            <div class="flex flex-col gap-1 font-bold text-slate-600"><span>Gráfica</span><details class="pg-am-multifiltro">
+                <summary aria-label="Selecionar gráficas"><span id="pgMapaRotulo-grafica">Todas</span><span aria-hidden="true">▾</span></summary>
+                <div class="pg-am-menu"><input type="search" id="pgMapaBusca-grafica" aria-label="Buscar gráfica" placeholder="Buscar gráfica" oninput="pgBuscarFiltroMapa('grafica', this.value)">
+                    <div class="pg-am-acoes"><button type="button" onclick="pgMarcarFiltroMapa('grafica', true)">Marcar todos</button><button type="button" onclick="pgMarcarFiltroMapa('grafica', false)">Desmarcar todos</button></div><div id="pgMapaOpcoes-grafica" class="pg-am-opcoes"></div></div>
+            </details></div>
+            <div class="flex flex-col gap-1 font-bold text-slate-600"><span>Marca</span><details class="pg-am-multifiltro">
+                <summary aria-label="Selecionar marcas"><span id="pgMapaRotulo-marca">Todas</span><span aria-hidden="true">▾</span></summary>
+                <div class="pg-am-menu"><input type="search" id="pgMapaBusca-marca" aria-label="Buscar marca" placeholder="Buscar marca" oninput="pgBuscarFiltroMapa('marca', this.value)">
+                    <div class="pg-am-acoes"><button type="button" onclick="pgMarcarFiltroMapa('marca', true)">Marcar todos</button><button type="button" onclick="pgMarcarFiltroMapa('marca', false)">Desmarcar todos</button></div><div id="pgMapaOpcoes-marca" class="pg-am-opcoes"></div></div>
+            </details></div>
+            <div class="flex flex-col gap-1 font-bold text-slate-600"><span>CD destino</span><details class="pg-am-multifiltro">
+                <summary aria-label="Selecionar destinos"><span id="pgMapaRotulo-destino">Todos</span><span aria-hidden="true">▾</span></summary>
+                <div class="pg-am-menu"><input type="search" id="pgMapaBusca-destino" aria-label="Buscar destino" placeholder="Buscar destino" oninput="pgBuscarFiltroMapa('destino', this.value)">
+                    <div class="pg-am-acoes"><button type="button" onclick="pgMarcarFiltroMapa('destino', true)">Marcar todos</button><button type="button" onclick="pgMarcarFiltroMapa('destino', false)">Desmarcar todos</button></div><div id="pgMapaOpcoes-destino" class="pg-am-opcoes"></div></div>
+            </details></div>
             <label class="flex flex-col gap-1 font-bold text-slate-600">Mostrar<select id="pgMapaFiltroProblema" onchange="pgFiltrarAcompanhamentoMapa()" class="rounded border border-slate-300 p-2">
                 <option value="">Tudo</option><option value="OK">Dados iguais ao PCP</option><option value="SEM_PCP">SKU fora do PCP</option><option value="DADOS_DIFERENTES">CD, gráfica, marca ou envio diferente</option><option value="SEM_IDENTIDADE">Dados faltando no mapa</option><option value="MAIS">Coletado a mais</option><option value="MENOS">Coletado a menos</option><option value="PENDENTE">Coleta pendente</option><option value="SEM_MAPA">PCP sem mapa</option>
             </select></label>
             <label class="flex flex-col gap-1 font-bold text-slate-600">Buscar SKU, kit ou mapa<input id="pgMapaBusca" type="search" oninput="pgFiltrarAcompanhamentoMapa()" class="rounded border border-slate-300 p-2" placeholder="Digite para buscar"></label>
             <button type="button" onclick="pgLimparAcompanhamentoMapa()" class="rounded border border-slate-300 px-3 py-2 font-bold text-slate-600">Limpar</button>
         </div>
-        <p class="text-xs text-slate-500 mt-3">Use os filtros desta tela. Eles incluem os itens que não aparecem no PCP.</p>
+        <p class="text-xs text-slate-500 mt-3">Filtros próprios desta tela, com seleção múltipla. CD e Acabadora seguem os mesmos critérios do portal.</p>
     </div>
     <div id="pgMapaCards" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4"></div>
     <div class="bg-white p-4 rounded-xl border border-slate-200 mb-4 overflow-x-auto">

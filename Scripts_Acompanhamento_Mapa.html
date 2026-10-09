@@ -1,7 +1,8 @@
 <script>
 (function () {
     'use strict';
-    const estado = { dados: null, grupos: [], pagina: 0, carregando: null, erro: '' };
+    const estado = { dados: null, grupos: [], pagina: 0, carregando: null, erro: '',
+        selecoes: { grafica: null, marca: null, destino: null }, tipoDestino: '' };
     const $ = id => document.getElementById(id);
     const texto = valor => Array.isArray(valor) ? valor.join(', ') : String(valor ?? '').trim();
     const chave = valor => texto(valor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
@@ -20,6 +21,25 @@
         'Tiragem ' + (c.volumeEsperadoPCP == null ? 'não informada' : fmt(c.volumeEsperadoPCP)),
         'Tiragem coletada ' + (c.volumeColetadoPCP == null ? 'não informada' : fmt(c.volumeColetadoPCP)),
         'Tiragem a mais ' + fmt(c.volumeAMais),'Tiragem a menos ' + fmt(c.volumeAMenos)].join(' / ')).join(' | ');
+    const linhasFiltro = new WeakMap();
+    const fonte = valor => chave(valor).includes('ACAB') ? 'ACABADORA' : 'PCP';
+    function linhaFiltro(g) {
+        if (linhasFiltro.has(g)) return linhasFiltro.get(g);
+        const referencias = (g.linhasPCP || []).filter(r => r && typeof r === 'object');
+        // A comparação principal também prefere PCP quando está nas duas abas.
+        const ref = referencias.find(r => fonte(r.origem) === 'PCP') || referencias[0];
+        const origem = ref ? fonte(ref.origem) : chave(g.origemPCP).split(/\s*\/\s*/).includes('PCP') ? 'PCP' : fonte(g.origemPCP);
+        const linha = { _SOURCE: origem, GRAFICA_FINAL: g.grafica, UNIDADE: g.marca,
+            CD_MAPA: g.destino, 'CD DESTINO': g.destino };
+        linhasFiltro.set(g, linha);
+        return linha;
+    }
+    function doTipoDestino(g) {
+        const tipo = $('pgMapaTipoDestino').value;
+        if (tipo === 'TODOS') return true;
+        const linha = linhaFiltro(g);
+        return tipo === 'ACAB' ? window.pgEhDestinoAcabadora(linha) : window.pgEhDestinoCD(linha);
+    }
     function aviso(mensagem) {
         const el = $('pgMapaAviso');
         if (el) { el.textContent = mensagem || ''; el.classList.toggle('hidden', !mensagem); }
@@ -41,12 +61,37 @@
         }
         return dados;
     }
-    function opcoes(id, campo, todas) {
-        const el = $(id), anterior = el.value;
-        const valores = [...new Set(estado.dados.grupos.map(g => texto(g[campo])))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
-        el.innerHTML = '<option value="">' + todas + '</option>' + valores.map(v => '<option value="' + esc(v || '__VAZIO__') + '">' + esc(v || 'Não informado') + '</option>').join('');
-        el.value = valores.includes(anterior) || anterior === '__VAZIO__' ? anterior : '';
+    function caixasFiltro(campo) {
+        return [...document.querySelectorAll('#pgMapaOpcoes-' + campo + ' input[type="checkbox"]')];
     }
+    function opcoes(campo) {
+        let selecionadas = estado.selecoes[campo];
+        const valores = [...new Set(estado.dados.grupos.filter(doTipoDestino).map(g => texto(g[campo])))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+        if (selecionadas?.size && !valores.some(v => selecionadas.has(v))) selecionadas = null;
+        $('pgMapaOpcoes-' + campo).innerHTML = valores.map(v => '<label class="pg-am-opcao"><input type="checkbox" value="' + esc(v) + '" ' +
+            (!selecionadas || selecionadas.has(v) ? 'checked ' : '') + 'onchange="pgFiltrarAcompanhamentoMapa()"><span>' + esc(v || 'Não informado') + '</span></label>').join('');
+        const busca = $('pgMapaBusca-' + campo);
+        if (busca) busca.value = '';
+    }
+    function lerSelecoes() {
+        ['grafica','marca','destino'].forEach(campo => {
+            const caixas = caixasFiltro(campo), marcadas = caixas.filter(cb => cb.checked);
+            estado.selecoes[campo] = marcadas.length === caixas.length ? null : new Set(marcadas.map(cb => cb.value));
+            $('pgMapaRotulo-' + campo).textContent = marcadas.length === caixas.length ? (campo === 'destino' ? 'Todos' : 'Todas') : marcadas.length === 1
+                ? (marcadas[0].value || 'Não informado') : marcadas.length + (campo === 'destino' ? ' selecionados' : ' selecionadas');
+        });
+    }
+    window.pgMarcarFiltroMapa = function(campo, marcar) {
+        caixasFiltro(campo).forEach(cb => cb.checked = marcar);
+        window.pgFiltrarAcompanhamentoMapa();
+    };
+    window.pgBuscarFiltroMapa = function(campo, busca) {
+        caixasFiltro(campo).forEach(cb => cb.closest('label').hidden = !chave(cb.value || 'Não informado').includes(chave(busca)));
+    };
+    document.addEventListener('click', function(e) {
+        const menu = e.target.closest('#abaColetas .pg-am-multifiltro');
+        document.querySelectorAll('#abaColetas .pg-am-multifiltro[open]').forEach(el => { if (el !== menu) el.open = false; });
+    });
     async function carregar(atualizar) {
         if (estado.carregando) return estado.carregando;
         estado.carregando = (async () => {
@@ -55,9 +100,8 @@
                 if (atualizar) await rpc('atualizarAcompanhamentoMapa');
                 estado.dados = validar(await rpc('getAcompanhamentoMapa'));
                 estado.erro = '';
-                opcoes('pgMapaFiltroGrafica', 'grafica', 'Todas');
-                opcoes('pgMapaFiltroMarca', 'marca', 'Todas');
-                opcoes('pgMapaFiltroDestino', 'destino', 'Todos');
+                estado.tipoDestino = $('pgMapaTipoDestino').value;
+                ['grafica','marca','destino'].forEach(opcoes);
                 const atualizado = horario(estado.dados.geradoEm);
                 $('pgMapaAtualizacao').textContent = (atualizado ? 'Conferido em ' + atualizado + '.' : '') + ' Visão geral, sem recorte de data.';
                 window.pgFiltrarAcompanhamentoMapa();
@@ -81,10 +125,10 @@
     };
     window.pgAtualizarAcompanhamentoMapa = () => carregar(true);
     function selecionados() {
-        const filtros = [['pgMapaFiltroGrafica', 'grafica'], ['pgMapaFiltroMarca', 'marca'], ['pgMapaFiltroDestino', 'destino']];
         const problema = $('pgMapaFiltroProblema').value, busca = chave($('pgMapaBusca').value);
-        return (estado.dados?.grupos || []).filter(g => {
-            if (!filtros.every(([id, campo]) => !$(id).value || ($(id).value === '__VAZIO__' ? !texto(g[campo]) : texto(g[campo]) === $(id).value))) return false;
+        return estado.dados.grupos.filter(g => {
+            if (!doTipoDestino(g)) return false;
+            if (!['grafica','marca','destino'].every(campo => !estado.selecoes[campo] || estado.selecoes[campo].has(texto(g[campo])))) return false;
             if (problema === 'MAIS' && !chave(g.statusColeta).includes('MAIS')) return false;
             if (problema === 'MENOS' && !chave(g.statusColeta).includes('MENOS')) return false;
             if (problema === 'PENDENTE' && !chave(g.statusColeta).includes('PENDENTE')) return false;
@@ -110,6 +154,11 @@
     window.pgFiltrarAcompanhamentoMapa = function () {
         if (!estado.dados) return;
         estado.pagina = 0;
+        if (estado.tipoDestino !== $('pgMapaTipoDestino').value) {
+            estado.tipoDestino = $('pgMapaTipoDestino').value;
+            ['grafica','marca','destino'].forEach(opcoes);
+        }
+        lerSelecoes();
         const prioridade = { SEM_IDENTIDADE:0, SEM_PCP:1, DADOS_DIFERENTES:2, SEM_MAPA:3, OK:4 };
         estado.grupos = selecionados().sort((a,b) => (prioridade[status(a)] ?? 5) - (prioridade[status(b)] ?? 5) ||
             (numero(b.volumeAMais) + numero(b.volumeAMenos)) - (numero(a.volumeAMais) + numero(a.volumeAMenos)) || texto(a.sku).localeCompare(texto(b.sku)));
@@ -153,11 +202,19 @@
         estado.pagina = Math.max(0, Math.min(Math.max(0,Math.ceil(estado.grupos.length/100)-1), estado.pagina + passo)); desenharLinhas();
     };
     window.pgLimparAcompanhamentoMapa = function () {
-        ['pgMapaFiltroGrafica','pgMapaFiltroMarca','pgMapaFiltroDestino','pgMapaFiltroProblema','pgMapaBusca'].forEach(id => $(id).value = '');
+        ['grafica','marca','destino'].forEach(campo => {
+            estado.selecoes[campo] = null;
+            caixasFiltro(campo).forEach(cb => cb.checked = true);
+            $('pgMapaBusca-' + campo).value = '';
+            window.pgBuscarFiltroMapa(campo, '');
+        });
+        ['pgMapaFiltroProblema','pgMapaBusca'].forEach(id => $(id).value = '');
+        $('pgMapaTipoDestino').value = 'CD';
         window.pgFiltrarAcompanhamentoMapa();
     };
     window.pgMontarBaseAcompanhamentoMapa = function () {
         if (!estado.dados || estado.carregando) throw new Error('Aguarde o acompanhamento terminar de carregar.');
+        window.pgFiltrarAcompanhamentoMapa();
         const cabecalho = ['Conferência','Gráfica','Marca','CD destino','SKU','Kit','Envio','Código mapa','Linha mapa',
             'Tiragem no mapa','Tiragem coletada no mapa','Data agendada','Data coleta TP','Data entrega TP','Classificação no mapa',
             'Origem PCP','Linhas PCP','Tiragem PCP (uma vez por item)','Tiragem coletada PCP (uma vez por item)',
