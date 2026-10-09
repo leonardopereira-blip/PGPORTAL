@@ -457,6 +457,7 @@ function atualizarCacheQualidade() {
 
 function atualizarCacheMapa() {
   pgAtualizarArquivoCache_('cache_mapa.json', getDadosMapaSaida);
+  return atualizarAcompanhamentoMapa();
 }
 
 function atualizarTodoOCache() {
@@ -487,6 +488,7 @@ function atualizarTodoOCache() {
     }
   });
   if (falhas.length) throw new Error('Caches com falha: ' + falhas.join(' | '));
+  if (typeof atualizarAcompanhamentoMapa === 'function') atualizarAcompanhamentoMapa();
   console.log('[cache] Todos os caches atualizados');
 }
 

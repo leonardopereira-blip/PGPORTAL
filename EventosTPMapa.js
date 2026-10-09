@@ -9,6 +9,8 @@ function pgComplementarEventosTPMapa_(mapa, jsonPublicado) {
     }
     var eventos = [], semAP = [], vistas = {};
     Object.keys(mapa).forEach(function(k) {
+      // A auditoria inclui linhas fora das listas temporais; nao amplia seus calculos.
+      if (k === '__linhasFisicas') return;
       if (!Array.isArray(mapa[k])) return;
       mapa[k].forEach(function(e) {
         if (!e || e.eventoTPVersao !== 2) throw new Error('cache_mapa.json com parcelas antigas: atualize o cache do mapa.');
@@ -38,6 +40,10 @@ function pgComplementarEventosTPMapa_(mapa, jsonPublicado) {
     mapa.__erroAgendaTP = e.message;
     console.warn('[mapa TP] Mantendo datas do PCP: ' + e.message);
   }
+  // O acompanhamento le o JSON bruto no servidor. Estas linhas nao ampliam o
+  // payload nem as listas recebidas pelas telas antigas de TP.
+  delete mapa.__linhasFisicas;
+  delete mapa.__acompanhamentoMapaVersao;
   return mapa;
 }
 

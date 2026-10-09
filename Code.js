@@ -898,8 +898,9 @@ function getDadosCaixas() {
 function getDadosMapaSaida() {
   try {
     // AT/AU guardam as datas TP e AX o envio usado pela formula do PCP.
-    var data = pgLerAbaCache_(['MAPA DE SAÍDA', 'MAPA DE SAIDA', 'MAPA DE SAIDA '], 50);
+    var data = pgLerAbaCache_(['MAPA DE SAÍDA', 'MAPA DE SAIDA', 'MAPA DE SAIDA '], 53);
     var mapaSKU = {};
+    var linhasAcompanhamento = [];
     var hoje = new Date();
     var hojeTP = Utilities.formatDate(hoje, 'America/Sao_Paulo', 'yyyy-MM-dd');
     hoje.setHours(23, 59, 59, 999);
@@ -993,6 +994,17 @@ function getDadosMapaSaida() {
         entregaTP: dataTP(row[46]), // AU: Entrega_TP
         statusTP: texto(row[47]) // AV: Status_TP
       };
+      // Resultados 0/vazios de formulas em linhas sem registro nao sao mapas.
+      if (evento.codigoMapa || evento.sku || (evento.volumeSolicitado || 0) !== 0 ||
+          (evento.volumeColetado || 0) !== 0 || texto(row[13])) {
+        var fisica = Object.assign({}, evento, {
+          atualizadoOrigem: row[3] instanceof Date ? row[3].toISOString() : texto(row[3]),
+          marcaOriginal: texto(row[5]), destinoOriginal: texto(row[6]), graficaOriginal: texto(row[13]),
+          descricao: texto(row[12]), tiragemRelacionada: quantidadeTP(row[42]),
+          solicitado: quantidadeTP(row[50]), confirmado: quantidadeTP(row[51]), naoGraficos: texto(row[52])
+        });
+        linhasAcompanhamento.push(fisica);
+      }
 
       // AP nao participa da chave da formula. Agenda tambem recebe essas linhas,
       // sem inclui-las nas listas usadas por Coleta TP/Entrega TP realizadas.
@@ -1021,6 +1033,8 @@ function getDadosMapaSaida() {
     mapaSKU.__forecastTP = pgChavesForecastTP_();
     mapaSKU.__agendaTPCompleta = true;
     mapaSKU.__agendaTPGeradoEm = new Date().toISOString();
+    mapaSKU.__acompanhamentoMapaVersao = 1;
+    mapaSKU.__linhasFisicas = linhasAcompanhamento;
     return mapaSKU;
    
   } catch (e) {

@@ -1,0 +1,193 @@
+<script>
+(function () {
+    'use strict';
+    const estado = { dados: null, grupos: [], pagina: 0, carregando: null, erro: '' };
+    const $ = id => document.getElementById(id);
+    const texto = valor => Array.isArray(valor) ? valor.join(', ') : String(valor ?? '').trim();
+    const chave = valor => texto(valor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    const numero = valor => Number.isFinite(Number(valor)) ? Number(valor) : 0;
+    const fmt = valor => numero(valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    const esc = valor => texto(valor).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const rotulos = { OK: 'Dados iguais ao PCP', SEM_PCP: 'SKU fora do PCP', DADOS_DIFERENTES: 'Dados diferentes',
+        SEM_IDENTIDADE: 'Dados faltando no mapa', SEM_MAPA: 'PCP sem mapa' };
+    const status = g => g.statusComparacao || 'SEM_IDENTIDADE';
+    const linhasPCP = g => (g.linhasPCP || []).map(l => typeof l === 'object'
+        ? [l.origem, l.linha && 'linha ' + l.linha].filter(Boolean).join(' ') : texto(l)).join(', ');
+    const horario = valor => valor ? new Date(valor).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
+    const contexto = g => (g.candidatosPCP || []).map(c => [c.origem || c.origemPCP, c.linha && 'linha ' + c.linha,
+        c.grafica, c.marca, c.destino, c.envio].filter(Boolean).join(' / ')).join(' | ');
+    const comparacoes = g => (g.comparacoesPCP || []).map(c => [c.origem,c.statusColeta,
+        'Tiragem ' + (c.volumeEsperadoPCP == null ? 'não informada' : fmt(c.volumeEsperadoPCP)),
+        'Coletado ' + (c.volumeColetadoPCP == null ? 'não informado' : fmt(c.volumeColetadoPCP)),
+        'A mais ' + fmt(c.volumeAMais),'A menos ' + fmt(c.volumeAMenos)].join(' / ')).join(' | ');
+    function aviso(mensagem) {
+        const el = $('pgMapaAviso');
+        if (el) { el.textContent = mensagem || ''; el.classList.toggle('hidden', !mensagem); }
+    }
+    function rpc(nome, ...args) {
+        return new Promise((resolve, reject) => google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[nome](...args));
+    }
+    function ocupado(valor) {
+        if ($('pgMapaAtualizar')) {
+            $('pgMapaAtualizar').disabled = valor;
+            $('pgMapaAtualizar').textContent = valor ? 'Carregando…' : 'Atualizar acompanhamento';
+        }
+        if ($('pgMapaBaixar')) $('pgMapaBaixar').disabled = valor || !estado.dados;
+    }
+    function validar(dados) {
+        if (typeof dados === 'string') dados = JSON.parse(dados);
+        if (!dados || dados.disponivel === false || dados.erro || dados._ERRO_CRITICO || !Array.isArray(dados.grupos) || !Array.isArray(dados.detalhes)) {
+            throw new Error(dados?.erro || dados?._ERRO_CRITICO || dados?.mensagem || 'Acompanhamento indisponível. Atualize os caches do mapa e do PCP.');
+        }
+        return dados;
+    }
+    function opcoes(id, campo, todas) {
+        const el = $(id), anterior = el.value;
+        const valores = [...new Set(estado.dados.grupos.map(g => texto(g[campo])))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+        el.innerHTML = '<option value="">' + todas + '</option>' + valores.map(v => '<option value="' + esc(v || '__VAZIO__') + '">' + esc(v || 'Não informado') + '</option>').join('');
+        el.value = valores.includes(anterior) || anterior === '__VAZIO__' ? anterior : '';
+    }
+    async function carregar(atualizar) {
+        if (estado.carregando) return estado.carregando;
+        estado.carregando = (async () => {
+            ocupado(true); aviso('');
+            try {
+                if (atualizar) await rpc('atualizarAcompanhamentoMapa');
+                estado.dados = validar(await rpc('getAcompanhamentoMapa'));
+                estado.erro = '';
+                opcoes('pgMapaFiltroGrafica', 'grafica', 'Todas');
+                opcoes('pgMapaFiltroMarca', 'marca', 'Todas');
+                opcoes('pgMapaFiltroDestino', 'destino', 'Todos');
+                const atualizado = horario(estado.dados.geradoEm);
+                $('pgMapaAtualizacao').textContent = (atualizado ? 'Conferido em ' + atualizado + '.' : '') + ' Visão geral, sem recorte de data.';
+                window.pgFiltrarAcompanhamentoMapa();
+                aviso((estado.dados.alertas || []).map(a => typeof a === 'string' ? a : a.mensagem || '').filter(Boolean).join(' '));
+            } catch (e) {
+                estado.erro = e?.message || String(e);
+                // Uma falha não permite baixar a base anterior como se estivesse atualizada.
+                estado.dados = null; estado.grupos = [];
+                $('pgMapaCards').innerHTML = ''; $('pgMapaResumo').innerHTML = '';
+                $('pgMapaDetalhes').innerHTML = '<tr><td colspan="12" class="p-5 text-slate-500">Acompanhamento indisponível.</td></tr>';
+                $('pgMapaContagem').textContent = ''; $('pgMapaPagina').textContent = '';
+                aviso(estado.erro);
+            } finally { ocupado(false); estado.carregando = null; }
+        })();
+        return estado.carregando;
+    }
+    window.renderizarDashColetas = function () {
+        if (!$('abaColetas')) return;
+        if (estado.dados) window.pgFiltrarAcompanhamentoMapa();
+        else if (!estado.erro) carregar(false);
+    };
+    window.pgAtualizarAcompanhamentoMapa = () => carregar(true);
+    function selecionados() {
+        const filtros = [['pgMapaFiltroGrafica', 'grafica'], ['pgMapaFiltroMarca', 'marca'], ['pgMapaFiltroDestino', 'destino']];
+        const problema = $('pgMapaFiltroProblema').value, busca = chave($('pgMapaBusca').value);
+        return (estado.dados?.grupos || []).filter(g => {
+            if (!filtros.every(([id, campo]) => !$(id).value || ($(id).value === '__VAZIO__' ? !texto(g[campo]) : texto(g[campo]) === $(id).value))) return false;
+            if (problema === 'MAIS' && !chave(g.statusColeta).includes('MAIS')) return false;
+            if (problema === 'MENOS' && !chave(g.statusColeta).includes('MENOS')) return false;
+            if (problema === 'PENDENTE' && !chave(g.statusColeta).includes('PENDENTE')) return false;
+            if (problema && !['MAIS','MENOS','PENDENTE'].includes(problema) && status(g) !== problema) return false;
+            return !busca || chave([g.sku,g.kit,g.envio,texto(g.codigosMapa)].join(' ')).includes(busca);
+        });
+    }
+    function resumo(grupos, detalhes) {
+        const r = { mapa: 0, coletado: 0, comPCP: 0, semPCP: 0, diferentes: 0, mais: 0, menos: 0, semMapa: 0,
+            mapas: new Set(detalhes.map(d => texto(d.codigoMapa)).filter(Boolean)).size, linhas: detalhes.length, faltando: 0 };
+        grupos.forEach(g => {
+            const s = status(g), volume = numero(g.volumeMapa);
+            r.mapa += volume; r.coletado += numero(g.volumeColetado);
+            if (s === 'OK') r.comPCP += volume;
+            if (s === 'SEM_PCP') r.semPCP += volume;
+            if (s === 'DADOS_DIFERENTES' || s === 'SEM_IDENTIDADE') r.diferentes += volume;
+            if (s === 'SEM_IDENTIDADE') r.faltando++;
+            if (s === 'SEM_MAPA') r.semMapa += numero(g.volumeEsperadoPCP);
+            r.mais += numero(g.volumeAMais); r.menos += numero(g.volumeAMenos);
+        });
+        return r;
+    }
+    window.pgFiltrarAcompanhamentoMapa = function () {
+        if (!estado.dados) return;
+        estado.pagina = 0;
+        const prioridade = { SEM_IDENTIDADE:0, SEM_PCP:1, DADOS_DIFERENTES:2, SEM_MAPA:3, OK:4 };
+        estado.grupos = selecionados().sort((a,b) => (prioridade[status(a)] ?? 5) - (prioridade[status(b)] ?? 5) ||
+            (numero(b.volumeAMais) + numero(b.volumeAMenos)) - (numero(a.volumeAMais) + numero(a.volumeAMenos)) || texto(a.sku).localeCompare(texto(b.sku)));
+        const ids = new Set(estado.grupos.map(g => g.id));
+        const detalhes = estado.dados.detalhes.filter(d => ids.has(d.grupoId));
+        const r = resumo(estado.grupos, detalhes);
+        const contarSKU = tipo => new Set(estado.grupos.filter(g=>status(g) === tipo).map(g=>g.sku).filter(Boolean)).size;
+        const cards = [ ['No mapa',r.mapa,fmt(r.mapas)+' mapas · '+fmt(r.linhas)+' linhas'], ['Com PCP',r.comPCP,fmt(contarSKU('OK'))+' SKUs com dados iguais'],
+            ['SKU fora do PCP',r.semPCP,fmt(contarSKU('SEM_PCP'))+' SKUs não encontrados nas duas abas'], ['Dados diferentes',r.diferentes,r.faltando ? fmt(r.faltando)+' itens com dados faltando' : 'CD, gráfica, marca ou envio'],
+            ['Coletado a mais',r.mais,fmt(estado.grupos.filter(g=>chave(g.statusColeta).includes('MAIS')).length)+' itens · status coleta do PCP'], ['Coletado a menos',r.menos,fmt(estado.grupos.filter(g=>chave(g.statusColeta).includes('MENOS')).length)+' itens · status coleta do PCP'],
+            ['PCP sem mapa',r.semMapa,'Tiragem prevista sem mapa correspondente'], ['Coletado no mapa',r.coletado,'Volume realizado, separado do solicitado'] ];
+        $('pgMapaCards').innerHTML = cards.map(([titulo,valor,sub]) => '<div class="rounded-xl border border-slate-200 bg-white p-4"><span class="text-xs font-bold text-slate-600">'+esc(titulo)+'</span><div class="text-2xl font-black text-slate-900 mt-1">'+fmt(valor)+'</div><p class="text-xs text-slate-500 mt-1">'+esc(sub)+'</p></div>').join('');
+        const graficas = [...new Set(estado.grupos.map(g => texto(g.grafica)))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+        $('pgMapaResumo').innerHTML = graficas.map(g => {
+            const rg = resumo(estado.grupos.filter(i => texto(i.grafica) === g), []);
+            return '<tr class="border-b border-slate-100"><td class="p-2 font-bold">'+esc(g || 'Não informado')+'</td>'+[rg.mapa,rg.comPCP,rg.semPCP,rg.diferentes,rg.mais,rg.menos,rg.semMapa].map(v=>'<td class="p-2 text-right">'+fmt(v)+'</td>').join('')+'</tr>';
+        }).join('') || '<tr><td colspan="8" class="p-4 text-slate-500">Nenhum item para estes filtros.</td></tr>';
+        desenharLinhas();
+    };
+    function desenharLinhas() {
+        const inicio = estado.pagina * 100, linhas = estado.grupos.slice(inicio, inicio + 100);
+        $('pgMapaDetalhes').innerHTML = linhas.map(g => {
+            const s = status(g), cor = s === 'OK' ? 'text-emerald-700' : s === 'SEM_MAPA' ? 'text-amber-700' : 'text-rose-700';
+            const codigos = texto(g.codigosMapa), conferir = [texto(g.diferencas),g.notaFonte,
+                g.multiplasFontes ? comparacoes(g) : contexto(g)].filter(Boolean).join(' · ');
+            return '<tr class="border-b border-slate-100 align-top"><td class="p-2 font-bold '+cor+'">'+esc(rotulos[s] || s)+'</td>'+
+                '<td class="p-2">'+esc(g.grafica || 'Gráfica não informada')+'<br>'+esc(g.marca || 'Marca não informada')+'<br>'+esc(g.destino || 'CD não informado')+'</td>'+
+                '<td class="p-2">'+esc(g.sku || 'SKU não informado')+'<br>'+esc(g.kit || 'Kit não informado')+'<br>'+esc(g.envio || 'Envio não informado')+'</td>'+
+                '<td class="p-2 max-w-xs whitespace-normal">'+esc(codigos || 'Sem mapa')+'</td>'+
+                [g.volumeMapa,g.volumeColetado,g.volumeEsperadoPCP,g.volumeColetadoPCP].map(v=>'<td class="p-2 text-right">'+(v === null || v === undefined ? 'Não informado' : fmt(v))+'</td>').join('')+
+                '<td class="p-2">'+esc(g.statusColeta || 'Sem status no PCP')+'</td><td class="p-2 text-right font-bold text-rose-700">'+fmt(g.volumeAMais)+'</td><td class="p-2 text-right font-bold text-amber-700">'+fmt(g.volumeAMenos)+'</td>'+
+                '<td class="p-2 max-w-sm whitespace-normal">'+esc(conferir || [g.origemPCP,linhasPCP(g)].filter(Boolean).join(' · ') || 'SKU não encontrado no PCP')+'</td></tr>';
+        }).join('') || '<tr><td colspan="12" class="p-5 text-slate-500">Nenhum item para estes filtros.</td></tr>';
+        $('pgMapaContagem').textContent = fmt(estado.grupos.length) + ' itens';
+        $('pgMapaPagina').textContent = estado.grupos.length ? (inicio + 1) + '–' + Math.min(inicio+100,estado.grupos.length) + ' de ' + fmt(estado.grupos.length) : '0 itens';
+        $('pgMapaAnterior').disabled = estado.pagina === 0;
+        $('pgMapaProxima').disabled = inicio + 100 >= estado.grupos.length;
+    }
+    window.pgPaginaAcompanhamentoMapa = function (passo) {
+        estado.pagina = Math.max(0, Math.min(Math.max(0,Math.ceil(estado.grupos.length/100)-1), estado.pagina + passo)); desenharLinhas();
+    };
+    window.pgLimparAcompanhamentoMapa = function () {
+        ['pgMapaFiltroGrafica','pgMapaFiltroMarca','pgMapaFiltroDestino','pgMapaFiltroProblema','pgMapaBusca'].forEach(id => $(id).value = '');
+        window.pgFiltrarAcompanhamentoMapa();
+    };
+    window.pgMontarBaseAcompanhamentoMapa = function () {
+        if (!estado.dados || estado.carregando) throw new Error('Aguarde o acompanhamento terminar de carregar.');
+        const cabecalho = ['Conferência','Gráfica','Marca','CD destino','SKU','Kit','Envio','Código mapa','Linha mapa',
+            'Volume mapa','Coletado no mapa','Data agendada','Data coleta TP','Data entrega TP','Classificação no mapa',
+            'Origem PCP','Linhas PCP','Tiragem PCP (uma vez por item)','Coletado PCP (uma vez por item)',
+            'Status coleta PCP','A mais (uma vez por item)','A menos (uma vez por item)','Diferenças nos dados','Dados no PCP','Atualização da origem',
+            'Comparação por aba PCP','Tiragem vencida PCP (uma vez por item)','Recebido Acabadora (uma vez por item)'];
+        const porGrupo = new Map();
+        estado.dados.detalhes.forEach(d => { if (!porGrupo.has(d.grupoId)) porGrupo.set(d.grupoId, []); porGrupo.get(d.grupoId).push(d); });
+        const linhas = [];
+        estado.grupos.forEach(g => {
+            const parcelas = porGrupo.get(g.id) || [{}];
+            parcelas.forEach((d,i) => linhas.push([rotulos[status(g)] || status(g),d.grafica || g.grafica,d.marca || g.marca,d.destino || g.destino,
+                d.sku || g.sku,d.kit || g.kit,d.envio || g.envio,d.codigoMapa || '',d.linhaMapa || '',numero(d.volumeMapa),numero(d.volumeColetado),
+                d.dataAgendada || '',d.coletaTP || '',d.entregaTP || '',d.statusNaoGrafico || '',g.origemPCP || '',linhasPCP(g),
+                i ? 0 : g.volumeEsperadoPCP == null ? 'Não informado' : numero(g.volumeEsperadoPCP),
+                i ? 0 : g.volumeColetadoPCP == null ? 'Não informado' : numero(g.volumeColetadoPCP),g.statusColeta || '',
+                i ? 0 : numero(g.volumeAMais),i ? 0 : numero(g.volumeAMenos),texto(g.diferencas),contexto(g),d.atualizadoOrigem || '',
+                comparacoes(g),i ? 0 : (g.basesStatus || []).reduce((s,b)=>s + numero(b.vencido),0),
+                i ? 0 : (g.basesStatus || []).reduce((s,b)=>s + numero(b.recebido),0)]));
+        });
+        return [{ nome: 'Acompanhamento mapas', cabecalho, linhas, colunasData:[11,12,13],colunasNumero:[8,9,10,17,18,20,21,26,27] }];
+    };
+    window.pgBaixarAcompanhamentoMapa = function () {
+        try {
+            if (typeof window.pgGerarExcelAbas !== 'function') throw new Error('O exportador Excel não carregou. Atualize o portal.');
+            const abas = window.pgMontarBaseAcompanhamentoMapa();
+            if (!abas[0].linhas.length) throw new Error('Nenhum item para estes filtros.');
+            const url = URL.createObjectURL(window.pgGerarExcelAbas(abas));
+            const a = document.createElement('a'); a.href = url;
+            a.download = 'Acompanhamento_Mapas_' + new Date().toLocaleDateString('sv-SE',{timeZone:'America/Sao_Paulo'}) + '.xlsx';
+            document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),60000);
+        } catch (e) { aviso(e?.message || String(e)); }
+    };
+})();
+</script>
