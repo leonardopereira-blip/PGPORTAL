@@ -1,5 +1,5 @@
 <script>
-// Datas por movimento complementam a formula do PCP; nunca substituem sua quantidade.
+// Solicitado segue a formula do PCP; realizado usa AN nas datas de cada movimento.
 (function() {
     'use strict';
     const indicesMapa = new WeakMap();
@@ -7,7 +7,8 @@
     const camposIdentidade = ['_SOURCE', 'BASE', '_base', 'MARCA_FINAL', 'UNIDADE', 'BR', 'AE',
         'GRAFICA_FINAL', 'GRÁFICA', 'GRAFICA', 'GRÁFICA_MAPA', 'S', 'AD', 'BQ', 'SKU', 'SKU_REAL', 'AJ', 'BW',
         'CD_MAPA', 'CD DESTINO', 'CD_DESTINO', 'CD_FINAL', 'AS', 'ENVIO', 'BT',
-        'DT_ENTREGA_DG', 'DG', 'BU', 'G', '_PG_TP_CHAVE_FORECAST', '_PG_TP_FORECAST', '_PG_TP_ORIGEM'];
+        'DT_ENTREGA_DG', 'DG', 'BU', 'G', 'GIRO_TOTAL_BA', 'BA', 'TIRAGEM',
+        '_PG_TP_CHAVE_FORECAST', '_PG_TP_FORECAST', '_PG_TP_ORIGEM'];
     const normal = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .trim().replace(/\s+/g, ' ').toUpperCase();
     const textoCompleto = v => !!normal(v) && !['-', 'N/A', 'NA', 'UNDEFINED', 'NULL', '#N/A'].includes(normal(v));
@@ -52,6 +53,8 @@
         const listas = Array.isArray(mapa.__eventosTPAtuais)
             ? [mapa.__eventosTPAtuais] : Object.keys(mapa)
                 .filter(k => k !== '__parcelasAgendaSemAP').map(k => mapa[k]);
+        // AP nao faz parte do SOMASES. A identidade completa e a linha fisica bastam.
+        listas.push(mapa.__parcelasAgendaSemAP || []);
         listas.forEach(lista => {
             if (!Array.isArray(lista)) return;
             lista.forEach(evento => {
@@ -84,13 +87,25 @@
         Object.defineProperty(eventos, 'conciliacao', { value: detalhe, enumerable: false });
         return eventos;
     }
-    function temExcecao(linha, identidade) {
-        if (linha?._PG_TP_FORECAST || normal(linha?._PG_TP_ORIGEM).includes('FORECAST')) return 'forecast-soberano';
+    function excecaoPosigraf(linha, identidade) {
         const graficaFinal = normal(primeiro(linha, ['GRAFICA_FINAL', 'BQ', 'GRÁFICA', 'GRAFICA']));
         if (graficaFinal !== 'POSIGRAF' || !['CQT', 'PIA', 'SPE'].includes(identidade.partes[0])) return '';
         const especial = primeiro(linha, ['DT_ENTREGA_DG', identidade.acabadora ? 'BU' : 'DG']);
         return data(especial) || (typeof especial === 'number' && especial > 0) ? 'excecao-posigraf' : '';
     }
+    function temExcecao(linha, identidade) {
+        if (linha?._PG_TP_FORECAST || normal(linha?._PG_TP_ORIGEM).includes('FORECAST')) return 'forecast-soberano';
+        return excecaoPosigraf(linha, identidade);
+    }
+    window.pgTiragemAgendadaPCP = function(linha) {
+        const campo = nome => window.pgCampoPrazoV35?.(linha, nome) ?? linha?.[nome];
+        const valor = campo('TIRAGEM AGENDADA');
+        if (valor == null || String(valor).trim() === '') return null;
+        // As duas formulas retornam BA nesta excecao: conta uma unica solicitacao.
+        if (excecaoPosigraf(linha, identidadeLinha(linha)) &&
+            window.pgNumeroPrazoV35(campo('TIRAGEM COLETADA')) > 0) return 0;
+        return window.pgNumeroPrazoV35(valor);
+    };
     // Agenda independente de AZ/EB. O matching usa a grafica da quantidade (S).
     const identidadeAgenda = linha => {
         const id = identidadeLinha(linha);
@@ -113,7 +128,7 @@
         const base = window.dadosGlobais || window.dadosTotalCanonico || [];
         if (cacheAgenda?.mapa === mapa && cacheAgenda.base === base &&
             cacheAgenda.tamanho === base.length && cacheAgenda.hoje === hoje) return cacheAgenda;
-        const donos = new Map(), referencias = new WeakSet(), porChave = new Map();
+        const donos = new Map(), referencias = new WeakSet(), porChave = new Map(), totaisFormula = new Map();
         const ordem = base.map((linha, i) => ({ linha, i, id: identidadeAgenda(linha) }));
         ordem.sort((a, b) => Number(a.id.acabadora) - Number(b.id.acabadora) ||
             (Number(a.linha._PG_TP_LINHA) || a.i + 1) - (Number(b.linha._PG_TP_LINHA) || b.i + 1));
@@ -140,14 +155,17 @@
                 if (solicitado === null || coletado === null || solicitado < 0 || coletado < 0) {
                     descartar('quantidade-invalida', 0); return;
                 }
-                const volume = Math.max(0, solicitado - coletado);
+                const partes = [e.marca, e.grafica, e.sku, e.destino, e.envio].map(normal);
+                const k = chave(partes), dono = partes.every(textoCompleto) ? donos.get(k) : null;
+                const novaQuantidade = dono ? window.pgTiragemAgendadaPCP(dono) : null;
+                // Nova coluna: SOMASES(O; AN; 0). Sem a coluna, conserva o contrato anterior.
+                const volume = novaQuantidade !== null ? (coletado === 0 ? solicitado : 0)
+                    : Math.max(0, solicitado - coletado);
                 if (!volume) return;
                 if (Number.isInteger(e.linhaMapa)) {
                     if (vistas.has(e.linhaMapa)) { descartar('parcela-repetida-no-payload', volume); return; }
                     vistas.add(e.linhaMapa);
                 }
-                const partes = [e.marca, e.grafica, e.sku, e.destino, e.envio].map(normal);
-                const k = chave(partes), dono = partes.every(textoCompleto) ? donos.get(k) : null;
                 let dt = data(e.dataAgendada);
                 if (!dono) {
                     if (dt && dt >= hoje) {
@@ -161,17 +179,18 @@
                     id.partes[3] + id.partes[1] + id.partes[2] + id.envio);
                 const excecao = temExcecao(dono, id) || (indice.forecastColeta.has(chaveForecast) ? 'forecast-soberano' : '');
                 if (excecao) { descartar(excecao, volume); return; }
+                totaisFormula.set(k, (totaisFormula.get(k) || 0) + volume);
                 if (dt && dt.slice(0, 4) !== '2026') dt = data(primeiro(dono,
                     ['DT_ENTREGA_DG', id.acabadora ? 'BU' : 'DG']));
                 if (!dt) { descartar('data-agendada-ausente-ou-invalida', volume); return; }
-                if (dt < hoje) return;
+                if (dt < hoje && novaQuantidade === null) return;
                 if (!porChave.has(k)) porChave.set(k, []);
                 porChave.get(k).push({ data: dt, volume, codigoMapa: e.codigoMapa,
                     linhaMapa: e.linhaMapa, chaveMapa: e.chaveMapa, kit: e.kit || '' });
             });
         });
         cacheAgenda = { mapa, base, tamanho: base.length, hoje, donos, referencias,
-            porChave, descartes, datasSemPCP, disponivel, indice };
+            porChave, totaisFormula, falhasQuantidade: new Map(), descartes, datasSemPCP, disponivel, indice };
         return cacheAgenda;
     }
     window.pgEventosAgendaMapaLinha = function(linha, hoje, volumeLegado, dataLegada) {
@@ -182,7 +201,7 @@
         if (dono !== linha) {
             // Linhas sinteticas das visoes mantem a identidade da primeira linha fisica.
             const assinatura = l => chave([l?._SOURCE, l?._PG_TP_LINHA, l?.Chave,
-                l?.['TIRAGEM COLETADA'], l?.['Coleta/Internalização de estoque final (re) plan']]);
+                l?.['TIRAGEM COLETADA'], l?.['TIRAGEM AGENDADA'], l?.['Coleta/Internalização de estoque final (re) plan']]);
             if (!dono || estado.referencias.has(linha) || assinatura(dono) !== assinatura(linha)) {
                 return resultado([], 'chave-atribuida-a-primeira-linha');
             }
@@ -195,6 +214,25 @@
         if (!estado.disponivel) return resultado([], estado.mapa?.__agendaTPCompleta
             ? 'forecast-nao-conferido' : 'parcelas-indisponiveis', 'indisponivel');
         const eventos = (estado.porChave.get(id.chave) || []).slice().sort((a, b) => a.data.localeCompare(b.data));
+        const quantidade = window.pgTiragemAgendadaPCP(linha);
+        if (quantidade !== null) {
+            if (!quantidade) return resultado([], 'tiragem-agendada-zerada-pela-formula');
+            const total = Math.round(estado.totaisFormula.get(id.chave) || 0);
+            const totalBA = window.pgNumeroPrazoV35(primeiro(linha, ['GIRO_TOTAL_BA', 'BA', 'TIRAGEM']));
+            const fator = totalBA > 0 && total === 2 * totalBA && quantidade === totalBA ? 0.5 : 1;
+            if (Math.round(total * fator) !== quantidade) {
+                estado.falhasQuantidade.set(id.chave, { chave: id.chave, pcp: quantidade, mapa: total });
+                return resultado([], 'quantidade-nao-concilia-tiragem-agendada', 'indisponivel');
+            }
+            let acumulado = 0, arredondado = 0;
+            const ajustados = eventos.map(e => {
+                acumulado += e.volume * fator;
+                const proximo = Math.round(acumulado), volume = proximo - arredondado;
+                arredondado = proximo;
+                return { ...e, volume };
+            }).filter(e => e.data >= hoje && e.volume > 0);
+            return resultado(ajustados, fator === 0.5 ? 'tiragem-agendada-corrigida-2x' : 'tiragem-agendada-por-parcela');
+        }
         return resultado(eventos, eventos.length ? 'saldo-o-menos-an-por-parcela' : 'sem-parcelas-pendentes');
     };
     window.pgStatusAgendaTP = function() {
@@ -202,85 +240,88 @@
         if (window.PG_MAPA_TP_CARGA_CONCLUIDA === false) return { disponivel: false, aviso: 'Carregando parcelas do mapa…' };
         if (!mapa?.__agendaTPCompleta) return { disponivel: false, aviso: 'Agendamento indisponível: falha ao carregar parcelas do mapa.' };
         if (!mapa.__forecastTP?.conferido) return { disponivel: false, aviso: 'Agendamento indisponível: não foi possível conferir o Forecast.' };
+        if (cacheAgenda?.falhasQuantidade.size) return { disponivel: false,
+            aviso: 'Agendamento indisponível: quantidades do PCP e do mapa não conciliam. Atualize os caches.' };
         return { disponivel: true, aviso: '' };
     };
-    // Realizados mantem as travas de conciliacao anteriores. A agenda e apurada acima.
-    // hoje e sempre o corte atual de conciliacao, mesmo quando o consumidor pede um dia passado.
+    // A formula define a linha elegivel; AN e AT/AU definem o volume realizado e sua data.
+    // Nunca substituir parcelas futuras/sem data pelo solicitado na data agregada do PCP.
     function calcularEventosLinha(linha, tipo, hoje, volumeLegado, dataLegada) {
         const dtHoje = data(hoje), dtLegada = data(dataLegada), n = numero(volumeLegado);
         const detalhe = { modo: 'legado', motivo: '', tipo, volumeLegado: n, dataLegada: dtLegada };
-        const pendente = tipo === 'agendado-pendente';
-        const legado = motivo => comDiagnostico(pendente ? [] : vetorLegado(volumeLegado, dataLegada), { ...detalhe, motivo });
-        const agenda = tipo === 'agendado' || pendente;
-        if (!['coleta', 'entrega', 'agendado', 'agendado-pendente'].includes(tipo)) return legado('tipo-desconhecido');
-        if (n === null || n <= 0 || !dtLegada || !dtHoje || (!agenda && dtLegada > dtHoje)) return legado('sem-realizado-legado-valido');
+        const vazio = motivo => comDiagnostico([], { ...detalhe, modo: 'excluido', motivo });
+        const legado = motivo => comDiagnostico(
+            dtLegada && dtLegada <= dtHoje ? vetorLegado(volumeLegado, dataLegada) : [],
+            { ...detalhe, motivo });
+        if (!['coleta', 'entrega'].includes(tipo)) return vazio('tipo-desconhecido');
+        // CONT.SES e BA=0 continuam soberanos: a linha zerada nao recebe AN novamente.
+        if (n === null || n <= 0 || !dtHoje) return vazio('sem-volume-formula');
         const identidade = identidadeLinha(linha);
         if (!identidade.partes.every(textoCompleto) || (!identidade.acabadora && !textoCompleto(identidade.envio))) {
-            return legado('identidade-da-linha-incompleta');
+            return vazio('identidade-da-linha-incompleta');
         }
         const excecao = temExcecao(linha, identidade);
         if (excecao) return legado(excecao);
         const indice = indexarMapa(window.MAPA_SAIDA_CACHE);
-        if (!indice || indice.legado) return legado('cache-sem-contrato-tp');
-        if (pendente && !indice.forecast?.conferido) return legado('forecast-nao-conferido');
+        if (!indice || indice.legado) return vazio('cache-sem-contrato-tp');
         if (indice.forecast) {
-            if (!indice.forecast.conferido) return legado('forecast-nao-conferido');
+            if (!indice.forecast.conferido) return vazio('forecast-nao-conferido');
             const chaveForecast = normal(primeiro(linha, ['_PG_TP_CHAVE_FORECAST', 'G']) ||
                 identidade.partes[3] + identidade.partes[1] + identidade.partes[2] + identidade.envio);
             if ((tipo === 'entrega' ? indice.forecastEntrega : indice.forecastColeta).has(chaveForecast)) {
                 return legado('forecast-soberano');
             }
         }
-        const mesmaVersao = r => identidade.acabadora || !textoCompleto(r.envio) || r.envio === identidade.envio;
-        for (const [mascara, grupos] of indice.parciais) {
-            const k = chave(identidade.partes.filter((p, i) => mascara & (1 << i)));
-            if ((grupos.get(k) || []).some(mesmaVersao)) return legado('identidade-do-mapa-incompleta');
-        }
+        const mesmaVersao = r => identidade.acabadora || r.envio === identidade.envio;
         const candidatos = (indice.grupos.get(chave(identidade.partes)) || []).filter(mesmaVersao);
         detalhe.candidatos = candidatos.length;
-        if (!candidatos.length) return legado('sem-movimentos-da-identidade');
-        if (!identidade.acabadora && candidatos.some(r => !textoCompleto(r.envio))) return legado('envio-ax-ausente');
+        // Operacoes exclusivas do PCP conservam seu realizado datado e ficam identificadas.
+        if (!candidatos.length) return legado('realizado-sem-parcelas');
         const eventos = [], linhasFisicas = new Set();
-        let soma = 0, somaAgendada = 0;
+        let somaAN = 0;
+        detalhe.descartes = {};
+        const descartar = (motivo, volume = 0) => {
+            const d = detalhe.descartes[motivo] || (detalhe.descartes[motivo] = { parcelas: 0, volume: 0 });
+            d.parcelas++; d.volume += volume;
+        };
         for (const { evento } of candidatos) {
-            if (agenda && evento.eventoTPVersao !== 2) return legado('cache-sem-data-agendada-ar');
-            const quantidade = agenda && !pendente ? evento.volumeSolicitado : evento.volumeColetado;
-            const base = quantidade == null ? 0 : numero(quantidade);
-            if (base === null || base < 0) return legado('quantidade-do-mapa-invalida');
-            soma += base;
-            const solicitado = numero(evento.volumeSolicitado);
-            if (pendente && (solicitado === null || solicitado < 0)) return legado('quantidade-do-mapa-invalida');
-            const volume = pendente ? Math.max(0, solicitado - base) : base;
-            // AN vazio nao contribui na formula. AN negativo ou malformado nao e redistribuido.
+            const volume = evento.volumeColetado == null ? 0 : numero(evento.volumeColetado);
+            if (volume === null || volume < 0) { descartar('quantidade-do-mapa-invalida'); continue; }
             if (volume === 0) continue;
-            if (volume === null || volume < 0) return legado('quantidade-do-mapa-invalida');
-            if (!textoCompleto(evento.codigoMapa) || !textoCompleto(evento.chaveMapa) ||
-                !Number.isInteger(evento.linhaMapa) || evento.linhaMapa < 2) return legado('identidade-do-movimento-incompleta');
-            if (linhasFisicas.has(evento.linhaMapa)) return legado('linha-do-mapa-duplicada');
+            if (!Number.isInteger(evento.linhaMapa) || evento.linhaMapa < 2) {
+                descartar('identidade-do-movimento-incompleta', volume); continue;
+            }
+            if (linhasFisicas.has(evento.linhaMapa)) { descartar('linha-do-mapa-duplicada', volume); continue; }
             linhasFisicas.add(evento.linhaMapa);
-            let dt = data(agenda ? evento.dataAgendada : tipo === 'entrega' ? evento.entregaTP : evento.coletaTP);
+            somaAN += volume;
+            let dt = data(tipo === 'entrega' ? evento.entregaTP : evento.coletaTP);
             // A regra de ano da planilha continua usando DG, sem corrigir a base.
             if (evento.eventoTPVersao === 2 && dt && dt.slice(0, 4) !== '2026') {
                 dt = data(primeiro(linha, ['DT_ENTREGA_DG', identidade.acabadora ? 'BU' : 'DG']));
             }
-            if (!dt || (!agenda && dt > dtHoje)) {
-                return legado('data-do-movimento-ausente-invalida-ou-futura');
-            }
-            somaAgendada += volume;
+            if (!dt) { descartar('data-do-movimento-ausente-ou-invalida', volume); continue; }
+            if (dt > dtHoje) { descartar('data-do-movimento-futura', volume); continue; }
             eventos.push({ data: dt, volume, codigoMapa: evento.codigoMapa, linhaMapa: evento.linhaMapa,
                 chaveMapa: evento.chaveMapa, kit: evento.kit || '' });
         }
-        detalhe.volumeEventos = soma;
-        if (soma !== n) return legado('quantidade-nao-concilia-com-formula');
         eventos.sort((a, b) => a.data.localeCompare(b.data) || a.linhaMapa - b.linhaMapa);
-        const extrema = eventos.length && eventos[agenda ? eventos.length - 1 : 0].data;
-        // Cache v1 nao informa a origem Forecast: a ancora MINIFS/MAXIFS e obrigatoria.
-        if (!pendente && !indice.forecast?.conferido && extrema !== dtLegada) {
-            return legado(agenda ? 'data-maxima-diverge-da-formula' : 'data-minima-diverge-da-formula');
-        }
-        return comDiagnostico(eventos, { ...detalhe, modo: 'eventos',
-            volumeAgendadoAdicional: pendente ? somaAgendada : 0,
-            motivo: pendente ? 'pendente-adicional-conciliado' : 'quantidade-e-data-conciliadas' });
+        const totalBA = Number(primeiro(linha, ['GIRO_TOTAL_BA', 'BA', 'TIRAGEM']));
+        // Mesma correcao da formula, aplicada a AN, nunca inferida apenas pelo solicitado O.
+        const fator = totalBA > 0 && Math.round(somaAN) === 2 * totalBA ? 0.5 : 1;
+        detalhe.volumeAN = somaAN;
+        detalhe.fatorDuplicidade = fator;
+        const quantidadeFormula = fator === 0.5 ? totalBA : Math.round(somaAN);
+        if (quantidadeFormula !== n) return vazio('quantidade-nao-concilia-tiragem-coletada');
+        let acumulado = 0, arredondado = 0;
+        eventos.forEach(e => {
+            acumulado += e.volume * fator;
+            const proximo = Math.round(acumulado);
+            e.volume = proximo - arredondado;
+            arredondado = proximo;
+        });
+        return comDiagnostico(eventos.filter(e => e.volume > 0), { ...detalhe, modo: 'eventos',
+            volumeAN: somaAN, fatorDuplicidade: fator, volumeEventos: arredondado,
+            motivo: fator === 0.5 ? 'an-realizado-corrigido-2x' : 'an-realizado-por-data' });
     }
     window.pgEventosTPLinha = function(linha, tipo, hoje, volumeLegado, dataLegada) {
         if (tipo === 'agendado' || tipo === 'agendado-pendente') {
@@ -366,9 +407,18 @@
     };
     window.pgDiagnosticoTP = async function() {
         if (mapaPromise) { try { await mapaPromise; } catch (e) {} }
-        const motivos = {}, meses = {}, porData = {};
+        const motivos = {}, meses = {}, porData = {}, volumesPorMes = {}, descartesRealizados = {};
+        const linhasSemParcelas = [];
         const totais = { antes: 0, depois: 0, diferenca: 0, agendadoAntes: 0, agendadoDepois: 0 };
         const hoje = typeof dtHojeISO !== 'undefined' ? dtHojeISO : new Date().toISOString().slice(0, 10);
+        const mensal = (dt, indicador, volume) => {
+            const mes = data(dt)?.slice(0, 7) || 'sem-mes';
+            const m = volumesPorMes[mes] || (volumesPorMes[mes] = { mes,
+                solicitadoPCP: 0, coletaPCPAgrupada: 0, coletaRealizada: 0,
+                entregaPCPAgrupada: 0, entregaRealizada: 0,
+                agendadoPCPAgrupado: 0, agendadoParcelas: 0 });
+            m[indicador] += volume;
+        };
         (window.dadosGlobais || []).forEach(linha => {
             const v = window.pgVolumesColetaUnificadosV37(linha, hoje);
             const antes = window.pgNumeroPrazoV35(window.pgCampoPrazoV35(linha, 'TIRAGEM COLETADA'));
@@ -379,6 +429,14 @@
             m.antes += antes; m.depois += v.bruto; m.diferenca = m.depois - m.antes;
             totais.antes += antes; totais.depois += v.bruto;
             const acab = identidadeLinha(linha).acabadora;
+            mensal(dtPlan, 'solicitadoPCP', v.mapa);
+            if (v.coletaTP && v.coletaTP <= hoje) mensal(v.coletaTP, 'coletaPCPAgrupada', v.bruto);
+            if (v.entregaTP && v.entregaTP <= hoje) mensal(v.entregaTP, 'entregaPCPAgrupada', v.bruto);
+            v.eventosColetaTP.forEach(e => { if (e.data <= hoje) mensal(e.data, 'coletaRealizada', e.volume); });
+            v.eventosEntregaTP.forEach(e => { if (e.data <= hoje) mensal(e.data, 'entregaRealizada', e.volume); });
+            const agendaPCP = v.agendadaPCP ?? (!acab && !v.coletaTP && v.mapaAgendado >= hoje ? v.bruto : 0);
+            if (agendaPCP > 0) mensal(v.mapaAgendado, 'agendadoPCPAgrupado', agendaPCP);
+            v.eventosAgendados.forEach(e => { if (e.data >= hoje) mensal(e.data, 'agendadoParcelas', e.volume); });
             totais.agendadoAntes += !acab && !v.coletaTP && v.mapaAgendado >= hoje ? v.bruto : 0;
             totais.agendadoDepois += v.agendado;
             const dia = dt => porData[dt] || (porData[dt] = { data: dt, antes: 0, depois: 0, diferenca: 0 });
@@ -391,6 +449,14 @@
                     const r = motivos[k] || (motivos[k] = { tipo, modo: d?.modo || 'legado',
                         motivo: d?.motivo || 'sem-diagnostico', linhas: 0, linhasComVolume: 0 });
                     r.linhas++; if (v.bruto > 0) r.linhasComVolume++;
+                    if (d?.motivo === 'realizado-sem-parcelas' && eventos.length) linhasSemParcelas.push({
+                        tipo, origem: linha._SOURCE, linhaPCP: linha._PG_TP_LINHA,
+                        sku: primeiro(linha, ['SKU_REAL', 'SKU']), volume: v.bruto, data: d.dataLegada });
+                    Object.entries(d?.descartes || {}).forEach(([motivo, valor]) => {
+                        const k = tipo + ': ' + motivo;
+                        const item = descartesRealizados[k] || (descartesRealizados[k] = { tipo, motivo, parcelas: 0, volume: 0 });
+                        item.parcelas += valor.parcelas; item.volume += valor.volume;
+                    });
                 });
         });
         totais.diferenca = totais.depois - totais.antes;
@@ -401,12 +467,19 @@
             erroCargaParcelas: window.MAPA_SAIDA_CACHE?.__erroAgendaTP || window.MAPA_SAIDA_CACHE?.__forecastTP?.erro || '',
             cacheParcelasGeradoEm: window.MAPA_SAIDA_CACHE?.__agendaTPGeradoEm || '',
             motivos: Object.values(motivos), totais, meses: Object.values(meses),
+            criterioComparacao: 'antes/depois conferem TIRAGEM COLETADA do PCP; volumesPorMes separa solicitado, agendado e realizado por AT/AU.',
+            volumesPorMes: Object.values(volumesPorMes).sort((a,b) => a.mes.localeCompare(b.mes)),
+            descartesRealizados: Object.values(descartesRealizados), linhasSemParcelas,
+            divergenciasAgendado: Array.from(agenda.falhasQuantidade.values()),
             agendadoPorData: Object.values(porData).sort((a,b) => a.data.localeCompare(b.data)),
             parcelasDescartadas: Object.values(agenda.descartes),
             volumeSemChavePCP: agenda.descartes['sem-chave-no-pcp']?.volume || 0,
             semChavePCPPorData: agenda.datasSemPCP };
         console.table(resultado.motivos); console.table([totais]); console.table(resultado.meses);
         console.table(resultado.agendadoPorData); console.table(resultado.parcelasDescartadas);
+        console.info(resultado.criterioComparacao);
+        console.table(resultado.volumesPorMes); console.table(resultado.descartesRealizados);
+        if (linhasSemParcelas.length) console.table(linhasSemParcelas);
         return resultado;
     };
     window.pgAtualizarDatasTPDoMapa = function() {

@@ -98,8 +98,8 @@
     }
     return null;
   }
-  function itensCanonicos(cenario) {
-    if (typeof window.pgMAObterItens === 'function') return window.pgMAObterItens({ cenario: cenario });
+  function itensCanonicos(cenario, corte) {
+    if (typeof window.pgMAObterItens === 'function') return window.pgMAObterItens(corte ? { cenario: cenario, corte: corte } : { cenario: cenario });
     var base = window.pgBaseGeralReportExecutiva || window.dadosGlobais || [];
     if (window.pgSolicitacaoCancelada) base = base.filter(function(l) { return !window.pgSolicitacaoCancelada(l); });
     if (window.pgLinhasUnicas) base = window.pgLinhasUnicas(base);
@@ -145,7 +145,7 @@
     }
     var linhas = typeof window.pgDadosParaFases === 'function' ? window.pgDadosParaFases() : (window.dadosFiltrados || []);
     if (window.pgLinhasUnicas) linhas = window.pgLinhasUnicas(linhas);
-    var itens = itensCanonicos(cenario).filter(function(item) {
+    var itens = itensCanonicos(cenario, base === 'meta' ? corte : null).filter(function(item) {
       var origem = window.pgOrigemAtivaPortal || 'TODOS', destino = window.pgDestinoAtivoPortal || 'TODOS';
       return (!window.pgLinhaDaOrigem || window.pgLinhaDaOrigem(item.linha, origem)) &&
         (!window.pgLinhaDoDestino || window.pgLinhaDoDestino(item.linha, destino, origem));
@@ -171,9 +171,12 @@
       itens.forEach(function(item) {
         var l = item.linha, total = item.total;
         if (total <= 0) return;
-        var prazo = data(item.metaAplicada), real = realFase(l, faseEntrega);
-        var quantidade = volumeReal(l, faseEntrega, total);
-        var realAteCorte = real && real <= corte;
+        var prazo = data(item.metaAplicada);
+        var eventosReal = (Array.isArray(item.eventosReal) ? item.eventosReal : []).filter(function(e) {
+          var dia = data(e.data);
+          return dia && dia <= corte && numero(e.volume) > 0;
+        });
+        var realizado = eventosReal.reduce(function(s, e) { return s + numero(e.volume); }, 0);
         var regs = [];
         var etapaAtual = modo === 'real' ? faseEntrega : faseAtual(item, corte, originais);
         if (modo === 'previsto') {
@@ -183,12 +186,12 @@
           });
           if (!parcelas.length) regs.push(registro(l, etapaAtual, prazo, null, total, 'Sem previsão de entrega válida: conferir coleta, intervalo e Matriz_SLA.'));
         } else if (modo === 'aberto') {
-          var pendente = Math.max(0, total - (realAteCorte ? quantidade : 0));
+          var pendente = Math.max(0, total - realizado);
           if (pendente > 0) regs.push(registro(l, etapaAtual, prazo, corte, pendente));
-        } else if (realAteCorte && quantidade > 0) {
-          regs.push(registro(l, etapaAtual, prazo, real, quantidade));
-        } else if (!real && quantidade > 0) {
-          regs.push(registro(l, etapaAtual, prazo, null, quantidade, 'Tiragem registrada sem Entrega_TP válida.'));
+        } else {
+          eventosReal.forEach(function(e) {
+            regs.push(registro(l, etapaAtual, prazo, data(e.data), numero(e.volume)));
+          });
         }
         regs.forEach(function(r) {
           r.metaOriginal = item.alvo || null;

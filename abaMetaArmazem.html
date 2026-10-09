@@ -177,7 +177,7 @@
     <p id="maComparativoNota" class="text-[10px] text-slate-500 mt-2"></p>
   </div>
 <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa TIRAGEM COLETADA na data de Entrega_TP. Só o saldo pendente usa Final (re)Plan + SLA. Sem início planejado, o saldo fica integralmente nessa data; com intervalo válido, segue o rateio. Baseline não participa do cálculo.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa as parcelas entregues nas respectivas datas de Entrega_TP, até hoje. Só o saldo pendente usa Final (re)Plan + SLA. Sem início planejado, o saldo fica integralmente nessa data; com intervalo válido, segue o rateio. Baseline não participa do cálculo.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
       <thead><tr><th>Grupo</th><th>Meta original / exceção</th><th>Volume total</th><th id="maThPrevisto">Dentro da meta</th><th id="maThPos">Fora da meta</th><th>Sem previsão</th><th>Realizado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
@@ -385,6 +385,9 @@
   }
   function dadosBase(opcoes) {
     var cenario=opcoes&&(opcoes.cenario==='com'||opcoes.cenario==='sem')?opcoes.cenario:estado.cenario;
+    var hojeEventos=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toLocaleDateString('en-CA');
+    var corteEventos=opcoes&&opcoes.corte?data(opcoes.corte):hojeEventos;
+    corteEventos=corteEventos&&corteEventos<hojeEventos?corteEventos:hojeEventos;
     var base=window.pgBaseGeralReportExecutiva||window.dadosGlobais||[];
     base=base.filter(function(l){return !(window.pgSolicitacaoCancelada&&window.pgSolicitacaoCancelada(l));});
     // Exclusão desta visão pelo destino, sem filtrar a gráfica de origem.
@@ -415,7 +418,7 @@
       var metaAplicada=cenario==='com'&&elegivel?dataAcordada:alvo;
 
       // Meta Armazém:
-      // - realizado = TIRAGEM COLETADA classificada pela data real de Entrega_TP;
+      // - realizado = parcelas de entrega TP até o corte, cada uma na sua data real;
       // - somente o saldo ainda pendente usa o planejamento;
       // - planejamento usa Final (re)plan + SLA, nunca baseline ou Coleta Fim Real;
       // - sem início, o saldo fica integralmente na entrega prevista pelo fim;
@@ -438,26 +441,28 @@
       if(replanValido&&(!dtPlan||!inicioAusente&&!inicioPlan))motivoReplan='Rota sem SLA válido na Matriz_SLA.';
 
       var coletadaBruta=Math.min(total,volume(campo('TIRAGEM COLETADA')));
-      var entregaTPRaw=campo('Entrega_TP')||l.DATA_EA||'';
-      var dtEntregaTP=window.pgNormalizarDataColeta?window.pgNormalizarDataColeta(entregaTPRaw):data(entregaTPRaw);
-      var realizadoTem=coletadaBruta>0&&!!dtEntregaTP;
-      var realizado=realizadoTem?coletadaBruta:0;
-      // A formula continua soberana. Um volume limitado ao total desta visao
-      // conserva a data antiga, pois nao existe evidencia para repartir o limite.
-      var eventosReal=realizado>0&&dtEntregaTP?[{data:dtEntregaTP,volume:realizado}]:[];
-      var hojeEventos=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toLocaleDateString('en-CA');
-      if(realizado>0&&dtEntregaTP<=hojeEventos&&campo('Entrega_TP')&&
-         coletadaBruta===volume(campo('TIRAGEM COLETADA'))&&typeof window.pgEventosTPLinha==='function'){
-        eventosReal=window.pgEventosTPLinha(l,'entrega',hojeEventos,realizado,dtEntregaTP);
-      }
+      var volumesTP=typeof window.pgVolumesColetaUnificadosV37==='function'?
+        window.pgVolumesColetaUnificadosV37(l,corteEventos):null;
+      var parcelasTP=volumesTP&&Array.isArray(volumesTP.eventosEntregaTP)?volumesTP.eventosEntregaTP:[];
+      var realizado=0,eventosReal=[];
+      // Preserva o teto desta visão, consumindo somente as parcelas já entregues,
+      // da mais antiga para a mais recente, sem antecipar o solicitado inteiro.
+      parcelasTP.map(function(e){return {data:data(e.data),volume:volume(e.volume)};})
+        .filter(function(e){return e.data&&e.data<=corteEventos&&e.volume>0;})
+        .sort(function(a,b){return a.data.localeCompare(b.data);})
+        .forEach(function(e){
+          var quantidade=Math.min(e.volume,Math.max(0,coletadaBruta-realizado));
+          if(!quantidade)return;
+          eventosReal.push({data:e.data,volume:quantidade});
+          realizado+=quantidade;
+        });
+      var realizadoTem=realizado>0;
+      var dtEntregaTP=realizadoTem?eventosReal[eventosReal.length-1].data:'';
 
-      // Se existe volume coletado sem Entrega_TP válida, ele não vira "Sem previsão" automaticamente:
-      // volta para o planejamento, exatamente como qualquer volume ainda não classificável como realizado.
+      // Todo volume ainda sem parcela de entrega até o corte permanece no planejamento.
       var pendentePlanejado=Math.max(0,total-realizado);
-      // Os indicadores e cenarios publicados conservam a classificacao atual.
-      // As parcelas apenas detalham as datas, sem reinterpretar os totais da meta.
-      var realDentro=function(meta){return realizado>0&&dtEntregaTP<=meta?realizado:0;};
-      var realFora=function(meta){return realizado>0&&dtEntregaTP>meta?realizado:0;};
+      var realDentro=function(meta){return eventosReal.reduce(function(s,e){return s+(e.data<=meta?e.volume:0);},0);};
+      var realFora=function(meta){return eventosReal.reduce(function(s,e){return s+(e.data>meta?e.volume:0);},0);};
 
       var rateio=pendentePlanejado>0&&replanValido&&(inicioAusente||inicioPlan)&&dtPlan?
         rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioAusente):null;
@@ -512,13 +517,9 @@
   window.pgMADiasEntrega=function(item){
     if(!item)return [];
     var parcelas=[];
-    var real=volume(item.realCD),pendente=volume(item.pendentePlanejado);
-    if(real>0&&item.dtRealCD){
-      var eventos=Array.isArray(item.eventosReal)?item.eventosReal:[];
-      if(eventos.length&&eventos.reduce(function(s,e){return s+e.volume;},0)===real){
-        eventos.forEach(function(e){parcelas.push({data:e.data,volume:e.volume,realizado:true});});
-      }else parcelas.push({data:item.dtRealCD,volume:real,realizado:true});
-    }
+    var pendente=volume(item.pendentePlanejado);
+    var eventos=Array.isArray(item.eventosReal)?item.eventosReal:[];
+    eventos.forEach(function(e){parcelas.push({data:e.data,volume:e.volume,realizado:true});});
     if(!pendente)return parcelas;
     var rateio=item.rateioAplicado||item.rateio;
     if(!item.dtPlan||!rateio)return parcelas;
@@ -587,7 +588,7 @@
     var cenario=cenarioId==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
     var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio','OP',
       'Tiragem total','Tiragem coletada','Dentro da meta','Fora da meta','Sem previsão','% dentro da meta',
-      'Entrega TP real','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
+      'Última Entrega TP realizada','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
       'Origem do cálculo','SLA (dias corridos)','Entrega início prevista','Entrega fim prevista',
       'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
       'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
@@ -611,9 +612,9 @@
         semDU?'Saldo pendente em entrega única (sem DU)':'Saldo pendente rateado por dias úteis';
       var situacao=i.semData>0?i.statusSemPrevisao:i.previsto>0&&i.pos>0?'Parcialmente dentro da meta':i.pos>0?'Fora da meta':'Dentro da meta';
       var notas=[];
-      if(i.coletadaBruta>0&&!i.realizadoTem)notas.push('TIRAGEM COLETADA sem Entrega_TP válida: volume voltou para o planejamento.');
+      if(i.coletadaBruta>0&&!i.realizadoTem)notas.push('Coletado sem parcela de entrega realizada até o corte: saldo no planejamento.');
       if(i.semData>0)notas.push(i.motivoReplan||'Intervalo de entrega invertido ou inválido.');
-      if(i.realizado>0&&i.dtEntregaTP)notas.push('Realizado classificado pela Entrega_TP.');
+      if(i.realizado>0&&i.dtEntregaTP)notas.push('Realizado classificado por parcela nas respectivas datas de Entrega_TP.');
       if(i.pendentePlanejado>0&&r){
         notas.push('Somente o saldo pendente usa Final (re)Plan + Matriz_SLA.');
         if(i.inicioAusente)notas.push('Início planejado vazio: saldo pendente integral na entrega prevista pelo fim (re)plan + SLA, sem rateio.');
@@ -939,7 +940,7 @@
     }
     document.getElementById('maComparativo').innerHTML=
       box('Real + previsto',planejado,'Volume realizado e saldo previsto dentro da '+(estado.cenario==='sem'?'meta original':'meta acordada'),'#418EDE',!!items.length)+
-      box('Realizado',total.realCD,'Tiragem coletada com Entrega_TP válida','#0f766e',total.realCDTem)+
+      box('Realizado',total.realCD,'Parcelas entregues com Entrega_TP válida até hoje','#0f766e',total.realCDTem)+
       box('Meta Armazém',total.total,'Volume total esperado no CD para os itens filtrados','#FA4616',!!items.length);
     document.getElementById('maComparativoNota').textContent=dataNota+
       (semData?' · '+semData+' linha(s) sem data de meta.':'')+
