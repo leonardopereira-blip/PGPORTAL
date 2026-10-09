@@ -2,7 +2,8 @@
 // Configure PG_MAPA_SLACK_WORKFLOW_TESTE_URL nas propriedades do script DEV.
 // Nenhum gatilho e criado; o envio de email existente permanece independente.
 
-function pgAMSlackDividirDetalhes_(detalhes) {
+function pgAMSlackDividirDetalhes_(detalhes, limite) {
+  limite = limite || 2500;
   // Cada unidade e um cabecalho, um item inteiro ou as notas finais.
   var unidades = detalhes.split(/\n\n(?=📅 Agendado hoje · pendente(?:\n|$)|🚚 Coletado hoje(?:\n|$)|Agendado hoje considera somente agendamentos ainda pendentes\.)/);
   var blocos = [], atual = '', maiorItem = 0, maiorUnidade = 0, itensAcimaDoLimite = 0;
@@ -13,7 +14,7 @@ function pgAMSlackDividirDetalhes_(detalhes) {
       maiorItem = Math.max(maiorItem, tamanho);
       if (tamanho > 2500) itensAcimaDoLimite++;
     }
-    if (atual && atual.length + 2 + tamanho > 2500) {
+    if (atual && atual.length + 2 + tamanho > limite) {
       blocos.push(atual);
       atual = unidade;
     } else {
@@ -134,6 +135,8 @@ function pgAMSlackCompactarDetalhes_(detalhes, quantidadeEsperada) {
   if (quantidadeCompactada !== quantidadeEsperada || itensPorBloco.reduce(function(total, n) { return total + n; }, 0) !== quantidadeEsperada) {
     throw new Error('A compactacao nao preservou a contagem de itens do report. Nenhum teste foi enviado ao Slack.');
   }
+  resumo = pgAMSlackDividirDetalhes_(detalhes, limiteResumo).blocos[0];
+  itensResumo = (resumo.match(/^(?:📅 Agendado hoje · pendente|🚚 Coletado hoje)$/gm) || []).length;
   resumo += '\n\nResumo dos detalhes: ' + itensResumo + ' de ' + quantidadeEsperada + ' itens.';
   return { resumo: resumo, itensResumo: itensResumo, blocos: blocos, itensPorBloco: itensPorBloco, quantidadeItens: quantidadeCompactada,
     maiorItem: maiorItem, maiorUnidade: maiorUnidade, itensAcimaDoLimite: itensAcimaDoLimite,
