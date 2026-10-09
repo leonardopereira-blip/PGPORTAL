@@ -237,8 +237,8 @@
     };
     window.pgStatusAgendaTP = function() {
         const mapa = window.MAPA_SAIDA_CACHE;
-        if (window.PG_MAPA_TP_CARGA_CONCLUIDA === false) return { disponivel: false, aviso: 'Carregando parcelas do mapa…' };
-        if (!mapa?.__agendaTPCompleta) return { disponivel: false, aviso: 'Agendamento indisponível: falha ao carregar parcelas do mapa.' };
+        if (window.PG_MAPA_TP_CARGA_CONCLUIDA === false) return { disponivel: false, aviso: 'Carregando dados do mapa…' };
+        if (!mapa?.__agendaTPCompleta) return { disponivel: false, aviso: 'Agendamento indisponível: falha ao carregar dados do mapa.' };
         if (!mapa.__forecastTP?.conferido) return { disponivel: false, aviso: 'Agendamento indisponível: não foi possível conferir o Forecast.' };
         if (cacheAgenda?.falhasQuantidade.size) return { disponivel: false,
             aviso: 'Agendamento indisponível: quantidades do PCP e do mapa não conciliam. Atualize os caches.' };
@@ -395,12 +395,12 @@
     };
     window.pgTPExportacaoPronta = function() {
         if (window.PG_MAPA_TP_CARGA_CONCLUIDA === false) {
-            window.alert('As parcelas do mapa ainda estao carregando. Aguarde a conclusao e repita a exportacao.');
+            window.alert('Os dados do mapa ainda estao carregando. Aguarde a conclusao e repita a exportacao.');
             return false;
         }
         if (window.PG_MAPA_TP_CARGA_CONCLUIDA === true &&
             !window.pgStatusAgendaTP().disponivel) {
-            window.alert('As parcelas do mapa nao puderam ser carregadas. Recarregue o portal antes de exportar.');
+            window.alert('Os dados do mapa nao puderam ser carregados. Recarregue o portal antes de exportar.');
             return false;
         }
         return true;

@@ -86,8 +86,8 @@ function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
   var nota = 'Tiragem a mais e a menos: saldo atual dos itens com movimento hoje.';
   var conferido = Utilities.formatDate(new Date(geradoEm), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm');
   var resumoLinhas = [
-    '📅 Agendamentos pendentes: ' + fmt(agenda.linhas) + ' parcelas em ' + fmt(agenda.mapas) + ' mapas.',
-    '🚚 Coletas realizadas: ' + fmt(coleta.linhas) + ' parcelas em ' + fmt(coleta.mapas) + ' mapas.',
+    '📅 Agendado para hoje: ' + fmt(agenda.mapas) + ' mapas · Tiragem: ' + fmt(agenda.volume) + '.',
+    '🚚 Coletado hoje: ' + fmt(coleta.mapas) + ' mapas · Tiragem: ' + fmt(coleta.volume) + '.',
     '🗺️ Mapas com movimento hoje: ' + fmt(Object.keys(mapas).length) + ' | Gráficas: ' + fmt(lista.length) + '.',
     '🔎 Itens fora do PCP: ' + fmt(resumo.ausentesPCP) + ' | Itens para conferir dados: ' + fmt(conferir) + '.',
     '➕ Tiragem a mais: ' + fmt(resumo.volumeAMais) + ' (' + fmt(resumo.gruposMais) + ' itens).',
@@ -100,7 +100,7 @@ function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
   if (!lista.length) plain.push('Nenhum agendamento pendente ou coleta realizada hoje.');
   plain.push('', 'CONFERÊNCIA DA TIRAGEM DE HOJE');
   categorias.forEach(function(row) { plain.push(row[0] + ': tiragem agendada ' + fmt(row[1]) + ' | tiragem coletada ' + fmt(row[2])); });
-  plain.push('', 'TODOS OS DETALHES DO DIA (' + fmt(diario.detalhes.length) + ' parcelas)');
+  plain.push('', 'DETALHES DOS MAPAS DO DIA (' + fmt(Object.keys(mapas).length) + ' mapas)');
   var ordenadas = diario.detalhes.slice().sort(function(a,b) {
     return (graficaGrupo[a.grupoId] || '').localeCompare(graficaGrupo[b.grupoId] || '', 'pt-BR') || texto(a.sku).localeCompare(texto(b.sku), 'pt-BR') || Number(a.linhaMapa || 0) - Number(b.linhaMapa || 0);
   });
@@ -117,10 +117,10 @@ function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
     var evento = m.agenda ? '📅 Agendado hoje · pendente' : '🚚 Coletado hoje';
     var classificacao = rotulos[d.statusComparacao || g.statusComparacao] || d.statusComparacao || g.statusComparacao || 'Não informado';
     var agendada = m.agenda ? Number(d.volumeMapa || 0) : 0, coletada = m.coleta ? Number(d.volumeColetado || 0) : 0;
-    plain.push('', (i + 1) + '. ' + evento,
+    plain.push('', evento,
       'Gráfica: ' + nome + ' | Marca: ' + (d.marca || 'Não informada') + ' | CD destino: ' + (d.destino || 'Não informado'),
       'SKU: ' + (d.sku || 'Não informado') + ' | Kit: ' + (d.kit || 'Não informado') + ' | Envio: ' + (d.envio || 'Não informado'),
-      'Código mapa: ' + (d.codigoMapa || 'Não informado') + ' | Linha mapa: ' + (d.linhaMapa || 'Não informada'),
+      'Código mapa: ' + (d.codigoMapa || 'Não informado'),
       'Agendamento: ' + data(d.dataAgendada) + ' | Coleta: ' + data(d.coletaTP) + ' | Entrega: ' + data(d.entregaTP),
       'Tiragem agendada hoje: ' + fmt(agendada) + ' | Tiragem coletada hoje: ' + fmt(coletada),
       'Conferência: ' + classificacao + ' | Status coleta PCP: ' + (g.statusColeta || 'Não informado'));
@@ -128,10 +128,10 @@ function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
     if (g.diferencas && g.diferencas.length) plain.push('Conferir: ' + g.diferencas.join(', '));
     htmlDetalhes.push('<tr style="background:' + (i % 2 ? c.zebra : c.branco) + ';border-bottom:1px solid ' + c.linha + ';">' +
       [nome,d.marca || 'Não informada',d.destino || 'Não informado',d.sku || 'Não informado',d.kit || 'Não informado',
-        d.envio || 'Não informado',d.codigoMapa || 'Não informado',d.linhaMapa || '—',data(d.dataAgendada),data(d.coletaTP),data(d.entregaTP),
+        d.envio || 'Não informado',d.codigoMapa || 'Não informado',data(d.dataAgendada),data(d.coletaTP),data(d.entregaTP),
         fmt(agendada),fmt(coletada),classificacao,g.statusColeta || 'Não informado',
         [d.statusNaoGrafico,(g.diferencas || []).join(', ')].filter(Boolean).join(' · ') || '—']
-        .map(function(v,n) { return '<td style="padding:8px 6px;vertical-align:top;' + (n === 11 || n === 12 ? 'text-align:right;' : '') + '">' + esc(v) + '</td>'; }).join('') + '</tr>');
+        .map(function(v,n) { return '<td style="padding:8px 6px;vertical-align:top;' + (n === 10 || n === 11 ? 'text-align:right;' : '') + '">' + esc(v) + '</td>'; }).join('') + '</tr>');
   });
   if (!ordenadas.length) plain.push('Nenhum item com movimento hoje.');
   plain.push('', 'Agendado hoje considera somente agendamentos ainda pendentes. Coletado hoje segue a data da coleta realizada.',
@@ -147,8 +147,8 @@ function pgAMApresentarAlerta_(diario, dataBR, geradoEm) {
     '<tr><td style="padding:0 20px 20px;"><h2 style="font-size:16px;font-weight:600;margin:0 0 10px;">Todas as gráficas do dia</h2>' +
     (lista.length ? tabela(['Gráfica','Mapas','Tiragem agendada hoje','Tiragem coletada hoje','Itens fora do PCP','Itens para conferir','Tiragem a mais','Tiragem a menos'],linhasGraficas) : '<p style="font-size:13px;">Nenhum agendamento pendente ou coleta realizada hoje.</p>') +
     '<p style="font-size:10px;line-height:1.6;color:' + c.secundario + ';">' + esc(nota) + ' Mapas são contados por gráfica; o total geral considera cada código uma vez.</p></td></tr>' +
-    '<tr><td style="padding:0 20px 20px;"><h2 style="font-size:16px;font-weight:600;margin:0 0 10px;">Todos os detalhes do dia · ' + esc(fmt(diario.detalhes.length)) + ' parcelas</h2>' +
-    (htmlDetalhes.length ? tabela(['Gráfica','Marca','CD destino','SKU','Kit','Envio','Código mapa','Linha mapa','Agendamento','Coleta','Entrega','Tiragem agendada hoje','Tiragem coletada hoje','Conferência','Status coleta PCP','Conferir no mapa'],htmlDetalhes.join('')) : '<p style="font-size:13px;">Nenhum item com movimento hoje.</p>') + '</td></tr>' +
+    '<tr><td style="padding:0 20px 20px;"><h2 style="font-size:16px;font-weight:600;margin:0 0 10px;">Detalhes dos mapas do dia · ' + esc(fmt(Object.keys(mapas).length)) + ' mapas</h2>' +
+    (htmlDetalhes.length ? tabela(['Gráfica','Marca','CD destino','SKU','Kit','Envio','Código mapa','Agendamento','Coleta','Entrega','Tiragem agendada hoje','Tiragem coletada hoje','Conferência','Status coleta PCP','Conferir no mapa'],htmlDetalhes.join('')) : '<p style="font-size:13px;">Nenhum item com movimento hoje.</p>') + '</td></tr>' +
     '<tr><td style="padding:14px 20px;background:' + c.zebra + ';font-size:11px;color:' + c.secundario + ';">Dados conferidos em ' + esc(conferido) + '.</td></tr></table></td></tr></table></body></html>';
   return { body: plain.join('\n'), htmlBody: html };
 }

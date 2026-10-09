@@ -215,7 +215,7 @@ function pgAMComparar_(linhasMapa, linhasPCP) {
   if (fontesRepetidas) alertas.push({ tipo: 'LINHAS_PCP_REPETIDAS', quantidade: fontesRepetidas,
     mensagem: 'Linhas fisicas repetidas do PCP foram consideradas uma unica vez.' });
   if (quantidadeAusente) alertas.push({ tipo: 'QUANTIDADE_MAPA_AUSENTE', quantidade: quantidadeAusente,
-    mensagem: 'Parcelas com volume ausente ou invalido; os totais incluem somente quantidades informadas.' });
+    mensagem: 'Ha tiragem ausente ou invalida no mapa; os totais incluem somente quantidades informadas.' });
   if (fontesSemQuantidade) alertas.push({ tipo: 'QUANTIDADE_PCP_AUSENTE', quantidade: fontesSemQuantidade,
     mensagem: 'Comparacao de quantidade indisponivel em grupos sem os valores da formula do PCP.' });
   return { grupos: lista, detalhes: detalhes, resumo: pgAMResumo_(lista, detalhes), filtros: pgAMFiltros_(lista),

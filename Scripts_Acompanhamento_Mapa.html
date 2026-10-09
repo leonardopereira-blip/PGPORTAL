@@ -105,7 +105,9 @@
                 const atualizado = horario(estado.dados.geradoEm);
                 $('pgMapaAtualizacao').textContent = (atualizado ? 'Conferido em ' + atualizado + '.' : '') + ' Visão geral, sem recorte de data.';
                 window.pgFiltrarAcompanhamentoMapa();
-                aviso((estado.dados.alertas || []).map(a => typeof a === 'string' ? a : a.mensagem || '').filter(Boolean).join(' '));
+                aviso((estado.dados.alertas || []).map(a => a?.tipo === 'QUANTIDADE_MAPA_AUSENTE'
+                    ? 'Há tiragem ausente ou inválida no mapa; os totais incluem somente quantidades informadas.'
+                    : typeof a === 'string' ? a : a.mensagem || '').filter(Boolean).join(' '));
             } catch (e) {
                 estado.erro = e?.message || String(e);
                 // Uma falha não permite baixar a base anterior como se estivesse atualizada.
@@ -166,7 +168,7 @@
         const detalhes = estado.dados.detalhes.filter(d => ids.has(d.grupoId));
         const r = resumo(estado.grupos, detalhes);
         const contarSKU = tipo => new Set(estado.grupos.filter(g=>status(g) === tipo).map(g=>g.sku).filter(Boolean)).size;
-        const cards = [ ['Tiragem no mapa',r.mapa,fmt(r.mapas)+' mapas · '+fmt(r.linhas)+' linhas'], ['Tiragem com PCP',r.comPCP,fmt(contarSKU('OK'))+' SKUs com dados iguais'],
+        const cards = [ ['Tiragem no mapa',r.mapa,fmt(r.mapas)+' mapas'], ['Tiragem com PCP',r.comPCP,fmt(contarSKU('OK'))+' SKUs com dados iguais'],
             ['Tiragem fora do PCP',r.semPCP,fmt(contarSKU('SEM_PCP'))+' SKUs não encontrados nas duas abas'], ['Tiragem com dados diferentes',r.diferentes,r.faltando ? fmt(r.faltando)+' itens com dados faltando' : 'CD, gráfica, marca ou envio'],
             ['Tiragem coletada a mais',r.mais,fmt(estado.grupos.filter(g=>chave(g.statusColeta).includes('MAIS')).length)+' itens · status coleta do PCP'], ['Tiragem coletada a menos',r.menos,fmt(estado.grupos.filter(g=>chave(g.statusColeta).includes('MENOS')).length)+' itens · status coleta do PCP'],
             ['Tiragem PCP sem mapa',r.semMapa,'Prevista no PCP, sem mapa correspondente'], ['Tiragem coletada no mapa',r.coletado,'Coleta realizada, separada da solicitada'] ];

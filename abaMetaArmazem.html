@@ -177,7 +177,7 @@
     <p id="maComparativoNota" class="text-[10px] text-slate-500 mt-2"></p>
   </div>
 <div class="ma-card overflow-hidden">
-    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa as parcelas entregues nas respectivas datas de Entrega_TP, até hoje. Só o saldo pendente usa Final (re)Plan + SLA. Sem início planejado, o saldo fica integralmente nessa data; com intervalo válido, segue o rateio. Baseline não participa do cálculo.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
+    <div class="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2"><div><h3 id="maTabelaTitulo" class="font-black text-slate-800 text-sm">Entregas por série</h3><p class="text-[10px] text-slate-500 mt-1">Realizado usa a tiragem entregue nas respectivas datas de Entrega_TP, até hoje. Só o saldo pendente usa Final (re)Plan + SLA. Sem início planejado, o saldo fica integralmente nessa data; com intervalo válido, segue o rateio. Baseline não participa do cálculo.</p></div><span id="maContagem" class="text-[10px] font-black text-slate-500"></span></div>
     <div class="overflow-x-auto max-h-[660px]"><table class="ma-table w-full border-collapse">
       <thead><tr><th>Grupo</th><th>Meta original / exceção</th><th>Volume total</th><th id="maThPrevisto">Dentro da meta</th><th id="maThPos">Fora da meta</th><th>Sem previsão</th><th>Realizado dentro meta</th><th>No prazo / total</th></tr></thead>
       <tbody id="maTabela"></tbody>
@@ -612,9 +612,9 @@
         semDU?'Saldo pendente em entrega única (sem DU)':'Saldo pendente rateado por dias úteis';
       var situacao=i.semData>0?i.statusSemPrevisao:i.previsto>0&&i.pos>0?'Parcialmente dentro da meta':i.pos>0?'Fora da meta':'Dentro da meta';
       var notas=[];
-      if(i.coletadaBruta>0&&!i.realizadoTem)notas.push('Coletado sem parcela de entrega realizada até o corte: saldo no planejamento.');
+      if(i.coletadaBruta>0&&!i.realizadoTem)notas.push('Tiragem coletada sem entrega realizada até o corte: saldo no planejamento.');
       if(i.semData>0)notas.push(i.motivoReplan||'Intervalo de entrega invertido ou inválido.');
-      if(i.realizado>0&&i.dtEntregaTP)notas.push('Realizado classificado por parcela nas respectivas datas de Entrega_TP.');
+      if(i.realizado>0&&i.dtEntregaTP)notas.push('Tiragem realizada nas respectivas datas de Entrega_TP.');
       if(i.pendentePlanejado>0&&r){
         notas.push('Somente o saldo pendente usa Final (re)Plan + Matriz_SLA.');
         if(i.inicioAusente)notas.push('Início planejado vazio: saldo pendente integral na entrega prevista pelo fim (re)plan + SLA, sem rateio.');
@@ -940,7 +940,7 @@
     }
     document.getElementById('maComparativo').innerHTML=
       box('Real + previsto',planejado,'Volume realizado e saldo previsto dentro da '+(estado.cenario==='sem'?'meta original':'meta acordada'),'#418EDE',!!items.length)+
-      box('Realizado',total.realCD,'Parcelas entregues com Entrega_TP válida até hoje','#0f766e',total.realCDTem)+
+      box('Realizado',total.realCD,'Tiragem entregue com Entrega_TP válida até hoje','#0f766e',total.realCDTem)+
       box('Meta Armazém',total.total,'Volume total esperado no CD para os itens filtrados','#FA4616',!!items.length);
     document.getElementById('maComparativoNota').textContent=dataNota+
       (semData?' · '+semData+' linha(s) sem data de meta.':'')+

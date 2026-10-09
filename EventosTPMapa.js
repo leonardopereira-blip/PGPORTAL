@@ -5,7 +5,7 @@ function pgComplementarEventosTPMapa_(mapa, jsonPublicado) {
   try {
     if (mapa._ERRO_CRITICO) throw new Error(mapa._ERRO_CRITICO);
     if (!mapa.__agendaTPCompleta || !mapa.__forecastTP?.conferido) {
-      throw new Error('cache_mapa.json sem parcelas ou Forecast: execute atualizarCacheMapa ou atualizarTodoOCache.');
+      throw new Error('cache_mapa.json sem dados do mapa ou Forecast: execute atualizarCacheMapa ou atualizarTodoOCache.');
     }
     var eventos = [], semAP = [], vistas = {};
     Object.keys(mapa).forEach(function(k) {
@@ -13,7 +13,7 @@ function pgComplementarEventosTPMapa_(mapa, jsonPublicado) {
       if (k === '__linhasFisicas') return;
       if (!Array.isArray(mapa[k])) return;
       mapa[k].forEach(function(e) {
-        if (!e || e.eventoTPVersao !== 2) throw new Error('cache_mapa.json com parcelas antigas: atualize o cache do mapa.');
+        if (!e || e.eventoTPVersao !== 2) throw new Error('cache_mapa.json em formato antigo: atualize o cache do mapa.');
         if (vistas[e.linhaMapa]) return;
         vistas[e.linhaMapa] = true;
         var parcela = { eventoTPVersao: 2, marca: e.marca, grafica: e.grafica, sku: e.sku,

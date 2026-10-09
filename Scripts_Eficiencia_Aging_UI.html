@@ -33,7 +33,7 @@
     if(!estado.cache||estado.cache.chave!==chave||estado.cache.ref!==ref||estado.cache.sla!==window.PG_MATRIZ_SLA||opcoes&&opcoes.forcar){estado.modelo=window.pgEficienciaAgingModelo(config);estado.aberto=config.modo==='aberto'?estado.modelo:window.pgEficienciaAgingModelo(Object.assign({},config,{modo:'aberto'}));estado.cache={chave:chave,ref:ref,sla:window.PG_MATRIZ_SLA};estado.pagina=0;}
     el('efAgingAvisos').innerHTML=(estado.modelo.avisos||[]).map(function(v){return '<p class="ef-notice">'+esc(v)+'</p>';}).join('');
     el('efAgingContexto').textContent=(base==='meta'?'Meta Armazém':base==='baseline'?'Baseline':'(Re)planejado')+' · '+(config.modo==='real'?'Realizado':config.modo==='aberto'?'Em aberto':'Previsto')+' · '+data(config.corte);
-    el('efAgingEtapasTexto').textContent=base==='meta'?'Distribuição da entrega final pela etapa atual; cada parcela entra uma vez.':'Selecione uma etapa para ver o aging diário, a curva e as gráficas.';
+    el('efAgingEtapasTexto').textContent=base==='meta'?'Distribuição da tiragem de entrega final pela etapa atual, sem duplicar quantidades.':'Selecione uma etapa para ver o aging diário, a curva e as gráficas.';
     el('efAgingLegenda').innerHTML=window.pgEficienciaAgingResumo([]).buckets.map(function(b,i){return '<span><i style="background:'+cores[i]+'"></i>'+esc(b.label)+'</span>';}).join('');
     sincronizarEtapas();window.pgEfAgingDetalhes();
   };

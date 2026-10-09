@@ -11564,7 +11564,7 @@ window.pgMontarAuditoriaPontoColetaV56 = function(visao, indice = 0, tipo = 'dia
     if(tipo==='coletadoOutroDia'){
         usarPlan=usarReal=true;
         titulo='Do Plan, já coletado em outros dias '+(acumulado?'até ':'de ')+fmtData(ponto);
-        descricao='Parcelas já coletadas até '+fmtData(hoje)+' em datas diferentes do Plan. Volume limitado ao planejado de cada linha; não soma novamente ao Real.';
+        descricao='Tiragem já coletada até '+fmtData(hoje)+' em datas diferentes do Plan. Volume limitado ao planejado de cada linha; não soma novamente ao Real.';
     }
     else if(tipo==='base'){titulo='Base do filtro atual';descricao='Mesmo conjunto de linhas usado pelo portal para formar a base desta visão.';usarBase=true;}
     else if(tipo==='planPeriodo'){cortePlan=visao.fim<=hoje?visao.fim:hoje;titulo='Planejado acumulado até '+fmtData(cortePlan);descricao='(Re)plan preenchido; quando vazio, fallback para baseline.';usarPlan=true;}
