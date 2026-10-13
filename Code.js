@@ -105,6 +105,13 @@ function _processarDadosDashboardBruto() {
   function personalizacaoSimNao(valor) {
     return String(valor == null ? "" : valor).trim().toUpperCase() === "SIM" ? "Sim" : "Não";
   }
+  // Desconsiderar a marca PES exclusivamente no envio V1.
+  function pgExcluirPESV1_(item) {
+    var marca = String(item.MARCA_FINAL || item.UNIDADE || item.MARCA || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    var envio = String(item.ENVIO || item.Envio || '').trim().toUpperCase();
+    return marca === 'PES' && envio === 'V1';
+  }
  
   var safeIsoDate = function(valData) {
       if (!valData || valData === "") return "";
@@ -179,7 +186,9 @@ function _processarDadosDashboardBruto() {
              var sku = obj["Produto"] || obj["Item"] || obj["SKU"] || "";
              if(op && sku) obj["Chave"] = op + "_" + sku;
         }
+        if (pgExcluirPESV1_(obj)) continue;
         if(obj["Chave"]) {
+          obj["AVALIACAO"] = personalizacaoSimNao(dataPCP[i][138]); // EI: Avaliacao
           obj["CLIENTE_PERSONALIZADO"] = personalizacaoSimNao(dataPCP[i][136]); // EG
           obj["CAPA_PERSONALIZADA"] = personalizacaoSimNao(dataPCP[i][137]); // EH
           obj["_SOURCE"] = "PCP";
@@ -249,7 +258,9 @@ function _processarDadosDashboardBruto() {
         obj["JOIN_KEY"] = pgCorrigirPrefixoSasWaysAcab_(obj["JOIN_KEY"]);
         obj["Chave"] = pgCorrigirPrefixoSasWaysAcab_(obj["Chave"]);
 
+        if (pgExcluirPESV1_(obj)) continue;
         if(obj["Chave"]) {
+          obj["AVALIACAO"] = personalizacaoSimNao(obj.Avaliacao ?? obj.AVALIACAO);
           obj["CLIENTE_PERSONALIZADO"] = personalizacaoSimNao(dataAcab[i][88]); // CK
           obj["CAPA_PERSONALIZADA"] = personalizacaoSimNao(dataAcab[i][89]); // CL
           obj["_SOURCE"] = "ACABADORA";
