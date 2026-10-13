@@ -725,10 +725,17 @@
       var base=auditoriaVisao();
       if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
       if(typeof window.pgGerarExcelAuditoria!=='function')throw new Error('Atualize a página para carregar o exportador Excel');
-      var arquivo=window.pgGerarExcelAuditoria(base);
+      var arquivo;
+      try{arquivo=window.pgGerarExcelAuditoria(base);}
+      catch(erroExcel){
+        if(typeof window.pgGerarExcelAbas!=='function')throw erroExcel;
+        arquivo=window.pgGerarExcelAbas([{nome:'Base auditável',cabecalho:base.cabecalho,linhas:base.linhas}]);
+      }
+      if(!(arquivo instanceof Blob)||!arquivo.size)throw new Error('O gerador de Excel retornou um arquivo vazio.');
       var url=URL.createObjectURL(arquivo),a=document.createElement('a');
-      a.href=url;a.download='Meta_Armazem_Base_Auditavel_'+(estado.cenario==='com'?'posi-nao-fere':'posi-fere')+'.xlsx';a.click();
-      setTimeout(function(){URL.revokeObjectURL(url);},10000);
+      a.href=url;a.download='Meta_Armazem_Base_Auditavel_'+(estado.cenario==='com'?'posi-nao-fere':'posi-fere')+'.xlsx';
+      a.style.display='none';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},60000);
     }catch(e){window.alert('Não foi possível baixar o Excel: '+(e&&e.message||e)+'. Você pode usar Baixar CSV.');}
     finally{window.pgMAExportandoAuditoria=false;if(botao){botao.disabled=false;botao.textContent=anterior;}}
   };
