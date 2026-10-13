@@ -139,7 +139,7 @@
   };
   function csvValor(valor) {
     var texto = String(valor == null ? '' : valor);
-    if (/^[=+\-@]/.test(texto)) texto = "'" + texto; // Evita interpretacao como formula em Excel.
+    if (/^[=+\-@]/.test(texto) && !/^[+-]?\d+(?:[.,]\d+)?$/.test(texto)) texto = "'" + texto; // Protege textos; preserva quantidades negativas.
     return '"' + texto.replace(/"/g, '""') + '"';
   }
   window.pgExportarTempSasAdapt = function(tipo) {
