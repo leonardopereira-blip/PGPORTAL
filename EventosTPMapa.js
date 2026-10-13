@@ -54,10 +54,25 @@ function pgChavesForecastTP_() {
   var resultado = { conferido: true, coleta: [], entrega: [] };
   if (meta.nomes.indexOf('Forecast_Coleta_Portal') < 0) return resultado;
   var valores = Sheets.Spreadsheets.Values.batchGet(id, {
-    ranges: ["'Forecast_Coleta_Portal'!K2:K", "'Forecast_Coleta_Portal'!T2:T"],
+    ranges: ["'Forecast_Coleta_Portal'!A1:P", "'Forecast_Coleta_Portal'!T2:T"],
     valueRenderOption: 'UNFORMATTED_VALUE'
   }).valueRanges || [];
-  if (valores.length !== 2) throw new Error('Leitura incompleta das chaves K/T do Forecast.');
+  if (valores.length !== 2) throw new Error('Leitura incompleta das chaves do Forecast.');
+  var linhas = valores[0] && valores[0].values || [];
+  var cabecalho = String(linhas[0] && linhas[0][0] || '').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+  if (cabecalho === 'GRAFICAUNIDADESKUCD DESTINO') {
+    resultado.formato = 'grafica-marca-sku-destino';
+    linhas.slice(1).forEach(function(r) {
+      var chave = String(r[0] == null ? '' : r[0]).trim();
+      if (!chave) return;
+      if (r[11]) resultado.coleta.push(chave);
+      if (r[12]) resultado.entrega.push(chave);
+    });
+    return resultado;
+  }
+  // Layout anterior: chaves independentes em K (coleta) e T (entrega).
+  valores[0] = { values: linhas.slice(1).map(function(r) { return [r[10]]; }) };
   ['coleta', 'entrega'].forEach(function(tipo, i) {
     resultado[tipo] = (valores[i] && valores[i].values || [])
       .map(function(r) { return String(r[0] == null ? '' : r[0]).trim(); }).filter(Boolean);

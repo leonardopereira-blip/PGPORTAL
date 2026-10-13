@@ -7,6 +7,7 @@
     const camposIdentidade = ['_SOURCE', 'BASE', '_base', 'MARCA_FINAL', 'UNIDADE', 'BR', 'AE',
         'GRAFICA_FINAL', 'GRÁFICA', 'GRAFICA', 'GRÁFICA_MAPA', 'S', 'AD', 'BQ', 'SKU', 'SKU_REAL', 'AJ', 'BW',
         'CD_MAPA', 'CD DESTINO', 'CD_DESTINO', 'CD_FINAL', 'AS', 'ENVIO', 'BT',
+        'CD_DESTINO_PCP_ORIGINAL', 'R',
         'DT_ENTREGA_DG', 'DG', 'BU', 'G', 'GIRO_TOTAL_BA', 'BA', 'TIRAGEM',
         '_PG_TP_CHAVE_FORECAST', '_PG_TP_FORECAST', '_PG_TP_ORIGEM'];
     const normal = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -97,6 +98,16 @@
         if (linha?._PG_TP_FORECAST || normal(linha?._PG_TP_ORIGEM).includes('FORECAST')) return 'forecast-soberano';
         return excecaoPosigraf(linha, identidade);
     }
+    function chaveForecastLinha(linha, identidade, indice) {
+        if (indice?.forecast?.formato === 'grafica-marca-sku-destino') {
+            return normal(primeiro(linha, ['GRAFICA_FINAL', 'BQ', 'GRÁFICA', 'GRAFICA']) +
+                primeiro(linha, ['MARCA_FINAL', 'UNIDADE', 'BR', 'AE']) +
+                primeiro(linha, ['SKU_REAL', 'SKU', 'BW', 'AJ']) +
+                primeiro(linha, ['CD_DESTINO_PCP_ORIGINAL', 'R']));
+        }
+        return normal(primeiro(linha, ['_PG_TP_CHAVE_FORECAST', 'G']) ||
+            identidade.partes[3] + identidade.partes[1] + identidade.partes[2] + identidade.envio);
+    }
     window.pgTiragemAgendadaPCP = function(linha) {
         const campo = nome => window.pgCampoPrazoV35?.(linha, nome) ?? linha?.[nome];
         const valor = campo('TIRAGEM AGENDADA');
@@ -175,8 +186,7 @@
                     return;
                 }
                 const id = identidadeAgenda(dono);
-                const chaveForecast = normal(primeiro(dono, ['_PG_TP_CHAVE_FORECAST', 'G']) ||
-                    id.partes[3] + id.partes[1] + id.partes[2] + id.envio);
+                const chaveForecast = chaveForecastLinha(dono, id, indice);
                 const excecao = temExcecao(dono, id) || (indice.forecastColeta.has(chaveForecast) ? 'forecast-soberano' : '');
                 if (excecao) { descartar(excecao, volume); return; }
                 totaisFormula.set(k, (totaisFormula.get(k) || 0) + volume);
@@ -206,8 +216,7 @@
                 return resultado([], 'chave-atribuida-a-primeira-linha');
             }
         }
-        const chaveForecast = normal(primeiro(linha, ['_PG_TP_CHAVE_FORECAST', 'G']) ||
-            id.partes[3] + id.partes[1] + id.partes[2] + id.envio);
+        const chaveForecast = chaveForecastLinha(linha, id, estado.indice);
         const excecao = temExcecao(linha, id) ||
             (estado.indice?.forecastColeta.has(chaveForecast) ? 'forecast-soberano' : '');
         if (excecao) return resultado(vetorLegado(volumeLegado, dataLegada), excecao, 'legado');
@@ -266,8 +275,7 @@
         if (!indice || indice.legado) return vazio('cache-sem-contrato-tp');
         if (indice.forecast) {
             if (!indice.forecast.conferido) return vazio('forecast-nao-conferido');
-            const chaveForecast = normal(primeiro(linha, ['_PG_TP_CHAVE_FORECAST', 'G']) ||
-                identidade.partes[3] + identidade.partes[1] + identidade.partes[2] + identidade.envio);
+            const chaveForecast = chaveForecastLinha(linha, identidade, indice);
             if ((tipo === 'entrega' ? indice.forecastEntrega : indice.forecastColeta).has(chaveForecast)) {
                 return legado('forecast-soberano');
             }
