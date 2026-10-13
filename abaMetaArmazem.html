@@ -269,6 +269,7 @@
   });
   var estado = {cenario:'com',matrizModo:'marcaSerie',matrizExpandida:false,ordemPrioridade:null,tiposMateriais:null,tiposDisponiveis:[],zerarSemPrevisao:false};
   var META = '2026-10-15';
+  var META_AVALIACAO = '2026-10-26';
   var META_WAYS = '2026-11-30';
   var META_GEE = '2026-11-12';
   var META_SAS_BRADESCO = '2026-10-26';
@@ -426,13 +427,14 @@
       var grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA)||'NÃO INFORMADA';
       var s=serie(l['SÉRIE']||l.SERIE);
       var campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
-      var alvo=metaOriginal(marca),cd=normal(l.CD_FINAL||l['CD DESTINO']);
+      var avaliacaoSim=normal(l.AVALIACAO||l.Avaliacao)==='SIM';
+      var alvo=avaliacaoSim?META_AVALIACAO:metaOriginal(marca),cd=normal(l.CD_FINAL||l['CD DESTINO']);
       var posiPropria=grafica==='POSIGRAF'&&cd==='POSIGRAF';
       var regras=posiPropria?posiRegra(l):null;
       var dataAcordada=(regras||[]).reduce(function(ultima,r){
         return r.datas.reduce(function(a,d){return d>a?d:a;},ultima);
       },'');
-      var elegivel=!!regras&&dataAcordada>alvo;
+      var elegivel=!avaliacaoSim&&!!regras&&dataAcordada>alvo;
       var metaAplicada=cenario==='com'&&elegivel?dataAcordada:alvo;
 
       // Meta Armazém:
@@ -532,7 +534,7 @@
         realizadoTem?(pendentePlanejado>0?'Entrega TP + (re)plan':'Entrega TP'):
         (pendentePlanejado>0&&rateioAplicado?'(re)plan':'Sem previsão');
       return {
-        marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),
+        marca:marca,serie:s,grafica:grafica,segmento:normal(l.SEGMENTO),tipo:normal(l.TIPO),avaliacao:avaliacaoSim?'Sim':'Não',
         total:total,previsto:previsto,pos:pos,semData:semData,real:real,realTem:realTem,
         realCD:realizado,realCDTem:realizadoTem,dtRealCD:dtEntregaTP,
         realizado:realizado,realizadoTem:realizadoTem,coletadaBruta:coletadaBruta,dtEntregaTP:dtEntregaTP,eventosReal:eventosReal,
@@ -627,13 +629,13 @@
   // Cada registro vem da própria linha que alimenta a visão, sem reagrupar por SKU.
   function montarAuditoria(items,cenarioId){
     var cenario=cenarioId==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
-    var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio','OP',
+    var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio',
       'Tiragem total','Tiragem coletada','Dentro da meta','Fora da meta','Sem previsão','% dentro da meta',
-      'Última Entrega TP realizada','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
+      'Entrega TP real','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
       'Origem do cálculo','SLA (dias corridos)','Entrega início prevista','Entrega fim prevista',
       'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
       'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
-      'Fonte','ID da linha','Chave','Cenário'];
+      'Fonte','ID da linha','Chave','Cenário','Tipo'];
     var linhas=items.map(function(i){
       var l=i.linha||{},campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
       var preenchido=function(v){return v!==null&&v!==undefined&&String(v).trim()!=='';};
@@ -667,14 +669,14 @@
       if(l._PG_TOTAL_HIBRIDO)notas.push('Volume da PCP_ACABADORAS: TIRAGEM A ENTREGAR (total por CD).');
       return [String(campo('KIT')??''),String(l.SKU_REAL||campo('SKU')||''),
         String(l.DESC_REAL||campo('DESCRIÇÃO')||campo('DESCRICAO')||l.PRODUTO||''),
-        i.marca,i.serie,i.grafica,i.cd,String(l.ENVIO||l.Envio||''),String(campo('OP')??''),
+        i.marca,i.serie,i.grafica,i.cd,String(l.ENVIO||l.Envio||''),
         i.total,i.coletadaBruta,i.previsto,i.pos,i.semData,i.total?i.previsto/i.total:0,
         i.dtEntregaTP||'',dataFonte(i.inicioColeta||inicioRaw),dataFonte(i.fimReplanColeta||fimRaw),coletaFim,origem,sla===null?'':sla,
         r&&r.entregaUnica?i.dtPlan||'':i.inicioPlan||'',i.dtPlan||'',
         i.alvo,i.dataAcordada||'',i.metaAplicada,
         porDU?r.dias:'',porDU?r.antes:'',porDU?r.dias-r.antes:'',porDU&&i.pendentePlanejado?i.pendentePlanejado/r.dias:'',
         regra,situacao,notas.join(' '),String(l._SOURCE||'PCP'),String(l.ID??l._ROW_ID??''),
-        String(l.JOIN_KEY||campo('Chave')||campo('CHAVE')||''),cenario];
+        String(l.JOIN_KEY||campo('Chave')||campo('CHAVE')||''),cenario,i.tipo];
     });
     return {nome:'Meta_Armazem_Base_Auditavel',cenario:cenario,cabecalho:cabecalho,linhas:linhas};
   }
