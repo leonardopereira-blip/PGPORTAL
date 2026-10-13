@@ -1,5 +1,6 @@
 // Teste manual no DEV. O Workflow deve publicar somente em #mapa_diario.
 // Configure PG_MAPA_SLACK_WORKFLOW_TESTE_URL nas propriedades do script DEV.
+// PG_MAPA_SLACK_PASTA_CSV_ID pode substituir a pasta do Drive definida abaixo.
 // Nenhum gatilho e criado; o envio de email existente permanece independente.
 
 function pgAMSlackDividirDetalhes_(detalhes, limite) {
@@ -144,7 +145,7 @@ function pgAMSlackCompactarDetalhes_(detalhes, quantidadeEsperada) {
     maiorItemRaw: maiorItemRaw };
 }
 
-function pgAMSlackAnalisarAlerta_(report) {
+function pgAMSlackAnalisarAlerta_(report, incluirDetalhes) {
   var linhas = String(report.body || '').replace(/\r\n/g, '\n').split('\n');
   var resumoInicio = linhas.indexOf('RESUMO RÁPIDO');
   var graficasInicio = linhas.indexOf('TODAS AS GRÁFICAS DO DIA');
@@ -194,7 +195,7 @@ function pgAMSlackAnalisarAlerta_(report) {
     throw new Error('Os indicadores do report estao incompletos. Nenhum teste foi enviado ao Slack.');
   }
   if (!Array.isArray(report.detalhes)) throw new Error('A lista de itens do report esta indisponivel para conferir a compactacao.');
-  return { detalhes: pgAMSlackCompactarDetalhes_(secao(detalhesInicio, rodapeInicio), report.detalhes.length), campos: {
+  return { detalhes: incluirDetalhes === false ? null : pgAMSlackCompactarDetalhes_(secao(detalhesInicio, rodapeInicio), report.detalhes.length), campos: {
     data: report.dia.slice(8) + '/' + report.dia.slice(5, 7) + '/' + report.dia.slice(0, 4),
     agendado_hoje: indicador(report.resumo.agenda),
     coletado_hoje: indicador(report.resumo.coleta),
@@ -206,22 +207,31 @@ function pgAMSlackAnalisarAlerta_(report) {
 }
 
 function prepararAlertaMapaSlackHoje(report) {
-  var analise = pgAMSlackAnalisarAlerta_(report || prepararAlertaMapaHoje()), divisao = analise.detalhes;
-  // Uma unica resposta curta; o fim e cortado entre itens completos, com aviso visivel.
+  var pastaId = String(PropertiesService.getScriptProperties().getProperty('PG_MAPA_SLACK_PASTA_CSV_ID') || '').trim() ||
+    '1gLVTjdcckFKFImhjuKnq588LXx_lKWOV';
+  report = report || prepararAlertaMapaHoje();
+  var analise = pgAMSlackAnalisarAlerta_(report, false);
   // Os demais campos ficam vazios somente por compatibilidade com o Workflow.
   var payload = analise.campos;
-  payload.detalhes = divisao.resumo;
+  payload.detalhes = report.detalhes.length + ' linhas de dados';
   for (var i = 1; i < 13; i++) payload['detalhes_' + ('0' + (i + 1)).slice(-2)] = '';
+  // Valida o relatorio inteiro antes de criar o arquivo ou enviar mensagens.
+  pgAMValidarCamposSlack_(payload);
+  var arquivo;
+  try {
+    var csv = report.csvDetalhes || pgAMCSVAlerta_(report.detalhes, report.grupos, report.dia);
+    arquivo = DriveApp.getFolderById(pastaId).createFile(Utilities.newBlob(csv,
+      'text/csv', 'Mapa_eventos_' + report.dia + '.csv'));
+  } catch (erroCSV) {
+    throw new Error('Nao foi possivel salvar o CSV completo na pasta configurada. Confira o acesso ao Drive. Nenhuma mensagem foi enviada.');
+  }
+  // O arquivo herda o acesso da pasta; nenhum compartilhamento e alterado.
+  payload.detalhes = arquivo.getUrl() + '\n' + report.detalhes.length + ' linhas de dados';
+  pgAMValidarCamposSlack_(payload);
   return payload;
 }
 
-function pgAMPrepararEnvioSlack_(report) {
-  var url = String(PropertiesService.getScriptProperties().getProperty('PG_MAPA_SLACK_WORKFLOW_TESTE_URL') || '').trim();
-  if (!/^https:\/\/hooks\.slack\.com\/triggers\/[^\s?#]+$/.test(url)) {
-    throw new Error('Configure PG_MAPA_SLACK_WORKFLOW_TESTE_URL com o webhook do Workflow de teste no script DEV.');
-  }
-  var payload = prepararAlertaMapaSlackHoje(report);
-  // Resumo principal e uma unica resposta curta com os primeiros itens completos.
+function pgAMValidarCamposSlack_(payload) {
   Object.keys(payload).forEach(function(campo) {
     if (typeof payload[campo] !== 'string' || payload[campo].length > 2500) {
       throw new Error('O campo ' + campo + ' precisa ser texto com ate 2.500 caracteres. Nenhum texto foi truncado ou enviado ao Slack.');
@@ -239,7 +249,14 @@ function pgAMPrepararEnvioSlack_(report) {
   if (camposResumo.concat(['detalhes']).some(function(campo) { return !payload[campo].trim(); })) {
     throw new Error('O relatorio do Slack ainda nao esta completo. Nenhuma mensagem foi enviada.');
   }
-  return { url: url, payload: payload };
+}
+
+function pgAMPrepararEnvioSlack_(report) {
+  var url = String(PropertiesService.getScriptProperties().getProperty('PG_MAPA_SLACK_WORKFLOW_TESTE_URL') || '').trim();
+  if (!/^https:\/\/hooks\.slack\.com\/triggers\/[^\s?#]+$/.test(url)) {
+    throw new Error('Configure PG_MAPA_SLACK_WORKFLOW_TESTE_URL com o webhook do Workflow de teste no script DEV.');
+  }
+  return { url: url, payload: prepararAlertaMapaSlackHoje(report) };
 }
 
 function enviarAlertaMapaSlackTeste() {
