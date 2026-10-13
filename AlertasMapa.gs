@@ -222,7 +222,7 @@ function enviarAlertaMapaHoje() {
 function pgAMEnviarEmailPreparado_(report, destinatarios) {
   var mensagem = { to: destinatarios.join(','), subject: report.subject, body: report.body, htmlBody: report.htmlBody };
   if (PG_ALERTAS_MAPA_ANEXAR_CSV) mensagem.attachments = [Utilities.newBlob(report.csvDetalhes || pgAMCSVAlerta_(report.detalhes, report.grupos, report.dia),
-    'text/csv', 'Mapa_eventos_' + report.dia + '.csv')];
+    'text/csv', 'Mapa_eventos_' + report.dia + '_' + Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'HH-mm-ss') + '.csv')];
   MailApp.sendEmail(mensagem);
   return { enviado: true, dia: report.dia, destinatarios: destinatarios.length,
     agenda: report.resumo.agenda, coleta: report.resumo.coleta };

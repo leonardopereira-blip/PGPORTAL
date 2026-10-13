@@ -221,7 +221,7 @@ function prepararAlertaMapaSlackHoje(report) {
   try {
     var csv = report.csvDetalhes || pgAMCSVAlerta_(report.detalhes, report.grupos, report.dia);
     arquivo = DriveApp.getFolderById(pastaId).createFile(Utilities.newBlob(csv,
-      'text/csv', 'Mapa_eventos_' + report.dia + '.csv'));
+      'text/csv', 'Mapa_eventos_' + report.dia + '_' + Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'HH-mm-ss') + '.csv'));
   } catch (erroCSV) {
     throw new Error('Nao foi possivel salvar o CSV completo na pasta configurada. Confira o acesso ao Drive. Nenhuma mensagem foi enviada.');
   }
