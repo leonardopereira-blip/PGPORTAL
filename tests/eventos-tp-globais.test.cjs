@@ -138,3 +138,40 @@ test('Report preserva tabela atual e fornece as mesmas parcelas para curva seman
     ['2026-07-31',1280],['2026-09-04',123]
   ]);
 });
+
+test('Report curva usa o planejado da tabela sem somar acabadora e preserva cortes semanais',()=>{
+  const datas=['2026-09-30','2026-10-10','2026-10-13','2026-10-17'];
+  const pcp=datas.map((data,i)=>row({_ROW_ID:'PCP:'+i,SKU_REAL:'SKU-'+i,SKU:'SKU-'+i,
+    CD_MAPA:'CD JDI',CD_FINAL:'CD JDI','CD DESTINO':'CD JDI',TIRAGEM:(i+1)*100,
+    'TIRAGEM COLETADA':0,Coleta_TP:'',[plan]:data}));
+  const acab=row({_SOURCE:'ACABADORA',_ROW_ID:'ACAB:1',GRAFICA_FINAL:'HR','GRÁFICA':'HR',
+    CD_MAPA:'CD JDI',CD_FINAL:'CD JDI','CD DESTINO':'CD JDI',TIRAGEM:500,
+    'TIRAGEM A ENTREGAR (total por CD)':500,'TIRAGEM COLETADA':0,Coleta_TP:'',[plan]:'2026-10-10'});
+  const base=[...pcp,acab],{w,controls}=portal(base,{});
+  vm.runInContext("dtHojeISO='2026-10-13';dtHoje=new Date('2026-10-13T12:00:00');",w);
+  const simples={querySelectorAll:()=>[],querySelector:()=>null};
+  controls.reTabelaMarcas={closest:()=>simples,querySelectorAll:()=>[],innerHTML:''};
+  controls.pgReSeletoresV42={querySelector:s=>s.includes('data-re-coluna')?
+    {checked:s.includes('marca')}:simples};
+  controls.reCurvaEntregas={};
+  w.pgBaseGeralReportExecutiva=base;w.dadosAcabamentoOrigem=[];
+  w.processarReportExecutiva();
+  const fonte=w.reCurvaFonteCDV43,tabela=w.pgReportAuditoriaPortal.coletaCD;
+  assert.equal(fonte.eventosPlano,tabela.eventosPlano);
+  assert.equal(fonte.eventosPlanoHistorico,tabela.eventosPlano);
+  assert.equal(fonte.planejadoHoje,600);
+  assert.equal(fonte.planejadoHoje,tabela.total.plan);
+  assert.equal(fonte.eventosPlano.length,4,'a acabadora do diario nao amplia o planejado da Report');
+  const soma=corte=>fonte.eventosPlano.reduce((s,r)=>s+(r.dtPlan<=corte?r.tiragem:0),0);
+  assert.equal(soma('2026-10-13'),tabela.total.plan);
+  const pontos=w.reCurvaPeriodos,forecast=w.chart.data.datasets[0].data;
+  const setembro=pontos.findIndex(p=>p.fim==='2026-09-30');
+  const semana10=pontos.findIndex(p=>p.fim==='2026-10-10');
+  const semana17=pontos.findIndex(p=>p.fim==='2026-10-17');
+  assert(semana10>=0&&semana17>=0&&setembro>=0);
+  assert.equal(pontos[semana10].cortePlano,'2026-10-10');
+  assert.equal(forecast[setembro],soma('2026-09-30')/tabela.total.den*100);
+  assert.equal(forecast[semana10],soma('2026-10-10')/tabela.total.den*100);
+  assert.equal(forecast[semana17],soma('2026-10-17')/tabela.total.den*100);
+  assert.equal(w.dadosBaseForecastColeta.length,5,'base do diario permanece intacta');
+});

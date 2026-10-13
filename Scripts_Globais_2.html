@@ -10753,56 +10753,16 @@ window.processarReportExecutiva = function() {
 
     // Fonte única: as porcentagens do gráfico são as mesmas colunas
     // Coletados (Plan/Real) - CD do TOTAL GERAL da tabela.
-    // V44: projeção posterior a hoje = mesma agenda do gráfico diário.
-    // O universo CD é independente do seletor Origem/Destino da aba Report.
-    // Reproduz a seleção PCP direto + acabadoras oficiais da base TP.
-    const contextoOrigem = document.getElementById('pgFiltroOrigem')?.value || 'TODOS';
-    const contextoDestino = document.getElementById('pgFiltroDestino')?.value || 'CD';
-    const filtroCDAtual = contextoOrigem === 'TODOS' && contextoDestino === 'CD';
-    const baseDiariaCD = filtroCDAtual
-        ? (window.dadosBaseForecastColeta || [])
-        : window.pgLinhasUnicas([
-            ...baseGeral.filter(l => !window.pgEhFonteAcabadora(l) &&
-                !window.pgEhDestinoAcabadora(l)),
-            ...baseGeral.filter(l => window.pgEhFonteAcabadora(l) &&
-                window.pgAcabadoraDaLista(l))
-        ]);
-    // Reutiliza o resumo já calculado quando os filtros exibem Todas / CD.
-    const resumoDiarioCD = filtroCDAtual
-        ? window.pgObterResumoColeta()
-        : window.pgCalcularColetaFunil(baseDiariaCD, hojeIso);
-    const eventosCDDia = (resumoDiarioCD.registros || [])
-        .filter(r => r.dtPlan && Number(r.tiragem || 0) > 0)
-        .map(r => ({
-            linha: r.linha || r.pcp, pcp: r.pcp || r.linha,
-            dtPlan: r.dtPlan, tiragem: Number(r.tiragem || 0)
-        }));
-    const somaDiaAte = data => eventosCDDia.reduce((soma, r) =>
-        soma + (r.dtPlan <= data ? r.tiragem : 0), 0);
-    // O total da tabela (denominador) continua sendo a referência.
-    // O ponto futuro utiliza o volume bruto do gráfico diário, sem ajuste
-    // por percentual, truncamento de semana ou antecipação de dias.
-    if (filtroCDAtual) {
-        const diarioHoje = somaDiaAte(hojeIso);
-        if (Math.abs(diarioHoje - entCD.total.plan) > 0.01) {
-            console.info('[V44] Planejados diferentes no corte de hoje:', {
-                report: entCD.total.plan, diario: diarioHoje
-            });
-        }
-    }
+    // Histórico, hoje e futuro usam as mesmas linhas, datas e tiragem da tabela.
 
     window.reCurvaFonteCDV43 = {
         total: entCD.total.den,
-        // O planejado da curva usa a mesma fonte consolidada do gráfico diário:
-        // PCP direto + acabadoras oficiais, sem duplicação.
-        planejadoHoje: somaDiaAte(hojeIso),
+        planejadoHoje: entCD.total.plan,
         realizadoHoje: entCD.total.real,
-        eventosPlano: eventosCDDia,
-        // Histórico usa a mesma base consolidada do gráfico diário para que
-        // pontos fechados (ex.: 30/09 após virar 01/10) não voltem ao cálculo antigo.
-        eventosPlanoHistorico: eventosCDDia,
+        eventosPlano: entCD.eventosPlano,
+        eventosPlanoHistorico: entCD.eventosPlano,
         eventosReal: entCD.eventosReal,
-        registros: [...eventosCDDia, ...entCD.eventosReal],
+        registros: [...entCD.eventosPlano, ...entCD.eventosReal],
         hoje: hojeIso
     };
 
