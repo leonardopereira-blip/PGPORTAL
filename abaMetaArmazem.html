@@ -343,6 +343,15 @@
   }
   function fmt(v, temDado) {return !temDado ? '–' : new Intl.NumberFormat('pt-BR',{maximumFractionDigits:0}).format(Math.round(v || 0));}
   function pct(v, total) {return total>0 ? new Intl.NumberFormat('pt-BR',{style:'percent',maximumFractionDigits:1}).format(v/total):'–';}
+  function detalhePercentualMeta(resumo){
+    var graficas={};
+    (resumo.itens||[]).forEach(function(item){
+      if(item.pos>0){var nome=item.grafica||'NÃO INFORMADA';graficas[nome]=(graficas[nome]||0)+item.pos;}
+    });
+    var nomes=Object.keys(graficas).sort(function(a,b){return graficas[b]-graficas[a]||a.localeCompare(b);});
+    return fmt(resumo.previsto,true)+' dentro, '+fmt(resumo.pos,true)+' fora'+
+      (nomes.length?'\nGráficas fora:\n'+nomes.map(function(nome){return nome+': '+fmt(graficas[nome],true)+' de tiragem';}).join('\n'):'\nNenhuma gráfica fora da meta.');
+  }
   // Calendário nacional de 2026; não inferir feriados locais ou pontos facultativos.
   var FERIADOS_2026=new Set([
     '2026-01-01','2026-04-03','2026-04-21','2026-05-01','2026-09-07',
@@ -772,13 +781,13 @@
     var p=hasValue?Math.max(0,Math.min(100,100*x.previsto/x.total)):0;
     var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
     return '<div class="ma-matrix-tile" title="'+
-      escapeHTML(hasValue?fmt(x.previsto,true)+' real + previsto no prazo / '+fmt(x.total,true)+' total':'Sem volume')+'">'+
+      escapeHTML(hasValue?detalhePercentualMeta(x):'Sem volume')+'">'+
       (hasValue?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
       '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(x.previsto,x.total)+'</span></div>';
   }
   function colunasMatriz(x,c) {
     return '<td class="ma-matrix-cell'+(!c.campo?' ma-matrix-total-col':'')+'" title="'+
-      escapeHTML(fmt(x.previsto,true)+' real + previsto no prazo / '+fmt(x.total,true)+' total')+'">'+
+      escapeHTML(detalhePercentualMeta(x))+'">'+
       barraMatriz(x)+'</td>';
   }
   function ordenarMatriz(a,b) {
@@ -820,7 +829,8 @@
         .concat(mostrar).concat(series.indexOf('VARIOS')>=0?[{nome:'VARIOS',campo:'serie',valores:['VARIOS'],prioritaria:false}]:[]);
     }
     function totalColuna(base,c){
-      return c.campo?soma(base.filter(function(x){return c.valores.indexOf(x[c.campo])>=0;})):soma(base);
+      var linhas=c.campo?base.filter(function(x){return c.valores.indexOf(x[c.campo])>=0;}):base;
+      return Object.assign(soma(linhas),{itens:linhas});
     }
     var dados=linhas.map(function(l){return {nome:l.nome,total:soma(l.itens),
       celulas:colunas.map(function(c){return totalColuna(l.itens,c);})};});
@@ -1074,9 +1084,9 @@
         rows+='<tr class="bg-indigo-50"><td class="font-black text-indigo-900">'+escapeHTML(atual)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(items.filter(function(l){return l.posi===(atual==='Posigraf — prazo combinado');})))+'</td><td class="font-black">'+fmt(x.total,x.total>0)+'</td><td class="font-black">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td class="font-black">'+pct(x.previsto,x.total)+'</td></tr>';
       }
       var x=soma(g.itens);
-      rows+='<tr><td class="font-bold text-slate-700">'+escapeHTML(g.nome)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(g.itens))+'</td><td>'+fmt(x.total,x.total>0)+'</td><td class="font-bold text-blue-700">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td><div class="flex items-center justify-end gap-2"><span class="whitespace-nowrap font-black">'+pct(x.previsto,x.total)+'</span><div class="ma-bar w-16"><b style="width:'+(x.total?100*x.previsto/x.total:0)+'%"></b></div></div></td></tr>';
+      rows+='<tr><td class="font-bold text-slate-700">'+escapeHTML(g.nome)+'</td><td class="ma-table-dates">'+escapeHTML(textoDatas(g.itens))+'</td><td>'+fmt(x.total,x.total>0)+'</td><td class="font-bold text-blue-700">'+fmt(x.previsto,x.total>0)+'</td><td>'+fmt(x.pos,x.total>0)+'</td><td>'+fmt(x.semData,x.total>0)+'</td><td>'+fmt(x.real,x.realTem)+'</td><td><div class="flex items-center justify-end gap-2"><span class="whitespace-nowrap font-black" title="'+escapeHTML(detalhePercentualMeta(Object.assign({itens:g.itens},x)))+'">'+pct(x.previsto,x.total)+'</span><div class="ma-bar w-16"><b style="width:'+(x.total?100*x.previsto/x.total:0)+'%"></b></div></div></td></tr>';
     });
-    rows+='<tr class="bg-slate-900 text-white font-black"><td>TOTAL GERAL</td><td class="ma-table-dates">'+escapeHTML(textoDatas(items))+'</td><td>'+fmt(total.total,total.total>0)+'</td><td>'+fmt(total.previsto,total.total>0)+'</td><td>'+fmt(total.pos,total.total>0)+'</td><td>'+fmt(total.semData,total.total>0)+'</td><td>'+fmt(total.real,total.realTem)+'</td><td>'+pct(total.previsto,total.total)+'</td></tr>';
+    rows+='<tr class="bg-slate-900 text-white font-black"><td>TOTAL GERAL</td><td class="ma-table-dates">'+escapeHTML(textoDatas(items))+'</td><td>'+fmt(total.total,total.total>0)+'</td><td>'+fmt(total.previsto,total.total>0)+'</td><td>'+fmt(total.pos,total.total>0)+'</td><td>'+fmt(total.semData,total.total>0)+'</td><td>'+fmt(total.real,total.realTem)+'</td><td title="'+escapeHTML(detalhePercentualMeta(Object.assign({itens:items},total)))+'">'+pct(total.previsto,total.total)+'</td></tr>';
     document.getElementById('maTabela').innerHTML=rows;
     document.getElementById('maContagem').textContent=rank.length+' grupos · '+items.length+' linhas';
     document.getElementById('maTabelaTitulo').textContent='Entregas por série';
