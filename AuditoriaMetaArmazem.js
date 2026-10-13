@@ -1,13 +1,13 @@
 // Base de auditoria da Meta Armazém: exporta as mesmas linhas calculadas na visão.
 function gerarPlanilhaMetaArmazemAuditavel(payload) {
   var colunas = [
-    'Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio','OP',
+    'Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio',
     'Tiragem total','Tiragem coletada','Dentro da meta','Fora da meta','Sem previsão','% dentro da meta',
     'Entrega TP real','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
     'Origem do cálculo','SLA (dias corridos)','Entrega início prevista','Entrega fim prevista',
     'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
     'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
-    'Fonte','ID da linha','Chave','Cenário'
+    'Fonte','ID da linha','Chave','Cenário','Tipo'
   ];
   var datas = [
     'Entrega TP real','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
@@ -108,16 +108,16 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
       .setFirstRowColor('#ffffff').setSecondRowColor('#f2f6fb');
     var header = sheet.getRange(1, 1, 1, colunas.length);
     header.setBackground('#0c2340').setFontColor('#ffffff').setFontWeight('bold').setWrap(true);
-    sheet.getRange(1, 10, 1, 5).setBackground('#c54c18');
-    sheet.getRange(1, 15, 1, 12).setBackground('#284081');
-    sheet.getRange(1, 27, 1, 4).setBackground('#c54c18');
+    sheet.getRange(1, indice_('Tiragem total'), 1, 5).setBackground('#c54c18');
+    sheet.getRange(1, indice_('% dentro da meta'), 1, 12).setBackground('#284081');
+    sheet.getRange(1, indice_('DU dentro da meta'), 1, 4).setBackground('#c54c18');
     sheet.setRowHeight(1, 48);
     sheet.setColumnWidths(1, colunas.length, 140);
     var larguras = {
       'Kit':160,'SKU':160,'Descrição':340,'Marca':130,'Série':110,'Gráfica':160,
-      'CD destino':130,'Envio':90,'OP':110,'Origem do cálculo':190,
+      'CD destino':130,'Envio':90,'Origem do cálculo':190,
       'Regra aplicada':220,'Situação':150,'Motivo / observação':340,
-      'Fonte':140,'ID da linha':150,'Chave':250,'Cenário':240
+      'Fonte':140,'ID da linha':150,'Chave':250,'Cenário':240,'Tipo':130
     };
     Object.keys(larguras).forEach(function(nome) { sheet.setColumnWidth(indice_(nome), larguras[nome]); });
     ['Descrição','Regra aplicada','Motivo / observação','Cenário'].forEach(function(nome) {
@@ -127,10 +127,10 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
     formato_(sheet, quantidades, '#,##0', n);
     formato_(sheet, inteiros, '#,##0', n);
     formato_(sheet, percentuais, '0.0%', n);
-    // Identificadores são texto: preservar zeros iniciais de kit, SKU, OP e chave.
-    sheet.getRange(2, 1, n, 9).setNumberFormat('@');
-    sheet.getRange(2, 19, n, 1).setNumberFormat('@');
-    sheet.getRange(2, 30, n, 7).setNumberFormat('@');
+    // Apenas identificadores são texto: preservar datas, valores e percentuais tipados.
+    sheet.getRange(2, indice_('Kit'), n, 2).setNumberFormat('@');
+    sheet.getRange(2, indice_('ID da linha'), n, 1).setNumberFormat('@');
+    sheet.getRange(2, indice_('Chave'), n, 1).setNumberFormat('@');
     sheet.getRange(2, 1, n, colunas.length).setValues(normalizadas);
     sheet.getRange(1, indice_('Tiragem total')).setNote('Volumes arredondados para unidades inteiras. Fora da meta é o saldo de total menos dentro e sem previsão; o percentual usa os volumes exportados.');
     sheet.getRange(1, indice_('Entrega fim prevista')).setNote('Saldo pendente: Final (re)Plan + Matriz_SLA em dias corridos. Sem início, entrega integral nessa data; sem fim, Sem data (re)Plan. O realizado usa Entrega_TP. Confirmação CD, Coleta Fim Real e baseline não participam do cálculo.');
