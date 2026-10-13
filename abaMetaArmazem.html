@@ -269,6 +269,7 @@
   });
   var estado = {cenario:'com',matrizModo:'marcaSerie',matrizExpandida:false,ordemPrioridade:null,tiposMateriais:null,tiposDisponiveis:[],zerarSemPrevisao:false};
   var META = '2026-10-15';
+  var META_LEOGRAF_EI = '2026-10-16';
   var META_AVALIACAO = '2026-10-26';
   var META_WAYS = '2026-11-30';
   var META_GEE = '2026-11-12';
@@ -438,6 +439,8 @@
       var campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
       var avaliacaoSim=normal(l.AVALIACAO||l.Avaliacao)==='SIM';
       var alvo=avaliacaoSim?META_AVALIACAO:metaOriginal(marca),cd=normal(l.CD_FINAL||l['CD DESTINO']);
+      // Exceção: Leograf + unidade EI, somente onde a meta padrão seria 15/10.
+      if(!avaliacaoSim&&alvo===META&&grafica==='LEOGRAF'&&normal(l.UNIDADE)==='EI')alvo=META_LEOGRAF_EI;
       var posiPropria=grafica==='POSIGRAF'&&cd==='POSIGRAF';
       var regras=posiPropria?posiRegra(l):null;
       var dataAcordada=(regras||[]).reduce(function(ultima,r){
