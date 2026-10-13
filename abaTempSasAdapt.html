@@ -1,0 +1,115 @@
+<div id="abaTempSasAdapt" class="aba-conteudo hidden h-full flex flex-col">
+  <div class="bg-white border-b border-slate-200 p-4 flex-shrink-0">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-black text-slate-800">TEMP SAS ADAPT</h2>
+        <p class="text-xs text-slate-500 mt-1">Movimentação ATHOS → CDs no mapa de saída, comparada ao total PCP. Visão independente e temporária.</p>
+      </div>
+      <button type="button" onclick="window.pgCarregarTempSasAdapt(true)"
+        class="bg-slate-800 text-white hover:bg-slate-700 rounded-lg px-4 py-2 text-xs font-bold">Atualizar visão</button>
+    </div>
+  </div>
+  <div class="flex-1 overflow-y-auto scroller bg-neutral-100 p-4 space-y-4">
+    <p id="statusTempSasAdapt" class="text-xs text-slate-600">Abra esta visão para carregar os movimentos.</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+        <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Total PCP · SAS ADAPT</p>
+        <p id="pgTempPcp" class="text-2xl font-black text-slate-800 mt-2">—</p>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+        <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Entrada ATHOS · Mapa</p>
+        <p id="pgTempEntrada" class="text-2xl font-black text-blue-700 mt-2">—</p>
+        <p id="pgTempEntradaPct" class="text-[11px] text-slate-500 mt-1"></p>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+        <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Saída ATHOS → CDs · Mapa</p>
+        <p id="pgTempSaida" class="text-2xl font-black text-emerald-700 mt-2">—</p>
+        <p id="pgTempSaidaPct" class="text-[11px] text-slate-500 mt-1"></p>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+        <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Diferença · Entrada − saída</p>
+        <p id="pgTempDiferenca" class="text-2xl font-black text-slate-800 mt-2">—</p>
+        <p class="text-[11px] text-slate-500 mt-1">Diferença matemática, não confirmação de estoque.</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+        <h3 class="text-sm font-black text-slate-800">Entradas para ATHOS por gráfica de origem</h3>
+        <p class="text-[11px] text-slate-500 my-1">GRÁFICA original → CD DESTINO contendo ATHOS</p>
+        <div class="overflow-x-auto mt-3">
+          <table class="w-full text-xs"><thead class="text-slate-500 bg-slate-50"><tr>
+            <th class="p-2 text-left">Gráfica</th><th class="p-2 text-right">Tiragem</th><th class="p-2 text-right">% do PCP</th>
+          </tr></thead><tbody id="pgTempTabelaEntrada"></tbody></table>
+        </div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+        <h3 class="text-sm font-black text-slate-800">Saídas da ATHOS para os CDs</h3>
+        <p class="text-[11px] text-slate-500 my-1">GRÁFICA = ATHOS → CD DESTINO original</p>
+        <div class="overflow-x-auto mt-3">
+          <table class="w-full text-xs"><thead class="text-slate-500 bg-slate-50"><tr>
+            <th class="p-2 text-left">CD destino</th><th class="p-2 text-right">Tiragem</th><th class="p-2 text-right">% do PCP</th>
+          </tr></thead><tbody id="pgTempTabelaSaida"></tbody></table>
+        </div>
+      </div>
+    </div>
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 text-xs text-slate-600 space-y-1">
+      <p><strong>Critério:</strong> UN PCP = SAS ADAPT ou UNIDADE original = SAD, sem duplicar linhas que atendem ambos. ENVIO V1.</p>
+      <p>Movimentos apurados pela TIRAGEM original do MAPA DE SAÍDA apenas quando DT COLETA está preenchida. Não usa MARCA PCP, GRÁFICA PCP nem CD PCP para definir origem/destino.</p>
+      <p><strong>Atenção:</strong> DT COLETA comprova coleta no mapa, não recebimento físico na ATHOS. O saldo é apenas diferença de movimentos; não é estoque confirmado.</p>
+      <p id="pgTempAuditoria"></p>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var ultimo = null;
+  var carregando = false;
+  function el(id) { return document.getElementById(id); }
+  function fmt(v) { return Math.round(Number(v) || 0).toLocaleString('pt-BR'); }
+  function pct(v, t) { return t ? ((Number(v) || 0) * 100 / t).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '% do PCP' : 'Sem base PCP'; }
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function tabela(id, linhas, total) {
+    var alvo = el(id);
+    if (!alvo) return;
+    alvo.innerHTML = (linhas && linhas.length ? linhas.map(function(l) {
+      return '<tr class="border-t border-slate-100"><td class="p-2 text-slate-700">' + esc(l.nome) +
+        '</td><td class="p-2 text-right font-bold tabular-nums">' + fmt(l.tiragem) +
+        '</td><td class="p-2 text-right text-slate-500 tabular-nums">' + pct(l.tiragem, total) + '</td></tr>';
+    }).join('') : '<tr><td colspan="3" class="p-4 text-center text-slate-500">Nenhum movimento encontrado</td></tr>');
+  }
+  function mostrar(d) {
+    ultimo = d;
+    el('pgTempPcp').textContent = fmt(d.pcpTotal);
+    el('pgTempEntrada').textContent = fmt(d.entradasAthos);
+    el('pgTempSaida').textContent = fmt(d.saidasCD);
+    el('pgTempEntradaPct').textContent = pct(d.entradasAthos, d.pcpTotal);
+    el('pgTempSaidaPct').textContent = pct(d.saidasCD, d.pcpTotal);
+    el('pgTempDiferenca').textContent = fmt(d.diferencaAthos);
+    el('pgTempDiferenca').className = 'text-2xl font-black mt-2 ' + (d.diferencaAthos < 0 ? 'text-rose-700' : 'text-slate-800');
+    tabela('pgTempTabelaEntrada', d.entradasPorGrafica, d.pcpTotal);
+    tabela('pgTempTabelaSaida', d.saidasPorCD, d.pcpTotal);
+    el('pgTempAuditoria').textContent = 'Linhas consideradas: PCP ' + d.linhasPcp +
+      ' · entradas ' + d.linhasEntrada + ' · saídas ' + d.linhasSaida +
+      ' · movimentos sem DT COLETA excluídos ' + d.movimentosSemColeta +
+      ' · diferença PCP − entradas ' + fmt(d.diferencaPCPEntrada) + '.';
+    el('statusTempSasAdapt').textContent = 'Dados lidos da fonte atual. Atualize para consultar novamente.';
+  }
+  window.pgCarregarTempSasAdapt = function(forcar) {
+    if (carregando) return;
+    if (ultimo && !forcar) { mostrar(ultimo); return; }
+    carregando = true;
+    el('statusTempSasAdapt').textContent = 'Consultando MAPA DE SAÍDA e PCP…';
+    google.script.run.withSuccessHandler(function(d) {
+      carregando = false;
+      if (!d || typeof d.pcpTotal !== 'number') {
+        el('statusTempSasAdapt').textContent = 'Não foi possível montar a visão.';
+        return;
+      }
+      mostrar(d);
+    }).withFailureHandler(function(e) {
+      carregando = false;
+      el('statusTempSasAdapt').textContent = 'Erro ao consultar a visão: ' + (e && e.message ? e.message : String(e));
+    }).getTempSasAdapt();
+  };
+})();
+</script>
