@@ -794,7 +794,8 @@ window.pgAnexarDadosDashboard = function(fatia) {
     'Prioridade': new Set(['1. 🚨 Backlog (Atrasado)', '2. 🔴 0 a 7 Dias', '3. 🟡 8 a 15 Dias', '4. 🟢 +15 Dias', '5. ⚪ (Sem Data)']),
     'Gráfica': new Set(), 'Marca': new Set(), 'CD Destino': new Set(),
     'Ciclo': new Set(), 'Envio': new Set(), 'Congelado': new Set(),
-    'Cliente personalizado': new Set(), 'Capa personalizada': new Set()
+    'Cliente personalizado': new Set(), 'Capa personalizada': new Set(),
+     'Avaliação': new Set(['Sim', 'Não'])
 };
     
     // A Prioridade não está aqui porque ela é "calculada", não puxa do Excel puro
@@ -802,7 +803,8 @@ window.pgAnexarDadosDashboard = function(fatia) {
     'Gráfica': 'GRAFICA_FINAL', 'Marca': 'UNIDADE', 'CD Destino': 'CD_MAPA',
     'Ciclo': 'CICLO', 'Envio': 'ENVIO', 'Congelado': 'Congelado',
     'Cliente personalizado': 'CLIENTE_PERSONALIZADO',
-    'Capa personalizada': 'CAPA_PERSONALIZADA'
+    'Capa personalizada': 'CAPA_PERSONALIZADA',
+     'Avaliação': 'AVALIACAO'
 };
     // O filtro visual distingue CD e Acabadora de KN/Raízes pelo destino original.
     // Roteamento e cálculos continuam usando exclusivamente CD_MAPA na PCP.
@@ -885,7 +887,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
         if (window.filtrosGeraisIniciados) return;
 
         Object.keys(window.listasMultiProducao).forEach(k => {
-            if(k !== 'Prioridade') window.listasMultiProducao[k].clear();
+            if(k !== 'Prioridade' && k !== 'Avaliação') window.listasMultiProducao[k].clear();
         });
         
         if(window.dadosGlobais) {
