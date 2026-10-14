@@ -3006,7 +3006,7 @@ window.renderColetaFinalFunil = function(sufixo = '') {
 window.pgAtributosCaixaFunil = function(contexto, cor) {
     if (!contexto) return '';
     const id = window.pgCaixasFunil.push({ ...contexto, atrasados: cor.includes('rose') || cor.includes('amber') }) - 1;
-    return `role="button" tabindex="0" title="Extrair pendências" onclick="extrairCaixaFunil(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();extrairCaixaFunil(${id});}" style="cursor:pointer"`;
+    return `role="button" tabindex="0" title="Detalhes do atraso" onmouseenter="if(window.pgTooltipAtrasosFunil)this.title=window.pgTooltipAtrasosFunil(window.pgCaixasFunil[${id}])" onclick="extrairCaixaFunil(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();extrairCaixaFunil(${id});}" style="cursor:pointer"`;
 };
 window.pgPendenciasCaixaFunil = function(contexto) {
     if (contexto.coletaConcluida) return [];
@@ -3228,6 +3228,83 @@ let tRef = document.getElementById('filtroReferencia').value;
     const dadosProcessamento = destinoCDAtivo
         ? Array.from(new Set([...dadosInicio, ...dadosFinalTotal, ...dadosFinalOrigem, ...dadosAcabamentoOrigem, ...dadosFasesEstaticas, ...dadosPadrao]))
         : Array.from(new Set([...dadosPadrao, ...dadosAcabamentoOrigem, ...dadosFasesEstaticas]));
+
+    // Tooltip compartilhado: somente volumes com planejamento vencido e saldo aberto.
+    // Cada tiragem é calculada separadamente; excedentes não compensam atrasos.
+    const pgItensAtrasadosPorFase = new Map();
+    const pgCacheDicasFunil = new Map();
+    const pgNomeFunil = (l, campo) => String(
+        campo === 'marca' ? (l.MARCA_FINAL || l.UNIDADE || l.MARCA || 'N/A') :
+        campo === 'grafica' ? (l.GRAFICA_FINAL || l['GRÁFICA'] || l.GRAFICA || 'N/A') :
+        (l['SÉRIE'] || l['Série'] || l.SERIE || l['SÉRIES'] || '-')
+    ).trim().toUpperCase();
+    const pgAtrasosFaseFunil = id => {
+        if (pgItensAtrasadosPorFase.has(id)) return pgItensAtrasadosPorFase.get(id);
+        const fase = FASES.find(f => f.id === id), itens = [];
+        if (fase) dadosProcessamento.forEach(l => {
+            if (!linhaPermitidaNaFase(l, id) || (id !== 'col_mapa' && !belongsToPhase(l, id))) return;
+            const dt = window.pgDataPlanoFaseFunil(l, fase, tRef);
+            if (!dt || dt >= dtHojeISO) return;
+            const base = window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0);
+            if (base <= 0) return;
+            const vol = window.getVolFase(l, fase, base);
+            const confirmado = dataFoiPreenchida(l, fase) ||
+                (vol > 0 && (id === 'col_mapa' || id === 'ent_cd'));
+            const saldo = Math.max(0, base - (confirmado ? Math.min(base, Math.max(0, vol)) : 0));
+            if (saldo <= 0) return;
+            itens.push({
+                marca:pgNomeFunil(l,'marca'), grafica:pgNomeFunil(l,'grafica'),
+                serie:pgNomeFunil(l,'serie'),
+                tipo:String(l.TIPO || l.Tipo || 'OUTROS').trim().toUpperCase(),
+                fonte:l._SOURCE === 'ACABADORA' ? 'acab' : 'pcp', saldo
+            });
+        });
+        pgItensAtrasadosPorFase.set(id, itens);
+        return itens;
+    };
+    window.pgTooltipAtrasosFunil = contexto => {
+        if (!contexto) return 'Sem recorte disponível.';
+        const faseId = contexto.fase === 'series' ? 'col_mapa' : contexto.fase;
+        const chave = JSON.stringify(contexto);
+        if (pgCacheDicasFunil.has(chave)) return pgCacheDicasFunil.get(chave);
+        const grupo = String(contexto.grupo || '').trim().toUpperCase();
+        const serie = String(contexto.serie || '').trim().toUpperCase();
+        const marca = String(contexto.marca || '').trim().toUpperCase();
+        const grafica = String(contexto.grafica || '').trim().toUpperCase();
+        const tipoMaterial = String(contexto.tipoMaterial || '').trim().toUpperCase();
+        const porSerie = contexto.tipo === 'serie' || contexto.fase === 'series';
+        const grupos = new Map();
+        let total = 0;
+        pgAtrasosFaseFunil(faseId).forEach(item => {
+            if (contexto.tipo === 'marca' && grupo && item.marca !== grupo) return;
+            if (contexto.tipo === 'grafica' && grupo && item.grafica !== grupo) return;
+            if (porSerie && serie && item.serie !== serie) return;
+            if (marca && item.marca !== marca) return;
+            if (grafica && item.grafica !== grafica) return;
+            if (tipoMaterial && item.tipo !== tipoMaterial) return;
+            if (contexto.fonte && item.fonte !== contexto.fonte) return;
+            const nome = porSerie ? item.grafica + ' / ' + item.marca :
+                contexto.tipo === 'grafica' ? item.marca + ' / ' + item.serie :
+                item.grafica + ' / ' + item.serie;
+            grupos.set(nome, (grupos.get(nome) || 0) + item.saldo);
+            total += item.saldo;
+        });
+        const titulo = porSerie ? 'Gráfica / Marca' :
+            contexto.tipo === 'grafica' ? 'Marca / Série' : 'Gráfica / Série';
+        const itens = Array.from(grupos).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0],'pt-BR'));
+        const resultado = 'Em atraso: ' + window.formatarBR(total) +
+            (itens.length ? '\n' + titulo + ':\n' +
+                itens.map(([nome,qtd]) => nome + ': ' + window.formatarBR(qtd)).join('\n')
+                : '\nSem itens vencidos neste recorte.');
+        pgCacheDicasFunil.set(chave,resultado);
+        return resultado;
+    };
+    // Calculado apenas ao passar o mouse, sem aumentar o HTML com listas extensas.
+    window.pgDicasFunil = [];
+    window.pgAtributosTooltipFunil = contexto => {
+        const id = window.pgDicasFunil.push(contexto) - 1;
+        return 'title="Detalhes do atraso" onmouseenter="this.title=window.pgTooltipAtrasosFunil(window.pgDicasFunil[' + id + '])"';
+    };
 
     dadosProcessamento.forEach(l => {
         let tBase = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"]); if(tBase<=0) return;
