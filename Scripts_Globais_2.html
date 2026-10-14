@@ -10869,11 +10869,13 @@ window.processarReportExecutiva = function() {
             total.real += real;
         });
 
-        // Planejado preservado: mesma fonte, mesmas datas e mesma fórmula.
-        let pcp = baseOrigemGrafica;
-        if (destino !== 'TODOS') {
-            pcp = baseOrigemGrafica.filter(l => window.pgLinhaDoDestino(l, destino, 'GRAFICA'));
-        }
+        // Planejado de Coleta CD: mesma base do total e do realizado.
+        // PCP direto ao CD + PCP_ACABADORAS oficiais, sem contar o envio
+        // à acabadora como uma segunda coleta. Entrega TP não é alterada.
+        let pcp = tipoReal === 'coleta'
+            ? baseCenario
+            : baseOrigemGrafica.filter(l => destino === 'TODOS' ||
+                window.pgLinhaDoDestino(l, destino, 'GRAFICA'));
         const fEnt = FASES.find(f => f.id === 'ent_tp');
         pcp.forEach(l => {
             const m = chaveLinha(l);
