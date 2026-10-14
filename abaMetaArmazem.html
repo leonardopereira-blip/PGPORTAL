@@ -187,7 +187,7 @@
     <div id="maMatrizRealizado" class="overflow-x-auto max-w-full" aria-label="Matriz de realizado versus planejado na meta, com rolagem horizontal"></div>
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4 border-t border-slate-200 pt-4">
       <div><h4 class="text-xs font-black text-slate-800">Base auditável · Realizado</h4>
-        <p class="text-[10px] text-slate-500 mt-1">Comparação registro a registro: Coletado Geral (Coleta TP no Funil) × Coletado armazém (Entrega TP na Meta Armazém), com datas e motivos da diferença.</p></div>
+        <p class="text-[10px] text-slate-500 mt-1">Entregue Geral × Entregue armazém, com datas e motivos da diferença.</p></div>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="ma-pill" onclick="window.pgMAExportarAuditoriaRealizado(this)">Baixar Excel Realizado (.xlsx)</button>
         <button type="button" class="ma-pill" onclick="window.pgMABaixarAuditoriaRealizadoCSV()">Baixar CSV Realizado</button>
@@ -763,8 +763,8 @@
   };
   // Auditoria exclusiva do Realizado. NÃO modifica a estrutura, valores,
   // exportadores ou a auditoria armazenada do quadro Planejado.
-  // Coletado Geral = Coleta TP datada no motor canônico do Funil;
-  // Coletado armazém = Entrega TP recebida até o corte, limitada à linha
+  // Entregue Geral = Entrega TP datada no motor canônico do Funil;
+  // Entregue armazém = Entrega TP recebida até o corte, limitada à linha
   // como no quadro Meta Armazém. A entrega DENTRO da meta é outra coluna.
   function montarAuditoriaRealizado(items,cenarioId){
     var cenario=cenarioId==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
@@ -783,8 +783,8 @@
     var chavesFunil=new Set(funilDisponivel?funilBase.map(chave):[]);
     var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio',
       'Fonte','ID da linha','Chave','Tipo','Cenário','Corte',
-      'Tiragem total','Tiragem coletada bruta','Coletado Geral','Coletado armazém',
-      'Diferença Geral - Armazém','Coletado dentro da meta','Coletado fora da meta',
+      'Tiragem total','Tiragem coletada bruta','Entregue Geral','Entregue armazém',
+      'Diferença Geral - Armazém','Entregue dentro da meta','Entregue fora da meta',
       'Planejado dentro da meta','Saldo para aderência','Aderência Realizado / Planejado',
       'Meta original','Meta aplicada','Prazo combinado Posi','Coleta TP (data)','Entrega TP (data)',
       'Parcelas de Entrega TP (data: quantidade)','Recorte Funil','Diagnóstico da diferença'];
@@ -792,8 +792,8 @@
       var l=i.linha||{},campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
       var vol=typeof window.pgVolumesColetaUnificadosV37==='function'?
         window.pgVolumesColetaUnificadosV37(l,corte):null;
-      // Sem fallback imaginado: a fonte do Funil é o valor de Coleta TP do V37.
-      var geral=vol?Math.max(0,volume(vol.coleta)):0;
+      // Mesma Entrega TP do Funil, com suas parcelas e o mesmo corte de data.
+      var geral=vol?Math.max(0,volume(vol.entrega)):0;
       // Esse valor é o que já foi efetivamente calculado e exibido na aba.
       var armazem=Math.max(0,volume(i.realizado));
       var dentro=Math.max(0,volume(i.real));
@@ -805,18 +805,14 @@
       var coletaData=vol?vol.coletaTP:null, entregaData=vol?vol.entregaTP:null;
       var motivo=[];
       if(!funilDisponivel)motivo.push('Recorte do Funil ainda não carregado.');
-      else if(!naBase)motivo.push('Este registro não está na base de Coleta do Funil com os filtros ativos.');
+      else if(!naBase)motivo.push('Este registro não está na base operacional do Funil com os filtros ativos.');
+      if(!vol)motivo.push('Motor de Entrega TP do Funil indisponível.');
       if(vol && volume(vol.entrega)>i.total)
         motivo.push('Entrega TP excede tiragem da linha; Meta Armazém limita ao total.');
-      if(diferenca>0){
-        if(!entregaData)motivo.push('Coleta TP registrada; Entrega TP sem data.');
-        else if(entregaData>corte)motivo.push('Entrega TP posterior à data de corte.');
-        else motivo.push('Coleta TP maior que Entrega TP até o corte (parcelas/datas distintas).');
-      } else if(diferenca<0){
-        if(!coletaData)motivo.push('Entrega TP registrada; Coleta TP sem data.');
-        else if(coletaData>corte)motivo.push('Coleta TP posterior à data de corte.');
-        else motivo.push('Entrega TP maior que Coleta TP até o corte (parcelas/datas distintas).');
-      } else if(!motivo.length)motivo.push('Coleta TP e Entrega TP conciliadas no volume.');
+      if(diferenca!==0){
+        if(!(vol && volume(vol.entrega)>i.total && armazem===i.total))
+          motivo.push('Volumes de Entrega TP diferem entre Funil e Meta Armazém até o corte; conferir parcelas e limite da linha.');
+      } else if(!motivo.length)motivo.push('Volumes de Entrega TP conciliados.');
       if(fora>0)motivo.push('Parte da entrega ocorreu após a meta aplicada.');
       if(saldo>0)motivo.push('Há saldo planejado dentro da meta ainda não entregue nesse prazo.');
       var parcelas=(i.eventosReal||[]).map(function(e){return fmtPrazo(e.data)+': '+fmt(e.volume,true);}).join(' | ');
