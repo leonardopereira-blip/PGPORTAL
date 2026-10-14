@@ -3058,6 +3058,120 @@ window.extrairCaixaFunil = function(id) {
     }).withFailureHandler(falha).gerarPlanilhaGiroFiltrado(itens);
 };
 
+
+// Tabela do analista restaurada na aba Funil.
+window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
+    const elThead = document.getElementById('thFunilNovaTabela');
+    const elTbody = document.getElementById('tbFunilNovaTabela');
+    const selFase = document.getElementById('selectFaseNovaTabela');
+    if (!elThead || !elTbody || !selFase) return;
+    // Todas as fases do Funil; mantém a fase inicial escolhida no HTML.
+    if (selFase.options.length <= 4) {
+        const faseInicial = selFase.value || 'col_tp';
+        let opts = '';
+        FASES.forEach(f => {
+            opts += `<option value="${f.id}">${f.nome}</option>`;
+        });
+        selFase.innerHTML = opts;
+        selFase.value = FASES.some(f => f.id === faseInicial) ? faseInicial : 'col_tp';
+    }
+    const faseId = selFase.value;
+    const faseObj = FASES.find(f => f.id === faseId);
+    if (!faseObj) return;
+
+    const matriz = {};
+    const setSeries = new Set();
+    // dadosFiltrados é a variável lexical do motor, não window.dadosFiltrados.
+    const arrayBase = dadosFiltrados || window.dadosGlobais || [];
+
+    arrayBase.forEach(l => {
+        let tBase = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"]);
+        if (tBase <= 0) return;
+        if (typeof belongsToPhase === 'function' && !belongsToPhase(l, faseId) && faseId !== 'col_mapa') return;
+        let marca = String(l["MARCA_FINAL"] || l["UNIDADE"] || "N/A").trim().toUpperCase();
+        let serie = String(l["SÉRIE"] || l["Série"] || l["SERIE"] || "-").trim();
+        let tipo = String(l["TIPO"] || l["Tipo"] || "Outros").trim().toUpperCase();
+        if (tipo === 'ALUNO') tipo = 'Aluno';
+        else if (tipo === 'PROFESSOR') tipo = 'Professor';
+        else tipo = 'Outros';
+
+        let tFaseReal = window.getVolFase ? window.getVolFase(l, faseObj, tBase) : tBase;
+        if (faseId === 'col_tp' || faseId === 'ent_tp') {
+            tFaseReal = window.arredondar(l["VOLUME_AZ"] || l["TIRAGEM COLETADA"] || l["COLETADA_MAPA"] || 0);
+        }
+        let isReal = false;
+        if (typeof dataFoiPreenchida === 'function') {
+            isReal = dataFoiPreenchida(l, faseObj) || (tFaseReal > 0 && (faseId === 'col_mapa' || faseId === 'ent_cd'));
+        }
+        if (faseId === 'col_tp') isReal = !!(l["DATA_DZ"] && String(l["DATA_DZ"]).trim() !== "");
+        if (faseId === 'ent_tp') isReal = !!(l["DATA_EA"] && String(l["DATA_EA"]).trim() !== "");
+
+        setSeries.add(serie);
+        if (!matriz[marca]) matriz[marca] = {totalGeral:{base:0,real:0},series:{}};
+        if (!matriz[marca].series[serie]) matriz[marca].series[serie] = {
+            Aluno:{base:0,real:0}, Professor:{base:0,real:0}, Outros:{base:0,real:0}
+        };
+        matriz[marca].totalGeral.base += tBase;
+        matriz[marca].series[serie][tipo].base += tBase;
+        if (isReal || (faseId === 'col_mapa' && tFaseReal > 0)) {
+            matriz[marca].totalGeral.real += tFaseReal;
+            matriz[marca].series[serie][tipo].real += tFaseReal;
+        }
+    });
+
+    const seriesOrdenadas = Array.from(setSeries).sort();
+    const marcasOrdenadas = Object.keys(matriz).sort();
+    if (marcasOrdenadas.length === 0) {
+        elThead.innerHTML = `<tr><th class="p-2">Aviso</th></tr>`;
+        elTbody.innerHTML = `<tr><td class="p-8 text-center text-slate-500 font-bold bg-slate-50 rounded-b-lg">Nenhum dado encontrado para a fase '${faseObj.nome}' com os filtros atuais.</td></tr>`;
+        return;
+    }
+    let trTopo = `<tr>
+        <th rowspan="2" class="p-2 border-r border-slate-300 sticky left-0 bg-slate-100 z-10 shadow-[1px_0_0_#CBD5E1] min-w-[120px]">Marca</th>
+        <th rowspan="2" class="p-2 border-r border-slate-300 text-center bg-slate-200 text-slate-800 font-black min-w-[70px]">% Total</th>`;
+    let trBase = `<tr>`;
+    seriesOrdenadas.forEach(serie => {
+        trTopo += `<th colspan="3" class="p-2 border-r border-slate-300 text-center font-black text-slate-700">${serie}</th>`;
+        trBase += `
+            <th class="p-1 border-r border-slate-200 text-center text-[9px] font-bold text-slate-500 bg-slate-50 w-20">Aluno</th>
+            <th class="p-1 border-r border-slate-200 text-center text-[9px] font-bold text-slate-500 bg-slate-50 w-20">Prof</th>
+            <th class="p-1 border-r border-slate-300 text-center text-[9px] font-bold text-slate-500 bg-slate-50 w-20">Outros</th>`;
+    });
+    trTopo += `</tr>`;
+    trBase += `</tr>`;
+    elThead.innerHTML = trTopo + trBase;
+
+    const renderCell = (dataObj, isTotal = false) => {
+        if (!dataObj || dataObj.base === 0) {
+            return `<td class="p-2 border-r ${isTotal ? 'border-slate-300 bg-slate-50' : 'border-slate-200'} text-center text-slate-300">-</td>`;
+        }
+        let pct = (dataObj.real / dataObj.base) * 100;
+        if (pct === 100 && dataObj.real < dataObj.base) pct = 99.9;
+        let corClasse = window.getCorHeatmap ? window.getCorHeatmap(pct) : 'bg-slate-500 text-white';
+        let tooltip = `${window.formatarBR(dataObj.real)} / ${window.formatarBR(dataObj.base)}`;
+        return `<td class="p-1 border-r ${isTotal ? 'border-slate-300 bg-slate-50' : 'border-slate-200'} text-center align-middle">
+                    <div class="px-1.5 py-1 rounded shadow-sm text-[10px] font-black ${corClasse}" title="${tooltip}">${pct.toFixed(1)}%</div>
+                </td>`;
+    };
+    let htmlBody = '';
+    marcasOrdenadas.forEach(marca => {
+        let colsSerie = '';
+        seriesOrdenadas.forEach(serie => {
+            let sData = matriz[marca].series[serie] || {
+                Aluno:{base:0,real:0}, Professor:{base:0,real:0}, Outros:{base:0,real:0}
+            };
+            colsSerie += renderCell(sData.Aluno);
+            colsSerie += renderCell(sData.Professor);
+            colsSerie += renderCell(sData.Outros);
+        });
+        htmlBody += `<tr class="border-b border-slate-100 hover:bg-slate-100/50 transition-colors">
+            <td class="p-2 font-bold text-slate-700 border-r border-slate-200 sticky left-0 bg-white shadow-[1px_0_0_#F1F5F9]">${marca}</td>
+            ${renderCell(matriz[marca].totalGeral,true)}${colsSerie}
+        </tr>`;
+    });
+    elTbody.innerHTML = htmlBody;
+};
+
 window.processarFunil = function() {
     window.pgCaixasFunil = [];
     window.renderColetaFinalFunil();
@@ -3951,6 +4065,7 @@ let tRef = document.getElementById('filtroReferencia').value;
     renderResumoTransposto('MarcaPct', aM, mGrid, pgSeriesPorMarca, true);
     renderResumoTransposto('GraficaTiragem', aG, gGrid, pgSeriesPorGrafica, false);
     renderResumoTransposto('GraficaPct', aG, gGrid, pgSeriesPorGrafica, true);
+    window.renderTabelaMarcaSerieTipo();
 };
 
     function renderCurvaAcumulada() {
