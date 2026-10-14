@@ -102,6 +102,19 @@ function _processarDadosDashboardBruto() {
   var result = [];
 
   function limparHeader(h) { return h ? String(h).trim() : ""; }
+  // Priorização opcional, por cabeçalho (sem depender da posição da coluna).
+  // Enquanto a coluna não existir ou estiver vazia, conserva a SÉRIE original.
+  function pgAplicarSerieCorrigida_(cabecalhos, valores, obj) {
+    var indice = cabecalhos.findIndex(function(titulo) {
+      return String(titulo == null ? '' : titulo).trim()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, '_').toLowerCase() === 'serie_corrigida';
+    });
+    if (indice < 0) return;
+    var corrigida = valores[indice];
+    if (corrigida == null || String(corrigida).trim() === '') return;
+    obj['SÉRIE'] = String(corrigida).trim();
+  }
   function personalizacaoSimNao(valor) {
     return String(valor == null ? "" : valor).trim().toUpperCase() === "SIM" ? "Sim" : "Não";
   }
@@ -146,6 +159,8 @@ function _processarDadosDashboardBruto() {
           }
         }
         
+        pgAplicarSerieCorrigida_(headersPCP, dataPCP[i], obj);
+
         // MAPEAMENTO POR ÍNDICE
         obj["GIRO_STATUS_AY"] = String(dataPCP[i][50] || "").trim();
         obj["GIRO_COLETADA_AZ"] = dataPCP[i][51];
@@ -222,6 +237,7 @@ function _processarDadosDashboardBruto() {
           }
         }
          
+        pgAplicarSerieCorrigida_(headersAcab, dataAcab[i], obj);
         obj["CD_DESTINO"] = obj["CD_DESTINO"] ?? obj["CD DESTINO"] ?? "";
         obj["Chave"] = dataAcab[i][0]; 
         if(dataAcab[i].length > 1)  obj["JOIN_KEY"] = String(dataAcab[i][1] || "").trim(); 
