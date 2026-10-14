@@ -569,11 +569,20 @@ window.getVolFase = function(linha, fObj, tBase) {
 
     function getCols(fObj, tRef) { return { plan: (tRef === 'baseline' && fObj.colBase) ? fObj.colBase : fObj.colPlan, real: fObj.colReal, realAlt: fObj.colRealAlt, iniReal: fObj.colIniReal }; }
     
+    // Mapa deve estar solicitado 48h (dois dias) antes da coleta.
+    window.pgDataPlanoMapa48h = function(l) {
+        const coleta = window.pgDataPlanoColetaLinha(l);
+        if (!coleta) return null;
+        const prazo = new Date(coleta + 'T12:00:00Z');
+        prazo.setUTCDate(prazo.getUTCDate() - 2);
+        return prazo.toISOString().slice(0, 10);
+    };
     window.pgDataPlanoFaseFunil = function(l, f, tRef) {
         const campo = n => window.pgCampoColeta(l, n);
-        if (['col_mapa', 'col_tp', 'ent_tp', 'ent_cd'].includes(f.id)) {
-            return window.pgDataPlanoColetaLinha(l);
-        }
+        if (f.id === 'col_mapa') return window.pgDataPlanoMapa48h(l);
+        if (f.id === 'col_tp') return window.pgDataPlanoColetaLinha(l);
+        // Entrega TP e Confirmação CD têm prazo próprio da rota (Matriz_SLA).
+        if (f.id === 'ent_tp' || f.id === 'ent_cd') return window.pgDataPlanoEntregaSLA(l);
         if (f.id !== 'kit') return extrairDataISO(l[getCols(f, tRef).plan]);
         const replan = campo(f.colPlan);
         const valor = tRef === 'baseline' || String(replan ?? '').trim() === ''
@@ -10871,7 +10880,7 @@ window.processarReportExecutiva = function() {
             if (fEnt) {
                 const dtPlan = tipoReal === 'entrega'
                     ? window.pgDataPlanoEntregaSLA(l)
-                    : window.pgDataPlanoFaseFunil(l, fEnt, tRef);
+                    : window.pgDataPlanoColetaLinha(l);
                 const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
                 const volumePlan = tiragem(l);
                 // Inclui o futuro na curva, sem antecipá-lo no total da tabela.
@@ -12173,7 +12182,7 @@ window.rePendenciasEntrega = function(marca, destino, tipoReal = 'coleta') {
 
         const dtPlan = tipoReal === 'entrega'
             ? window.pgDataPlanoEntregaSLA(l)
-            : window.pgDataPlanoFaseFunil(l, f, tRef);
+            : window.pgDataPlanoColetaLinha(l);
         const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
         if (!(dtPlan && dias !== null && dias >= 0)) return;
 
