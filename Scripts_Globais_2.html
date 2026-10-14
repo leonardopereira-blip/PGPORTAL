@@ -10869,11 +10869,14 @@ window.processarReportExecutiva = function() {
             total.real += real;
         });
 
-        // Planejado preservado: mesma fonte, mesmas datas e mesma fórmula.
-        let pcp = baseOrigemGrafica;
-        if (destino !== 'TODOS') {
-            pcp = baseOrigemGrafica.filter(l => window.pgLinhaDoDestino(l, destino, 'GRAFICA'));
-        }
+        // Coleta: planejado e realizado usam as MESMAS linhas da base CD que compõe
+        // o denominador. A regra anterior usava só origem Gráfica no PLAN,
+        // mas incluía PCP_ACABADORAS no REAL e no total, descasando as visões.
+        // Entrega TP mantém seu recorte próprio e o prazo da Matriz_SLA.
+        let pcp = tipoReal === 'coleta'
+            ? baseCenario
+            : baseOrigemGrafica.filter(l => destino === 'TODOS' ||
+                window.pgLinhaDoDestino(l, destino, 'GRAFICA'));
         const fEnt = FASES.find(f => f.id === 'ent_tp');
         pcp.forEach(l => {
             const m = chaveLinha(l);
