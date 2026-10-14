@@ -185,6 +185,14 @@
       <button type="button" class="ma-pill shrink-0" onclick="window.pgMACapturarMatriz('realizado')" title="Captura a matriz de Realizado completa, incluindo colunas fora da rolagem">Capturar Realizado (PNG)</button>
     </div>
     <div id="maMatrizRealizado" class="overflow-x-auto max-w-full" aria-label="Matriz de realizado versus planejado na meta, com rolagem horizontal"></div>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4 border-t border-slate-200 pt-4">
+      <div><h4 class="text-xs font-black text-slate-800">Base auditável · Realizado</h4>
+        <p class="text-[10px] text-slate-500 mt-1">Comparação registro a registro: Coletado Geral (Coleta TP no Funil) × Coletado armazém (Entrega TP na Meta Armazém), com datas e motivos da diferença.</p></div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="ma-pill" onclick="window.pgMAExportarAuditoriaRealizado(this)">Baixar Excel Realizado (.xlsx)</button>
+        <button type="button" class="ma-pill" onclick="window.pgMABaixarAuditoriaRealizadoCSV()">Baixar CSV Realizado</button>
+      </div>
+    </div>
   </div>
   <div class="ma-card px-4 py-3">
     <div class="text-xs font-black text-slate-800 mb-1">Distribuição do realizado + saldo previsto · meta do cenário selecionado</div>
@@ -752,6 +760,138 @@
       setTimeout(function(){URL.revokeObjectURL(url);},60000);
     }catch(e){window.alert('Não foi possível baixar o Excel: '+(e&&e.message||e)+'. Você pode usar Baixar CSV.');}
     finally{window.pgMAExportandoAuditoria=false;if(botao){botao.disabled=false;botao.textContent=anterior;}}
+  };
+  // Auditoria exclusiva do Realizado. NÃO modifica a estrutura, valores,
+  // exportadores ou a auditoria armazenada do quadro Planejado.
+  // Coletado Geral = Coleta TP datada no motor canônico do Funil;
+  // Coletado armazém = Entrega TP recebida até o corte, limitada à linha
+  // como no quadro Meta Armazém. A entrega DENTRO da meta é outra coluna.
+  function montarAuditoriaRealizado(items,cenarioId){
+    var cenario=cenarioId==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
+    var corte=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toLocaleDateString('en-CA');
+    var funilBase=window.dadosBaseForecastColeta;
+    var funilDisponivel=Array.isArray(funilBase);
+    function chave(l){
+      if(!l)return '';
+      var origem=normal(l._SOURCE||l.BASE||l._base||'PCP');
+      var id=l.ID!=null?String(l.ID):'';
+      var idLinha=String(l._ROW_ID||'').replace(/:total-todas$/,'');
+      var identificador=id?'ID:'+id:idLinha?'ROW:'+idLinha:'';
+      return [origem,identificador,String(l.JOIN_KEY||l['CD+GRAF+SKU+ENVIO']||''),
+        String(l.SKU_REAL||l.SKU||''),String(l.CD_FINAL||l['CD DESTINO']||'')].join('|');
+    }
+    var chavesFunil=new Set(funilDisponivel?funilBase.map(chave):[]);
+    var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio',
+      'Fonte','ID da linha','Chave','Tipo','Cenário','Corte',
+      'Tiragem total','Tiragem coletada bruta','Coletado Geral','Coletado armazém',
+      'Diferença Geral - Armazém','Coletado dentro da meta','Coletado fora da meta',
+      'Planejado dentro da meta','Saldo para aderência','Aderência Realizado / Planejado',
+      'Meta original','Meta aplicada','Prazo combinado Posi','Coleta TP (data)','Entrega TP (data)',
+      'Parcelas de Entrega TP (data: quantidade)','Recorte Funil','Diagnóstico da diferença'];
+    var linhas=items.map(function(i){
+      var l=i.linha||{},campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
+      var vol=typeof window.pgVolumesColetaUnificadosV37==='function'?
+        window.pgVolumesColetaUnificadosV37(l,corte):null;
+      // Sem fallback imaginado: a fonte do Funil é o valor de Coleta TP do V37.
+      var geral=vol?Math.max(0,volume(vol.coleta)):0;
+      // Esse valor é o que já foi efetivamente calculado e exibido na aba.
+      var armazem=Math.max(0,volume(i.realizado));
+      var dentro=Math.max(0,volume(i.real));
+      var fora=Math.max(0,armazem-dentro);
+      var plan=Math.max(0,volume(i.previsto));
+      var saldo=Math.max(0,plan-dentro);
+      var diferenca=geral-armazem;
+      var naBase=funilDisponivel?chavesFunil.has(chave(l)):null;
+      var coletaData=vol?vol.coletaTP:null, entregaData=vol?vol.entregaTP:null;
+      var motivo=[];
+      if(!funilDisponivel)motivo.push('Recorte do Funil ainda não carregado.');
+      else if(!naBase)motivo.push('Este registro não está na base de Coleta do Funil com os filtros ativos.');
+      if(vol && volume(vol.entrega)>i.total)
+        motivo.push('Entrega TP excede tiragem da linha; Meta Armazém limita ao total.');
+      if(diferenca>0){
+        if(!entregaData)motivo.push('Coleta TP registrada; Entrega TP sem data.');
+        else if(entregaData>corte)motivo.push('Entrega TP posterior à data de corte.');
+        else motivo.push('Coleta TP maior que Entrega TP até o corte (parcelas/datas distintas).');
+      } else if(diferenca<0){
+        if(!coletaData)motivo.push('Entrega TP registrada; Coleta TP sem data.');
+        else if(coletaData>corte)motivo.push('Coleta TP posterior à data de corte.');
+        else motivo.push('Entrega TP maior que Coleta TP até o corte (parcelas/datas distintas).');
+      } else if(!motivo.length)motivo.push('Coleta TP e Entrega TP conciliadas no volume.');
+      if(fora>0)motivo.push('Parte da entrega ocorreu após a meta aplicada.');
+      if(saldo>0)motivo.push('Há saldo planejado dentro da meta ainda não entregue nesse prazo.');
+      var parcelas=(i.eventosReal||[]).map(function(e){return fmtPrazo(e.data)+': '+fmt(e.volume,true);}).join(' | ');
+      return [
+        String(campo('KIT')??''),String(l.SKU_REAL||campo('SKU')||''),
+        String(l.DESC_REAL||campo('DESCRIÇÃO')||campo('DESCRICAO')||l.PRODUTO||''),
+        i.marca,i.serie,i.grafica,i.cd,String(l.ENVIO||l.Envio||''),
+        String(l._SOURCE||'PCP'),String(l.ID??l._ROW_ID??''),
+        String(l.JOIN_KEY||campo('Chave')||campo('CHAVE')||''),i.tipo,cenario,corte,
+        i.total,i.coletadaBruta,geral,armazem,diferenca,dentro,fora,plan,saldo,
+        plan>0?dentro/plan:null,
+        i.alvo,i.metaAplicada,i.dataAcordada||'',
+        coletaData||'',entregaData||i.dtEntregaTP||'',parcelas,
+        funilDisponivel?(naBase?'Sim':'Não'):'Não disponível',motivo.join(' ')
+      ];
+    });
+    return {nome:'Meta_Armazem_Realizado_Auditavel',cenario:cenario,
+      cabecalho:cabecalho,linhas:linhas};
+  }
+  window.pgMAObterAuditoriaRealizado=function(){
+    var atual=window.pgMAVisaoAtual;
+    var base=montarAuditoriaRealizado(atual?atual.itens:[],estado.cenario);
+    return {nome:base.nome,cenario:base.cenario,
+      cabecalho:base.cabecalho.slice(),
+      linhas:base.linhas.map(function(l){return l.slice();})};
+  };
+  window.pgMABaixarAuditoriaRealizadoCSV=function(){
+    var base=window.pgMAObterAuditoriaRealizado();
+    if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
+    var csv=function(v,j){
+      var txt=typeof v==='number'?String(v).replace('.',','):String(v??'');
+      if(j===23&&typeof v==='number')txt=pct(v,1);
+      if(typeof v==='string'&&/^[\s]*[=+@-]/.test(txt))txt="'"+txt;
+      return '"'+txt.replace(/"/g,'""')+'"';
+    };
+    var url=URL.createObjectURL(new Blob(['\uFEFF'+[base.cabecalho].concat(base.linhas)
+      .map(function(l){return l.map(csv).join(';');}).join('\r\n')],
+      {type:'text/csv;charset=utf-8;'}));
+    var a=document.createElement('a');a.href=url;
+    a.download='Meta_Armazem_Realizado_Auditavel_'+(estado.cenario==='com'?'posi-nao-fere':'posi-fere')+'.csv';
+    a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  };
+  window.pgMAExportarAuditoriaRealizado=async function(botao){
+    if(window.pgTPExportacaoPronta&&!window.pgTPExportacaoPronta())return;
+    if(window.pgMAExportandoAuditoriaRealizado)return;
+    window.pgMAExportandoAuditoriaRealizado=true;
+    var anterior=botao?botao.textContent:'';
+    if(botao){botao.disabled=true;botao.textContent='Gerando base Realizado…';}
+    try{
+      await new Promise(function(resolve){setTimeout(resolve,0);});
+      var base=window.pgMAObterAuditoriaRealizado();
+      if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
+      if(typeof window.pgGerarExcelAuditoria!=='function')
+        throw new Error('Atualize a página para carregar o exportador Excel');
+      var arquivo;
+      try{arquivo=window.pgGerarExcelAuditoria(base);}
+      catch(erroExcel){
+        if(typeof window.pgGerarExcelAbas!=='function')throw erroExcel;
+        arquivo=window.pgGerarExcelAbas([{nome:'Realizado',cabecalho:base.cabecalho,linhas:base.linhas}]);
+      }
+      if(!(arquivo instanceof Blob)||!arquivo.size)
+        throw new Error('O gerador de Excel retornou um arquivo vazio.');
+      var url=URL.createObjectURL(arquivo),a=document.createElement('a');
+      a.href=url;
+      a.download='Meta_Armazem_Realizado_Auditavel_'+
+        (estado.cenario==='com'?'posi-nao-fere':'posi-fere')+'.xlsx';
+      a.style.display='none';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},60000);
+    }catch(e){
+      window.alert('Não foi possível baixar o Excel do Realizado: '+(e&&e.message||e)+'. Você pode usar CSV.');
+    }finally{
+      window.pgMAExportandoAuditoriaRealizado=false;
+      if(botao){botao.disabled=false;botao.textContent=anterior;}
+    }
   };
   function listaDatas(items){return Array.from(new Set((items||[]).reduce(function(a,l){return a.concat(l.prazos||[]);},[]).filter(Boolean))).sort();}
   function textoDatas(items){
