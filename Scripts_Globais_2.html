@@ -3141,7 +3141,7 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
     trBase += `</tr>`;
     elThead.innerHTML = trTopo + trBase;
 
-    const renderCell = (dataObj, isTotal = false) => {
+    const renderCell = (dataObj, isTotal = false, contexto = null) => {
         if (!dataObj || dataObj.base === 0) {
             return `<td class="p-2 border-r ${isTotal ? 'border-slate-300 bg-slate-50' : 'border-slate-200'} text-center text-slate-300">-</td>`;
         }
@@ -3149,8 +3149,10 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         if (pct === 100 && dataObj.real < dataObj.base) pct = 99.9;
         let corClasse = window.getCorHeatmap ? window.getCorHeatmap(pct) : 'bg-slate-500 text-white';
         let tooltip = `${window.formatarBR(dataObj.real)} / ${window.formatarBR(dataObj.base)}`;
+        const dica = contexto && window.pgAtributosTooltipFunil
+            ? window.pgAtributosTooltipFunil(contexto) : 'title="' + tooltip + '"';
         return `<td class="p-1 border-r ${isTotal ? 'border-slate-300 bg-slate-50' : 'border-slate-200'} text-center align-middle">
-                    <div class="px-1.5 py-1 rounded shadow-sm text-[10px] font-black ${corClasse}" title="${tooltip}">${pct.toFixed(1)}%</div>
+                    <div class="px-1.5 py-1 rounded shadow-sm text-[10px] font-black ${corClasse}" ${dica}>${pct.toFixed(1)}%</div>
                 </td>`;
     };
     let htmlBody = '';
@@ -3160,13 +3162,13 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
             let sData = matriz[marca].series[serie] || {
                 Aluno:{base:0,real:0}, Professor:{base:0,real:0}, Outros:{base:0,real:0}
             };
-            colsSerie += renderCell(sData.Aluno);
-            colsSerie += renderCell(sData.Professor);
-            colsSerie += renderCell(sData.Outros);
+            colsSerie += renderCell(sData.Aluno,false,{fase:faseId,tipo:'serie',serie,marca,tipoMaterial:'ALUNO'});
+            colsSerie += renderCell(sData.Professor,false,{fase:faseId,tipo:'serie',serie,marca,tipoMaterial:'PROFESSOR'});
+            colsSerie += renderCell(sData.Outros,false,{fase:faseId,tipo:'serie',serie,marca,tipoMaterial:'OUTROS'});
         });
         htmlBody += `<tr class="border-b border-slate-100 hover:bg-slate-100/50 transition-colors">
             <td class="p-2 font-bold text-slate-700 border-r border-slate-200 sticky left-0 bg-white shadow-[1px_0_0_#F1F5F9]">${marca}</td>
-            ${renderCell(matriz[marca].totalGeral,true)}${colsSerie}
+            ${renderCell(matriz[marca].totalGeral,true,{fase:faseId,tipo:'marca',grupo:marca})}${colsSerie}
         </tr>`;
     });
     elTbody.innerHTML = htmlBody;
@@ -4036,11 +4038,12 @@ let tRef = document.getElementById('filtroReferencia').value;
         </td>`;
     };
 
-    const montarCelulaBrutaFunil = (cellData) => {
+    const montarCelulaBrutaFunil = (cellData, contexto) => {
+        const dica = window.pgAtributosTooltipFunil(contexto);
         if (!cellData || Number(cellData.real || 0) <= 0) {
-            return `<td class="p-2 border-r border-slate-200 text-right text-slate-300">-</td>`;
+            return `<td ${dica} class="p-2 border-r border-slate-200 text-right text-slate-300">-</td>`;
         }
-        return `<td class="p-2 border-r border-slate-200 text-right font-bold text-slate-700">${window.formatarBR(cellData.real)}</td>`;
+        return `<td ${dica} class="p-2 border-r border-slate-200 text-right font-bold text-slate-700">${window.formatarBR(cellData.real)}</td>`;
     };
 
     // Mesma base e fórmula para gráfico geral e tabelas por Marca/Gráfica.
@@ -4067,11 +4070,12 @@ let tRef = document.getElementById('filtroReferencia').value;
         </td>`;
     };
 
-    const montarCelulaSeriesBruta = (resumo) => {
+    const montarCelulaSeriesBruta = (resumo, contexto) => {
+        const dica = window.pgAtributosTooltipFunil(contexto);
         if (!resumo || resumo.total <= 0) {
             return `<td class="p-2 border-r border-slate-200 text-center text-slate-300">-</td>`;
         }
-        return `<td class="p-2 border-r border-slate-200 text-center font-black text-slate-700">${resumo.finalizadas.toLocaleString('pt-BR')}</td>`;
+        return `<td ${dica} class="p-2 border-r border-slate-200 text-center font-black text-slate-700">${resumo.finalizadas.toLocaleString('pt-BR')}</td>`;
     };
 
     const renderResumoTransposto = (sufixo, grupos, grid, mapaSeries, percentual) => {
@@ -4085,14 +4089,14 @@ let tRef = document.getElementById('filtroReferencia').value;
         th.innerHTML = '<th class="p-2 border-r border-slate-300 sticky left-0 bg-slate-100 z-20 min-w-[150px]">Indicador</th>'
             + ativos.map(header).join('') + header('Total Geral');
         const inicio = nome => `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="p-2 border-r border-slate-200 font-black sticky left-0 bg-white z-10">${esc(nome)}</td>`;
-        const volume = n => `<td class="p-2 border-r border-slate-200 ${percentual ? 'text-center' : 'text-right'} font-black bg-slate-50">${percentual ? fmtCompactoFunil(n) : window.formatarBR(n)}</td>`;
-        let h = inicio('00 - Tiragem Total') + ativos.map(g => volume(percentual ? grid[g].total : pgBrutoGrupoV56(contexto('total', g)))).join('') + volume(percentual ? tGeral : pgTotalBrutoV56) + '</tr>';
+        const volume = (n,ctx) => `<td ${window.pgAtributosTooltipFunil(ctx)} class="p-2 border-r border-slate-200 ${percentual ? 'text-center' : 'text-right'} font-black bg-slate-50">${percentual ? fmtCompactoFunil(n) : window.formatarBR(n)}</td>`;
+        let h = inicio('00 - Tiragem Total') + ativos.map(g => volume(percentual ? grid[g].total : pgBrutoGrupoV56(contexto('total', g)), contexto('col_mapa',g))).join('') + volume(percentual ? tGeral : pgTotalBrutoV56, contexto('col_mapa')) + '</tr>';
         fasesAtivas.forEach((f, idx) => {
             h += inicio(String(idx + 1).padStart(2, '0') + ' - ' + nomeFaseTabelaFunil(f));
             ativos.forEach(g => {
-                h += percentual ? montarCelulaPctFunil(grid[g][f.id], grid[g].total, f.colPlan !== null, contexto(f.id, g)) : montarCelulaBrutaFunil(grid[g][f.id]);
+                h += percentual ? montarCelulaPctFunil(grid[g][f.id], grid[g].total, f.colPlan !== null, contexto(f.id, g)) : montarCelulaBrutaFunil(grid[g][f.id], contexto(f.id, g));
             });
-            h += (percentual ? montarCelulaPctFunil(fTotais[f.id], tGeral, f.colPlan !== null, contexto(f.id)) : montarCelulaBrutaFunil(fTotais[f.id])) + '</tr>';
+            h += (percentual ? montarCelulaPctFunil(fTotais[f.id], tGeral, f.colPlan !== null, contexto(f.id)) : montarCelulaBrutaFunil(fTotais[f.id], contexto(f.id))) + '</tr>';
         });
         h += inicio(String(fasesAtivas.length + 1).padStart(2, '0') + ' - Séries Finalizadas (Mapa Solicitado)');
         const totalSeries = { finalizadas: 0, total: 0 };
@@ -4100,10 +4104,10 @@ let tRef = document.getElementById('filtroReferencia').value;
             const resumo = pgResumoSeries(mapaSeries, String(g).trim().toUpperCase());
             totalSeries.finalizadas += resumo.finalizadas;
             totalSeries.total += resumo.total;
-            h += percentual ? montarCelulaSeriesPct(resumo, contexto('series', g)) : montarCelulaSeriesBruta(resumo);
+            h += percentual ? montarCelulaSeriesPct(resumo, contexto('series', g)) : montarCelulaSeriesBruta(resumo, contexto('series', g));
         });
         totalSeries.pct = totalSeries.total > 0 ? Math.round(totalSeries.finalizadas / totalSeries.total * 100) : 0;
-        h += (percentual ? montarCelulaSeriesPct(totalSeries, contexto('series')) : montarCelulaSeriesBruta(totalSeries)) + '</tr>';
+        h += (percentual ? montarCelulaSeriesPct(totalSeries, contexto('series')) : montarCelulaSeriesBruta(totalSeries, contexto('series'))) + '</tr>';
         tb.innerHTML = h;
     };
     const aG = Object.keys(gGrid).sort((a, b) => gGrid[b].total - gGrid[a].total);
