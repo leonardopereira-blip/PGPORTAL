@@ -3190,7 +3190,7 @@ let tRef = document.getElementById('filtroReferencia').value;
     const initFase = () => ({ pendenciasMapaAY: 0, base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0, pcp: {pendenciasMapaAY: 0, base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0}, acab: {pendenciasMapaAY: 0, base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0} });
     fasesAtivas.forEach(f => fTotais[f.id] = initFase());
 
-    let mapTotal = {}; let seriesGlobais = {};
+    let mapTotal = {};
     const destinoCDAtivo = document.getElementById('pgFiltroDestino')?.value === 'CD';
     const dadosPadrao = dadosFiltrados || [];
     const dadosInicio = destinoCDAtivo ? (window.dadosSemFiltroCD || []) : dadosPadrao;
@@ -3313,7 +3313,6 @@ let tRef = document.getElementById('filtroReferencia').value;
         let k = getKey(l);
         let m = String(l["MARCA_FINAL"] || l["UNIDADE"] || "N/A").toUpperCase();
         let g = String(l["GRAFICA_FINAL"] || l["GRÁFICA"] || "N/A").toUpperCase();
-        let nomeSerie = String(l["SÉRIE"] || l["Série"] || l["SERIE"] || l["SÉRIES"] || "").trim();
         let src = l["_SOURCE"] === "ACABADORA" ? "acab" : "pcp";
 
         if(!mGrid[m]) {
@@ -3336,12 +3335,6 @@ let tRef = document.getElementById('filtroReferencia').value;
                 mGrid[m].total += tBase; mGrid[m][src].total += tBase;
                 gGrid[g].total += tBase; gGrid[g][src].total += tBase;
             }
-        }
-
-        if (nomeSerie !== "") {
-            if (!seriesGlobais[nomeSerie]) seriesGlobais[nomeSerie] = { base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0 };
-            if (!mGrid[m].series[nomeSerie]) mGrid[m].series[nomeSerie] = { base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0 };
-            if (!gGrid[g].series[nomeSerie]) gGrid[g].series[nomeSerie] = { base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0 };
         }
 
         fasesAtivas.forEach(f => {
@@ -3404,21 +3397,6 @@ let tRef = document.getElementById('filtroReferencia').value;
                     gGrid[g][f.id][src].planAtHoje += tPlan;
                 }
 
-                if (f.id === 'col' && nomeSerie !== "") {
-                    seriesGlobais[nomeSerie].base += tBase;
-                    mGrid[m].series[nomeSerie].base += tBase;
-                    gGrid[g].series[nomeSerie].base += tBase;
-                    if (isReal) {
-                        seriesGlobais[nomeSerie].real += tFaseReal;
-                        mGrid[m].series[nomeSerie].real += tFaseReal;
-                        gGrid[g].series[nomeSerie].real += tFaseReal;
-                    }
-                    if (isMetaVencida) {
-                        seriesGlobais[nomeSerie].planAtHoje += tBase;
-                        mGrid[m].series[nomeSerie].planAtHoje += tBase;
-                        gGrid[g].series[nomeSerie].planAtHoje += tBase;
-                    }
-                }
             }
         });
     });
