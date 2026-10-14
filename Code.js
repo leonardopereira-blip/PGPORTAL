@@ -857,8 +857,9 @@ function registrarAcessoUsuario() {
 
 function getDadosAlocacao() {
   try {
-    var data = pgLerAbaCache_('Alocacao_Reentradas', 30);
-    if (data.length <= 1) return [];
+    // Aba temporariamente opcional: sem ela, publica cache vazio (sem dados antigos).
+    var data = pgLerAbaCache_('Alocacao_Reentradas', 30, false, true);
+    if (!data || data.length <= 1) return [];
     var headers = data[0];
     var result = [];
     
@@ -883,8 +884,9 @@ function getDadosAlocacao() {
 
 function getDadosChamados() {
   try {
-    var data = pgLerAbaCache_('Chamados');
-    if (data.length <= 1) return [];
+    // Aba temporariamente opcional: ao ser recriada, a leitura volta normalmente.
+    var data = pgLerAbaCache_('Chamados', 0, false, true);
+    if (!data || data.length <= 1) return [];
     var headers = data[0];
     var result = [];
     
