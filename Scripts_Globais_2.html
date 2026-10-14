@@ -3025,7 +3025,7 @@ window.pgPendenciasCaixaFunil = function(contexto) {
         return window.pgItensColetaDia(window.pgResumoColetaFunil, dtHojeISO, dtHojeISO, dtHojeISO, true)
             .filter(i => casa(i.graficaBase, i.marca) && (!contexto.atrasados || (i.dias !== null && i.dias < 0)));
     }
-    const f = FASES.find(f => f.id === (contexto.fase === 'series' ? 'col_mapa' : contexto.fase));
+    const f = FASES.find(f => f.id === (contexto.fase === 'series' ? 'col_tp' : contexto.fase));
     if (!f) return [];
     const tRef = document.getElementById('filtroReferencia').value;
     const basePendencias = ['col_tp', 'ent_tp'].includes(f.id) ? (window.dadosBaseTPPortal || [])
@@ -3045,7 +3045,7 @@ window.pgPendenciasCaixaFunil = function(contexto) {
         if (saldo <= 0 || (contexto.atrasados && (dias === null || dias >= 0)) || (contexto.fase === 'series' && serie === '-')) return [];
         return [{grafica:String(g || 'N/A'), marca:String(m || 'N/A'), serie,
             sku:String(l.SKU_REAL || l.SKU || '-'), desc:String(l.DESC_REAL || l['DESCRIÇÃO'] || l.PRODUTO || '-'),
-            status:'Em Aberto', pendencia: contexto.fase === 'series' ? 'Série pendente — Coleta Final' : f.nome,
+            status:'Em Aberto', pendencia: contexto.fase === 'series' ? 'Série pendente' : f.nome,
             dias, tiragem:saldo}];
     });
 };
@@ -3275,7 +3275,7 @@ let tRef = document.getElementById('filtroReferencia').value;
     };
     window.pgTooltipAtrasosFunil = contexto => {
         if (!contexto) return 'Sem recorte disponível.';
-        const faseId = contexto.fase === 'series' ? 'col_mapa' : contexto.fase;
+        const faseId = contexto.fase === 'series' ? 'col_tp' : contexto.fase;
         const chave = JSON.stringify(contexto);
         if (pgCacheDicasFunil.has(chave)) return pgCacheDicasFunil.get(chave);
         const grupo = String(contexto.grupo || '').trim().toUpperCase();
@@ -3455,10 +3455,10 @@ let tRef = document.getElementById('filtroReferencia').value;
     Object.keys(mGrid).forEach(g => aplicarPlanoColeta(mGrid[g], coletaResumo.marcas[g]));
     Object.keys(gGrid).forEach(g => aplicarPlanoColeta(gGrid[g], coletaResumo.graficas[g]));
 
-    // Séries Finalizadas: Mapa Solicitado, independente do checkbox de Coleta PCP.
-    // Uma tiragem solicitada acima da base não compensa outra linha incompleta.
-    const pgSeriesMapa = { geral: {}, marca: {}, grafica: {} };
-    const pgAddSerieMapa = (destino, serie, chave, base, real, vencido) => {
+    // Séries finalizadas: Coleta TP, independente do checkbox da fase.
+    // Uma tiragem coletada acima da base não compensa outra linha incompleta.
+    const pgSeriesColeta = { geral: {}, marca: {}, grafica: {} };
+    const pgAddSerieColeta = (destino, serie, chave, base, real, vencido) => {
         if (!destino[serie]) destino[serie] = {};
         const atual = destino[serie][chave];
         if (!atual) destino[serie][chave] = { base, real, vencido };
@@ -3468,25 +3468,25 @@ let tRef = document.getElementById('filtroReferencia').value;
             atual.vencido = atual.vencido || vencido;
         }
     };
-    const pgFaseSeriesMapa = FASES.find(f => f.id === 'col_mapa');
+    const pgFaseSeriesColeta = FASES.find(f => f.id === 'col_tp');
     (window.dadosBaseTPPortal || []).forEach(l => {
         const serie = String(l['SÉRIE'] || l['Série'] || l.SERIE || '').trim();
         if (!serie || serie === '-' || serie.toUpperCase() === 'N/A') return;
         const base = window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0);
         if (base <= 0) return;
-        const real = window.pgMapaSolicitadoAtual(l);
-        const prazo = window.pgDataPlanoFaseFunil(l, pgFaseSeriesMapa, tRef);
+        const real = window.pgTiragemColetadaReal(l);
+        const prazo = window.pgDataPlanoFaseFunil(l, pgFaseSeriesColeta, tRef);
         const vencido = !!prazo && prazo < dtHojeISO;
         const chave = String(l.JOIN_KEY || l.Chave || l.CHAVE || l.SKU_REAL || l.SKU || getKey(l)).trim();
         const marca = String(l.MARCA_FINAL || l.UNIDADE || 'N/A').trim().toUpperCase();
         const grafica = String(l.GRAFICA_FINAL || l['GRÁFICA'] || 'N/A').trim().toUpperCase();
-        pgAddSerieMapa(pgSeriesMapa.geral, serie, chave, base, real, vencido);
-        if (!pgSeriesMapa.marca[marca]) pgSeriesMapa.marca[marca] = {};
-        if (!pgSeriesMapa.grafica[grafica]) pgSeriesMapa.grafica[grafica] = {};
-        pgAddSerieMapa(pgSeriesMapa.marca[marca], serie, chave, base, real, vencido);
-        pgAddSerieMapa(pgSeriesMapa.grafica[grafica], serie, chave, base, real, vencido);
+        pgAddSerieColeta(pgSeriesColeta.geral, serie, chave, base, real, vencido);
+        if (!pgSeriesColeta.marca[marca]) pgSeriesColeta.marca[marca] = {};
+        if (!pgSeriesColeta.grafica[grafica]) pgSeriesColeta.grafica[grafica] = {};
+        pgAddSerieColeta(pgSeriesColeta.marca[marca], serie, chave, base, real, vencido);
+        pgAddSerieColeta(pgSeriesColeta.grafica[grafica], serie, chave, base, real, vencido);
     });
-    const pgResumoSeriesMapa = series => {
+    const pgResumoSeriesColeta = series => {
         let total = 0, finalizadas = 0, atrasadas = 0;
         Object.values(series || {}).forEach(itens => {
             const linhas = Object.values(itens);
@@ -3499,7 +3499,7 @@ let tRef = document.getElementById('filtroReferencia').value;
         return { total, finalizadas, atrasadas,
             pct: total > 0 ? Math.round(finalizadas / total * 100) : 0 };
     };
-    const seriesGeral = pgResumoSeriesMapa(pgSeriesMapa.geral);
+    const seriesGeral = pgResumoSeriesColeta(pgSeriesColeta.geral);
 
     // BASE CANÔNICA DO TOTAL / TABELAS
     // A tiragem reage a Origem e Destino; Acabamento mantém seu denominador anterior.
@@ -3797,7 +3797,7 @@ let tRef = document.getElementById('filtroReferencia').value;
     });
     
     let pctSeriesGlobais = seriesGeral.total > 0 ? (seriesGeral.finalizadas / seriesGeral.total) * 100 : 0;
-    hFunil += `<div class="funnel-layer text-center text-white py-1 rounded-b-md bg-indigo-900 mt-0.5" style="width: ${Math.max(pctSeriesGlobais, 15)}%;">🌟 Séries 100% Finalizadas — Mapa Solicitado (${seriesGeral.finalizadas}/${seriesGeral.total} | ${pctSeriesGlobais.toFixed(1)}%)</div>`;
+    hFunil += `<div class="funnel-layer text-center text-white py-1 rounded-b-md bg-indigo-900 mt-0.5" style="width: ${Math.max(pctSeriesGlobais, 15)}%;">🌟 Séries finalizadas (${seriesGeral.finalizadas}/${seriesGeral.total} | ${pctSeriesGlobais.toFixed(1)}%)</div>`;
     
     document.getElementById('containerFunilVisual').innerHTML = hFunil;
     
@@ -3922,10 +3922,10 @@ let tRef = document.getElementById('filtroReferencia').value;
         
         let idSerieFase = String(fasesAtivas.length + 1).padStart(2, '0');
         h += `<tr class="border-b border-indigo-200 hover:bg-indigo-50 bg-indigo-50/30">
-                <td class="p-2 border-r border-indigo-200 font-bold text-indigo-900 sticky left-0 bg-indigo-50 shadow-[1px_0_0_#c7d2fe]">${idSerieFase} - Séries Finalizadas (Mapa Solicitado)</td>`;
+                <td class="p-2 border-r border-indigo-200 font-bold text-indigo-900 sticky left-0 bg-indigo-50 shadow-[1px_0_0_#c7d2fe]">${idSerieFase} - Séries finalizadas</td>`;
         
         arrIds.forEach(id => {
-            let sData = pgResumoSeriesMapa((arrIds === aM ? pgSeriesMapa.marca : pgSeriesMapa.grafica)[id] || {});
+            let sData = pgResumoSeriesColeta((arrIds === aM ? pgSeriesColeta.marca : pgSeriesColeta.grafica)[id] || {});
             if (sData.total === 0) {
                 h += `<td class="p-2 border-r border-indigo-200 text-center text-slate-400">-</td>`;
             } else {
@@ -4034,9 +4034,9 @@ let tRef = document.getElementById('filtroReferencia').value;
     };
 
     // Mesma base e fórmula para gráfico geral e tabelas por Marca/Gráfica.
-    const pgSeriesPorGrafica = pgSeriesMapa.grafica;
-    const pgSeriesPorMarca = pgSeriesMapa.marca;
-    const pgResumoSeries = (mapaGrupo, grupo) => pgResumoSeriesMapa(mapaGrupo[grupo] || {});
+    const pgSeriesPorGrafica = pgSeriesColeta.grafica;
+    const pgSeriesPorMarca = pgSeriesColeta.marca;
+    const pgResumoSeries = (mapaGrupo, grupo) => pgResumoSeriesColeta(mapaGrupo[grupo] || {});
 
     const montarCelulaSeriesPct = (resumo, contexto) => {
         if (!resumo || resumo.total <= 0) {
@@ -4085,7 +4085,7 @@ let tRef = document.getElementById('filtroReferencia').value;
             });
             h += (percentual ? montarCelulaPctFunil(fTotais[f.id], tGeral, f.colPlan !== null, contexto(f.id)) : montarCelulaBrutaFunil(fTotais[f.id], contexto(f.id))) + '</tr>';
         });
-        h += inicio(String(fasesAtivas.length + 1).padStart(2, '0') + ' - Séries Finalizadas (Mapa Solicitado)');
+        h += inicio(String(fasesAtivas.length + 1).padStart(2, '0') + ' - Séries finalizadas');
         const totalSeries = { finalizadas: 0, total: 0 };
         ativos.forEach(g => {
             const resumo = pgResumoSeries(mapaSeries, String(g).trim().toUpperCase());
