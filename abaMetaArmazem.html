@@ -175,6 +175,17 @@
     </div>
     <div id="maMatriz" class="overflow-x-auto max-w-full" aria-label="Matriz com rolagem horizontal"></div>
   </div>
+  <!-- Segunda matriz: mesmo universo, filtros, séries, ordem e metas da matriz planejada. -->
+  <div class="ma-card p-5 overflow-hidden">
+    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
+      <div>
+        <h3 id="maMatrizRealizadoTitulo" class="font-black text-slate-800 text-sm">Realizado</h3>
+        <p class="text-[10px] text-slate-500 mt-1">Aderência: Entrega TP realizada dentro da meta aplicável ÷ volume planejado dentro da mesma meta. Usa os filtros e a ordenação do quadro acima; saldo ainda não entregue permanece pendente.</p>
+      </div>
+      <button type="button" class="ma-pill shrink-0" onclick="window.pgMACapturarMatriz('realizado')" title="Captura a matriz de Realizado completa, incluindo colunas fora da rolagem">Capturar Realizado (PNG)</button>
+    </div>
+    <div id="maMatrizRealizado" class="overflow-x-auto max-w-full" aria-label="Matriz de realizado versus planejado na meta, com rolagem horizontal"></div>
+  </div>
   <div class="ma-card px-4 py-3">
     <div class="text-xs font-black text-slate-800 mb-1">Distribuição do realizado + saldo previsto · meta do cenário selecionado</div>
     <div id="maLegendaPrazos" class="text-[11px] text-slate-600 leading-relaxed mb-2"></div>
@@ -850,9 +861,89 @@
       total:colunas.map(function(c){return totalColuna(items,c);}),
       escondidas:escondidas,geral:soma(items)};
   }
+  // Realizado / Planejado DENTRO da meta aplicada, sobre as mesmas linhas e
+  // o mesmo modelo de agrupamento do quadro superior. Nunca soma um
+  // excedente de uma linha para compensar outra.
+  function detalheRealizadoMeta(resumo){
+    var graficas={},saldo=0;
+    (resumo.itens||[]).forEach(function(item){
+      var pendente=Math.max(0,(item.previsto||0)-(item.real||0));
+      if(pendente>0){
+        saldo+=pendente;
+        var nome=item.grafica||'NÃO INFORMADA';
+        graficas[nome]=(graficas[nome]||0)+pendente;
+      }
+    });
+    var nomes=Object.keys(graficas).sort(function(a,b){return graficas[b]-graficas[a]||a.localeCompare(b);});
+    return 'Realizado dentro da meta: '+fmt(resumo.real,true)+
+      '\nPlanejado dentro da meta: '+fmt(resumo.previsto,true)+
+      '\nSaldo pendente para aderência: '+fmt(saldo,true)+
+      (nomes.length?'\nGráficas com saldo pendente:\n'+
+        nomes.map(function(nome){return nome+': '+fmt(graficas[nome],true)+' de tiragem';}).join('\n'):
+        '\nNenhuma gráfica com saldo pendente para o planejado.');
+  }
+  function barraMatrizRealizado(x) {
+    var planejado=Math.max(0,x.previsto||0),realizado=Math.max(0,x.real||0);
+    var p=planejado>0?Math.max(0,Math.min(100,100*realizado/planejado)):0;
+    var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
+    return '<div class="ma-matrix-tile" title="'+
+      escapeHTML(planejado>0?detalheRealizadoMeta(x):'Sem volume planejado dentro da meta')+'">'+
+      (planejado>0?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
+      '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(realizado,planejado)+'</span></div>';
+  }
+  function matrizRealizado(m) {
+    var root=document.getElementById('maMatrizRealizado');
+    if(!root)return;
+    if(!m.linhas.length){
+      root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';
+      return;
+    }
+    // Reutiliza exatamente colunas, grupos, séries prioritárias, Outros, Vários
+    // e total do modelo da matriz superior: nenhuma regra recalculada aqui.
+    var cabeca='<th>'+m.rotuloLinha+'</th>'+m.colunas.map(function(c){
+      var arrastavel=c.prioritaria,extra=c.nome==='OUTROS';
+      return '<th class="ma-matrix-col-head'+(!c.campo?' ma-matrix-total-col':'')+
+        (arrastavel?' ma-draggable':'')+'"'+
+        (arrastavel?' draggable="true" data-ma-prioridade="1" data-ma-col="'+escapeHTML(c.nome)+'"':'')+
+        ' title="'+escapeHTML(c.nome+(arrastavel?' — arraste para reordenar':'')+
+        (extra?' — séries secundárias agrupadas sem duplicidade':''))+'">'+
+        '<span class="ma-matriz-label">'+escapeHTML(c.nome)+'</span></th>';
+    }).join('');
+    var h='<table class="ma-matrix-table"><colgroup><col style="width:118px">'+
+      m.colunas.map(function(){return '<col style="width:94px">';}).join('')+
+      '</colgroup><thead><tr>'+cabeca+'</tr></thead><tbody>';
+    function celula(x,c){
+      return '<td class="ma-matrix-cell'+(!c.campo?' ma-matrix-total-col':'')+
+        '" title="'+escapeHTML(x.previsto>0?detalheRealizadoMeta(x):'Sem volume planejado dentro da meta')+'">'+
+        barraMatrizRealizado(x)+'</td>';
+    }
+    m.linhas.forEach(function(l){
+      h+='<tr><th>'+rotuloMatriz(l.nome,25)+'</th>'+
+        l.celulas.map(function(x,i){return celula(x,m.colunas[i]);}).join('')+'</tr>';
+    });
+    h+='<tr class="ma-matrix-total"><th>TOTAL GERAL</th>'+
+      m.total.map(function(x,i){return celula(x,m.colunas[i]);}).join('')+'</tr></tbody></table>';
+    root.innerHTML=h;
+    var origem='';
+    root.querySelectorAll('th[data-ma-prioridade="1"]').forEach(function(th){
+      th.addEventListener('dragstart',function(ev){
+        origem=th.getAttribute('data-ma-col');
+        ev.dataTransfer.effectAllowed='move';
+        ev.dataTransfer.setData('text/plain',origem);
+      });
+      th.addEventListener('dragover',function(ev){ev.preventDefault();ev.dataTransfer.dropEffect='move';th.classList.add('ma-drag-over');});
+      th.addEventListener('dragleave',function(){th.classList.remove('ma-drag-over');});
+      th.addEventListener('dragend',function(){root.querySelectorAll('.ma-drag-over').forEach(function(x){x.classList.remove('ma-drag-over');});});
+      th.addEventListener('drop',function(ev){
+        ev.preventDefault();th.classList.remove('ma-drag-over');
+        window.pgMAReordenarMatriz(ev.dataTransfer.getData('text/plain')||origem,th.getAttribute('data-ma-col'));
+      });
+    });
+  }
   function matriz(items) {
     var root=document.getElementById('maMatriz'),m=modeloMatriz(items);
     window.pgMAMatrizSnapshot=m;
+    matrizRealizado(m);
     var toggle=document.getElementById('maOutrosToggle');
     if(toggle){
       toggle.classList.toggle('hidden',!m.escondidas||m.modo!=='marcaSerie');
@@ -905,8 +996,10 @@
     estado.ordemPrioridade=ordem;
     try{window.localStorage.setItem('pgMAOrdemPrioridadeV1',JSON.stringify(ordem));}catch(e){}
     var root=document.getElementById('maMatriz'),pos=root?root.scrollLeft:0;
+    var rootReal=document.getElementById('maMatrizRealizado'),posReal=rootReal?rootReal.scrollLeft:0;
     matriz(window.pgMAUltimosItens||[]);
     if(root)root.scrollLeft=pos;
+    if(rootReal)rootReal.scrollLeft=posReal;
   };
   function rotuloTipoMaterial(v) {
     return String(v||'').toLowerCase().split('|').map(function(parte){
@@ -962,7 +1055,8 @@
   };
   // PNG construído do modelo completo: inclui também as linhas e colunas fora do scroll,
   // sem depender de bibliotecas externas e sem modificar dados da matriz.
-  window.pgMACapturarMatriz=function() {
+  window.pgMACapturarMatriz=function(tipo) {
+    var realizado=tipo==='realizado';
     var m=window.pgMAMatrizSnapshot;
     if(!m||!m.linhas.length){window.alert('A matriz ainda não tem dados para capturar.');return;}
     try {
@@ -975,9 +1069,9 @@
       ctx.scale(dpr,dpr);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
       ctx.fillStyle='#0C2340';ctx.fillRect(0,0,w,top);
       ctx.fillStyle='#fff';ctx.font='bold 17px Poppins, sans-serif';
-      ctx.fillText('META ARMAZÉM · '+m.nomeModo,16,29);
+      ctx.fillText('META ARMAZÉM · '+(realizado?'REALIZADO · ':'')+m.nomeModo,16,29);
       ctx.font='11px Poppins, sans-serif';
-      ctx.fillText('Real + previsão  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta')+
+      ctx.fillText((realizado?'Entrega TP dentro da meta / planejado dentro da meta':'Real + previsão')+'  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta')+
         '  |  15/10 · SAS Bradesco 26/10 · GEE 12/11 · WAYS 30/11',16,51);
       ctx.fillStyle='#284081';ctx.fillRect(0,top,w,head);
       ctx.fillStyle='#fff';ctx.font='bold 12px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,5,top+27,first-9);
@@ -991,15 +1085,16 @@
         ctx.fillStyle='#0C2340';ctx.font=(ultimo?'bold ':'')+'12px Poppins, sans-serif';
         ctx.fillText(corta(r.nome,18),5,y+25,first-9);
         r.celulas.forEach(function(c,j){
-          var x=first+j*col,p=c.total?Math.max(0,Math.min(100,100*c.previsto/c.total)):0;
+          var x=first+j*col,den=realizado?c.previsto:c.total,num=realizado?c.real:c.previsto;
+          var p=den?Math.max(0,Math.min(100,100*num/den)):0;
           // Preenchimento da célula inteira, preservando só 3px de respiro entre tiles.
           ctx.fillStyle='#EDF4FB';ctx.fillRect(x+3,y+3,col-6,rowH-6);
           ctx.fillStyle=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
-          if(c.total&&p>0)ctx.fillRect(x+3,y+3,(col-6)*p/100,rowH-6);
+          if(den>0&&p>0)ctx.fillRect(x+3,y+3,(col-6)*p/100,rowH-6);
           ctx.fillStyle='#0C2340';
           ctx.font='900 11px Poppins, sans-serif';
           ctx.textAlign='center';ctx.textBaseline='middle';
-          ctx.fillText(pct(c.previsto,c.total),x+col/2,y+rowH/2,col-12);
+          ctx.fillText(pct(num,den),x+col/2,y+rowH/2,col-12);
           ctx.textAlign='start';ctx.textBaseline='alphabetic';
         });
       });
@@ -1007,7 +1102,7 @@
       ctx.fillText('Fonte: PCP direto ao CD + PCP_ACABADORAS oficiais · TOTAL ponderado pela tiragem · '+
         (estado.matrizExpandida?'Outros expandido':'Outros agrupado quando aplicável'),10,h-16);
       var a=document.createElement('a');
-      a.download='meta-armazem-matriz-'+m.modo+'-'+(estado.cenario==='com'?'posi-nao-fere-meta':'posi-fere-meta')+'.png';
+      a.download='meta-armazem-matriz-'+(realizado?'realizado-':'')+m.modo+'-'+(estado.cenario==='com'?'posi-nao-fere-meta':'posi-fere-meta')+'.png';
       a.href=canvas.toDataURL('image/png');a.click();
     }catch(e){console.error('[META ARMAZEM] Screenshot:',e);window.alert('Não foi possível capturar a matriz: '+e.message);}
   };
