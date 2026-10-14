@@ -169,6 +169,39 @@ test('atualizacao completa continua apos erro e informa falhas ao final', () => 
   assert.equal(writes.length, 10);
 });
 
+
+test('alocacao e chamados ausentes nao geram erro e substituem caches antigos por listas vazias', () => {
+  const { ctx } = app({});
+  const gravados = new Map();
+  ctx.atualizarCacheDashboard = () => ({ atualizado: true });
+  for (const fn of ['getDadosCockpit', 'getDadosPreProducao', 'getDadosQualidade',
+    'getDadosPPM', 'getDadosInspecaoCDs', 'getDadosCaixas', 'getDadosMapaSaida',
+    'buscarHistoricoObsGiro']) ctx[fn] = () => [];
+  ctx.salvarJSONNoDrive = (arquivo, dados) => { gravados.set(arquivo, dados); return true; };
+  assert.doesNotThrow(() => ctx.atualizarTodoOCache());
+  assert.equal(JSON.stringify(gravados.get('cache_alocacao.json')), '[]');
+  assert.equal(JSON.stringify(gravados.get('cache_chamados.json')), '[]');
+  assert.equal(gravados.size, 10);
+});
+
+test('alocacao e chamados voltam a funcionar quando abas sao recriadas', () => {
+  const { ctx } = app({
+    Alocacao_Reentradas: [['codigo', 'tipo'], ['SKU-1', 'Principal']],
+    Chamados: [['a', 'b', 'c', 'd', 'e', 'f', 'codigo'], ['', '', '', '', '', '', 'SKU-2']]
+  });
+  assert.equal(ctx.getDadosAlocacao()[0].codigo, 'SKU-1');
+  assert.equal(ctx.getDadosChamados()[0].codigo, 'SKU-2');
+});
+
+test('falhas reais da API em alocacao e chamados continuam sendo reportadas', () => {
+  const { ctx } = app({
+    Alocacao_Reentradas: Error('API indisponivel'),
+    Chamados: Error('API indisponivel')
+  });
+  assert.throws(() => ctx.getDadosAlocacao(), /API indisponivel/);
+  assert.throws(() => ctx.getDadosChamados(), /API indisponivel/);
+});
+
 function snapshotApp() {
   const { ctx } = app({});
   const writes = [], updates = [], properties = new Map();
