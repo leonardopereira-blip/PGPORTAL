@@ -700,6 +700,12 @@ function enviarEmailsPendenciasGiro(dados) {
 // =========================================================================
 function gerarPlanilhaGiroFiltrado(dados) {
   try {
+    // Não aceitar e-mail informado pelo navegador: a identidade precisa
+    // vir da sessão autenticada no servidor.
+    var solicitante = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+    if (!solicitante || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(solicitante)) {
+      throw new Error('Não foi possível identificar o usuário. A exportação não foi criada.');
+    }
     var nomeArquivo = "Giro_Filtrado_" + Utilities.formatDate(new Date(), "GMT-3", "dd_MM_yyyy_HHmm");
     var ss = SpreadsheetApp.create(nomeArquivo);
     var aba = ss.getActiveSheet();
@@ -720,8 +726,29 @@ function gerarPlanilhaGiroFiltrado(dados) {
         aba.getRange(2, 1, linhas.length, cabecalho.length).setValues(linhas);
     }
     aba.autoResizeColumns(1, cabecalho.length);
-    
-    return { success: true, url: ss.getUrl() };
+    SpreadsheetApp.flush();
+
+    var arquivo = DriveApp.getFileById(ss.getId());
+    var proprietario = String(arquivo.getOwner().getEmail() || '').trim().toLowerCase();
+    var transferido = proprietario === solicitante;
+    var aviso = '';
+
+    if (!transferido) {
+      try {
+        // No Google Workspace, a propriedade pode ser transferida ao autor
+        // do clique sem alterar a identidade de execução do portal inteiro.
+        arquivo.setOwner(solicitante);
+        transferido = String(arquivo.getOwner().getEmail() || '').trim().toLowerCase() === solicitante;
+      } catch (erroProprietario) {
+        // Acesso imediato, caso as políticas do Drive proíbam transferência.
+        transferido = false;
+      }
+      if (!transferido) {
+        arquivo.addEditor(solicitante);
+        aviso = 'Planilha compartilhada com você para edição. O Google Drive não permitiu transferir a propriedade.';
+      }
+    }
+    return { success: true, url: ss.getUrl(), proprietarioTransferido: transferido, aviso: aviso };
   } catch(e) {
     return { success: false, error: e.toString() };
   }
