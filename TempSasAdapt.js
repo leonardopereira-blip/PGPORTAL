@@ -100,10 +100,10 @@ function pgTempSasAdaptLerColunas_(nomes, campos) {
 
 function pgTempSasAdaptDestino_(valor) {
   var s = pgTempSasAdaptNormalizar_(valor);
-  if (/(?:^|\\W)(?:JDI|JUNDIAI)(?:\\W|$)/.test(s)) return 'CD JDI';
-  if (/(?:^|\\W)(?:FOR|FORTALEZA|ITAITINGA)(?:\\W|$)/.test(s)) return 'CD FOR';
-  if (/(?:^|\\W)(?:RP|RIBEIRAO PRETO)(?:\\W|$)/.test(s)) return 'CD RP';
-  return s.replace(/^CD\\s+/, '');
+  if (/(?:^|\W)(?:JDI|JUNDIAI)(?:\W|$)/.test(s)) return 'CD JDI';
+  if (/(?:^|\W)(?:FOR|FORTALEZA|ITAITINGA)(?:\W|$)/.test(s)) return 'CD FOR';
+  if (/(?:^|\W)(?:RP|RIBEIRAO PRETO)(?:\W|$)/.test(s)) return 'CD RP';
+  return s.replace(/^CD\s+/, '');
 }
 // As saidas da ATHOS sao lidas das colunas originais do Mapa, nunca de
 // GRAFICA PCP / CD PCP (campos transformados pela planilha).
