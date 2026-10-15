@@ -711,15 +711,38 @@ function gerarPlanilhaGiroFiltrado(dados) {
     var aba = ss.getActiveSheet();
     aba.setName("Giro_Filtrado");
     
-    var cabecalho = ["Gráfica", "Marca", "Série", "SKU", "Descrição", "Status Geral", "Etapa Pendente", "Dias de Atraso", "Tiragem"];
+    dados = Array.isArray(dados) ? dados.slice() : [];
+    // Ordena do mais atrasado (negativo) para o mais positivo.
+    dados.sort(function(a, b) { return a.dias - b.dias; });
+
+    // As observações ficam nas abas históricas do Giro, não na base PCP.
+    // Consultar a fonte no momento de exportar evita notas ausentes por
+    // carregamento assíncrono ou por atualização posterior ao filtro.
+    var temChavesObs = dados.some(function(d) { return d.chaveMaster || d.chaveSku; });
+    var historico = temChavesObs ? buscarHistoricoObsGiro() : {master:{}, sku:{}};
+    var notaMaisRecente = function(escopo, chave) {
+      var registros = (historico[escopo] || {})[String(chave || '')] || [];
+      return registros.length ? String(registros[0].obs || '').trim() : '';
+    };
+    var observacoes = dados.map(function(d) {
+      var geral = notaMaisRecente('master', d.chaveMaster);
+      var sku = notaMaisRecente('sku', d.chaveSku);
+      if (geral && sku && geral !== sku) return 'Geral: ' + geral + '\\nSKU: ' + sku;
+      return sku || geral || '';
+    });
+    var temObservacoes = observacoes.some(function(nota) { return !!nota; });
+
+    var cabecalho = ["Gráfica", "Marca", "Série", "CD", "SKU", "Descrição",
+        "Status Geral", "Etapa Pendente", "Dias de Atraso", "Tiragem"];
+    if (temObservacoes) cabecalho.push("Observações");
     aba.appendRow(cabecalho);
     aba.getRange(1, 1, 1, cabecalho.length).setFontWeight("bold").setBackground("#0f172a").setFontColor("#ffffff");
-    
-    // Ordena do mais atrasado (negativo) para o mais positivo
-    dados.sort(function(a, b) { return a.dias - b.dias; });
-    
-    var linhas = dados.map(function(d) {
-        return [d.grafica, d.marca, d.serie, d.sku, d.desc, d.status, d.pendencia, d.dias, d.tiragem];
+
+    var linhas = dados.map(function(d, i) {
+      var linha = [d.grafica, d.marca, d.serie, d.cd || '', d.sku, d.desc,
+          d.status, d.pendencia, d.dias, d.tiragem];
+      if (temObservacoes) linha.push(observacoes[i]);
+      return linha;
     });
     
     if (linhas.length > 0) {
