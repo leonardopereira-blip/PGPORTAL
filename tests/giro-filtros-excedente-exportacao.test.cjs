@@ -66,10 +66,10 @@ test('excedente AY aparece como pendência mesmo quando STATUS_EE é OK',()=>{
   assert.equal(linhas[0].tiragem,50);
 });
 
-function executarExportacao(email,{podeTransferir=true}={}) {
-  let owner='autor@empresa.com', editor='', criações=0;
-  const sheet={setName(){},appendRow(){},getRange(){return {setFontWeight(){return this},
-    setBackground(){return this},setFontColor(){return this},setValues(){return this}}},
+function executarExportacao(email,{podeTransferir=true,dados,historico={master:{},sku:{}}}={}) {
+  let owner='autor@empresa.com', editor='', criações=0, cabecalho=[], linhas=[];
+  const sheet={setName(){},appendRow(row){cabecalho=row},getRange(){return {setFontWeight(){return this},
+    setBackground(){return this},setFontColor(){return this},setValues(rows){linhas=rows;return this}}},
     autoResizeColumns(){}};
   const arquivo={getOwner:()=>({getEmail:()=>owner}),
     setOwner:dest=>{if(!podeTransferir)throw Error('Política');owner=dest},
@@ -80,11 +80,12 @@ function executarExportacao(email,{podeTransferir=true}={}) {
   const DriveApp={getFileById:()=>arquivo};
   const Utilities={formatDate:()=> '2026_10_15'};
   const Session={getActiveUser:()=>({getEmail:()=>email})};
-  const fn=new Function('SpreadsheetApp','DriveApp','Utilities','Session',
-    exportacao+'\nreturn gerarPlanilhaGiroFiltrado;')(Sheets,DriveApp,Utilities,Session);
-  const resultado=fn([{grafica:'A',marca:'COC',serie:'2º ANO',sku:'SKU',desc:'D',
-    status:'Em Aberto',pendencia:'Coleta Mapa',dias:0,tiragem:100}]);
-  return {resultado,owner,editor,criações};
+  const fn=new Function('SpreadsheetApp','DriveApp','Utilities','Session','buscarHistoricoObsGiro',
+    exportacao+'\nreturn gerarPlanilhaGiroFiltrado;')(Sheets,DriveApp,Utilities,Session,()=>historico);
+  const entrada=dados||[{grafica:'A',marca:'COC',serie:'2º ANO',cd:'CD FOR',sku:'SKU',desc:'D',
+    status:'Em Aberto',pendencia:'Coleta Mapa',dias:0,tiragem:100}];
+  const resultado=fn(entrada);
+  return {resultado,owner,editor,criações,cabecalho,linhas};
 }
 
 test('exportação transfere a propriedade para o autor autenticado quando permitido',()=>{
@@ -104,4 +105,46 @@ test('sem usuário autenticado, não cria arquivo no proprietário do portal',()
   const r=executarExportacao('');
   assert.equal(r.resultado.success,false);
   assert.equal(r.criações,0);
+});
+
+test('payload filtrado inclui CD, Série corrigida e chaves das observações',()=>{
+  const linhas=executarGiro({eventos:[{categoria:'Vencida',volume:50,dias:0}],
+    estado:{pendente:true,saldo:50},serie:'2º ANO'});
+  assert.equal(linhas.length,1);
+  assert.equal(linhas[0].cd,'CD JDI');
+  assert.equal(linhas[0].serie,'2º ANO');
+  assert.match(linhas[0].chaveMaster,/LOGPRINT.*COC.*2º ANO/);
+  assert.match(linhas[0].chaveSku,/SKU-1/);
+});
+
+test('planilha inclui Série e CD sem criar coluna de observação quando vazia',()=>{
+  const r=executarExportacao('colega@empresa.com');
+  assert.equal(r.resultado.success,true);
+  assert.equal(r.cabecalho[2],'Série');
+  assert.equal(r.cabecalho[3],'CD');
+  assert.equal(r.linhas[0][2],'2º ANO');
+  assert.equal(r.linhas[0][3],'CD FOR');
+  assert.equal(r.cabecalho.includes('Observações'),false);
+  assert.equal(r.linhas[0].length,r.cabecalho.length);
+});
+
+test('observações atuais de grupo e SKU aparecem só nas linhas correspondentes',()=>{
+  const dados=[
+    {grafica:'LOGPRINT',marca:'COC',serie:'2º ANO',cd:'CD JDI',
+      sku:'SKU 1',desc:'D',status:'Em Aberto',pendencia:'Coleta Mapa',
+      dias:0,tiragem:50,chaveMaster:'GRUPO',chaveSku:'SKU1'},
+    {grafica:'LOGPRINT',marca:'COC',serie:'2º ANO',cd:'CD JDI',
+      sku:'SKU 2',desc:'D',status:'Em Aberto',pendencia:'Coleta Mapa',
+      dias:1,tiragem:40,chaveMaster:'OUTRO',chaveSku:'SKU2'}
+  ];
+  const historico={master:{GRUPO:[{obs:'Prazo atualizado'}]},
+    sku:{SKU1:[{obs:'Aguardando gráfica'}],SKU2:[]}};
+  const r=executarExportacao('colega@empresa.com',{dados,historico});
+  assert.equal(r.resultado.success,true);
+  const idx=r.cabecalho.indexOf('Observações');
+  assert.equal(idx,10);
+  assert.equal(r.linhas[0][idx],'Geral: Prazo atualizado\nSKU: Aguardando gráfica');
+  assert.equal(r.linhas[1][idx],'');
+  assert.equal(r.linhas[0][3],'CD JDI');
+  assert.equal(r.linhas[1][2],'2º ANO');
 });
