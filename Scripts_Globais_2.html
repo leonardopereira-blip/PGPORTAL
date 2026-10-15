@@ -2249,7 +2249,11 @@ window.pgExcluirForecastColeta = function(sufixo = '') {
 // acumulado = PLAN acumulado x REAL acumulado. Futuro nao vira atraso.
 // Mantem o saldo historico apenas na visao acumulada.
 window.pgComparativoColetaVisao = function(o) {
-    const plan = Math.max(0, Number(o.acumulado ? o.planAcumulado : o.planDia) || 0);
+    const planOriginal = Math.max(0, Number(o.acumulado ? o.planAcumulado : o.planDia) || 0);
+    // Só na visão diária: tira do Plan o que já foi coletado em outros dias.
+    // A visão acumulada mantém o Plan integral para não descontar duas vezes.
+    const outroDia = o.acumulado ? 0 : Math.min(planOriginal, Math.max(0, Number(o.coletadoOutroDia) || 0));
+    const plan = planOriginal - outroDia;
     const real = Math.max(0, Number(o.acumulado ? o.realAcumulado : o.realDia) || 0);
     const futuro = o.dia > o.hoje;
     const gap = futuro
@@ -2514,23 +2518,25 @@ window.renderColetaFinalFunil = function(sufixo = '') {
     // Cada ponto usa a MESMA referencia para o plano e o realizado.
     // Na visao diaria, o vermelho e somente o gap daquela data.
     // Na acumulada, o vermelho e o gap entre os dois acumulados.
-    const comparativoVisao = pontos.map((d, i) => window.pgComparativoColetaVisao({
-        acumulado,
-        dia: d,
-        hoje: dtHojeISO,
-        planDia: planejadoDia[i],
-        realDia: realizadoDia[i],
-        planAcumulado: somaAte('esperado', d),
-        realAcumulado: somaAte('real', d <= dtHojeISO ? d : dtHojeISO),
-        backlogAtual
-    }));
-    const planejadoVisao = comparativoVisao.map(p => p.plan);
+    // Barra cinza segue visível para auditoria, mas fora do total diário líquido.
     const coletadoOutroDiaVisao = pontos.map(d => {
         if (!acumulado) return coletadoOutroDiaPorPlan.get(d) || 0;
         let total = 0;
         coletadoOutroDiaPorPlan.forEach((volume, dtPlan) => { if (dtPlan <= d) total += volume; });
         return total;
     });
+    const comparativoVisao = pontos.map((d, i) => window.pgComparativoColetaVisao({
+        acumulado,
+        dia: d,
+        hoje: dtHojeISO,
+        planDia: planejadoDia[i],
+        coletadoOutroDia: !entregaCD ? coletadoOutroDiaVisao[i] : 0,
+        realDia: realizadoDia[i],
+        planAcumulado: somaAte('esperado', d),
+        realAcumulado: somaAte('real', d <= dtHojeISO ? d : dtHojeISO),
+        backlogAtual
+    }));
+    const planejadoVisao = comparativoVisao.map(p => p.plan);
     const realizadoVisao = comparativoVisao.map(p => p.real);
     const backlogVisao = comparativoVisao.map(p => p.gap);
     const percentualVisao = comparativoVisao.map(p => p.percentual);
@@ -2943,10 +2949,12 @@ window.renderColetaFinalFunil = function(sufixo = '') {
                             const idx = c.dataIndex;
 
                             if (c.datasetIndex === 4) {
-                                const percentual = planejadoVisao[idx] > 0
-                                    ? coletadoOutroDiaVisao[idx] / planejadoVisao[idx] * 100 : 0;
+                                const planOriginal = acumulado
+                                    ? somaAte('esperado', pontos[idx]) : planejadoDia[idx];
+                                const percentual = planOriginal > 0
+                                    ? coletadoOutroDiaVisao[idx] / planOriginal * 100 : 0;
                                 return 'Do Plan, já coletado em outros dias: ' + fmt(coletadoOutroDiaVisao[idx]) +
-                                    ' (' + percentual.toLocaleString('pt-BR', {maximumFractionDigits: 1}) + '% do Plan; até ' + labelData(dtHojeISO) + ')';
+                                    ' (' + percentual.toLocaleString('pt-BR', {maximumFractionDigits: 1}) + '% do Plan original; até ' + labelData(dtHojeISO) + ')';
                             }
                             if (c.datasetIndex === 0) {
                                 return (acumulado ? 'Planejado acumulado: ' : 'Planejado do dia: ') +

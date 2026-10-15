@@ -177,3 +177,22 @@ test('Report curva usa o planejado da tabela sem somar acabadora e preserva cort
   assert.equal(forecast[semana17],soma('2026-10-17')/tabela.total.den*100);
   assert.equal(w.dadosBaseForecastColeta.length,5,'base do diario permanece intacta');
 });
+
+
+test('grafico diario desconta do Plan o que foi coletado em outros dias; acumulado permanece intacto',()=>{
+  const {w}=portal([row()]);
+  const dados={acumulado:false,dia:'2026-10-14',hoje:'2026-10-15',
+    planDia:1580833,realDia:729820,coletadoOutroDia:612427};
+  const dia=w.pgComparativoColetaVisao(dados);
+  assert.equal(dia.plan,968406);
+  assert.equal(dia.real,729820);
+  assert.equal(dia.gap,238586);
+  assert.ok(Math.abs(dia.percentual-(729820/968406*100))<1e-9);
+  const acumulado=w.pgComparativoColetaVisao({...dados,acumulado:true,
+    planAcumulado:1580833,realAcumulado:729820});
+  assert.equal(acumulado.plan,1580833,'a visao acumulada nao deve descontar duas vezes');
+  assert.equal(acumulado.gap,851013);
+  const tudoColetado=w.pgComparativoColetaVisao({...dados,coletadoOutroDia:2000000});
+  assert.equal(tudoColetado.plan,0,'o Plan diario nao pode ficar negativo');
+  assert.equal(tudoColetado.gap,0);
+});
