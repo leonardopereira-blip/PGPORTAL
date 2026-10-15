@@ -40,7 +40,7 @@ test('Auditoria exporta mesmo conjunto de colunas, sem OP e com Tipo na posiçã
 });
 
 test('Percentuais mostram graficas fora e XLSX possui fallback e tipos', () => {
-  assert.match(armazem, /function detalhePercentualMeta\(resumo\)/);
+  assert.match(armazem, /function detalhePercentualMeta\(resumo,modo\)/);
   assert.match(armazem, /Gráficas fora:/);
   assert.match(armazem, /window\.pgGerarExcelAbas/);
   assert.match(exportador, /'Entrega TP real'/);

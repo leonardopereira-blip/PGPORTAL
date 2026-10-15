@@ -382,14 +382,15 @@
   }
   function fmt(v, temDado) {return !temDado ? '–' : new Intl.NumberFormat('pt-BR',{maximumFractionDigits:0}).format(Math.round(v || 0));}
   function pct(v, total) {return total>0 ? new Intl.NumberFormat('pt-BR',{style:'percent',maximumFractionDigits:1}).format(v/total):'–';}
-  function detalhePercentualMeta(resumo){
-    var graficas={};
+  function detalhePercentualMeta(resumo,modo){
+    var graficas={},porSerie=modo==='graficaMarca';
     (resumo.itens||[]).forEach(function(item){
-      if(item.pos>0){var nome=item.grafica||'NÃO INFORMADA';graficas[nome]=(graficas[nome]||0)+item.pos;}
+      if(item.pos>0){var nome=(porSerie?item.serie:item.grafica)||'NÃO INFORMADA';graficas[nome]=(graficas[nome]||0)+item.pos;}
     });
     var nomes=Object.keys(graficas).sort(function(a,b){return graficas[b]-graficas[a]||a.localeCompare(b);});
     return fmt(resumo.previsto,true)+' dentro, '+fmt(resumo.pos,true)+' fora'+
-      (nomes.length?'\nGráficas fora:\n'+nomes.map(function(nome){return nome+': '+fmt(graficas[nome],true)+' de tiragem';}).join('\n'):'\nNenhuma gráfica fora da meta.');
+      (nomes.length?(porSerie?'\nSéries fora:\n':'\nGráficas fora:\n')+nomes.map(function(nome){return nome+': '+fmt(graficas[nome],true)+' de tiragem';}).join('\n'):
+        '\nNenhuma '+(porSerie?'série':'gráfica')+' fora da meta.');
   }
   // Calendário nacional de 2026; não inferir feriados locais ou pontos facultativos.
   var FERIADOS_2026=new Set([
@@ -1089,19 +1090,19 @@
     return '<span class="ma-matriz-label'+(max===25?' ma-matriz-serie':'')+'"'+
       (longo||nome==='VARIOS'?' title="'+escapeHTML(dica)+'"':'')+'>'+escapeHTML(curto)+'</span>';
   }
-  function barraMatriz(x) {
+  function barraMatriz(x,modo) {
     var hasValue=x.total>0;
     var p=hasValue?Math.max(0,Math.min(100,100*x.previsto/x.total)):0;
     var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
     return '<div class="ma-matrix-tile" title="'+
-      escapeHTML(hasValue?detalhePercentualMeta(x):'Sem volume')+'">'+
+      escapeHTML(hasValue?detalhePercentualMeta(x,modo):'Sem volume')+'">'+
       (hasValue?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
       '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(x.previsto,x.total)+'</span></div>';
   }
-  function colunasMatriz(x,c) {
+  function colunasMatriz(x,c,modo) {
     return '<td class="ma-matrix-cell'+(!c.campo?' ma-matrix-total-col':'')+'" title="'+
-      escapeHTML(detalhePercentualMeta(x))+'">'+
-      barraMatriz(x)+'</td>';
+      escapeHTML(detalhePercentualMeta(x,modo))+'">'+
+      barraMatriz(x,modo)+'</td>';
   }
   function ordenarMatriz(a,b) {
     var ai=SERIES.indexOf(a),bi=SERIES.indexOf(b);
@@ -1156,13 +1157,13 @@
   // Realizado / Planejado DENTRO da meta aplicada, sobre as mesmas linhas e
   // o mesmo modelo de agrupamento do quadro superior. Nunca soma um
   // excedente de uma linha para compensar outra.
-  function detalheRealizadoMeta(resumo){
-    var graficas={},saldo=0;
+  function detalheRealizadoMeta(resumo,modo){
+    var graficas={},saldo=0,porSerie=modo==='graficaMarca';
     (resumo.itens||[]).forEach(function(item){
       var pendente=Math.max(0,(item.previsto||0)-(item.real||0));
       if(pendente>0){
         saldo+=pendente;
-        var nome=item.grafica||'NÃO INFORMADA';
+        var nome=(porSerie?item.serie:item.grafica)||'NÃO INFORMADA';
         graficas[nome]=(graficas[nome]||0)+pendente;
       }
     });
@@ -1170,16 +1171,16 @@
     return 'Realizado dentro da meta: '+fmt(resumo.real,true)+
       '\nPlanejado dentro da meta: '+fmt(resumo.previsto,true)+
       '\nSaldo pendente para aderência: '+fmt(saldo,true)+
-      (nomes.length?'\nGráficas com saldo pendente:\n'+
+      (nomes.length?(porSerie?'\nSéries com saldo pendente:\n':'\nGráficas com saldo pendente:\n')+
         nomes.map(function(nome){return nome+': '+fmt(graficas[nome],true)+' de tiragem';}).join('\n'):
-        '\nNenhuma gráfica com saldo pendente para o planejado.');
+        '\nNenhuma '+(porSerie?'série':'gráfica')+' com saldo pendente para o planejado.');
   }
-  function barraMatrizRealizado(x) {
+  function barraMatrizRealizado(x,modo) {
     var planejado=Math.max(0,x.previsto||0),realizado=Math.max(0,x.real||0);
     var p=planejado>0?Math.max(0,Math.min(100,100*realizado/planejado)):0;
     var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
     return '<div class="ma-matrix-tile" title="'+
-      escapeHTML(planejado>0?detalheRealizadoMeta(x):'Sem volume planejado dentro da meta')+'">'+
+      escapeHTML(planejado>0?detalheRealizadoMeta(x,modo):'Sem volume planejado dentro da meta')+'">'+
       (planejado>0?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
       '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(realizado,planejado)+'</span></div>';
   }
@@ -1205,11 +1206,23 @@
       m.colunas.map(function(){return '<col style="width:94px">';}).join('')+
       '</colgroup><thead><tr>'+cabeca+'</tr></thead><tbody>';
     function detalheColetas(x){
+      var saldos={},porSerie=m.modo==='graficaMarca';
+      (x.itens||[]).forEach(function(item){
+        var saldo=Math.max(0,(item.total||0)-(item.coletadoTP||0));
+        if(saldo>0){
+          var nome=(porSerie?item.serie:item.grafica)||'NÃO INFORMADA';
+          saldos[nome]=(saldos[nome]||0)+saldo;
+        }
+      });
+      var nomes=Object.keys(saldos).sort(function(a,b){return saldos[b]-saldos[a]||a.localeCompare(b);});
       return 'Coleta TP realizada até hoje: '+fmt(x.coletadoTP,true)+
         '\nTiragem total CD: '+fmt(x.total,true)+
         '\nColeta TP bruta até hoje: '+fmt(x.coletadoBrutoTP,true)+
         '\nExcedente de coleta: '+fmt(x.excedenteColeta,true)+
-        '\nSaldo a coletar: '+fmt(Math.max(0,x.total-x.coletadoTP),true);
+        '\nSaldo a coletar: '+fmt(Math.max(0,x.total-x.coletadoTP),true)+
+        (nomes.length?(porSerie?'\nSéries com saldo a coletar:\n':'\nGráficas com saldo a coletar:\n')+
+          nomes.map(function(nome){return nome+': '+fmt(saldos[nome],true)+' de tiragem';}).join('\n'):
+          '\nNenhuma '+(porSerie?'série':'gráfica')+' com saldo a coletar.');
     }
     function barraColetas(x){
       var total=Math.max(0,x.total||0),coletado=Math.max(0,x.coletadoTP||0);
@@ -1221,9 +1234,9 @@
     }
     function celula(x,c){
       var detalhe=coletas?(x.total>0?detalheColetas(x):'Sem volume'):
-        x.previsto>0?detalheRealizadoMeta(x):'Sem volume planejado dentro da meta';
+        x.previsto>0?detalheRealizadoMeta(x,m.modo):'Sem volume planejado dentro da meta';
       return '<td class="ma-matrix-cell'+(!c.campo?' ma-matrix-total-col':'')+
-        '" title="'+escapeHTML(detalhe)+'">'+(coletas?barraColetas(x):barraMatrizRealizado(x))+'</td>';
+        '" title="'+escapeHTML(detalhe)+'">'+(coletas?barraColetas(x):barraMatrizRealizado(x,m.modo))+'</td>';
     }
     m.linhas.forEach(function(l){
       h+='<tr><th>'+rotuloMatriz(l.nome,25)+'</th>'+
@@ -1277,10 +1290,10 @@
       '</colgroup><thead><tr>'+cabeca+'</tr></thead><tbody>';
     m.linhas.forEach(function(l){
       h+='<tr><th>'+rotuloMatriz(l.nome,25)+'</th>'+
-        l.celulas.map(function(x,i){return colunasMatriz(x,m.colunas[i]);}).join('')+'</tr>';
+        l.celulas.map(function(x,i){return colunasMatriz(x,m.colunas[i],m.modo);}).join('')+'</tr>';
     });
     h+='<tr class="ma-matrix-total"><th>TOTAL GERAL</th>'+
-      m.total.map(function(x,i){return colunasMatriz(x,m.colunas[i]);}).join('')+'</tr></tbody></table>';
+      m.total.map(function(x,i){return colunasMatriz(x,m.colunas[i],m.modo);}).join('')+'</tr></tbody></table>';
     root.innerHTML=h;
     var origem='';
     root.querySelectorAll('th[data-ma-prioridade="1"]').forEach(function(th){

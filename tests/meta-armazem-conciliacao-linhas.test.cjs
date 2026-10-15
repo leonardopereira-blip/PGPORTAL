@@ -458,3 +458,135 @@ for(const source of ['PCP','ACABADORA'])test('arredonda tiragem por linha antes 
   assert.equal(rows[0].TIRAGEM, 643.6);
   checkAuditAlignment(app);
 });
+
+// Inspeciona o HTML realmente apresentado nas células das três matrizes.
+function matrixTooltipCells(app, id) {
+  return Array.from(app.controls[id].innerHTML.matchAll(/<td class="ma-matrix-cell[^\"]*" title="([^\"]*)">([\s\S]*?)<\/td>/g), match => {
+    const tileTitle = match[2].match(/<div class="ma-matrix-tile" title="([^\"]*)">/);
+    assert(tileTitle, 'Célula deve conter a barra com tooltip');
+    const label = match[2].match(/<span class="ma-matrix-label-inside[^\"]*">([^<]*)<\/span>/);
+    assert(label, 'Célula deve apresentar seu percentual');
+    return {title:match[1], tileTitle:tileTitle[1], percentage:label[1]};
+  });
+}
+
+function matrixCellAt(app, id, rowName, columnName = 'TOTAL GERAL') {
+  const model = app.w.pgMAMatrizSnapshot;
+  const rowIndex = model.linhas.findIndex(line => line.nome === rowName);
+  const columnIndex = model.colunas.findIndex(column => column.nome === columnName);
+  assert.notEqual(rowIndex, -1, 'Linha da matriz: '+rowName);
+  assert.notEqual(columnIndex, -1, 'Coluna da matriz: '+columnName);
+  return matrixTooltipCells(app, id)[rowIndex*model.colunas.length+columnIndex];
+}
+
+test('tooltip de Coletas soma o saldo por gráfica, ordena por saldo e preserva nomes escapados', () => {
+  const graph = 'FORMA <\" &\'>', escapedGraph = 'FORMA &lt;&quot; &amp;&#39;&gt;';
+  const app = portal([
+    row(201,{SKU:'COLETA-A',SKU_REAL:'COLETA-A',GRAFICA_FINAL:graph,'GRÁFICA':graph,'TIRAGEM COLETADA':30}),
+    row(202,{SKU:'COLETA-B',SKU_REAL:'COLETA-B',GRAFICA_FINAL:graph,'GRÁFICA':graph,TIRAGEM:200,'TIRAGEM COLETADA':50}),
+    row(203,{SKU:'COLETA-C',SKU_REAL:'COLETA-C',GRAFICA_FINAL:'HR','GRÁFICA':'HR',TIRAGEM:400,'TIRAGEM COLETADA':120}),
+    row(204,{SKU:'COLETA-D',SKU_REAL:'COLETA-D',GRAFICA_FINAL:'HR','GRÁFICA':'HR','TIRAGEM COLETADA':160})
+  ]);
+  assert.equal(app.total.total, 800);
+  assert.equal(app.total.coletadoTP, 300);
+  assert.equal(app.total.coletadoBrutoTP, 360);
+  for(const mode of ['marcaSerie','marca']) {
+    app.w.pgMAMatrizModo(mode);
+    const cell = matrixCellAt(app,'maMatrizColetas','COC');
+    assert.equal(cell.title, cell.tileTitle, 'Tooltip da célula e da barra deve ser idêntico');
+    assert.match(cell.title, /Saldo a coletar: 500/);
+    assert.match(cell.title, /Gráficas com saldo a coletar:\nHR: 280 de tiragem\nFORMA &lt;&quot; &amp;&#39;&gt;: 220 de tiragem/);
+    assert(cell.title.includes(escapedGraph));
+    assert(!cell.title.includes(graph), 'Caracteres do nome não podem romper o atributo HTML');
+    assert(!cell.title.includes('HR: 220'), 'Excedente de uma linha não abate o saldo de outra');
+    assert(!cell.title.includes('Séries com saldo a coletar:'));
+    assert.match(matrixCellAt(app,'maMatrizRealizado','COC').title, /Gráficas com saldo pendente:/);
+    assert(!matrixCellAt(app,'maMatrizRealizado','COC').title.includes('Séries com saldo pendente:'));
+    assert(!matrixCellAt(app,'maMatriz','COC').title.includes('Séries fora:'));
+  }
+  checkAuditAlignment(app);
+});
+
+test('Gráfica × Marca detalha séries fora e saldos pendentes em cada quadro sem misturar células', () => {
+  const specialSeries = '3 <\" &\'>', escapedSeries = '3 &lt;&quot; &amp;&#39;&gt;';
+  const app = portal([
+    row(211,{SKU:'SERIE-A',SKU_REAL:'SERIE-A','TIRAGEM COLETADA':30,[fimPlan]:'2026-10-20'}),
+    row(212,{SKU:'SERIE-B',SKU_REAL:'SERIE-B',TIRAGEM:200,'TIRAGEM COLETADA':50}),
+    row(213,{SKU:'SERIE-C',SKU_REAL:'SERIE-C',serie_corrigida:'2º ANO',TIRAGEM:400,'TIRAGEM COLETADA':120,[fimPlan]:'2026-10-20'}),
+    row(214,{SKU:'SERIE-D',SKU_REAL:'SERIE-D',serie_corrigida:'2º ANO','TIRAGEM COLETADA':160}),
+    row(215,{SKU:'SERIE-E',SKU_REAL:'SERIE-E',serie_corrigida:'2º ANO',TIRAGEM:300,'TIRAGEM COLETADA':100}),
+    row(216,{SKU:'SERIE-F',SKU_REAL:'SERIE-F',serie_corrigida:specialSeries,TIRAGEM:110,'TIRAGEM COLETADA':10}),
+    row(217,{SKU:'OUTRA-GRAFICA',SKU_REAL:'OUTRA-GRAFICA',GRAFICA_FINAL:'HR','GRÁFICA':'HR',serie_corrigida:'9º ANO',TIRAGEM:500}),
+    row(218,{SKU:'OUTRA-MARCA',SKU_REAL:'OUTRA-MARCA',MARCA_FINAL:'NAV',UNIDADE:'NAV',serie_corrigida:'8º ANO',TIRAGEM:1000})
+  ]);
+  app.w.pgMAMatrizModo('graficaMarca');
+  const planned = matrixCellAt(app,'maMatriz','FORMA CERTA','COC');
+  const delivered = matrixCellAt(app,'maMatrizRealizado','FORMA CERTA','COC');
+  const collected = matrixCellAt(app,'maMatrizColetas','FORMA CERTA','COC');
+  for(const cell of [planned,delivered,collected]) {
+    assert.equal(cell.title,cell.tileTitle);
+    assert(!cell.title.includes('Gráficas '), 'Neste modo o detalhe é por série');
+    assert(!cell.title.includes('8º ANO'), 'Marca de outra coluna não entra no detalhe');
+    assert(!cell.title.includes('9º ANO'), 'Gráfica de outra linha não entra no detalhe');
+  }
+  assert.match(planned.title,/Séries fora:\n2º ANO: 280 de tiragem\n1º ANO: 70 de tiragem/);
+  assert.match(delivered.title,/Séries com saldo pendente:\n2º ANO: 200 de tiragem\n1º ANO: 150 de tiragem\n3 &lt;&quot; &amp;&#39;&gt;: 100 de tiragem/);
+  assert.match(collected.title,/Saldo a coletar: 800/);
+  assert.match(collected.title,/Séries com saldo a coletar:\n2º ANO: 480 de tiragem\n1º ANO: 220 de tiragem\n3 &lt;&quot; &amp;&#39;&gt;: 100 de tiragem/);
+  assert(delivered.title.includes(escapedSeries));
+  assert(collected.title.includes(escapedSeries));
+  assert(!delivered.title.includes(specialSeries));
+  assert(!collected.title.includes(specialSeries));
+  checkAuditAlignment(app);
+});
+
+test('trocar modo altera o detalhamento mantendo os números de cada matriz e toda auditoria', () => {
+  const rows = [row(221,{'TIRAGEM COLETADA':250}),row(222,{TIRAGEM:200,[fimPlan]:'2026-10-20'}),
+    row(223,{SKU:'SEM-COLETA',SKU_REAL:'SEM-COLETA',serie_corrigida:'2º ANO',TIRAGEM:200}),
+    row(224,{SKU:'OUTRA-GRAFICA',SKU_REAL:'OUTRA-GRAFICA',GRAFICA_FINAL:'HR','GRÁFICA':'HR',serie_corrigida:'3º ANO',TIRAGEM:200,'TIRAGEM COLETADA':80})];
+  const app = portal(rows,{cache:{key:[movement(2,250)]}});
+  const auditsBefore = plain(checkAuditAlignment(app));
+  const itemsBefore = plain(app.items);
+  const totalBefore = plain(app.total);
+  const format = (value,total) => total>0?new Intl.NumberFormat('pt-BR',{style:'percent',maximumFractionDigits:1}).format(value/total):'–';
+  for(const mode of ['graficaMarca','marca','marcaSerie']) {
+    app.w.pgMAMatrizModo(mode);
+    const model = app.w.pgMAMatrizSnapshot;
+    const numericCells = Array.from(model.linhas,line=>Array.from(line.celulas)).flat().concat(Array.from(model.total));
+    for(const [id,numerator,denominator] of [['maMatriz','previsto','total'],['maMatrizRealizado','real','previsto'],['maMatrizColetas','coletadoTP','total']]) {
+      const cells = matrixTooltipCells(app,id);
+      assert.equal(cells.length,numericCells.length);
+      cells.forEach((cell,index)=>{
+        const numeric = numericCells[index];
+        assert.equal(cell.percentage,format(numeric[numerator],numeric[denominator]),id+' mantém a fórmula do percentual');
+        if(numeric.total>0)assert.equal(cell.title,cell.tileTitle,id+' mantém o mesmo detalhe na barra e célula');
+      });
+    }
+    assert.deepEqual(plain(model.geral),totalBefore);
+    assert.deepEqual(plain(app.w.pgMAVisaoAtual.itens),itemsBefore);
+    assert.deepEqual(plain(checkAuditAlignment(app)),auditsBefore);
+  }
+  assert.equal(app.items[0].conciliacao.agrupado,true);
+  assert.equal(app.items[0].dtPlan,'2026-10-20');
+});
+
+test('78,4% de Entregas e 69,4% de Coletas coexistem por usarem denominadores diferentes', () => {
+  const app = portal([
+    row(231,{SKU:'ENTREGUE',SKU_REAL:'ENTREGUE',TIRAGEM:694,'TIRAGEM COLETADA':694}),
+    row(232,{SKU:'SALDO-META',SKU_REAL:'SALDO-META',TIRAGEM:191}),
+    row(233,{SKU:'SALDO-FORA',SKU_REAL:'SALDO-FORA',TIRAGEM:115,[fimPlan]:'2026-10-20'})
+  ]);
+  assert.equal(app.total.total,1000);
+  assert.equal(app.total.previsto,885);
+  assert.equal(app.total.real,694);
+  assert.equal(app.total.coletadoTP,694);
+  for(const mode of ['marcaSerie','graficaMarca','marca']) {
+    app.w.pgMAMatrizModo(mode);
+    const rowName = mode==='graficaMarca'?'FORMA CERTA':'COC';
+    assert.equal(matrixCellAt(app,'maMatrizRealizado',rowName).percentage,'78,4%');
+    assert.equal(matrixCellAt(app,'maMatrizColetas',rowName).percentage,'69,4%');
+    assert.match(matrixCellAt(app,'maMatrizRealizado',rowName).title,/Planejado dentro da meta: 885/);
+    assert.match(matrixCellAt(app,'maMatrizColetas',rowName).title,/Tiragem total CD: 1\.000/);
+  }
+  checkAuditAlignment(app);
+});
