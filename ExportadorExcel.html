@@ -72,11 +72,11 @@
     'Base', 'Planejado', 'Coletado', 'Forecast', 'Backlog líquido', 'Futuro', 'Valor',
     'Entregue Geral','Entregue armazém','Entregue dentro da meta','Entregue fora da meta',
     'Diferença Geral - Armazém','Planejado dentro da meta','Saldo para aderência','Tiragem coletada bruta',
-    'Coletado TP','Coletado TP bruto','Excedente de coleta','Excedente de entrega','Saldo a coletar']);
+    'Coletado TP','Coletado TP bruto','Excedente de coleta','Excedente de entrega','Saldo a coletar','Saldo a entregar']);
   var INTEIROS = new Set(['SLA (dias corridos)', 'DU totais', 'DU dentro da meta', 'DU fora da meta']);
   function tipo(nome) {
     return DATAS.has(nome) ? 3 : VOLUMES.has(nome) ? 4 :
-      ['% dentro da meta','% coletado TP / tiragem total','Aderência Realizado / Planejado'].includes(nome) ? 5 : INTEIROS.has(nome) ? 6 : 2;
+      ['% dentro da meta','% coletado TP / tiragem total','% entregue TP / tiragem total','Aderência Realizado / Planejado'].includes(nome) ? 5 : INTEIROS.has(nome) ? 6 : 2;
   }
   function largura(nome) {
     if (/Composição do agrupamento|Movimentos de (Entrega|Coleta) TP/.test(nome)) return 80;

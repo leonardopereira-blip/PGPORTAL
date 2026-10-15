@@ -180,11 +180,11 @@
     <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
       <div>
         <h3 id="maMatrizRealizadoTitulo" class="font-black text-slate-800 text-sm">Entregas</h3>
-        <p class="text-[10px] text-slate-500 mt-1">Aderência: Entrega TP realizada dentro da meta aplicável ÷ volume planejado dentro da mesma meta. Usa os filtros e a ordenação do quadro acima; saldo ainda não entregue permanece pendente.</p>
+        <p class="text-[10px] text-slate-500 mt-1">Entrega TP realizada até hoje ÷ tiragem total CD. Segue os mesmos itens, filtros e ordenação dos quadros acima. Excedentes ficam identificados na base auditável.</p>
       </div>
       <button type="button" class="ma-pill shrink-0" onclick="window.pgMACapturarMatriz('realizado')" title="Captura a matriz de entregas completa, incluindo colunas fora da rolagem">Capturar Entregas (PNG)</button>
     </div>
-    <div id="maMatrizRealizado" class="overflow-x-auto max-w-full" aria-label="Matriz de realizado versus planejado na meta, com rolagem horizontal"></div>
+    <div id="maMatrizRealizado" class="overflow-x-auto max-w-full" aria-label="Matriz de entrega realizada sobre tiragem total CD, com rolagem horizontal"></div>
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4 border-t border-slate-200 pt-4">
       <div><h4 class="text-xs font-black text-slate-800">Base auditável · Realizado</h4>
         <p class="text-[10px] text-slate-500 mt-1">Entregue Geral × Entregue armazém, com datas e motivos da diferença.</p></div>
@@ -882,7 +882,8 @@
       'Meta original','Meta aplicada','Prazo combinado Posi','Coleta TP (data)','Entrega TP (data)',
       'Parcelas de Entrega TP (data: quantidade)','Recorte Funil','Diagnóstico da diferença',
       'Coleta fim (re)plan','Entrega fim prevista','Linhas de origem','Série original','Regra de conciliação',
-      'Composição do agrupamento','Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação'];
+      'Composição do agrupamento','Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação',
+      '% entregue TP / tiragem total','Saldo a entregar'];
     var linhas=items.map(function(i){
       var l=i.linha||{},campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
       var vol=!i.conciliacao&&typeof window.pgVolumesColetaUnificadosV37==='function'?
@@ -932,7 +933,8 @@
         Array.from(new Set((i.conciliacao?i.conciliacao.linhas:[l]).map(function(r){return r['SÉRIE']||r.SERIE||'';}))).join(' | '),
         i.conciliacao?i.conciliacao.regra:'Linha de origem',
         composicaoAuditavel(i,cenarioId),movimentosAuditaveis(i,'entrega'),movimentosAuditaveis(i,'coleta'),
-        i.conciliacao?(i.conciliacao.diagnosticos||[]).join(' | '):''
+        i.conciliacao?(i.conciliacao.diagnosticos||[]).join(' | '):'',
+        i.total>0?armazem/i.total:null,Math.max(0,i.total-armazem)
       ];
     });
     return {nome:'Meta_Armazem_Realizado_Auditavel',cenario:cenario,
@@ -950,7 +952,7 @@
     if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
     var csv=function(v,j){
       var txt=typeof v==='number'?String(v).replace('.',','):String(v??'');
-      if(j===23&&typeof v==='number')txt=pct(v,1);
+      if((j===23||/^%/.test(base.cabecalho[j]))&&typeof v==='number')txt=pct(v,1);
       if(typeof v==='string'&&/^[\s]*[=+@-]/.test(txt))txt="'"+txt;
       return '"'+txt.replace(/"/g,'""')+'"';
     };
@@ -1164,13 +1166,13 @@
       total:colunas.map(function(c){return totalColuna(items,c);}),
       escondidas:escondidas,geral:soma(items)};
   }
-  // Realizado / Planejado DENTRO da meta aplicada, sobre as mesmas linhas e
-  // o mesmo modelo de agrupamento do quadro superior. Nunca soma um
-  // excedente de uma linha para compensar outra.
-  function detalheRealizadoMeta(resumo,modo){
+  // Entrega TP até o corte / tiragem total CD, sobre as mesmas linhas e
+  // agrupamentos de Coletas. O volume já vem limitado por agrupamento,
+  // sem usar o excedente de um item para compensar outro.
+  function detalheEntregas(resumo,modo){
     var graficas={},saldo=0,porSerie=modo==='graficaMarca';
     (resumo.itens||[]).forEach(function(item){
-      var pendente=Math.max(0,(item.previsto||0)-(item.real||0));
+      var pendente=Math.max(0,(item.total||0)-(item.realCD||0));
       if(pendente>0){
         saldo+=pendente;
         var nome=(porSerie?item.serie:item.grafica)||'NÃO INFORMADA';
@@ -1178,21 +1180,23 @@
       }
     });
     var nomes=Object.keys(graficas).sort(function(a,b){return graficas[b]-graficas[a]||a.localeCompare(b);});
-    return 'Realizado dentro da meta: '+fmt(resumo.real,true)+
-      '\nPlanejado dentro da meta: '+fmt(resumo.previsto,true)+
-      '\nSaldo pendente para aderência: '+fmt(saldo,true)+
-      (nomes.length?(porSerie?'\nSéries com saldo pendente:\n':'\nGráficas com saldo pendente:\n')+
+    return 'Entrega TP realizada até hoje: '+fmt(resumo.realCD,true)+
+      '\nTiragem total CD: '+fmt(resumo.total,true)+
+      '\nEntrega TP bruta até hoje: '+fmt((resumo.realCD||0)+(resumo.excedenteEntrega||0),true)+
+      '\nExcedente de entrega: '+fmt(resumo.excedenteEntrega,true)+
+      '\nSaldo a entregar: '+fmt(saldo,true)+
+      (nomes.length?(porSerie?'\nSéries com saldo a entregar:\n':'\nGráficas com saldo a entregar:\n')+
         nomes.map(function(nome){return nome+': '+fmt(graficas[nome],true)+' de tiragem';}).join('\n'):
-        '\nNenhuma '+(porSerie?'série':'gráfica')+' com saldo pendente para o planejado.');
+        '\nNenhuma '+(porSerie?'série':'gráfica')+' com saldo a entregar.');
   }
   function barraMatrizRealizado(x,modo) {
-    var planejado=Math.max(0,x.previsto||0),realizado=Math.max(0,x.real||0);
-    var p=planejado>0?Math.max(0,Math.min(100,100*realizado/planejado)):0;
+    var total=Math.max(0,x.total||0),realizado=Math.max(0,x.realCD||0);
+    var p=total>0?Math.max(0,Math.min(100,100*realizado/total)):0;
     var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
     return '<div class="ma-matrix-tile" title="'+
-      escapeHTML(planejado>0?detalheRealizadoMeta(x,modo):'Sem volume planejado dentro da meta')+'">'+
-      (planejado>0?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
-      '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(realizado,planejado)+'</span></div>';
+      escapeHTML(total>0?detalheEntregas(x,modo):'Sem volume')+'">'+
+      (total>0?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
+      '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(realizado,total)+'</span></div>';
   }
   function matrizRealizado(m,tipo) {
     var coletas=tipo==='coletas',root=document.getElementById(coletas?'maMatrizColetas':'maMatrizRealizado');
@@ -1244,7 +1248,7 @@
     }
     function celula(x,c){
       var detalhe=coletas?(x.total>0?detalheColetas(x):'Sem volume'):
-        x.previsto>0?detalheRealizadoMeta(x,m.modo):'Sem volume planejado dentro da meta';
+        x.total>0?detalheEntregas(x,m.modo):'Sem volume';
       return '<td class="ma-matrix-cell'+(!c.campo?' ma-matrix-total-col':'')+
         '" title="'+escapeHTML(detalhe)+'">'+(coletas?barraColetas(x):barraMatrizRealizado(x,m.modo))+'</td>';
     }
@@ -1405,7 +1409,7 @@
       ctx.fillStyle='#fff';ctx.font='bold 17px Poppins, sans-serif';
       ctx.fillText((coletas?'Coletas':realizado?'Entregas':'Previsão Armazém')+' · '+m.nomeModo,16,29);
       ctx.font='11px Poppins, sans-serif';
-      ctx.fillText((coletas?'Coleta TP até hoje / tiragem total CD':realizado?'Entrega TP dentro da meta / planejado dentro da meta':'Real + previsão')+'  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta')+
+      ctx.fillText((coletas?'Coleta TP até hoje / tiragem total CD':realizado?'Entrega TP até hoje / tiragem total CD':'Real + previsão')+'  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta')+
         '  |  15/10 · SAS Bradesco 26/10 · GEE 12/11 · WAYS 30/11',16,51);
       ctx.fillStyle='#284081';ctx.fillRect(0,top,w,head);
       ctx.fillStyle='#fff';ctx.font='bold 12px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,5,top+27,first-9);
@@ -1419,7 +1423,7 @@
         ctx.fillStyle='#0C2340';ctx.font=(ultimo?'bold ':'')+'12px Poppins, sans-serif';
         ctx.fillText(corta(r.nome,18),5,y+25,first-9);
         r.celulas.forEach(function(c,j){
-          var x=first+j*col,den=realizado?c.previsto:c.total,num=coletas?c.coletadoTP:realizado?c.real:c.previsto;
+          var x=first+j*col,den=c.total,num=coletas?c.coletadoTP:realizado?c.realCD:c.previsto;
           var p=den?Math.max(0,Math.min(100,100*num/den)):0;
           // Preenchimento da célula inteira, preservando só 3px de respiro entre tiles.
           ctx.fillStyle='#EDF4FB';ctx.fillRect(x+3,y+3,col-6,rowH-6);

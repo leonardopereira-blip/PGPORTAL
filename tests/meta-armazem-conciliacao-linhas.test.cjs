@@ -501,8 +501,8 @@ test('tooltip de Coletas soma o saldo por gráfica, ordena por saldo e preserva 
     assert(!cell.title.includes(graph), 'Caracteres do nome não podem romper o atributo HTML');
     assert(!cell.title.includes('HR: 220'), 'Excedente de uma linha não abate o saldo de outra');
     assert(!cell.title.includes('Séries com saldo a coletar:'));
-    assert.match(matrixCellAt(app,'maMatrizRealizado','COC').title, /Gráficas com saldo pendente:/);
-    assert(!matrixCellAt(app,'maMatrizRealizado','COC').title.includes('Séries com saldo pendente:'));
+    assert.match(matrixCellAt(app,'maMatrizRealizado','COC').title, /Gráficas com saldo a entregar:/);
+    assert(!matrixCellAt(app,'maMatrizRealizado','COC').title.includes('Séries com saldo a entregar:'));
     assert(!matrixCellAt(app,'maMatriz','COC').title.includes('Séries fora:'));
   }
   checkAuditAlignment(app);
@@ -531,7 +531,8 @@ test('Gráfica × Marca detalha séries fora e saldos pendentes em cada quadro s
     assert(!cell.title.includes('9º ANO'), 'Gráfica de outra linha não entra no detalhe');
   }
   assert.match(planned.title,/Séries fora:\n2º ANO: 280 de tiragem\n1º ANO: 70 de tiragem/);
-  assert.match(delivered.title,/Séries com saldo pendente:\n2º ANO: 200 de tiragem\n1º ANO: 150 de tiragem\n3 &lt;&quot; &amp;&#39;&gt;: 100 de tiragem/);
+  assert.match(delivered.title,/Saldo a entregar: 800/);
+  assert.match(delivered.title,/Séries com saldo a entregar:\n2º ANO: 480 de tiragem\n1º ANO: 220 de tiragem\n3 &lt;&quot; &amp;&#39;&gt;: 100 de tiragem/);
   assert.match(collected.title,/Saldo a coletar: 800/);
   assert.match(collected.title,/Séries com saldo a coletar:\n2º ANO: 480 de tiragem\n1º ANO: 220 de tiragem\n3 &lt;&quot; &amp;&#39;&gt;: 100 de tiragem/);
   assert(delivered.title.includes(escapedSeries));
@@ -554,7 +555,7 @@ test('trocar modo altera o detalhamento mantendo os números de cada matriz e to
     app.w.pgMAMatrizModo(mode);
     const model = app.w.pgMAMatrizSnapshot;
     const numericCells = Array.from(model.linhas,line=>Array.from(line.celulas)).flat().concat(Array.from(model.total));
-    for(const [id,numerator,denominator] of [['maMatriz','previsto','total'],['maMatrizRealizado','real','previsto'],['maMatrizColetas','coletadoTP','total']]) {
+    for(const [id,numerator,denominator] of [['maMatriz','previsto','total'],['maMatrizRealizado','realCD','total'],['maMatrizColetas','coletadoTP','total']]) {
       const cells = matrixTooltipCells(app,id);
       assert.equal(cells.length,numericCells.length);
       cells.forEach((cell,index)=>{
@@ -571,7 +572,7 @@ test('trocar modo altera o detalhamento mantendo os números de cada matriz e to
   assert.equal(app.items[0].dtPlan,'2026-10-20');
 });
 
-test('78,4% de Entregas e 69,4% de Coletas coexistem por usarem denominadores diferentes', () => {
+test('Entregas e Coletas mostram 69,4% quando os volumes realizados são iguais sobre o mesmo total CD', () => {
   const app = portal([
     row(231,{SKU:'ENTREGUE',SKU_REAL:'ENTREGUE',TIRAGEM:694,'TIRAGEM COLETADA':694}),
     row(232,{SKU:'SALDO-META',SKU_REAL:'SALDO-META',TIRAGEM:191}),
@@ -580,13 +581,18 @@ test('78,4% de Entregas e 69,4% de Coletas coexistem por usarem denominadores di
   assert.equal(app.total.total,1000);
   assert.equal(app.total.previsto,885);
   assert.equal(app.total.real,694);
+  assert.equal(app.total.realCD,694);
   assert.equal(app.total.coletadoTP,694);
   for(const mode of ['marcaSerie','graficaMarca','marca']) {
     app.w.pgMAMatrizModo(mode);
     const rowName = mode==='graficaMarca'?'FORMA CERTA':'COC';
-    assert.equal(matrixCellAt(app,'maMatrizRealizado',rowName).percentage,'78,4%');
+    assert.equal(matrixCellAt(app,'maMatrizRealizado',rowName).percentage,'69,4%');
     assert.equal(matrixCellAt(app,'maMatrizColetas',rowName).percentage,'69,4%');
-    assert.match(matrixCellAt(app,'maMatrizRealizado',rowName).title,/Planejado dentro da meta: 885/);
+    assert.match(matrixCellAt(app,'maMatrizRealizado',rowName).title,/Entrega TP realizada até hoje: 694/);
+    assert.match(matrixCellAt(app,'maMatrizRealizado',rowName).title,/Tiragem total CD: 1\.000/);
+    assert.match(matrixCellAt(app,'maMatrizRealizado',rowName).title,/Entrega TP bruta até hoje: 694/);
+    assert.match(matrixCellAt(app,'maMatrizRealizado',rowName).title,/Excedente de entrega: 0/);
+    assert.match(matrixCellAt(app,'maMatrizRealizado',rowName).title,/Saldo a entregar: 306/);
     assert.match(matrixCellAt(app,'maMatrizColetas',rowName).title,/Tiragem total CD: 1\.000/);
   }
   checkAuditAlignment(app);
