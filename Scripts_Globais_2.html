@@ -9484,10 +9484,16 @@ let arrGrupos = Object.values(grupos);
         return true;
     });
 
-    window.pgGiroLinhasExportar = arrGrupos.flatMap(g => g.skus.map(l => ({
-        grafica: g.grafica, marca: g.marca, serie: g.serie, sku: l.sku, desc: l.descricao,
-        status: l.statusLinha, pendencia: l.pendencia, dias: l.escala, tiragem: l.tiragem
-    })));
+    window.pgGiroLinhasExportar = arrGrupos.flatMap(g => {
+        const chaveMaster = window.pgGiroChaveObs('MASTER',
+            `${g.grafica}|${g.marca}|${g.serie}|${g.envio}|${g.cd}`);
+        return g.skus.map(l => ({
+            grafica: g.grafica, marca: g.marca, serie: g.serie, cd: l.cd || g.cd,
+            sku: l.sku, desc: l.descricao,
+            status: l.statusLinha, pendencia: l.pendencia, dias: l.escala, tiragem: l.tiragem,
+            chaveMaster: chaveMaster, chaveSku: window.pgGiroChaveObs('SKU', l.chaveUnica)
+        }));
+    });
 
     if (arrGrupos.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
