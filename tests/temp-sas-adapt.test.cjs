@@ -215,7 +215,18 @@ test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos c
       'Tiragem recebida (Total SKU)': 20 })
   ]);
   a.splice(2, 0, []);
-  const mapa = [Array.from({length: 50}, (_, i) => 'COLUNA ' + i)];
+  const mapaLinha = Array(50).fill('');
+  mapaLinha[1] = 'CD ERRADO PCP'; // B: nao usar
+  mapaLinha[2] = 'LOGPRINT'; // C: nao usar
+  mapaLinha[4] = 'MP-ATHOS-SKU-2'; // E: codigo mapa
+  mapaLinha[6] = 'JUNDIAÍ - SP'; // G: CD ORIGINAL
+  mapaLinha[7] = 'V1'; // H: envio original
+  mapaLinha[11] = 'SKU-2'; // L: SKU
+  mapaLinha[13] = 'ATHOS'; // N: GRAFICA ORIGINAL
+  mapaLinha[39] = 20; // AN: Volume Coletado
+  mapaLinha[45] = '14/10/2026'; // AT: Coleta TP
+  mapaLinha[49] = 'V1'; // AX: envio normalizado
+  const mapa = [Array.from({length: 50}, (_, i) => 'COLUNA ' + i), mapaLinha];
   const sheets = { PCP: p, PCP_ACABADORAS: a, 'MAPA DE SAÍDA': mapa };
   const sourceRequests = [], headers = [], batches = [];
   const FixedDate = class extends Date {
@@ -266,7 +277,7 @@ test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos c
   assert.equal(r.saiuGraficas, 35);
   assert.equal(r.totalAthos, 110);
   assert.equal(r.recebidoAthos, 50);
-  assert.equal(r.produzidoAthos, 60);
+  assert.equal(r.produzidoAthos, 80, 'saida fisica da ATHOS confirma 20 sem BP');
   assert.deepEqual(Array.from(r.linhasGraficas, row => row.linha), [3, 4]);
   assert.deepEqual(Array.from(r.linhasAthos, row => row.linha), [2, 4]);
   assert.equal(r.dataReferencia, hoje);
