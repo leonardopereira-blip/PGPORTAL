@@ -481,8 +481,25 @@ function atualizarTodoOCache() {
     ['cache_mapa.json', getDadosMapaSaida],
     ['cache_observacoes.json', buscarHistoricoObsGiro]
   ];
+  // Enquanto essas abas nao existirem, nao sobrescreva seus JSONs com [].
+  // Quando voltarem, elas seguem exatamente a atualizacao normal.
+  var abasOpcionais = {
+    'cache_alocacao.json': 'Alocacao_Reentradas',
+    'cache_chamados.json': 'Chamados'
+  };
   etapas.forEach(function(etapa) {
-    try { pgAtualizarArquivoCache_(etapa[0], etapa[1]); } catch (e) {
+    try {
+      var abaOpcional = abasOpcionais[etapa[0]];
+      if (abaOpcional) {
+        var metadados = pgMetadadosPlanilhaCache_();
+        if (metadados.nomes.indexOf(abaOpcional) < 0) {
+          console.log('[cache] ' + etapa[0] + ': aba ' + abaOpcional +
+            ' ausente; JSON anterior preservado.');
+          return;
+        }
+      }
+      pgAtualizarArquivoCache_(etapa[0], etapa[1]);
+    } catch (e) {
       console.error('[cache] ' + etapa[0] + ': ' + e.message);
       falhas.push(etapa[0] + ': ' + e.message);
     }
