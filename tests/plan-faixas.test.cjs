@@ -4,7 +4,10 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '..', 'Scripts_Globais_2.html'), 'utf8');
-const code = source.slice(source.indexOf('window.pgFaixaPlan ='), source.indexOf('function processarFalhasPlan()'));
+// O Backlog compartilha o prazo canônico com a matriz WIP, sem copiar o motor do Funil.
+const prazoWIP = source.slice(source.indexOf('function pgPrazoWIPAtual('),
+  source.indexOf('function processarMatriz()'));
+const code = prazoWIP + '\n' + source.slice(source.indexOf('window.pgFaixaPlan ='), source.indexOf('function processarFalhasPlan()'));
 
 function context(mode = 'fase') {
   const elements = {};
@@ -143,4 +146,25 @@ test('cabeçalhos reais Triagem Vencida e TIRAGEM COLETADA calculam backlog dos 
   assert.equal(buckets(elements.tfootPlanGrafica.innerHTML)[1][0], 10790);
   assert.equal(buckets(elements.tfootPlanMarca.innerHTML)[1][0], 10790);
   assert.doesNotMatch(elements.tabelaPlanGrafica.innerHTML, />C<\/td>/);
+});
+
+test('Backlog de Entrega TP usa o prazo atual mesmo sem coluna legada preenchida', () => {
+  const { c, elements } = context('ent_tp');
+  const linha = { TIRAGEM: 100, plan: '' };
+  c.window.pgDataPlanoFaseFunil = (_, fase) => fase.id === 'ent_tp' ? '2026-09-17' : null;
+  c.window.dadosGlobais = [linha];
+  assert.equal(c.pgPrazoWIPAtual(linha, {id:'ent_tp'}, 'replan'), '2026-09-17');
+  c.renderTabelaPlan();
+  assert.ok(elements.tabelaPlanGrafica.innerHTML.includes('100'));
+  assert.deepEqual(buckets(elements.tfootPlanGrafica.innerHTML).slice(-4),
+    [[100,1],[100,1],[0,0],[0,0]]);
+});
+
+test('Matriz WIP usa os mesmos prazos das fases e CSV preserva Segmento e Tipo', () => {
+  const matriz = source.slice(source.indexOf('function processarMatriz()'),
+    source.indexOf('function processarEficiencia()'));
+  assert.match(matriz, /pgAtrasoWIPAtual\(l, wipFase, tRef, dtHoje\)/);
+  assert.match(matriz, /pgPrazoWIPAtual\(l, proxFase, tRef\)/);
+  assert.match(matriz, /seg: window\.pgCampoColeta\(l, 'SEGMENTO'\)/);
+  assert.match(matriz, /tipo: window\.pgCampoColeta\(l, 'TIPO'\)/);
 });
