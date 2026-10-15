@@ -727,7 +727,7 @@ function gerarPlanilhaGiroFiltrado(dados) {
     var observacoes = dados.map(function(d) {
       var geral = notaMaisRecente('master', d.chaveMaster);
       var sku = notaMaisRecente('sku', d.chaveSku);
-      if (geral && sku && geral !== sku) return 'Geral: ' + geral + '\\nSKU: ' + sku;
+      if (geral && sku && geral !== sku) return 'Geral: ' + geral + '\nSKU: ' + sku;
       return sku || geral || '';
     });
     var temObservacoes = observacoes.some(function(nota) { return !!nota; });
