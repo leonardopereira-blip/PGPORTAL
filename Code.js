@@ -857,7 +857,7 @@ function registrarAcessoUsuario() {
 
 function getDadosAlocacao() {
   try {
-    // Aba temporariamente opcional: sem ela, publica cache vazio (sem dados antigos).
+    // Leitura opcional: atualizarTodoOCache preserva o JSON anterior se a aba estiver ausente.
     var data = pgLerAbaCache_('Alocacao_Reentradas', 30, false, true);
     if (!data || data.length <= 1) return [];
     var headers = data[0];
