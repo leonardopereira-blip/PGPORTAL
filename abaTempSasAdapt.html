@@ -1,101 +1,65 @@
 <div id="abaTempSasAdapt" class="aba-conteudo hidden h-full flex flex-col">
   <div class="bg-white border-b border-slate-200 p-4 flex-shrink-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h2 class="text-xl font-black text-slate-800">TEMP SAS ADAPT</h2>
-        <p class="text-xs text-slate-500 mt-1">Etapa 1: PCP das gráficas → ATHOS. Etapa 2: MAPA DE SAÍDA original da ATHOS → CDs.</p>
-      </div>
+      <h2 class="text-xl font-black text-slate-800">TEMP SAS ADAPT</h2>
       <button type="button" onclick="window.pgCarregarTempSasAdapt(true)"
         class="bg-slate-800 text-white hover:bg-slate-700 rounded-lg px-4 py-2 text-xs font-bold">Atualizar visão</button>
     </div>
   </div>
   <div class="flex-1 overflow-y-auto scroller bg-neutral-100 p-4 space-y-4">
-    <p id="statusTempSasAdapt" class="text-xs text-slate-600">Abra esta visão para carregar os movimentos.</p>
-    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+    <p id="statusTempSasAdapt" role="status" class="text-xs text-slate-600">Aguardando atualização.</p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
       <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <p class="text-[11px] font-bold uppercase text-slate-500">PCP · Planejado para ATHOS</p>
-        <p id="pgTempPcp" class="text-2xl font-black text-slate-800 mt-2">—</p>
-        <p class="text-[11px] text-slate-500 mt-1">Tiragem do PCP, sem soma de movimentações do mapa.</p>
+        <p class="text-[11px] font-bold uppercase text-slate-500">Saiu das gráficas</p>
+        <p id="pgTempSaiuPct" class="text-2xl font-black text-blue-700 mt-2">—</p>
+        <p id="pgTempSaiuVolume" class="text-xs text-slate-500 mt-1"></p>
       </div>
       <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <p class="text-[11px] font-bold uppercase text-slate-500">PCP · Coletado para ATHOS</p>
-        <p id="pgTempEntrada" class="text-2xl font-black text-blue-700 mt-2">—</p>
-        <p id="pgTempEntradaPct" class="text-[11px] text-slate-500 mt-1"></p>
+        <p class="text-[11px] font-bold uppercase text-slate-500">PCP Athos · Programado</p>
+        <p id="pgTempAthosProgramado" class="text-2xl font-black text-slate-800 mt-2">—</p>
+        <p id="pgTempAthosRecebido" class="text-xs text-slate-500 mt-1"></p>
       </div>
       <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <p class="text-[11px] font-bold uppercase text-slate-500">Mapa · Coletado ATHOS → CDs</p>
-        <p id="pgTempSaida" class="text-2xl font-black text-emerald-700 mt-2">—</p>
-        <p id="pgTempSaidaPct" class="text-[11px] text-slate-500 mt-1"></p>
-      </div>
-      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <p class="text-[11px] font-bold uppercase text-slate-500">Diferença de movimentos</p>
-        <p id="pgTempDiferenca" class="text-2xl font-black text-slate-800 mt-2">—</p>
-        <p class="text-[11px] text-slate-500 mt-1">Coletado para ATHOS menos coletado aos CDs; não é estoque físico.</p>
+        <p class="text-[11px] font-bold uppercase text-slate-500">Produzido na Athos</p>
+        <p id="pgTempProduzidoPct" class="text-2xl font-black text-emerald-700 mt-2">—</p>
+        <p id="pgTempProduzidoVolume" class="text-xs text-slate-500 mt-1"></p>
       </div>
     </div>
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <div class="flex flex-wrap justify-between items-start gap-2">
-          <div><h3 class="text-sm font-black text-slate-800">1. Gráficas → ATHOS · PCP</h3>
-          <p class="text-[11px] text-slate-500 mt-1">GRÁFICA e CD DESTINO do PCP · TIRAGEM COLETADA · Data_Coleta_Mapa · Entrega_TP</p></div>
-          <button type="button" onclick="window.pgExportarTempSasAdapt('pcp')"
-            class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Extrair PCP CSV</button>
+        <div class="flex flex-wrap justify-between items-center gap-2">
+          <h3 class="text-sm font-black text-slate-800">Gráficas</h3>
+          <button type="button" onclick="window.pgExportarTempSasAdapt('graficas')"
+            class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Baixar CSV</button>
         </div>
         <div class="overflow-x-auto mt-3">
-          <table class="w-full text-xs"><thead class="text-slate-500 bg-slate-50"><tr>
-            <th class="p-2 text-left">Gráfica</th><th class="p-2 text-right">Coletado</th><th class="p-2 text-right">% do PCP</th>
-          </tr></thead><tbody id="pgTempTabelaEntrada"></tbody></table>
+          <table class="w-full text-xs whitespace-nowrap"><thead class="text-slate-500 bg-slate-50"><tr>
+            <th class="p-2 text-left">Gráfica</th><th class="p-2 text-right">Total</th>
+            <th class="p-2 text-right">Saiu</th><th class="p-2 text-right">%</th>
+          </tr></thead><tbody id="pgTempTabelaGraficas"></tbody></table>
         </div>
       </div>
       <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <div class="flex flex-wrap justify-between items-start gap-2">
-          <div><h3 class="text-sm font-black text-slate-800">2. ATHOS → CDs · Mapa original</h3>
-          <p class="text-[11px] text-slate-500 mt-1">GRÁFICA = ATHOS · CD DESTINO, DT COLETA e Entrega_TP do MAPA DE SAÍDA</p></div>
-          <button type="button" onclick="window.pgExportarTempSasAdapt('mapa')"
-            class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Extrair Mapa CSV</button>
+        <div class="flex flex-wrap justify-between items-center gap-2">
+          <h3 class="text-sm font-black text-slate-800">Athos</h3>
+          <button type="button" onclick="window.pgExportarTempSasAdapt('athos')"
+            class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Baixar CSV</button>
         </div>
-        <div class="overflow-x-auto mt-3">
-          <table class="w-full text-xs"><thead class="text-slate-500 bg-slate-50"><tr>
-            <th class="p-2 text-left">CD destino</th><th class="p-2 text-right">Coletado</th><th class="p-2 text-right">% do PCP</th>
-          </tr></thead><tbody id="pgTempTabelaSaida"></tbody></table>
+        <div class="flex flex-wrap items-center justify-between gap-2 mt-3 mb-2">
+          <input id="pgTempFiltroSku" type="search" aria-label="Filtrar SKU" placeholder="Filtrar SKU"
+            oninput="window.pgFiltrarTempSasAdapt()" class="rounded border border-slate-300 px-3 py-2 text-xs">
+          <p id="pgTempQtdSku" class="text-[11px] text-slate-500"></p>
         </div>
-      </div>
-    </div>
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <div>
-          <h3 class="text-sm font-black text-slate-800">Comparação por SKU</h3>
-          <p class="text-[11px] text-slate-500 mt-1">Todos os SKUs de uma ou ambas as etapas, sem compensar SKUs diferentes. Detalhamento completo nos CSVs.</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <input id="pgTempFiltroSku" type="search" placeholder="Filtrar SKU, gráfica, CD ou mapa"
-            oninput="window.pgFiltrarTempSasAdapt()" class="rounded border border-slate-300 px-3 py-2 text-xs min-w-[220px]">
-          <button type="button" onclick="window.pgExportarTempSasAdapt('sku')"
-            class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Extrair SKUs CSV</button>
+        <div class="overflow-auto max-h-[460px]">
+          <table class="w-full text-xs whitespace-nowrap">
+            <thead class="sticky top-0 bg-slate-100 text-slate-600"><tr>
+              <th class="p-2 text-left">SKU</th><th class="p-2 text-right">Programado</th>
+              <th class="p-2 text-right">Recebido</th><th class="p-2 text-right">Produzido</th>
+              <th class="p-2 text-right">% produzido</th>
+            </tr></thead><tbody id="pgTempTabelaAthos"></tbody>
+          </table>
         </div>
       </div>
-      <p id="pgTempQtdSku" class="text-[11px] text-slate-500 mb-2"></p>
-      <div class="overflow-auto max-h-[460px]">
-        <table class="w-full text-xs whitespace-nowrap">
-          <thead class="sticky top-0 bg-slate-100 text-slate-600"><tr>
-            <th class="p-2 text-left">SKU</th>
-            <th class="p-2 text-left">Gráficas PCP</th>
-            <th class="p-2 text-right">PCP planejado</th>
-            <th class="p-2 text-right">PCP coletado</th>
-            <th class="p-2 text-right">Mapa coletado aos CDs</th>
-            <th class="p-2 text-right">Diferença</th>
-            <th class="p-2 text-left">CDs destino</th>
-            <th class="p-2 text-left">Mapas ATHOS</th>
-          </tr></thead>
-          <tbody id="pgTempTabelaSku"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 text-xs text-slate-600 space-y-1">
-      <p><strong>Critério da entrada:</strong> PCP · UNIDADE SAS ADAPT · ENVIO V1 · CD DESTINO ATHOS; não considera cancelados/reentradas. Volume = TIRAGEM COLETADA, independentemente de haver data preenchida. Datas = Data_Coleta_Mapa e Entrega_TP.</p>
-      <p><strong>Critério da saída:</strong> MAPA DE SAÍDA · UN PCP SAS ADAPT ou UNIDADE SAD · ENVIO V1 · GRÁFICA original ATHOS e CD DESTINO original. Só soma TIRAGEM quando DT COLETA está preenchida; exporta também os movimentos não coletados, identificados no status.</p>
-      <p><strong>Auditoria:</strong> CSV com fonte, linha de origem, SKU, gráfica, destino, tiragem e datas; a extração do mapa inclui o código MP. Entrega_TP é data de programação/transporte, não comprovação de recebimento físico.</p>
-      <p id="pgTempAuditoria"></p>
     </div>
   </div>
 </div>
@@ -104,67 +68,64 @@
   var ultimo = null, carregando = false;
   function el(id) { return document.getElementById(id); }
   function fmt(v) { return Math.round(Number(v) || 0).toLocaleString('pt-BR'); }
-  function pct(v, t) { return t ? ((Number(v) || 0) * 100 / t).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '% do PCP' : 'Sem base PCP'; }
+  function pct(v, t) { return t > 0 ? ((Number(v) || 0) * 100 / t).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%' : '—'; }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
-  function tabela(id, linhas, total) {
-    var alvo = el(id);
-    if (!alvo) return;
-    alvo.innerHTML = linhas && linhas.length ? linhas.map(function(l) {
+  function graficas(linhas) {
+    el('pgTempTabelaGraficas').innerHTML = linhas.map(function(l) {
       return '<tr class="border-t border-slate-100"><td class="p-2 text-slate-700">' + esc(l.nome) +
-        '</td><td class="p-2 text-right font-bold tabular-nums">' + fmt(l.tiragem) +
-        '</td><td class="p-2 text-right text-slate-500 tabular-nums">' + pct(l.tiragem, total) + '</td></tr>';
-    }).join('') : '<tr><td colspan="3" class="p-4 text-center text-slate-500">Nenhum movimento coletado encontrado</td></tr>';
+        '</td><td class="p-2 text-right tabular-nums">' + fmt(l.total) +
+        '</td><td class="p-2 text-right font-bold tabular-nums">' + fmt(l.saiu) +
+        '</td><td class="p-2 text-right text-slate-500 tabular-nums">' + pct(l.saiu, l.total) + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="p-4 text-center text-slate-500">Nenhum registro encontrado</td></tr>';
   }
   window.pgFiltrarTempSasAdapt = function() {
     if (!ultimo) return;
     var busca = (el('pgTempFiltroSku').value || '').trim().toUpperCase();
-    var todas = ultimo.porSku || [];
-    var filtradas = busca ? todas.filter(function(s) {
-      return [s.sku, s.graficas, s.destinos, s.mapas].join(' ').toUpperCase().indexOf(busca) >= 0;
-    }) : todas;
-    var limite = 250;
-    el('pgTempQtdSku').textContent = filtradas.length + ' SKUs encontrados' +
-      (filtradas.length > limite ? ' · mostrando os primeiros ' + limite + '; exportação inclui todos' : '');
-    el('pgTempTabelaSku').innerHTML = filtradas.slice(0, limite).map(function(s) {
+    var filtradas = (ultimo.athosPorSku || []).filter(function(s) {
+      return !busca || String(s.sku).toUpperCase().indexOf(busca) >= 0;
+    });
+    el('pgTempQtdSku').textContent = filtradas.length + ' SKUs';
+    el('pgTempTabelaAthos').innerHTML = filtradas.map(function(s) {
       return '<tr class="border-t border-slate-100 hover:bg-slate-50">' +
         '<td class="p-2 font-semibold">' + esc(s.sku) + '</td>' +
-        '<td class="p-2">' + esc(s.graficas) + '</td>' +
-        '<td class="p-2 text-right tabular-nums">' + fmt(s.planejado) + '</td>' +
-        '<td class="p-2 text-right tabular-nums">' + fmt(s.coletado) + '</td>' +
-        '<td class="p-2 text-right tabular-nums">' + fmt(s.saida) + '</td>' +
-        '<td class="p-2 text-right tabular-nums ' + (s.diferenca < 0 ? 'text-rose-700' : '') + '">' + fmt(s.diferenca) + '</td>' +
-        '<td class="p-2">' + esc(s.destinos) + '</td>' +
-        '<td class="p-2">' + esc(s.mapas) + '</td></tr>';
-    }).join('') || '<tr><td colspan="8" class="p-5 text-center text-slate-500">Sem SKUs para o filtro</td></tr>';
+        '<td class="p-2 text-right tabular-nums">' + fmt(s.total) + '</td>' +
+        '<td class="p-2 text-right tabular-nums">' + fmt(s.recebido) + '</td>' +
+        '<td class="p-2 text-right tabular-nums"' + (s.producaoApontada ? '' : ' title="Sem apontamento"') + '>' + (s.producaoApontada ? fmt(s.produzido) : '—') + '</td>' +
+        '<td class="p-2 text-right tabular-nums">' + (s.producaoApontada ? pct(s.produzido, s.total) : '—') + '</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="p-5 text-center text-slate-500">Sem SKUs para o filtro</td></tr>';
   };
   function csvValor(valor) {
     var texto = String(valor == null ? '' : valor);
-    if (/^[=+\-@]/.test(texto) && !/^[+-]?\d+(?:[.,]\d+)?$/.test(texto)) texto = "'" + texto; // Protege textos; preserva quantidades negativas.
+    if (/^[=+\-@]/.test(texto) && !/^[+-]?\d+(?:[.,]\d+)?$/.test(texto)) texto = "'" + texto;
     return '"' + texto.replace(/"/g, '""') + '"';
   }
   window.pgExportarTempSasAdapt = function(tipo) {
-    if (!ultimo) { alert('Atualize a visão antes de extrair.'); return; }
+    if (!ultimo) { alert('Atualize a visão antes de baixar.'); return; }
     var definicoes = {
-      pcp: {nome:'PCP_ENTRADA_ATHOS', colunas:['fonte','linha','sku','grafica','destino','envio','planejado','volume','dataColeta','entregaTP','status'], linhas:ultimo.linhasEntrada},
-      mapa: {nome:'MAPA_SAIDA_ATHOS_CDS', colunas:['fonte','linha','mapa','sku','grafica','destino','unidade','unPCP','envio','volume','volumeColetado','dataColeta','entregaTP','status'], linhas:ultimo.linhasSaida},
-      sku: {nome:'RESUMO_POR_SKU_SAS_ADAPT', colunas:['sku','graficas','planejado','coletado','saida','diferenca','destinos','mapas'], linhas:ultimo.porSku}
+      graficas: {nome:'SAS_ADAPT_GRAFICAS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','tiragemRaw','saiuBruto','saiuReconhecido','operacao','totalOperacao','saiuBrutoOperacao','excedenteOperacao','linhasAgrupadas','dataColeta','dataColetaRaw','entregaTP','entregaTPRaw'], linhas:ultimo.linhasGraficas},
+      athos: {nome:'SAS_ADAPT_ATHOS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','recebidoRaw','recebido','recebidoReconhecido','linhasAgrupadas','recebimentoDivergente','dataAcabamento','dataAcabamentoRaw','dataFinalizacao','dataFinalizacaoRaw','statusFinalizacao','produzido','producaoApontada'], linhas:ultimo.linhasAthos}
     };
     var spec = definicoes[tipo];
     if (!spec || !spec.linhas) return;
     var cabecalho = {
-      fonte:'FONTE',linha:'LINHA NA FONTE',mapa:'CÓDIGO MP',sku:'SKU',grafica:'GRÁFICA',
-      destino:'CD DESTINO',unidade:'UNIDADE ORIGINAL',unPCP:'UN PCP',envio:'ENVIO',
-      planejado:'TIRAGEM PCP',volume:'VOLUME NA ORIGEM',volumeColetado:'TIRAGEM COLETADA NO MAPA',
-      dataColeta:'DATA COLETA',entregaTP:'ENTREGA TP',status:'STATUS',graficas:'GRÁFICAS PCP',
-      coletado:'PCP COLETADO',saida:'MAPA COLETADO AOS CDS',diferenca:'DIFERENÇA',
-      destinos:'CDS DESTINO',mapas:'MAPAS MP'
+      fonte:'FONTE',linha:'LINHA NA FONTE',id:'ID',sku:'SKU',grafica:'GRÁFICA',destino:'CD DESTINO',
+      rawUnit:'UNIDADE ORIGINAL',envio:'ENVIO',caracteristica:'CARACTERÍSTICA DA SOLICITAÇÃO',
+      total:tipo === 'graficas' ? 'TIRAGEM TOTAL' : 'TIRAGEM A ENTREGAR (total por CD)',
+      tiragemRaw:'TIRAGEM ORIGINAL',saiuBruto:'COLETADO INFORMADO',saiuReconhecido:'COLETADO RECONHECIDO (uma vez por operação)',
+      operacao:'OPERAÇÃO',totalOperacao:'TOTAL DA OPERAÇÃO',saiuBrutoOperacao:'COLETADO DA OPERAÇÃO',
+      excedenteOperacao:'EXCEDENTE DA OPERAÇÃO',linhasAgrupadas:'LINHAS AGRUPADAS NA FONTE',
+      dataColeta:'DATA COLETA',dataColetaRaw:'DATA COLETA ORIGINAL',entregaTP:'ENTREGA TP',entregaTPRaw:'ENTREGA TP ORIGINAL',
+      recebidoRaw:'RECEBIDO INFORMADO (Total SKU)',recebido:'RECEBIDO SEM DUPLICIDADE (uma vez por SKU)',
+      recebidoReconhecido:'RECEBIDO RECONHECIDO (uma vez por SKU)',recebimentoDivergente:'RECEBIMENTOS DIVERGENTES',
+      dataAcabamento:'ACABAMENTO FINAL REAL',dataAcabamentoRaw:'ACABAMENTO FINAL REAL ORIGINAL',
+      dataFinalizacao:'FINALIZAÇÃO ATHOS',dataFinalizacaoRaw:'FINALIZAÇÃO ATHOS ORIGINAL',statusFinalizacao:'STATUS FINALIZAÇÃO',
+      produzido:'PRODUZIDO',producaoApontada:'FINALIZAÇÃO APONTADA'
     };
     var linhas = [spec.colunas.map(function(k) { return csvValor(cabecalho[k] || k); }).join(';')];
     spec.linhas.forEach(function(r) {
       linhas.push(spec.colunas.map(function(k) { return csvValor(r[k]); }).join(';'));
     });
-    var csv = '\uFEFF' + linhas.join('\r\n');
-    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var blob = new Blob(['\uFEFF' + linhas.join('\r\n')], {type:'text/csv;charset=utf-8;'});
     var url = URL.createObjectURL(blob), a = document.createElement('a');
     a.href = url;
     a.download = spec.nome + '_' + new Date().toISOString().slice(0,10) + '.csv';
@@ -175,36 +136,33 @@
   };
   function mostrar(d) {
     ultimo = d;
-    el('pgTempPcp').textContent = fmt(d.pcpTotal);
-    el('pgTempEntrada').textContent = fmt(d.entradasAthos);
-    el('pgTempSaida').textContent = fmt(d.saidasCD);
-    el('pgTempEntradaPct').textContent = pct(d.entradasAthos, d.pcpTotal);
-    el('pgTempSaidaPct').textContent = pct(d.saidasCD, d.pcpTotal);
-    el('pgTempDiferenca').textContent = fmt(d.diferencaAthos);
-    el('pgTempDiferenca').className = 'text-2xl font-black mt-2 ' + (d.diferencaAthos < 0 ? 'text-rose-700' : 'text-slate-800');
-    tabela('pgTempTabelaEntrada', d.entradasPorGrafica, d.pcpTotal);
-    tabela('pgTempTabelaSaida', d.saidasPorCD, d.pcpTotal);
+    el('pgTempSaiuPct').textContent = pct(d.saiuGraficas, d.pcpTotal);
+    el('pgTempSaiuVolume').textContent = fmt(d.saiuGraficas) + ' de ' + fmt(d.pcpTotal);
+    el('pgTempAthosProgramado').textContent = fmt(d.totalAthos);
+    el('pgTempAthosRecebido').textContent = 'Recebido: ' + fmt(d.recebidoAthos);
+    el('pgTempProduzidoPct').textContent = d.producaoApontada ? pct(d.produzidoAthos, d.totalAthos) : 'Sem apontamento';
+    el('pgTempProduzidoVolume').textContent = d.producaoApontada ? fmt(d.produzidoAthos) + ' de ' + fmt(d.totalAthos) : 'Total programado: ' + fmt(d.totalAthos);
+    graficas(d.graficas);
     window.pgFiltrarTempSasAdapt();
-    el('pgTempAuditoria').textContent = 'Linhas: PCP ' + d.qtdLinhasEntrada + ' · MAPA ' + d.qtdLinhasSaida +
-      ' · PCP coletado com datas incompletas ' + d.faltamDatasEntrada +
-      ' · Mapa coletado sem Entrega_TP ' + d.faltamDatasSaida + '.';
-    el('statusTempSasAdapt').textContent = 'Dados lidos das fontes atuais. Exportações geradas somente com valores; clique em Atualizar visão para consultar novamente.';
+    var data = d.atualizadoEm ? new Date(d.atualizadoEm) : null;
+    el('statusTempSasAdapt').textContent = data && !isNaN(data.getTime()) ? 'Atualizado em ' + data.toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'}) : 'Atualizado.';
   }
   window.pgCarregarTempSasAdapt = function(forcar) {
     if (carregando) return;
     if (ultimo && !forcar) { mostrar(ultimo); return; }
     carregando = true;
-    el('statusTempSasAdapt').textContent = 'Consultando PCP e MAPA DE SAÍDA…';
+    el('statusTempSasAdapt').textContent = 'Carregando…';
     google.script.run.withSuccessHandler(function(d) {
       carregando = false;
-      if (!d || typeof d.pcpTotal !== 'number') {
-        el('statusTempSasAdapt').textContent = 'Não foi possível montar a visão.';
+      if (!d || typeof d.pcpTotal !== 'number' || typeof d.totalAthos !== 'number' ||
+          !Array.isArray(d.graficas) || !Array.isArray(d.athosPorSku)) {
+        el('statusTempSasAdapt').textContent = 'Não foi possível carregar. Tente atualizar a visão.';
         return;
       }
       mostrar(d);
     }).withFailureHandler(function(e) {
       carregando = false;
-      el('statusTempSasAdapt').textContent = 'Erro ao consultar: ' + (e && e.message ? e.message : String(e));
+      el('statusTempSasAdapt').textContent = 'Erro ao atualizar: ' + (e && e.message ? e.message : String(e));
     }).getTempSasAdapt();
   };
 })();
