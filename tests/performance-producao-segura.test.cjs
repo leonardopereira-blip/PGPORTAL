@@ -10,7 +10,9 @@ const global = fs.readFileSync(path.join(root, 'Scripts_Globais_2.html'), 'utf8'
 test('somente uma carga de Chart.js e do plugin permanece no HTML principal', () => {
   assert.equal((main.match(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/chart\.js"><\/script>/g) || []).length, 1);
   assert.equal((main.match(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/chartjs-plugin-datalabels@2\.0\.0"><\/script>/g) || []).length, 1);
-  assert.doesNotMatch(main, /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/(?:chart\.js|chartjs-plugin-datalabels@2\.0\.0)">[\s\S]*?<\/script>/);
+  const tags = [...main.matchAll(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/(?:chart\.js|chartjs-plugin-datalabels@2\.0\.0)">([\s\S]*?)<\/script>/g)];
+  assert.equal(tags.length, 2);
+  tags.forEach(match => assert.equal(match[1].trim(), '', 'biblioteca nao deve carregar script inline'));
 });
 
 test('SLA nao dispara calculo da Meta Armazem enquanto a aba esta oculta', () => {
