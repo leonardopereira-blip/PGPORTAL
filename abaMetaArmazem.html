@@ -111,8 +111,8 @@
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-draggable{cursor:grab;user-select:none}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-draggable:active{cursor:grabbing}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-drag-over{outline:3px solid #FCB04E;outline-offset:-3px;background:#365992}
-    #abaMetaArmazem #maMatrizColetas{--ma-header-bg:#FCB04E;--ma-header-text:#0C2340}
-    #abaMetaArmazem #maMatrizRealizado{--ma-header-bg:#418EDE;--ma-header-text:#0C2340}
+    #abaMetaArmazem #maMatrizColetas{--ma-header-bg:#9A650B;--ma-header-text:#fff}
+    #abaMetaArmazem #maMatrizRealizado{--ma-header-bg:#236AA5;--ma-header-text:#fff}
     #abaMetaArmazem #maMatrizColetas .ma-matrix-table thead th,
     #abaMetaArmazem #maMatrizRealizado .ma-matrix-table thead th{background:var(--ma-header-bg);color:var(--ma-header-text)}
     #abaMetaArmazem #maMatrizColetas .ma-matrix-table thead .ma-drag-over,
@@ -1410,8 +1410,8 @@
       canvas.width=Math.ceil(w*dpr);canvas.height=Math.ceil(h*dpr);
       var ctx=canvas.getContext('2d');
       if(!ctx)throw new Error('Canvas indisponível');
-      var headerBg=coletas?'#FCB04E':realizado?'#418EDE':'#284081';
-      var headerText=coletas||realizado?'#0C2340':'#fff';
+      var headerBg=coletas?'#9A650B':realizado?'#236AA5':'#284081';
+      var headerText='#fff';
       ctx.scale(dpr,dpr);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
       ctx.fillStyle=coletas||realizado?headerBg:'#0C2340';ctx.fillRect(0,0,w,top);
       ctx.fillStyle=headerText;ctx.font='bold 17px Poppins, sans-serif';
