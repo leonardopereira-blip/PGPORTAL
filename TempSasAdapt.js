@@ -97,7 +97,48 @@ function pgTempSasAdaptLerColunas_(nomes, campos) {
   }
   return saida;
 }
-function pgTempSasAdaptResumo_(pcp, athos, hojeISO) {
+
+function pgTempSasAdaptDestino_(valor) {
+  var s = pgTempSasAdaptNormalizar_(valor);
+  if (/(?:^|\\W)(?:JDI|JUNDIAI)(?:\\W|$)/.test(s)) return 'CD JDI';
+  if (/(?:^|\\W)(?:FOR|FORTALEZA|ITAITINGA)(?:\\W|$)/.test(s)) return 'CD FOR';
+  if (/(?:^|\\W)(?:RP|RIBEIRAO PRETO)(?:\\W|$)/.test(s)) return 'CD RP';
+  return s.replace(/^CD\\s+/, '');
+}
+// As saidas da ATHOS sao lidas das colunas originais do Mapa, nunca de
+// GRAFICA PCP / CD PCP (campos transformados pela planilha).
+function pgTempSasAdaptLerSaidasMapa_() {
+  var nomes = ['MAPA DE SAÍDA','MAPA DE SAIDA','MAPA DE SAIDA '];
+  var meta = pgMetadadosPlanilhaCache_(pgFonteExternaCache_(nomes));
+  var aba = nomes.filter(function(n) { return meta.nomes.indexOf(n) >= 0; })[0];
+  if (!aba) throw new Error('TEMP SAS ADAPT: Mapa de Saída não encontrado');
+  var grade = meta.abas.filter(function(x) { return x.title === aba; })[0].gridProperties;
+  var prefixo = "'" + aba.replace(/'/g, "''") + "'!";
+  // E=codigo mapa, G=destino original, H=envio original, L=SKU,
+  // N=grafica original, AN=volume coletado, AT=Coleta TP, AX=envio normalizado.
+  var letras = ['E','G','H','L','N','AN','AT','AX'];
+  var retorno = Sheets.Spreadsheets.Values.batchGet(meta.id, {
+    ranges: letras.map(function(col) { return prefixo + col + '2:' + col + grade.rowCount; }),
+    valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER'
+  }).valueRanges || [];
+  if (retorno.length !== letras.length) throw new Error('TEMP SAS ADAPT: leitura incompleta do Mapa de Saída');
+  var n = 0, saidas = [];
+  retorno.forEach(function(r) { n = Math.max(n, (r.values || []).length); });
+  for (var i = 0; i < n; i++) {
+    var v = retorno.map(function(r) { return r.values && r.values[i] && r.values[i][0] != null ? r.values[i][0] : ''; });
+    var grafica = pgTempSasAdaptNormalizar_(v[4]);
+    var envio = pgTempSasAdaptNormalizar_(v[7] || v[2]);
+    var coletado = pgTempSasAdaptNumero_(v[5]);
+    if ((grafica !== 'ATHOS' && grafica.indexOf('ATHOS ') !== 0) || envio !== 'V1' || coletado <= 0) continue;
+    var sku = pgTempSasAdaptNormalizar_(v[3]), destino = pgTempSasAdaptDestino_(v[1]);
+    if (!sku || !destino) continue;
+    saidas.push({sku: sku, destino: destino, codigoMapa: pgTempSasAdaptNormalizar_(v[0]),
+      coletado: coletado, dataColeta: pgTempSasAdaptDiaISO_(v[6]), linhaMapa: i + 2});
+  }
+  return saidas;
+}
+
+function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
   function idx(cab, nomes, fonte) {
     var lista = (cab || []).map(pgTempSasAdaptNormalizar_), indices = {};
     nomes.forEach(function(n) {
@@ -180,6 +221,25 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO) {
       l.saiuReconhecido = n === 0 ? reconhecido : 0;
     });
   });
+  // Concilia parcelas de saida por mapa/SKU/CD; codigos repetidos nao
+  // duplicam a quantidade coletada. Nao compensa atraso de outro destino.
+  var parcelasMapa = Object.create(null), saidaPorDestino = Object.create(null);
+  (saidasMapa || []).forEach(function(m) {
+    var sku = pgTempSasAdaptNormalizar_(m.sku), destino = pgTempSasAdaptDestino_(m.destino);
+    if (!skusOrigem[sku] || !destino) return;
+    var codigo = pgTempSasAdaptNormalizar_(m.codigoMapa);
+    var chave = JSON.stringify([sku, destino, codigo || 'LINHA ' + m.linhaMapa]);
+    var volume = Math.max(0, pgTempSasAdaptNumero_(m.coletado));
+    if (!parcelasMapa[chave] || parcelasMapa[chave].volume < volume) {
+      parcelasMapa[chave] = {sku: sku, destino: destino, codigo: codigo, volume: volume};
+    }
+  });
+  Object.keys(parcelasMapa).forEach(function(chave) {
+    var m = parcelasMapa[chave], k = JSON.stringify([m.sku, m.destino]);
+    if (!saidaPorDestino[k]) saidaPorDestino[k] = {restante: 0, mapas: []};
+    saidaPorDestino[k].restante += m.volume;
+    if (m.codigo && saidaPorDestino[k].mapas.indexOf(m.codigo) < 0) saidaPorDestino[k].mapas.push(m.codigo);
+  });
   for (var j = 1; j < athos.length; j++) {
     var l = athos[j] || [];
     if (pgTempSasAdaptNormalizar_(l[a['GRÁFICA']]) !== 'ATHOS') continue;
@@ -196,7 +256,14 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO) {
     var dataFinalRaw = l[a['Formação de kit/Encaixotamento Final Real']];
     var dataFinalISO = pgTempSasAdaptDiaISO_(dataFinalRaw);
     var apontada = Boolean(dataFinalISO && dataFinalISO <= hoje);
-    var volumeProduzido = apontada ? volume : 0;
+    var chaveSaida = JSON.stringify([codigo, pgTempSasAdaptDestino_(l[a['CD DESTINO']])]);
+    var saidaSkuCD = saidaPorDestino[chaveSaida];
+    var confirmadoMapa = saidaSkuCD ? Math.min(Math.max(0, volume), saidaSkuCD.restante) : 0;
+    if (saidaSkuCD) saidaSkuCD.restante = Math.max(0, saidaSkuCD.restante - confirmadoMapa);
+    // Uma coleta Athos -> CD comprova finalizacao mesmo sem a data BP.
+    // Quando BP ja finalizou, nao somar duas vezes a mesma tiragem.
+    var volumeProduzido = Math.max(apontada ? volume : 0, confirmadoMapa);
+    var finalizacaoComprovada = apontada || confirmadoMapa > 0;
     if (!skusAthos[codigo]) skusAthos[codigo] = {
       sku: codigo, total: 0, recebido: 0, recebidoReconhecido: 0, produzido: 0,
       producaoApontada: false, qtdApontamentos: 0, recebimentos: Object.create(null), linhas: []
@@ -207,19 +274,20 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO) {
     item.recebido = Math.max(item.recebido, recebida);
     if (recebida > 0) item.recebimentos[String(recebida)] = true;
     item.produzido += volumeProduzido;
-    item.producaoApontada = item.producaoApontada || apontada;
-    item.qtdApontamentos += apontada ? 1 : 0;
+    item.producaoApontada = item.producaoApontada || finalizacaoComprovada;
+    item.qtdApontamentos += finalizacaoComprovada ? 1 : 0;
     totalAthos += volume;
     produzido += volumeProduzido;
-    qtdApontamentos += apontada ? 1 : 0;
-    var statusFinal = apontada ? 'Finalizado' : dataFinalISO ? 'Data futura' :
-      dataFinalRaw == null || dataFinalRaw === '' || dataFinalRaw === 0 || dataFinalRaw === '0' ? 'Sem apontamento' : 'Data final inválida';
+    qtdApontamentos += finalizacaoComprovada ? 1 : 0;
+    var statusFinal = apontada ? 'Finalizado no PCP' : confirmadoMapa > 0 ? 'Saída Athos para CD confirmada' :
+      dataFinalISO ? 'Data futura' : 'Sem finalização comprovada';
     var auditAthos = {
       source: 'PCP_ACABADORAS', fonte: 'PCP_ACABADORAS', row: j + 1, linha: j + 1,
       id: l[a.ID], sku: codigo, grafica: 'ATHOS', destino: pgTempSasAdaptNormalizar_(l[a['CD DESTINO']]),
       envio: 'V1', rawUnit: String(l[a.UNIDADE] || ''), caracteristica: caract,
       total: volume, recebidoRaw: recebida, recebido: 0, recebidoReconhecido: 0,
-      produzido: volumeProduzido, producaoApontada: apontada,
+      produzido: volumeProduzido, producaoApontada: finalizacaoComprovada,
+      saidaMapa: confirmadoMapa, codigosMapa: saidaSkuCD ? saidaSkuCD.mapas.join(', ') : '',
       dataFinalizacao: pgTempSasAdaptData_(dataFinalRaw), dataFinalizacaoISO: dataFinalISO,
       dataFinalizacaoRaw: dataFinalRaw, statusFinalizacao: statusFinal,
       dataAcabamento: pgTempSasAdaptData_(l[a['Acbto Final Real']]), dataAcabamentoRaw: l[a['Acbto Final Real']],
@@ -274,7 +342,8 @@ function getTempSasAdapt() {
     'Formação de kit/Encaixotamento Final Real','Acbto Final Real'];
   var pcp = pgTempSasAdaptLerColunas_('PCP', pCampos);
   var athos = pgTempSasAdaptLerColunas_('PCP_ACABADORAS', aCampos);
-  var resumo = pgTempSasAdaptResumo_(pcp, athos);
+  var saidasMapa = pgTempSasAdaptLerSaidasMapa_();
+  var resumo = pgTempSasAdaptResumo_(pcp, athos, null, saidasMapa);
   resumo.atualizadoEm = new Date().toISOString();
   return resumo;
 }
