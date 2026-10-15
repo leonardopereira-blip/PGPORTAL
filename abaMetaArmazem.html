@@ -111,6 +111,12 @@
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-draggable{cursor:grab;user-select:none}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-draggable:active{cursor:grabbing}
     #abaMetaArmazem .ma-matrix-table .ma-matrix-col-head.ma-drag-over{outline:3px solid #FCB04E;outline-offset:-3px;background:#365992}
+    #abaMetaArmazem #maMatrizColetas{--ma-header-bg:#FCB04E;--ma-header-text:#0C2340}
+    #abaMetaArmazem #maMatrizRealizado{--ma-header-bg:#418EDE;--ma-header-text:#0C2340}
+    #abaMetaArmazem #maMatrizColetas .ma-matrix-table thead th,
+    #abaMetaArmazem #maMatrizRealizado .ma-matrix-table thead th{background:var(--ma-header-bg);color:var(--ma-header-text)}
+    #abaMetaArmazem #maMatrizColetas .ma-matrix-table thead .ma-drag-over,
+    #abaMetaArmazem #maMatrizRealizado .ma-matrix-table thead .ma-drag-over{background:#0C2340;color:#fff}
     #abaMetaArmazem .ma-compare-bar{height:9px;overflow:hidden;background:#e5edf7;border-radius:999px}
     #abaMetaArmazem .ma-compare-bar span{display:block;height:100%;border-radius:999px}
     #abaMetaArmazem .ma-compare-card{border:1px solid #dce5f0;border-radius:12px;padding:14px;background:#f8fbff;min-width:0}
@@ -175,25 +181,7 @@
     </div>
     <div id="maMatriz" class="overflow-x-auto max-w-full" aria-label="Matriz com rolagem horizontal"></div>
   </div>
-  <!-- Segunda matriz: mesmo universo, filtros, séries, ordem e metas da matriz planejada. -->
-  <div class="ma-card p-5 overflow-hidden">
-    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
-      <div>
-        <h3 id="maMatrizRealizadoTitulo" class="font-black text-slate-800 text-sm">Entregas</h3>
-        <p class="text-[10px] text-slate-500 mt-1">Entrega TP realizada até hoje ÷ tiragem total CD. Segue os mesmos itens, filtros e ordenação dos quadros acima. Excedentes ficam identificados na base auditável.</p>
-      </div>
-      <button type="button" class="ma-pill shrink-0" onclick="window.pgMACapturarMatriz('realizado')" title="Captura a matriz de entregas completa, incluindo colunas fora da rolagem">Capturar Entregas (PNG)</button>
-    </div>
-    <div id="maMatrizRealizado" class="overflow-x-auto max-w-full" aria-label="Matriz de entrega realizada sobre tiragem total CD, com rolagem horizontal"></div>
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4 border-t border-slate-200 pt-4">
-      <div><h4 class="text-xs font-black text-slate-800">Base auditável · Realizado</h4>
-        <p class="text-[10px] text-slate-500 mt-1">Entregue Geral × Entregue armazém, com datas e motivos da diferença.</p></div>
-      <div class="flex flex-wrap gap-2">
-        <button type="button" class="ma-pill" onclick="window.pgMAExportarAuditoriaRealizado(this)">Baixar Excel Realizado (.xlsx)</button>
-        <button type="button" class="ma-pill" onclick="window.pgMABaixarAuditoriaRealizadoCSV()">Baixar CSV Realizado</button>
-      </div>
-    </div>
-  </div>
+  <!-- Coletas e Entregas compartilham o universo, os filtros e as séries da previsão. -->
   <div class="ma-card p-5 overflow-hidden">
     <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
       <div>
@@ -209,6 +197,24 @@
       <div class="flex flex-wrap gap-2">
         <button type="button" class="ma-pill" onclick="window.pgMAExportarAuditoriaColetas(this)">Baixar Excel Coletas (.xlsx)</button>
         <button type="button" class="ma-pill" onclick="window.pgMABaixarAuditoriaColetasCSV()">Baixar CSV Coletas</button>
+      </div>
+    </div>
+  </div>
+  <div class="ma-card p-5 overflow-hidden">
+    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
+      <div>
+        <h3 id="maMatrizRealizadoTitulo" class="font-black text-slate-800 text-sm">Entregas</h3>
+        <p class="text-[10px] text-slate-500 mt-1">Entrega TP realizada até hoje ÷ tiragem total CD. Segue os mesmos itens, filtros e ordenação dos quadros acima. Excedentes ficam identificados na base auditável.</p>
+      </div>
+      <button type="button" class="ma-pill shrink-0" onclick="window.pgMACapturarMatriz('realizado')" title="Captura a matriz de entregas completa, incluindo colunas fora da rolagem">Capturar Entregas (PNG)</button>
+    </div>
+    <div id="maMatrizRealizado" class="overflow-x-auto max-w-full" aria-label="Matriz de entrega realizada sobre tiragem total CD, com rolagem horizontal"></div>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4 border-t border-slate-200 pt-4">
+      <div><h4 class="text-xs font-black text-slate-800">Base auditável · Realizado</h4>
+        <p class="text-[10px] text-slate-500 mt-1">Entregue Geral × Entregue armazém, com datas e motivos da diferença.</p></div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="ma-pill" onclick="window.pgMAExportarAuditoriaRealizado(this)">Baixar Excel Realizado (.xlsx)</button>
+        <button type="button" class="ma-pill" onclick="window.pgMABaixarAuditoriaRealizadoCSV()">Baixar CSV Realizado</button>
       </div>
     </div>
   </div>
@@ -1404,17 +1410,19 @@
       canvas.width=Math.ceil(w*dpr);canvas.height=Math.ceil(h*dpr);
       var ctx=canvas.getContext('2d');
       if(!ctx)throw new Error('Canvas indisponível');
+      var headerBg=coletas?'#FCB04E':realizado?'#418EDE':'#284081';
+      var headerText=coletas||realizado?'#0C2340':'#fff';
       ctx.scale(dpr,dpr);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
-      ctx.fillStyle='#0C2340';ctx.fillRect(0,0,w,top);
-      ctx.fillStyle='#fff';ctx.font='bold 17px Poppins, sans-serif';
+      ctx.fillStyle=coletas||realizado?headerBg:'#0C2340';ctx.fillRect(0,0,w,top);
+      ctx.fillStyle=headerText;ctx.font='bold 17px Poppins, sans-serif';
       ctx.fillText((coletas?'Coletas':realizado?'Entregas':'Previsão Armazém')+' · '+m.nomeModo,16,29);
       ctx.font='11px Poppins, sans-serif';
       ctx.fillText((coletas?'Coleta TP até hoje / tiragem total CD':realizado?'Entrega TP até hoje / tiragem total CD':'Real + previsão')+'  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta')+
         '  |  15/10 · SAS Bradesco 26/10 · GEE 12/11 · WAYS 30/11',16,51);
-      ctx.fillStyle='#284081';ctx.fillRect(0,top,w,head);
-      ctx.fillStyle='#fff';ctx.font='bold 12px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,5,top+27,first-9);
+      ctx.fillStyle=headerBg;ctx.fillRect(0,top,w,head);
+      ctx.fillStyle=headerText;ctx.font='bold 12px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,5,top+27,first-9);
       function corta(v,max){var chars=Array.from(String(v));return chars.length>max?chars.slice(0,max-1).join('')+'…':chars.join('');}
-      m.colunas.forEach(function(c,j){ctx.fillStyle='#fff';ctx.fillText(corta(c.nome,13),first+j*col+4,top+27,col-8);});
+      m.colunas.forEach(function(c,j){ctx.fillStyle=headerText;ctx.fillText(corta(c.nome,13),first+j*col+4,top+27,col-8);});
       var rows=m.linhas.concat([{nome:'TOTAL GERAL',celulas:m.total}]);
       rows.forEach(function(r,i){
         var y=top+head+i*rowH,ultimo=i===rows.length-1;
