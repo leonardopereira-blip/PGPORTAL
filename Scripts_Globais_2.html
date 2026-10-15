@@ -9126,8 +9126,10 @@ window.reFiltrarTabelaGiro = function() {
             /COLETAD[OA] A MAIS|COLETA A MAIS/.test(statusColetaFonte);
         // Usar somente o excedente medido; quando a fonte só informa o
         // status, exibir a pendência sem inventar uma quantidade.
-        const excedenteColeta = coletadoAMais && estadoMapa.total > 0
-            ? Math.max(0, estadoMapa.coletada - estadoMapa.total) : 0;
+        const totalColeta = window.pgNumeroPrazoV35(window.pgCampoColeta(l, 'TIRAGEM TOTAL'));
+        const realizadoColeta = window.pgNumeroPrazoV35(window.pgCampoColeta(l, 'TIRAGEM COLETADA'));
+        const excedenteColeta = coletadoAMais && totalColeta > 0
+            ? Math.max(0, realizadoColeta - totalColeta) : 0;
         const pendenteMapa = estadoMapa.pendente || prazoGiro.totalPendente > 0;
         const saldoColeta = prazoGiro.temCampos ? prazoGiro.totalPendente : estadoMapa.saldo;
         const coletadoAMenos = saldoColeta > 0 &&
