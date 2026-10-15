@@ -3068,6 +3068,14 @@ window.extrairCaixaFunil = function(id) {
 };
 
 
+// Série efetiva em ambas as bases: prioriza serie_corrigida sem depender de maiúsculas/acentos.
+window.pgSerieCorrigidaFunil = function(l) {
+    const chave = Object.keys(l || {}).find(k => k.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === 'seriecorrigida');
+    const corrigida = chave ? String(l[chave] == null ? '' : l[chave]).trim() : '';
+    return corrigida || String(l['SÉRIE'] || l['Série'] || l.SERIE || l['SÉRIES'] || '-').trim();
+};
+
 // Tabela do analista restaurada na aba Funil.
 window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
     const elThead = document.getElementById('thFunilNovaTabela');
@@ -3098,7 +3106,7 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         if (tBase <= 0) return;
         if (typeof belongsToPhase === 'function' && !belongsToPhase(l, faseId) && faseId !== 'col_mapa') return;
         let marca = String(l["MARCA_FINAL"] || l["UNIDADE"] || "N/A").trim().toUpperCase();
-        let serie = String(l["SÉRIE"] || l["Série"] || l["SERIE"] || "-").trim();
+        let serie = window.pgSerieCorrigidaFunil(l);
         let tipo = String(l["TIPO"] || l["Tipo"] || "Outros").trim().toUpperCase();
         if (tipo === 'ALUNO') tipo = 'Aluno';
         else if (tipo === 'PROFESSOR') tipo = 'Professor';
@@ -3116,15 +3124,20 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         if (faseId === 'ent_tp') isReal = !!(l["DATA_EA"] && String(l["DATA_EA"]).trim() !== "");
 
         setSeries.add(serie);
-        if (!matriz[marca]) matriz[marca] = {totalGeral:{base:0,real:0},series:{}};
+        if (!matriz[marca]) matriz[marca] = {totalGeral:{base:0,real:0,bruto:0,excedente:0},series:{}};
         if (!matriz[marca].series[serie]) matriz[marca].series[serie] = {
-            Aluno:{base:0,real:0}, Professor:{base:0,real:0}, Outros:{base:0,real:0}
+            Aluno:{base:0,real:0,bruto:0,excedente:0}, Professor:{base:0,real:0,bruto:0,excedente:0}, Outros:{base:0,real:0,bruto:0,excedente:0}
         };
-        matriz[marca].totalGeral.base += tBase;
-        matriz[marca].series[serie][tipo].base += tBase;
-        if (isReal || (faseId === 'col_mapa' && tFaseReal > 0)) {
-            matriz[marca].totalGeral.real += tFaseReal;
-            matriz[marca].series[serie][tipo].real += tFaseReal;
+        // Cada linha tem seu próprio limite. Excesso de uma tiragem não quita outra.
+        const bruto = (isReal || (faseId === 'col_mapa' && tFaseReal > 0))
+            ? Math.max(0, Number(window.arredondar(tFaseReal)) || 0) : 0;
+        const considerado = Math.min(tBase, bruto);
+        const excedente = Math.max(0, bruto - tBase);
+        for (const celula of [matriz[marca].totalGeral, matriz[marca].series[serie][tipo]]) {
+            celula.base += tBase;
+            celula.real += considerado;
+            celula.bruto += bruto;
+            celula.excedente += excedente;
         }
     });
 
@@ -3154,12 +3167,16 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         if (!dataObj || dataObj.base === 0) {
             return `<td class="p-2 border-r ${isTotal ? 'border-slate-300 bg-slate-50' : 'border-slate-200'} text-center text-slate-300">-</td>`;
         }
-        let pct = (dataObj.real / dataObj.base) * 100;
-        if (pct === 100 && dataObj.real < dataObj.base) pct = 99.9;
+        let pct = Math.min(100, (dataObj.real / dataObj.base) * 100);
+        if (pct < 100 && pct.toFixed(1) === '100.0') pct = 99.9;
         let corClasse = window.getCorHeatmap ? window.getCorHeatmap(pct) : 'bg-slate-500 text-white';
-        let tooltip = `${window.formatarBR(dataObj.real)} / ${window.formatarBR(dataObj.base)}`;
+        const detalhe = {base:dataObj.base, considerado:dataObj.real,
+            bruto:dataObj.bruto, excedente:dataObj.excedente};
         const dica = contexto && window.pgAtributosTooltipFunil
-            ? window.pgAtributosTooltipFunil(contexto) : 'title="' + tooltip + '"';
+            ? window.pgAtributosTooltipFunil({ ...contexto, valoresTabela:detalhe })
+            : 'title="Considerado: ' + window.formatarBR(detalhe.considerado) +
+              ' / ' + window.formatarBR(detalhe.base) + '; Excedente: ' +
+              window.formatarBR(detalhe.excedente) + '"';
         return `<td class="p-1 border-r ${isTotal ? 'border-slate-300 bg-slate-50' : 'border-slate-200'} text-center align-middle">
                     <div class="px-1.5 py-1 rounded shadow-sm text-[10px] font-black ${corClasse}" ${dica}>${pct.toFixed(1)}%</div>
                 </td>`;
@@ -3169,7 +3186,9 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         let colsSerie = '';
         seriesOrdenadas.forEach(serie => {
             let sData = matriz[marca].series[serie] || {
-                Aluno:{base:0,real:0}, Professor:{base:0,real:0}, Outros:{base:0,real:0}
+                Aluno:{base:0,real:0,bruto:0,excedente:0},
+                Professor:{base:0,real:0,bruto:0,excedente:0},
+                Outros:{base:0,real:0,bruto:0,excedente:0}
             };
             colsSerie += renderCell(sData.Aluno,false,{fase:faseId,tipo:'serie',serie,marca,tipoMaterial:'ALUNO'});
             colsSerie += renderCell(sData.Professor,false,{fase:faseId,tipo:'serie',serie,marca,tipoMaterial:'PROFESSOR'});
@@ -3247,7 +3266,7 @@ let tRef = document.getElementById('filtroReferencia').value;
     const pgNomeFunil = (l, campo) => String(
         campo === 'marca' ? (l.MARCA_FINAL || l.UNIDADE || l.MARCA || 'N/A') :
         campo === 'grafica' ? (l.GRAFICA_FINAL || l['GRÁFICA'] || l.GRAFICA || 'N/A') :
-        (l['SÉRIE'] || l['Série'] || l.SERIE || l['SÉRIES'] || '-')
+        window.pgSerieCorrigidaFunil(l)
     ).trim().toUpperCase();
     const pgAtrasosFaseFunil = id => {
         if (pgItensAtrasadosPorFase.has(id)) return pgItensAtrasadosPorFase.get(id);
@@ -3303,10 +3322,15 @@ let tRef = document.getElementById('filtroReferencia').value;
         const titulo = porSerie ? 'Gráfica / Marca' :
             contexto.tipo === 'grafica' ? 'Marca / Série' : 'Gráfica / Série';
         const itens = Array.from(grupos).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0],'pt-BR'));
-        const resultado = 'Em atraso: ' + window.formatarBR(total) +
+        const atraso = 'Em atraso: ' + window.formatarBR(total) +
             (itens.length ? '\n' + titulo + ':\n' +
                 itens.map(([nome,qtd]) => nome + ': ' + window.formatarBR(qtd)).join('\n')
                 : '\nSem itens vencidos neste recorte.');
+        const v = contexto.valoresTabela;
+        const resultado = v ? 'Considerado: ' + window.formatarBR(v.considerado) +
+            ' / ' + window.formatarBR(v.base) +
+            '\nRealizado bruto: ' + window.formatarBR(v.bruto) +
+            '\nExcedente: ' + window.formatarBR(v.excedente) + '\n' + atraso : atraso;
         pgCacheDicasFunil.set(chave,resultado);
         return resultado;
     };
@@ -3470,7 +3494,7 @@ let tRef = document.getElementById('filtroReferencia').value;
     };
     const pgFaseSeriesColeta = FASES.find(f => f.id === 'col_tp');
     (window.dadosBaseTPPortal || []).forEach(l => {
-        const serie = String(l['SÉRIE'] || l['Série'] || l.SERIE || '').trim();
+        const serie = window.pgSerieCorrigidaFunil(l);
         if (!serie || serie === '-' || serie.toUpperCase() === 'N/A') return;
         const base = window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0);
         if (base <= 0) return;
