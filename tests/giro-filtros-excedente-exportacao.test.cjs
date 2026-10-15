@@ -14,7 +14,8 @@ const exportacao = servidor.slice(servidor.indexOf('function gerarPlanilhaGiroFi
 function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',ee=''}) {
   const el = {};
   const linha = {TIRAGEM:100,SKU:'SKU-1',UNIDADE:'COC','GRÁFICA':'LOGPRINT',
-    'CD DESTINO':'CD JDI',ENVIO:'V1','SÉRIE':'Série antiga',SERIE_CORRIGIDA:serie, STATUS_EE:ee};
+    'CD DESTINO':'CD JDI',ENVIO:'V1','SÉRIE':'Série antiga',SERIE_CORRIGIDA:serie,
+    'TIRAGEM TOTAL':100,'TIRAGEM COLETADA':estado.coletada||0, STATUS_EE:ee};
   const w = {
     GIRO_DADOS_RAW:[linha],GIRO_ETAPAS_SELECIONADAS:new Set(['Coleta Mapa','Coletado a mais']),
     GIRO_SORT_RULES:[],HISTORICO_OBS_GIRO:{master:{},sku:{}},CONTEXTOS_TEMP:{},
@@ -24,7 +25,8 @@ function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',e
     pgGiroSaldoPrazosV41:()=>({
       temCampos:true,totalPendente:eventos.reduce((s,e)=>s+e.volume,0),eventos
     }),
-    pgCampoColeta:(r,n)=>r[n]||'',pgGiroChaveObs:(_,x)=>x,
+    pgCampoColeta:(r,n)=>r[n]||'',pgNumeroPrazoV35:v=>Math.max(0,Number(v)||0),
+    pgGiroChaveObs:(_,x)=>x,
     pgGiroEscaparChaveObs:x=>x,pgGiroIdCampoObs:()=>'_campo',
     pgSerieCorrigidaFunil:r=>r.SERIE_CORRIGIDA||r['SÉRIE'],
     formatarBR:String,arredondar:Math.round,pgDataPlanoColetaLinha:()=>null,
