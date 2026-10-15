@@ -9052,6 +9052,7 @@ window.exportarPendenciasGiroVisiveis = function() {
         btn.disabled = false;
         if (aba) aba.location.href = res.url;
         else window.open(res.url, '_blank');
+        if (res.aviso) alert(res.aviso);
     }).withFailureHandler(falha).gerarPlanilhaGiroFiltrado(itens);
 };
 
