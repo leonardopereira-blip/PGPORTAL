@@ -22,7 +22,9 @@ const mapa = () => ({key:[movement(), movement({codigoMapa:'MP-506731-COC-V1-FOR
 function portal(rows, cache = mapa()) {
   const controls = {filtroReferencia:{value:'replan'}, pgFiltroOrigem:{value:'TODOS'},
     pgFiltroDestino:{value:'TODOS'}};
-  const c = {console:{info(){},warn(){},error(){}}, MAPA_SAIDA_CACHE:cache, dadosGlobais:rows,
+  const c = {console:{info(){},warn(){},error(){}},
+    MAPA_SAIDA_CACHE:{__agendaTPCompleta:true,__forecastTP:{conferido:true},...cache},
+    PG_MAPA_TP_CARGA_CONCLUIDA:true,dadosGlobais:rows,
     arredondar:v=>Math.round(Number(v)||0), formatarBR:String,
     setTimeout(){},clearTimeout(){},setInterval(){},clearInterval(){},
     performance:{now:()=>0},addEventListener(){},dispatchEvent(){},

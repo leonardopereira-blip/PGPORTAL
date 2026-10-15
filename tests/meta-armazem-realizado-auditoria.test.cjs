@@ -30,7 +30,8 @@ function portal(rows, {today = '2026-10-20', cache = {}, funil = rows} = {}) {
     appendChild(){}, remove(){}, addEventListener(){}, setAttribute(){},
     getAttribute(){return null;}, querySelector(){return null;}, querySelectorAll(){return [];},
     click(){downloads.push({name:this.download, blob:blobs.get(this.href)});}});
-  const w = {console:{info(){}, warn(){}, error(){}}, dadosGlobais:rows, MAPA_SAIDA_CACHE:cache,
+  const w = {console:{info(){}, warn(){}, error(){}}, dadosGlobais:rows,
+    MAPA_SAIDA_CACHE:{__agendaTPCompleta:true,__forecastTP:{conferido:true},...cache},PG_MAPA_TP_CARGA_CONCLUIDA:true,
     PG_MATRIZ_SLA:[['FORNECEDOR','CD JDI'],['FORMA CERTA',0]],
     arredondar:v=>Math.round(Number(v)||0), formatarBR:String,
     setTimeout(){}, clearTimeout(){}, setInterval(){}, clearInterval(){},

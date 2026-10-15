@@ -11577,7 +11577,7 @@ window.reUsuarioEmail = function() {
 // Planilha única, usada pelo Funil e Report Executiva.
 // Cada linha física mantém sua identidade; nunca associa marcas apenas por SKU.
 window.pgExportarVisaoCompletaV37 = function(dataCorte, titulo, elemento, resumoFiltro = null) {
-    if (window.pgTPExportacaoPronta && !window.pgTPExportacaoPronta()) return;
+    if (window.pgTPExportacaoPronta && !window.pgTPExportacaoPronta({agenda:true})) return;
     const resumo = resumoFiltro || window.pgObterResumoColeta();
     const corte = String(dataCorte || dtHojeISO).slice(0, 10);
     const corteReal = corte > dtHojeISO ? dtHojeISO : corte;
@@ -11933,7 +11933,7 @@ window.pgMontarAuditoriaCompletaXlsxV57=function(visao){
 };
 
 window.pgBaixarAuditoriaPontoColetaV56=function(){
-    if(window.pgTPExportacaoPronta&&!window.pgTPExportacaoPronta())return;
+    if(window.pgTPExportacaoPronta&&!window.pgTPExportacaoPronta({agenda:true}))return;
     const visao=window.pgAuditoriaVisaoAtualV56;
     if(!visao)return;
     if(typeof window.pgGerarExcelAbas!=='function'){alert('Exportador XLSX não carregado.');return;}

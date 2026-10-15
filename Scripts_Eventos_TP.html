@@ -146,7 +146,7 @@
     function obterAgenda(hoje) {
         const mapa = window.MAPA_SAIDA_CACHE;
         const base = window.dadosGlobais || window.dadosTotalCanonico || [];
-        if (cacheAgenda?.mapa === mapa && cacheAgenda.base === base &&
+        if (cacheAgenda && cacheAgenda.mapa === mapa && cacheAgenda.base === base &&
             cacheAgenda.tamanho === base.length && cacheAgenda.hoje === hoje) return cacheAgenda;
         const donos = new Map(), referencias = new WeakSet(), porChave = new Map(), totaisFormula = new Map();
         const ordem = base.map((linha, i) => ({ linha, i, id: identidadeAgenda(linha) }));
@@ -253,12 +253,32 @@
         }
         return resultado(eventos, eventos.length ? 'saldo-o-menos-an-por-parcela' : 'sem-parcelas-pendentes');
     };
-    window.pgStatusAgendaTP = function() {
+    function erroPayloadMapaTP(mapa) {
+        if (!mapa || typeof mapa !== 'object' || Array.isArray(mapa)) return 'Resposta vazia ou inválida ao carregar o mapa.';
+        if (mapa._ERRO_CRITICO || mapa.__erroAgendaTP) return String(mapa._ERRO_CRITICO || mapa.__erroAgendaTP);
+        if (!mapa.__agendaTPCompleta) return 'O cache do mapa está incompleto ou em formato antigo. Atualize o cache do mapa.';
+        if (!mapa.__forecastTP?.conferido) return 'Não foi possível conferir o Forecast do mapa.' +
+            (mapa.__forecastTP?.erro ? ' ' + mapa.__forecastTP.erro : ' Atualize o cache do mapa.');
+        return '';
+    }
+    window.pgStatusMapaTP = function() {
+        if (window.PG_MAPA_TP_CARGA_CONCLUIDA === false) return { disponivel: false, aviso: 'Os dados do mapa ainda estão carregando. Aguarde a conclusão antes de exportar.' };
+        if (window.PG_MAPA_TP_CARGA_CONCLUIDA !== true) return { disponivel: false, aviso: 'Os dados do mapa ainda não foram carregados. Aguarde o carregamento do portal antes de exportar.' };
+        const erro = window.PG_MAPA_TP_ERRO || erroPayloadMapaTP(window.MAPA_SAIDA_CACHE);
+        return erro ? { disponivel: false, aviso: 'Não foi possível carregar os dados completos do mapa: ' + erro } : { disponivel: true, aviso: '' };
+    };
+    window.pgStatusAgendaTP = function(opcoes = {}) {
+        const statusMapa = window.pgStatusMapaTP();
+        if (!statusMapa.disponivel) return statusMapa;
         const mapa = window.MAPA_SAIDA_CACHE;
-        if (window.PG_MAPA_TP_CARGA_CONCLUIDA === false) return { disponivel: false, aviso: 'Carregando dados do mapa…' };
-        if (!mapa?.__agendaTPCompleta) return { disponivel: false, aviso: 'Agendamento indisponível: falha ao carregar dados do mapa.' };
-        if (!mapa.__forecastTP?.conferido) return { disponivel: false, aviso: 'Agendamento indisponível: não foi possível conferir o Forecast.' };
-        if (cacheAgenda?.falhasQuantidade.size) return { disponivel: false,
+        if (opcoes.validar) {
+            const hoje = typeof dtHojeISO !== 'undefined' ? dtHojeISO : new Date().toISOString().slice(0, 10);
+            const agenda = obterAgenda(hoje);
+            // A exportação valida a base atual, mesmo se a curva ainda não foi processada.
+            agenda.falhasQuantidade.clear();
+            agenda.donos.forEach(linha => window.pgEventosAgendaMapaLinha(linha, hoje, 0, null));
+        }
+        if (cacheAgenda?.mapa === mapa && cacheAgenda?.falhasQuantidade.size) return { disponivel: false,
             aviso: 'Agendamento indisponível: quantidades do PCP e do mapa não conciliam. Atualize os caches.' };
         return { disponivel: true, aviso: '' };
     };
@@ -394,30 +414,40 @@
     window.pgCarregarMapaTPCache = function() {
         if (!mapaPromise) {
             window.PG_MAPA_TP_CARGA_CONCLUIDA = false;
-            mapaPromise = new Promise((resolve, reject) => {
-                google.script.run.withSuccessHandler(valor => {
-                    window.MAPA_SAIDA_CACHE = valor || {};
-                    window.PG_MAPA_TP_CARGA_CONCLUIDA = true;
-                    resolve(valor);
-                }).withFailureHandler(reject).getDadosMapaSaida_Cache();
-            }).catch(erro => {
+            window.PG_MAPA_TP_ERRO = '';
+            mapaPromise = (async function() {
+                let ultimoErro;
+                for (let tentativa = 0; tentativa < 2; tentativa++) {
+                    try {
+                        let valor = await new Promise((resolve, reject) => {
+                            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getDadosMapaSaida_Cache();
+                        });
+                        if (typeof valor === 'string') valor = JSON.parse(valor);
+                        const erro = erroPayloadMapaTP(valor);
+                        if (erro) throw new Error(erro);
+                        window.MAPA_SAIDA_CACHE = valor;
+                        window.PG_MAPA_TP_CARGA_CONCLUIDA = true;
+                        window.PG_MAPA_TP_ERRO = '';
+                        return valor;
+                    } catch (erro) { ultimoErro = erro; }
+                }
+                throw ultimoErro;
+            })().catch(erro => {
                 window.PG_MAPA_TP_CARGA_CONCLUIDA = true;
-                window.MAPA_SAIDA_CACHE = window.MAPA_SAIDA_CACHE || {};
-                window.MAPA_SAIDA_CACHE.__erroAgendaTP = erro?.message || String(erro);
-                window.pgAtualizarDatasTPDoMapa?.();
-                mapaPromise = null; throw erro;
+                window.PG_MAPA_TP_ERRO = erro?.message || String(erro);
+                mapaPromise = null;
+                try { window.pgAtualizarDatasTPDoMapa?.(); }
+                catch (erroTela) { console.warn('[mapa TP] Falha ao atualizar a tela após erro de carga:', erroTela); }
+                throw erro;
             });
         }
         return mapaPromise;
     };
-    window.pgTPExportacaoPronta = function() {
-        if (window.PG_MAPA_TP_CARGA_CONCLUIDA === false) {
-            window.alert('Os dados do mapa ainda estao carregando. Aguarde a conclusao e repita a exportacao.');
-            return false;
-        }
-        if (window.PG_MAPA_TP_CARGA_CONCLUIDA === true &&
-            !window.pgStatusAgendaTP().disponivel) {
-            window.alert('Os dados do mapa nao puderam ser carregados. Recarregue o portal antes de exportar.');
+    // Uma divergência de agendamento não invalida a previsão nem as parcelas realizadas.
+    window.pgTPExportacaoPronta = function(opcoes = {}) {
+        const status = opcoes.agenda ? window.pgStatusAgendaTP({validar:true}) : window.pgStatusMapaTP();
+        if (!status.disponivel) {
+            window.alert(status.aviso);
             return false;
         }
         return true;
@@ -480,8 +510,8 @@
         const agenda = obterAgenda(hoje);
         Object.values(porData).forEach(d => { d.diferenca = d.depois - d.antes; });
         const resultado = { cargaConcluida: window.PG_MAPA_TP_CARGA_CONCLUIDA === true,
-            parcelasDisponiveis: agenda.disponivel, avisoAgendado: window.pgStatusAgendaTP().aviso,
-            erroCargaParcelas: window.MAPA_SAIDA_CACHE?.__erroAgendaTP || window.MAPA_SAIDA_CACHE?.__forecastTP?.erro || '',
+            parcelasDisponiveis: window.pgStatusMapaTP().disponivel && agenda.disponivel, avisoAgendado: window.pgStatusAgendaTP().aviso,
+            erroCargaParcelas: window.PG_MAPA_TP_ERRO || window.MAPA_SAIDA_CACHE?.__erroAgendaTP || window.MAPA_SAIDA_CACHE?.__forecastTP?.erro || '',
             cacheParcelasGeradoEm: window.MAPA_SAIDA_CACHE?.__agendaTPGeradoEm || '',
             motivos: Object.values(motivos), totais, meses: Object.values(meses),
             criterioComparacao: 'antes/depois conferem TIRAGEM COLETADA do PCP; volumesPorMes separa solicitado, agendado e realizado por AT/AU.',
@@ -501,8 +531,8 @@
     };
     window.pgAtualizarDatasTPDoMapa = function() {
         const mapa = window.MAPA_SAIDA_CACHE;
-        if (!mapa || (!mapa.__erroAgendaTP && !Object.values(mapa).some(lista => Array.isArray(lista) &&
-            lista.some(evento => [1, 2].includes(evento?.eventoTPVersao))))) return false;
+        if (!window.PG_MAPA_TP_ERRO && (!mapa || (!mapa.__erroAgendaTP && !Object.values(mapa).some(lista => Array.isArray(lista) &&
+            lista.some(evento => [1, 2].includes(evento?.eventoTPVersao)))))) return false;
         window.pgCacheResumoColeta = null;
         window.pgAbasRenderizadas?.clear();
         if (!window.pgCarregamentoInicial && window.dadosGlobais?.length &&

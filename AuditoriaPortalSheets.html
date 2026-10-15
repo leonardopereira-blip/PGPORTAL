@@ -170,10 +170,7 @@
         if (window.pgCarregamentoInicial || !window.dadosGlobais?.length) {
             alert('Aguarde o carregamento completo dos dados do portal.'); return;
         }
-        if (!window.pgTPExportacaoPronta() || !window.pgStatusAgendaTP().disponivel) {
-            if (!window.pgStatusAgendaTP().disponivel) alert(window.pgStatusAgendaTP().aviso);
-            return;
-        }
+        if (!window.pgTPExportacaoPronta({agenda:true})) return;
         if (botao.disabled) return;
         const rotulo = botao.textContent;
         botao.disabled = true; botao.textContent = 'Gerando XLSX…';

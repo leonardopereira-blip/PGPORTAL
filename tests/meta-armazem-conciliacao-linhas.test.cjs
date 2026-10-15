@@ -34,7 +34,8 @@ function portal(rows, {cache = {}, today = '2026-10-20', sla = 0} = {}) {
     click(){downloads.push({name:this.download,blob:blobs.get(this.href),href:this.href});},
     addEventListener(){}, setAttribute(){}, getAttribute(){return null;},
     querySelector(){return null;}, querySelectorAll(){return [];}});
-  const w = {dadosGlobais:rows, MAPA_SAIDA_CACHE:cache,
+  const w = {dadosGlobais:rows, MAPA_SAIDA_CACHE:{__agendaTPCompleta:true,__forecastTP:{conferido:true},...cache},
+    PG_MAPA_TP_CARGA_CONCLUIDA:true,
     PG_MATRIZ_SLA:[['FORNECEDOR','CD JDI','CD RP'],['FORMA CERTA',sla,sla],['HR',sla,sla]],
     console:{info(){}, warn(){}, error(){}}, arredondar:v=>Math.round(Number(v)||0), formatarBR:String,
     setTimeout(){}, clearTimeout(){}, setInterval(){}, clearInterval(){}, performance:{now:()=>0},
