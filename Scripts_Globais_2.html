@@ -4604,12 +4604,20 @@ let tRef = document.getElementById('filtroReferencia').value;
                 if (dataFoiPreenchida(l, f)) {
                     mFase[f.id].tp += tFaseReal; mGrid[cv][f.id].tp += tFaseReal; rankG[g].fases[f.id].tp += tFaseReal; 
                     if(f.id === fSelecionada) mGraf[g].tp += tFaseReal;
-                    if(foiEntregueNoPrazo(l, f, tRef)) { mFase[f.id].tn += tFaseReal; mGrid[cv][f.id].tn += tFaseReal; rankG[g].fases[f.id].tn += tFaseReal; if(f.id === fSelecionada) mGraf[g].tn += tFaseReal; } 
-                    // Atraso ponderado pela tiragem, com os mesmos prazos do aging desta visão.
+                    // Prazo e realização únicos para os cards de eficiência e seu aging.
+                    // Não altera os cálculos próprios do Funil ou da Meta Armazém.
                     let cols = getCols(f, tRef);
                     let isoR = window.pgEficienciaAgingDataReal ? window.pgEficienciaAgingDataReal(l, f) :
-                        (extrairDataISO(l[cols.real]) || (cols.realAlt ? extrairDataISO(l[cols.realAlt]) : null));
-                    let isoP = window.pgEficienciaAgingPrazo ? window.pgEficienciaAgingPrazo(l, f, tRef) : extrairDataISO(l[cols.plan]);
+                        (typeof window.pgDataRealFaseFunil === 'function'
+                            ? window.pgDataRealFaseFunil(l, f)
+                            : (extrairDataISO(l[cols.real]) || (cols.realAlt ? extrairDataISO(l[cols.realAlt]) : null)));
+                    let isoP = window.pgEficienciaAgingPrazo ? window.pgEficienciaAgingPrazo(l, f, tRef) :
+                        pgPrazoWIPAtual(l, f, tRef);
+                    if (isoR && isoR <= dtHojeISO && isoP && calcDiffDiasISO(isoP, isoR) <= 0) {
+                        mFase[f.id].tn += tFaseReal; mGrid[cv][f.id].tn += tFaseReal;
+                        rankG[g].fases[f.id].tn += tFaseReal;
+                        if(f.id === fSelecionada) mGraf[g].tn += tFaseReal;
+                    }
                     if(isoR && isoR <= dtHojeISO && isoP) {
                         let dif = calcDiffDiasISO(isoP, isoR), peso = Math.min(tBase, Math.max(0, tFaseReal));
                         if(dif > 0 && peso > 0) { mFase[f.id].atrD += dif * peso; mFase[f.id].atrC += peso; }
