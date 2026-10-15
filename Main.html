@@ -592,7 +592,11 @@ window.exportarSkusFiltradosSheets = function() {
                         if (typeof window.processarReportExecutiva === 'function') {
                             window.processarReportExecutiva();
                         }
-                        if (typeof window.processarMetaArmazem === 'function') {
+                        // A matriz de SLA atualiza a Meta Armazém apenas quando a tela
+                        // está visível. Fora dela, o motor da aba renderiza na abertura
+                        // com as fontes atuais, evitando um cálculo oculto duplicado.
+                        if (typeof window.processarMetaArmazem === 'function' &&
+                            !document.getElementById('abaMetaArmazem')?.classList.contains('hidden')) {
                             window.processarMetaArmazem();
                         }
                         if (typeof window.processarEntregasCD === 'function' &&
