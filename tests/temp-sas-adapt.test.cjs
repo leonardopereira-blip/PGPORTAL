@@ -166,6 +166,31 @@ test('produzido exige BP final válido até hoje; recebimento, coleta e acabamen
   assert.ok(Array.from(semFinal.athosPorSku).every(x => x.producaoApontada === false));
 });
 
+test('saída original ATHOS para CDs comprova finalização sem BP, sem duplicar mapa ou compensar outro CD', () => {
+  const pcp = [pLinha()];
+  const athos = [
+    aLinha({ ID: 'JDI', 'CD DESTINO': 'JUNDIAÍ - SP', 'TIRAGEM A ENTREGAR (total por CD)': 60 }),
+    aLinha({ ID: 'FOR', 'CD DESTINO': 'ITAITINGA - CE', 'TIRAGEM A ENTREGAR (total por CD)': 40 })
+  ];
+  const saidas = [
+    { sku: 'SKU-1', destino: 'CD JDI', codigoMapa: 'MP-1', coletado: 35 },
+    { sku: 'SKU-1', destino: 'JUNDIAÍ - SP', codigoMapa: 'MP-1', coletado: 35 },
+    { sku: 'SKU-1', destino: 'CD JDI', codigoMapa: 'MP-3', coletado: 8 },
+    { sku: 'SKU-1', destino: 'FORTALEZA', codigoMapa: 'MP-2', coletado: 20 },
+    { sku: 'SKU-2', destino: 'JUNDIAÍ - SP', codigoMapa: 'MP-4', coletado: 100 }
+  ];
+  const r = contexto.pgTempSasAdaptResumo_(tabela(pHeader, pcp), tabela(aHeader, athos), hoje, saidas);
+  assert.equal(r.produzidoAthos, 63);
+  assert.equal(r.producaoApontada, true);
+  assert.deepEqual(Array.from(r.linhasAthos, x => x.saidaMapa), [43, 20]);
+  assert.deepEqual(Array.from(r.linhasAthos, x => x.produzido), [43, 20]);
+  assert.equal(r.linhasAthos[0].statusFinalizacao, 'Saída Athos para CD confirmada');
+  // BP já finalizado e Mapa de Saída não são somados na mesma linha.
+  athos[0]['Formação de kit/Encaixotamento Final Real'] = '15/10/2026';
+  const comBP = contexto.pgTempSasAdaptResumo_(tabela(pHeader, pcp), tabela(aHeader, athos), hoje, saidas);
+  assert.equal(comBP.produzidoAthos, 80);
+});
+
 test('colunas de total e finalização são obrigatórias e não viram números silenciosamente errados', () => {
   const { pcp, athos } = exemplo();
   const p = tabela(pHeader, pcp), a = tabela(aHeader, athos);
@@ -177,7 +202,7 @@ test('colunas de total e finalização são obrigatórias e não viram números 
   assert.throws(() => contexto.pgTempSasAdaptResumo_(tabela(pHeader, pcp), a, 'data inválida'), /data|hoje/i);
 });
 
-test('endpoint lê só os dois PCPs pelos cabeçalhos atuais e mantém as linhas físicas com vazios', () => {
+test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos com vazios', () => {
   const p = tabela(['COLUNA EXTRA', ...pHeader].reverse(), [
     pLinha({ ID: 'PCP-LINHA-3', TIRAGEM: 999, 'TIRAGEM COLETADA': 25 }),
     pLinha({ ID: 'PCP-LINHA-4', SKU: 'SKU-2', 'TIRAGEM TOTAL': 50, 'TIRAGEM COLETADA': 10 })
@@ -190,7 +215,8 @@ test('endpoint lê só os dois PCPs pelos cabeçalhos atuais e mantém as linhas
       'Tiragem recebida (Total SKU)': 20 })
   ]);
   a.splice(2, 0, []);
-  const sheets = { PCP: p, PCP_ACABADORAS: a };
+  const mapa = [Array.from({length: 50}, (_, i) => 'COLUNA ' + i)];
+  const sheets = { PCP: p, PCP_ACABADORAS: a, 'MAPA DE SAÍDA': mapa };
   const sourceRequests = [], headers = [], batches = [];
   const FixedDate = class extends Date {
     constructor(...args) { super(...(args.length ? args : ['2026-10-15T15:00:00Z'])); }
@@ -217,10 +243,11 @@ test('endpoint lê só os dois PCPs pelos cabeçalhos atuais e mantém as linhas
         assert.equal(options.valueRenderOption, 'UNFORMATTED_VALUE');
         batches.push(Array.from(options.ranges));
         return { valueRanges: options.ranges.map(range => {
-          const match = /^'([^']+)'!([A-Z]+)1:\2(\d+)$/.exec(range);
+          const match = /^'([^']+)'!([A-Z]+)([12]):\2(\d+)$/.exec(range);
           assert.ok(match, range);
           const column = Array.from(match[2]).reduce((n, char) => n * 26 + char.charCodeAt(0) - 64, 0) - 1;
-          const values = sheets[match[1]].map(row => row[column] == null || row[column] === '' ? [] : [row[column]]);
+          const values = sheets[match[1]].slice(Number(match[3]) - 1)
+            .map(row => row[column] == null || row[column] === '' ? [] : [row[column]]);
           while (values.length && !values.at(-1).length) values.pop();
           return { values };
         }) };
@@ -229,11 +256,12 @@ test('endpoint lê só os dois PCPs pelos cabeçalhos atuais e mantém as linhas
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'TempSasAdapt.js'), 'utf8'), api);
   const r = api.getTempSasAdapt();
-  assert.deepEqual(sourceRequests, [['PCP'], ['PCP_ACABADORAS']]);
+  assert.deepEqual(sourceRequests, [['PCP'], ['PCP_ACABADORAS'], ['MAPA DE SAÍDA','MAPA DE SAIDA','MAPA DE SAIDA ']]);
   assert.deepEqual(headers, ['PCP', 'PCP_ACABADORAS']);
-  assert.equal(batches.length, 2);
+  assert.equal(batches.length, 3);
   assert.equal(batches[0].length, pHeader.length);
   assert.equal(batches[1].length, aHeader.length);
+  assert.equal(batches[2].length, 8);
   assert.equal(r.pcpTotal, 150);
   assert.equal(r.saiuGraficas, 35);
   assert.equal(r.totalAthos, 110);
@@ -294,7 +322,7 @@ test('visão exibe os três indicadores e detalhe sem as explicações de bases 
   assert.doesNotMatch(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-1/);
   const missing = frontHarness(resumo(pcp, athos.slice(1)));
   missing.context.window.pgCarregarTempSasAdapt(true);
-  assert.match(missing.elements.get('pgTempProduzidoPct').textContent, /Sem apontamento/i);
+  assert.equal(missing.elements.get('pgTempProduzidoPct').textContent, '—');
 });
 
 test('CSV auditável preserva quantidades negativas e neutraliza fórmulas em campos de texto', () => {
