@@ -466,6 +466,16 @@
     return {avaliacaoSim:avaliacaoSim,alvo:alvo,posiPropria:posiPropria,dataAcordada:dataAcordada,
       elegivel:elegivel,metaAplicada:cenario==='com'&&elegivel?dataAcordada:alvo};
   }
+  // Mesmo cálculo da Meta Armazém, inclusive exceções e cenário Posi.
+  window.pgMAMetaAplicadaDaLinha = function(l) {
+    return prazoDaLinha(l,estado.cenario).metaAplicada;
+  };
+  // A união das datas dos dois cenários mantém as opções estáveis.
+  window.pgMAMetasPossiveisDaLinha = function(l) {
+    var sem=prazoDaLinha(l,'sem').metaAplicada;
+    var com=prazoDaLinha(l,'com').metaAplicada;
+    return sem===com?[sem]:[sem,com];
+  };
   function dadosBase(opcoes) {
     var cenario=opcoes&&(opcoes.cenario==='com'||opcoes.cenario==='sem')?opcoes.cenario:estado.cenario;
     var hojeEventos=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toLocaleDateString('en-CA');
@@ -1468,7 +1478,13 @@
     });
     return Object.values(por).sort(function(a,b){return a.grupo.localeCompare(b.grupo)||a.nome.localeCompare(b.nome,'pt-BR',{numeric:true});});
   }
-  window.pgMACenario=function(c){if(c!=='com'&&c!=='sem')return;estado.cenario=c;window.processarMetaArmazem();};
+  window.pgMACenario=function(c){
+    if(c!=='com'&&c!=='sem')return;
+    estado.cenario=c;
+    // Reaplica o filtro geral quando o prazo Posi muda de cenário.
+    if(window.filtrosGeraisIniciados&&typeof window.aplicarFiltros==='function')window.aplicarFiltros();
+    else window.processarMetaArmazem();
+  };
   window.processarMetaArmazem=function(){
     var aviso=document.getElementById('maAviso'),base;
     if(!aviso)return;

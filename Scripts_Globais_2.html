@@ -771,6 +771,9 @@ window.pgAnexarDadosDashboard = function(fatia) {
     window.DADOS_PCP_CACHE = juntos;
 
     // Guarda o que estava desmarcado para reconstruir os menus sem perder a selecao.
+    const metasAnteriores = window.listasMultiProducao?.['Meta Aplicada'] || new Set();
+    const metasSelecionadas = new Set(Array.from(document.querySelectorAll('.chk-geral-MetaAplicada:checked')).map(cb => cb.value));
+    const metasRestritas = !!window.filtrosGeraisIniciados && metasSelecionadas.size !== metasAnteriores.size;
     const desmarcados = {};
     if (window.filtrosGeraisIniciados) {
         Object.keys(window.listasMultiProducao || {}).forEach(k => {
@@ -788,6 +791,11 @@ window.pgAnexarDadosDashboard = function(fatia) {
             if (desmarcados[idCat].has(cb.value)) cb.checked = false;
         });
     });
+    if (metasRestritas) {
+        document.querySelectorAll('.chk-geral-MetaAplicada').forEach(cb => {
+            cb.checked = metasSelecionadas.has(cb.value);
+        });
+    }
     if (typeof injetarDatasMapa === 'function') injetarDatasMapa();
     aplicarFiltros();
     return juntos.length;
@@ -804,7 +812,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
     'Gráfica': new Set(), 'Marca': new Set(), 'CD Destino': new Set(),
     'Ciclo': new Set(), 'Envio': new Set(), 'Congelado': new Set(),
     'Cliente personalizado': new Set(), 'Capa personalizada': new Set(),
-     'Avaliação': new Set(['Sim', 'Não'])
+     'Avaliação': new Set(['Sim', 'Não']), 'Meta Aplicada': new Set()
 };
     
     // A Prioridade não está aqui porque ela é "calculada", não puxa do Excel puro
@@ -813,7 +821,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
     'Ciclo': 'CICLO', 'Envio': 'ENVIO', 'Congelado': 'Congelado',
     'Cliente personalizado': 'CLIENTE_PERSONALIZADO',
     'Capa personalizada': 'CAPA_PERSONALIZADA',
-     'Avaliação': 'AVALIACAO'
+     'Avaliação': 'AVALIACAO', 'Meta Aplicada': '__META_ARMAZEM__'
 };
     // O filtro visual distingue CD e Acabadora de KN/Raízes pelo destino original.
     // Roteamento e cálculos continuam usando exclusivamente CD_MAPA na PCP.
@@ -827,6 +835,8 @@ window.pgAnexarDadosDashboard = function(fatia) {
     window.pgValorFiltroProducao = function(l, categoria) {
         // Mesmo fornecedor canonico usado pelos consolidados. O cabecalho bruto
         // GRÁFICA pode colidir com outras colunas na importacao da planilha.
+        if (categoria === 'Meta Aplicada') return typeof window.pgMAMetaAplicadaDaLinha === 'function'
+            ? window.pgMAMetaAplicadaDaLinha(l) : '';
         if (categoria === 'Gráfica') return l.GRAFICA_FINAL || l['GRÁFICA'] || l.GRAFICA || '';
         if (categoria !== 'CD Destino') return l[window.mapCamposProducao[categoria]];
         const fonteAcab = [l?._SOURCE, l?.BASE, l?._base]
@@ -902,6 +912,14 @@ window.pgAnexarDadosDashboard = function(fatia) {
         if(window.dadosGlobais) {
             window.dadosGlobais.forEach(l => {
                 Object.keys(window.mapCamposProducao).forEach(k => {
+                    if (k === 'Meta Aplicada') {
+                        if (typeof window.pgMAMetasPossiveisDaLinha === 'function') {
+                            window.pgMAMetasPossiveisDaLinha(l).forEach(meta => {
+                                if (meta) window.listasMultiProducao[k].add(meta);
+                            });
+                        }
+                        return;
+                    }
                     let val = String(window.pgValorFiltroProducao(l, k) || "").trim();
                     if(!val || val === "undefined" || val === "-") {
                         val = "(Vazio)";
@@ -939,7 +957,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
                             <div class="flex justify-between items-center hover:bg-slate-100 p-1 rounded border border-transparent hover:border-slate-200 group/item transition-colors">
                                 <label class="flex items-start gap-2 text-[11px] cursor-pointer font-bold text-slate-700 flex-1">
                                     <input type="checkbox" value="${val}" class="chk-geral-${idCat} mt-0.5" ${key === 'Envio' && val !== 'V1' ? '' : 'checked'} onchange="window.aplicarFiltros()">
-                                    <span class="whitespace-normal leading-tight">${val}</span>
+                                    <span class="whitespace-normal leading-tight">${key === 'Meta Aplicada' && /^\d{4}-\d{2}-\d{2}$/.test(val) ? val.slice(8,10) + '/' + val.slice(5,7) + '/' + val.slice(0,4) : val}</span>
                                 </label>
                                 <button onclick="window.checkOnlyGeral('${idCat}', '${val}')" class="hidden group-hover/item:block text-[9px] bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-black border border-indigo-200 hover:bg-indigo-600 hover:text-white transition-colors">Único</button>
                             </div>
@@ -1056,6 +1074,7 @@ function aplicarFiltros() {
     const destinoExtra = origem === 'ACABADORA' ? 'CD' : (document.getElementById('pgFiltroDestino')?.value || 'CD');
     const categorias = Object.keys(selFilters);
     const passaCategorias = l => categorias.every(k => {
+        if (k === 'Meta Aplicada' && typeof window.pgMAMetaAplicadaDaLinha !== 'function') return true;
         if (k === 'Prioridade') return selFilters[k].has(window.obterPrioridade(l, tRef));
         let v = String(window.pgValorFiltroProducao(l, k) || '').trim();
         if (!v || v === 'undefined' || v === '-') v = '(Vazio)';
