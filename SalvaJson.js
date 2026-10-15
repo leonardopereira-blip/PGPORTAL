@@ -703,7 +703,7 @@ function gerarPlanilhaGiroFiltrado(dados) {
     // Não aceitar e-mail informado pelo navegador: a identidade precisa
     // vir da sessão autenticada no servidor.
     var solicitante = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
-    if (!solicitante || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(solicitante)) {
+    if (!solicitante || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(solicitante)) {
       throw new Error('Não foi possível identificar o usuário. A exportação não foi criada.');
     }
     var nomeArquivo = "Giro_Filtrado_" + Utilities.formatDate(new Date(), "GMT-3", "dd_MM_yyyy_HHmm");
