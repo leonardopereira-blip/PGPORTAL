@@ -155,7 +155,7 @@ test('todos os processadores de cache usam API, sem localizar abas pelo Spreadsh
 });
 
 test('atualizacao completa continua apos erro e informa falhas ao final', () => {
-  const { ctx } = app({});
+  const { ctx } = app({ Alocacao_Reentradas: [['header']], Chamados: [['header']] });
   const writes = [];
   ctx.atualizarCacheDashboard = () => { throw Error('PCP indisponivel'); };
   for (const name of ['getDadosCockpit', 'getDadosPreProducao', 'getDadosQualidade',
@@ -170,17 +170,49 @@ test('atualizacao completa continua apos erro e informa falhas ao final', () => 
 });
 
 
-test('alocacao e chamados ausentes nao geram erro e substituem caches antigos por listas vazias', () => {
+test('alocacao e chamados ausentes preservam os caches anteriores', () => {
   const { ctx } = app({});
+  const alocacaoAntiga = [{ SKU: 'antigo-alocacao' }];
+  const chamadosAntigos = [{ SKU: 'antigo-chamados' }];
+  const gravados = new Map([
+    ['cache_alocacao.json', alocacaoAntiga],
+    ['cache_chamados.json', chamadosAntigos]
+  ]);
+  const escritos = [];
+  ctx.atualizarCacheDashboard = () => ({ atualizado: true });
+  for (const fn of ['getDadosCockpit', 'getDadosPreProducao', 'getDadosQualidade',
+    'getDadosPPM', 'getDadosInspecaoCDs', 'getDadosCaixas', 'getDadosMapaSaida',
+    'buscarHistoricoObsGiro']) ctx[fn] = () => [];
+  ctx.salvarJSONNoDrive = (arquivo, dados) => {
+    escritos.push(arquivo);
+    gravados.set(arquivo, dados);
+    return true;
+  };
+  assert.doesNotThrow(() => ctx.atualizarTodoOCache());
+  assert.equal(gravados.get('cache_alocacao.json'), alocacaoAntiga);
+  assert.equal(gravados.get('cache_chamados.json'), chamadosAntigos);
+  assert.equal(escritos.length, 8);
+  assert.ok(!escritos.includes('cache_alocacao.json'));
+  assert.ok(!escritos.includes('cache_chamados.json'));
+});
+
+test('com abas presentes, atualizarTodoOCache substitui os caches anteriores', () => {
+  const { ctx } = app({
+    Alocacao_Reentradas: [['codigo', 'tipo'], ['SKU-1', 'Principal']],
+    Chamados: [['a', 'b', 'c', 'd', 'e', 'f', 'codigo'], ['', '', '', '', '', '', 'SKU-2']]
+  });
   const gravados = new Map();
   ctx.atualizarCacheDashboard = () => ({ atualizado: true });
   for (const fn of ['getDadosCockpit', 'getDadosPreProducao', 'getDadosQualidade',
     'getDadosPPM', 'getDadosInspecaoCDs', 'getDadosCaixas', 'getDadosMapaSaida',
     'buscarHistoricoObsGiro']) ctx[fn] = () => [];
-  ctx.salvarJSONNoDrive = (arquivo, dados) => { gravados.set(arquivo, dados); return true; };
+  ctx.salvarJSONNoDrive = (arquivo, dados) => {
+    gravados.set(arquivo, dados);
+    return true;
+  };
   assert.doesNotThrow(() => ctx.atualizarTodoOCache());
-  assert.equal(JSON.stringify(gravados.get('cache_alocacao.json')), '[]');
-  assert.equal(JSON.stringify(gravados.get('cache_chamados.json')), '[]');
+  assert.equal(gravados.get('cache_alocacao.json')[0].codigo, 'SKU-1');
+  assert.equal(gravados.get('cache_chamados.json')[0].codigo, 'SKU-2');
   assert.equal(gravados.size, 10);
 });
 
