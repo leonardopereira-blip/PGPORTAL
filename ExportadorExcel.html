@@ -69,12 +69,18 @@
   var VOLUMES = new Set(['Tiragem total', 'Tiragem coletada', 'Dentro da meta', 'Fora da meta', 'Sem previsão', 'Tiragem por DU',
     'Tiragem', 'Tiragem Vencida', 'A Vencer', 'Tiragem Coletada', 'Planejado até hoje', 'Planejado futuro',
     'Coletado até hoje', 'Backlog portal (bruto)', 'Saldo vencido por DT Vencido', 'Sem data', 'Mapa agendado',
-    'Base', 'Planejado', 'Coletado', 'Forecast', 'Backlog líquido', 'Futuro', 'Valor']);
+    'Base', 'Planejado', 'Coletado', 'Forecast', 'Backlog líquido', 'Futuro', 'Valor',
+    'Entregue Geral','Entregue armazém','Entregue dentro da meta','Entregue fora da meta',
+    'Diferença Geral - Armazém','Planejado dentro da meta','Saldo para aderência','Tiragem coletada bruta',
+    'Coletado TP','Coletado TP bruto','Excedente de coleta','Excedente de entrega','Saldo a coletar']);
   var INTEIROS = new Set(['SLA (dias corridos)', 'DU totais', 'DU dentro da meta', 'DU fora da meta']);
   function tipo(nome) {
-    return DATAS.has(nome) ? 3 : VOLUMES.has(nome) ? 4 : nome === '% dentro da meta' ? 5 : INTEIROS.has(nome) ? 6 : 2;
+    return DATAS.has(nome) ? 3 : VOLUMES.has(nome) ? 4 :
+      ['% dentro da meta','% coletado TP / tiragem total','Aderência Realizado / Planejado'].includes(nome) ? 5 : INTEIROS.has(nome) ? 6 : 2;
   }
   function largura(nome) {
+    if (/Composição do agrupamento|Movimentos de (Entrega|Coleta) TP/.test(nome)) return 80;
+    if (/Linhas de origem|Diagnósticos de conciliação|Regra de conciliação|Parcelas de (Entrega|Coleta) TP/.test(nome)) return 48;
     if (nome === 'Descrição' || nome === 'Motivo / observação') return 48;
     if (nome === 'Kit' || nome === 'SKU') return 20;
     if (DATAS.has(nome)) return 15;

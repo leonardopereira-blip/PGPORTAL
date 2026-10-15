@@ -166,7 +166,7 @@
   <div id="maKPIs" class="grid grid-cols-2 xl:grid-cols-4 gap-3"></div>
   <div class="ma-card p-5 overflow-hidden">
     <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
-      <div><h3 id="maMatrizTitulo" class="font-black text-slate-800 text-sm">Matriz · Marca × Séries</h3>
+      <div><h3 id="maMatrizTitulo" class="font-black text-slate-800 text-sm">Previsão Armazém</h3>
         <p class="text-[10px] text-slate-500 mt-1">Marcas nas linhas; TOTAL GERAL primeiro. Arraste as séries prioritárias para mudar a ordem. Outros pode ser expandido; VARIOS permanece por último.</p></div>
       <button type="button" id="maScreenshot" onclick="window.pgMACapturarMatriz()" class="shrink-0 rounded-xl px-4 py-3 text-xs font-black text-white shadow-sm" title="Captura a tabela inteira em PNG, inclusive o conteúdo fora da rolagem">📸 Capturar tabela completa (PNG)</button>
     </div>
@@ -179,10 +179,10 @@
   <div class="ma-card p-5 overflow-hidden">
     <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
       <div>
-        <h3 id="maMatrizRealizadoTitulo" class="font-black text-slate-800 text-sm">Realizado</h3>
+        <h3 id="maMatrizRealizadoTitulo" class="font-black text-slate-800 text-sm">Entregas</h3>
         <p class="text-[10px] text-slate-500 mt-1">Aderência: Entrega TP realizada dentro da meta aplicável ÷ volume planejado dentro da mesma meta. Usa os filtros e a ordenação do quadro acima; saldo ainda não entregue permanece pendente.</p>
       </div>
-      <button type="button" class="ma-pill shrink-0" onclick="window.pgMACapturarMatriz('realizado')" title="Captura a matriz de Realizado completa, incluindo colunas fora da rolagem">Capturar Realizado (PNG)</button>
+      <button type="button" class="ma-pill shrink-0" onclick="window.pgMACapturarMatriz('realizado')" title="Captura a matriz de entregas completa, incluindo colunas fora da rolagem">Capturar Entregas (PNG)</button>
     </div>
     <div id="maMatrizRealizado" class="overflow-x-auto max-w-full" aria-label="Matriz de realizado versus planejado na meta, com rolagem horizontal"></div>
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4 border-t border-slate-200 pt-4">
@@ -191,6 +191,24 @@
       <div class="flex flex-wrap gap-2">
         <button type="button" class="ma-pill" onclick="window.pgMAExportarAuditoriaRealizado(this)">Baixar Excel Realizado (.xlsx)</button>
         <button type="button" class="ma-pill" onclick="window.pgMABaixarAuditoriaRealizadoCSV()">Baixar CSV Realizado</button>
+      </div>
+    </div>
+  </div>
+  <div class="ma-card p-5 overflow-hidden">
+    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
+      <div>
+        <h3 id="maMatrizColetasTitulo" class="font-black text-slate-800 text-sm">Coletas</h3>
+        <p class="text-[10px] text-slate-500 mt-1">Coleta TP realizada até hoje ÷ tiragem total CD. Segue os mesmos itens, filtros e ordenação dos quadros acima. Excedentes ficam identificados na base auditável.</p>
+      </div>
+      <button type="button" class="ma-pill shrink-0" onclick="window.pgMACapturarMatriz('coletas')" title="Captura a matriz de coletas completa, incluindo colunas fora da rolagem">Capturar Coletas (PNG)</button>
+    </div>
+    <div id="maMatrizColetas" class="overflow-x-auto max-w-full" aria-label="Matriz de coleta realizada sobre tiragem total CD, com rolagem horizontal"></div>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4 border-t border-slate-200 pt-4">
+      <div><h4 class="text-xs font-black text-slate-800">Base auditável · Coletas</h4>
+        <p class="text-[10px] text-slate-500 mt-1">Previsão, entrega e coleta na mesma linha, com parcelas, saldo, excedentes e linhas de origem.</p></div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="ma-pill" onclick="window.pgMAExportarAuditoriaColetas(this)">Baixar Excel Coletas (.xlsx)</button>
+        <button type="button" class="ma-pill" onclick="window.pgMABaixarAuditoriaColetasCSV()">Baixar CSV Coletas</button>
       </div>
     </div>
   </div>
@@ -341,6 +359,7 @@
     if(seriado)return seriado[1]+'ª SERIE';
     return s;
   }
+  function serieDaLinha(l){return serie(l.serie_corrigida||l['SÉRIE']||l.SERIE);}
   function data(v) {
     if (!v) return '';
     if (typeof extrairDataISO === 'function') return extrairDataISO(v) || '';
@@ -411,7 +430,11 @@
   }
   function posiRegra(l) {
     var marca=normal(l.MARCA_FINAL || l.UNIDADE || l.MARCA);
-    var segmento=normal(l.SEGMENTO), s=serie(l['SÉRIE'] || l.SERIE), tipo=normal(l.TIPO);
+    if(l._PG_MA&&l._PG_MA.agrupado){
+      var regrasGrupo=l._PG_MA.linhas.flatMap(function(r){return posiRegra(r)||[];});
+      return regrasGrupo.length?regrasGrupo:null;
+    }
+    var segmento=normal(l.SEGMENTO), s=serieDaLinha(l), tipo=normal(l.TIPO);
     var grafica=normal(l.GRAFICA_FINAL || l['GRÁFICA'] || l.GRAFICA);
     if (grafica.indexOf('POSIGRAF')<0) return null;
     var matches=REGRAS.filter(function(r){
@@ -431,12 +454,24 @@
     }
     return rateioDiasUteis(inicio,fim,meta);
   }
+  function prazoDaLinha(l,cenario){
+    var marca=normal(l.MARCA_FINAL||l.UNIDADE||l.MARCA),grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA);
+    var avaliacaoSim=normal(l.AVALIACAO||l.Avaliacao)==='SIM';
+    var alvo=avaliacaoSim?META_AVALIACAO:metaOriginal(marca),cd=normal(l.CD_FINAL||l['CD DESTINO']);
+    if(!avaliacaoSim&&alvo===META&&grafica==='LEOGRAF'&&normal(l.UNIDADE)==='EI')alvo=META_LEOGRAF_EI;
+    var posiPropria=grafica==='POSIGRAF'&&cd==='POSIGRAF',regras=posiPropria?posiRegra(l):null;
+    var dataAcordada=(regras||[]).reduce(function(ultima,r){return r.datas.reduce(function(a,d){return d>a?d:a;},ultima);},'');
+    var elegivel=!avaliacaoSim&&!!regras&&dataAcordada>alvo;
+    return {avaliacaoSim:avaliacaoSim,alvo:alvo,posiPropria:posiPropria,dataAcordada:dataAcordada,
+      elegivel:elegivel,metaAplicada:cenario==='com'&&elegivel?dataAcordada:alvo};
+  }
   function dadosBase(opcoes) {
     var cenario=opcoes&&(opcoes.cenario==='com'||opcoes.cenario==='sem')?opcoes.cenario:estado.cenario;
     var hojeEventos=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toLocaleDateString('en-CA');
     var corteEventos=opcoes&&opcoes.corte?data(opcoes.corte):hojeEventos;
     corteEventos=corteEventos&&corteEventos<hojeEventos?corteEventos:hojeEventos;
-    var base=window.pgBaseGeralReportExecutiva||window.dadosGlobais||[];
+    var base=opcoes&&Array.isArray(opcoes.base)?opcoes.base:
+      window.pgBaseGeralReportExecutiva||window.dadosGlobais||[];
     base=base.filter(function(l){return !(window.pgSolicitacaoCancelada&&window.pgSolicitacaoCancelada(l));});
     // Exclusão desta visão pelo destino, sem filtrar a gráfica de origem.
     base=base.filter(function(l){
@@ -450,23 +485,20 @@
       console.warn('[META ARMAZEM] Regra canônica de CD indisponível.');return [];
     }
     base=window.pgUnirTotalSemDuplicidade(base);
+    if(typeof window.pgMAPrepararLinhas==='function')base=window.pgMAPrepararLinhas(base,
+      opcoes&&Array.isArray(opcoes.base)?opcoes.base:window.dadosGlobais||base,corteEventos);
     return base.map(function(l){
       var total=volume(l.TIRAGEM),marca=normal(l.MARCA_FINAL||l.UNIDADE||l.MARCA);
       if(!total||!marca)return null;
       var grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA)||'NÃO INFORMADA';
-      var s=serie(l['SÉRIE']||l.SERIE);
+      var s=serieDaLinha(l),conciliacao=l._PG_MA;
       var campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
-      var avaliacaoSim=normal(l.AVALIACAO||l.Avaliacao)==='SIM';
-      var alvo=avaliacaoSim?META_AVALIACAO:metaOriginal(marca),cd=normal(l.CD_FINAL||l['CD DESTINO']);
-      // Exceção: Leograf + unidade EI, somente onde a meta padrão seria 15/10.
-      if(!avaliacaoSim&&alvo===META&&grafica==='LEOGRAF'&&normal(l.UNIDADE)==='EI')alvo=META_LEOGRAF_EI;
-      var posiPropria=grafica==='POSIGRAF'&&cd==='POSIGRAF';
-      var regras=posiPropria?posiRegra(l):null;
-      var dataAcordada=(regras||[]).reduce(function(ultima,r){
-        return r.datas.reduce(function(a,d){return d>a?d:a;},ultima);
-      },'');
-      var elegivel=!avaliacaoSim&&!!regras&&dataAcordada>alvo;
-      var metaAplicada=cenario==='com'&&elegivel?dataAcordada:alvo;
+      var prazosOrigem=(conciliacao?conciliacao.linhas:[l]).map(function(r){return prazoDaLinha(r,cenario);});
+      var prazo=prazosOrigem[0];
+      if(prazosOrigem.some(function(p){return p.alvo!==prazo.alvo||p.metaAplicada!==prazo.metaAplicada||p.dataAcordada!==prazo.dataAcordada;}))
+        throw new Error('O agrupamento '+String(l.SKU_REAL||l.SKU||'')+' tem metas diferentes entre as linhas de origem. É necessário identificar as parcelas por KIT antes de apurar esse grupo.');
+      var avaliacaoSim=prazo.avaliacaoSim,alvo=prazo.alvo,cd=normal(l.CD_FINAL||l['CD DESTINO']);
+      var posiPropria=prazo.posiPropria,dataAcordada=prazo.dataAcordada,elegivel=prazo.elegivel,metaAplicada=prazo.metaAplicada;
 
       // Meta Armazém:
       // - realizado = parcelas de entrega TP até o corte, cada uma na sua data real;
@@ -494,13 +526,13 @@
       dtPlan=ajustarDomingoPrevisto(dtPlan);
       if(replanValido&&(!dtPlan||!inicioAusente&&!inicioPlan))motivoReplan='Rota sem SLA válido na Matriz_SLA.';
 
-      var coletadaBruta=Math.min(total,volume(campo('TIRAGEM COLETADA')));
-      var volumesTP=typeof window.pgVolumesColetaUnificadosV37==='function'?
+      var coletadaBruta=conciliacao?conciliacao.coletadaBruta:volume(campo('TIRAGEM COLETADA'));
+      var volumesTP=!conciliacao&&typeof window.pgVolumesColetaUnificadosV37==='function'?
         window.pgVolumesColetaUnificadosV37(l,corteEventos):null;
-      var parcelasTP=volumesTP&&Array.isArray(volumesTP.eventosEntregaTP)?volumesTP.eventosEntregaTP:[];
-      // Mesmo realizado de Entrega TP do Funil, limitado apenas à tiragem da linha.
-      // Não usar TIRAGEM COLETADA como um segundo teto nem compensar atrasos entre linhas.
-      var limiteTP=Math.min(total,volume(volumesTP&&volumesTP.entrega));
+      var parcelasTP=conciliacao?conciliacao.eventosEntrega:volumesTP&&Array.isArray(volumesTP.eventosEntregaTP)?volumesTP.eventosEntregaTP:[];
+      // Teto do total canônico do agrupamento, após conciliar as parcelas de origem.
+      var entregueBruto=conciliacao?conciliacao.entregueBruto:volume(volumesTP&&volumesTP.entrega);
+      var limiteTP=Math.min(total,entregueBruto);
       var realizado=0,eventosReal=[];
       // Preserva cada data real de entrega para a classificação dentro/fora da meta.
       parcelasTP.map(function(e){return {data:data(e.data),volume:volume(e.volume)};})
@@ -514,6 +546,10 @@
         });
       var realizadoTem=realizado>0;
       var dtEntregaTP=realizadoTem?eventosReal[eventosReal.length-1].data:'';
+      var eventosColeta=conciliacao?conciliacao.eventosColeta:volumesTP&&volumesTP.eventosColetaTP||[];
+      eventosColeta=eventosColeta.filter(function(e){return e.data&&e.data<=corteEventos;});
+      var coletadoBrutoTP=conciliacao?conciliacao.coletadoBruto:volume(volumesTP&&volumesTP.coleta);
+      var coletadoTP=Math.min(total,coletadoBrutoTP);
 
       // Todo volume ainda sem parcela de entrega até o corte permanece no planejamento.
       var pendentePlanejado=Math.max(0,total-realizado);
@@ -569,6 +605,9 @@
         total:total,previsto:previsto,pos:pos,semData:semData,real:real,realTem:realTem,
         realCD:realizado,realCDTem:realizadoTem,dtRealCD:dtEntregaTP,
         realizado:realizado,realizadoTem:realizadoTem,coletadaBruta:coletadaBruta,dtEntregaTP:dtEntregaTP,eventosReal:eventosReal,
+        entregueBruto:entregueBruto,excedenteEntrega:Math.max(0,entregueBruto-total),
+        coletadoTP:coletadoTP,coletadoBrutoTP:coletadoBrutoTP,eventosColeta:eventosColeta,
+        excedenteColeta:Math.max(0,coletadoBrutoTP-total),conciliacao:conciliacao,
         metaArmDate:alvo,
         ate15:ate15,apos15:apos15,excecao:excecao,
         posi:elegivel,alvo:alvo,dtPlan:dtPlan,rateio:rateio,
@@ -616,15 +655,19 @@
       a.combinadoAdicional+=l.combinadoAdicional||0;
       a.real+=l.real;if(l.realTem)a.realTem=true;
       a.realCD+=l.realCD||0;if(l.realCDTem)a.realCDTem=true;
+      a.coletadoTP+=l.coletadoTP||0;a.coletadoBrutoTP+=l.coletadoBrutoTP||0;
+      a.excedenteEntrega+=l.excedenteEntrega||0;a.excedenteColeta+=l.excedenteColeta||0;
       return a;
-    },{total:0,previsto:0,pos:0,semData:0,ate15:0,apos15:0,excecao:0,real:0,realTem:false,realCD:0,realCDTem:false,combinadoAdicional:0});
+    },{total:0,previsto:0,pos:0,semData:0,ate15:0,apos15:0,excecao:0,real:0,realTem:false,realCD:0,realCDTem:false,combinadoAdicional:0,
+      coletadoTP:0,coletadoBrutoTP:0,excedenteEntrega:0,excedenteColeta:0});
   }
   // Os mesmos volumes inteiros alimentam todos os componentes e a auditoria.
   // O arredondamento acontece uma vez por linha, antes de qualquer soma da visão.
   function volumesVisao(items){
     return items.map(function(item){
       var i=Object.assign({},item);
-      ['total','coletadaBruta','realizado','real','previsto','semData','ate15','excecao','combinadoAdicional'].forEach(function(c){
+      ['total','coletadaBruta','realizado','real','previsto','semData','ate15','excecao','combinadoAdicional',
+        'entregueBruto','excedenteEntrega','coletadoTP','coletadoBrutoTP','excedenteColeta'].forEach(function(c){
         i[c]=Math.round(i[c]||0);
       });
       i.pos=i.total-i.previsto-i.semData;
@@ -657,7 +700,27 @@
       (aging?'<span class="ma-kpi-aging" title="Média em dias corridos, ponderada pela tiragem, em relação à meta aplicada de cada item.">'+escapeHTML(aging)+'</span>':'')+'</div></div>';
   }
   function fmtPrazo(iso){return /^\d{4}-\d{2}-\d{2}$/.test(iso)?iso.slice(8)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4):iso;}
-  // Cada registro vem da própria linha que alimenta a visão, sem reagrupar por SKU.
+  function composicaoAuditavel(i,cenario){
+    return JSON.stringify((i.conciliacao?i.conciliacao.linhas:[i.linha]).map(function(l){
+      var campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
+      return {fonte:l._SOURCE||'PCP',linha:l._PG_TP_LINHA||l.ID||l._ROW_ID||'',id:l.ID||'',
+        kit:campo('KIT')||'',tiragem:Math.round(volume(l.TIRAGEM)),tipo:l.TIPO||'',serie:serieDaLinha(l),
+        inicioReplan:data(campo('Coleta/Internalização de estoque inicial (re) plan')),
+        fimReplan:data(campo('Coleta/Internalização de estoque final (re) plan')),
+        baseline:data(campo('COLETA/INTERNALIZAÇÃO FIM BASELINE')),meta:prazoDaLinha(l,cenario).metaAplicada};
+    }));
+  }
+  function movimentosAuditaveis(i,tipo){
+    var eventos=i.conciliacao?i.conciliacao[tipo==='entrega'?'eventosEntregaBrutos':'eventosColetaBrutos']:
+      tipo==='entrega'?i.eventosReal:i.eventosColeta;
+    return JSON.stringify((eventos||[]).map(function(e){return {data:e.data,volume:e.volume,
+      linhaMapa:e.linhaMapa||'',codigoMapa:e.codigoMapa||'',kit:e.kit||'',linhaOrigem:e.ownerId||''};}));
+  }
+  // Cada registro vem da mesma linha conciliada que alimenta os três quadros.
+  function linhasOrigemAuditaveis(i){
+    return i.conciliacao?Array.from(new Set(i.conciliacao.ids.concat(i.conciliacao.owners.map(window.pgMAIdLinhaRealizado)))).join(' | '):
+      String(i.linha._PG_TP_LINHA||i.linha.ID||i.linha._ROW_ID||'');
+  }
   function montarAuditoria(items,cenarioId){
     var cenario=cenarioId==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
     var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio',
@@ -666,7 +729,11 @@
       'Origem do cálculo','SLA (dias corridos)','Entrega início prevista','Entrega fim prevista',
       'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
       'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
-      'Fonte','ID da linha','Chave','Cenário','Tipo'];
+      'Fonte','ID da linha','Chave','Cenário','Tipo',
+      'Entregue Geral','Entregue armazém','Entregue dentro da meta','Entregue fora da meta','Excedente de entrega',
+      'Coletado TP','Coletado TP bruto','Excedente de coleta','Parcelas de Entrega TP (data: quantidade)',
+      'Parcelas de Coleta TP (data: quantidade)','Linhas de origem','Série original','Regra de conciliação',
+      'Composição do agrupamento','Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação'];
     var linhas=items.map(function(i){
       var l=i.linha||{},campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
       var preenchido=function(v){return v!==null&&v!==undefined&&String(v).trim()!=='';};
@@ -698,6 +765,11 @@
         else if(mesmoDia)notas.push('Início e fim planejados no mesmo dia: saldo pendente integral nessa data + SLA, sem rateio.');
       }
       if(l._PG_TOTAL_HIBRIDO)notas.push('Volume da PCP_ACABADORAS: TIRAGEM A ENTREGAR (total por CD).');
+      if(i.conciliacao&&i.conciliacao.agrupado)notas.push(i.conciliacao.regra+'. '+i.conciliacao.linhas.length+' linhas de origem.');
+      if(i.conciliacao&&i.conciliacao.filtroParcial)notas.push('Filtro corresponde a parte do agrupamento: grupo exibido inteiro para preservar o vínculo entre planejamento e movimentos compartilhados.');
+      if(i.conciliacao&&i.conciliacao.agrupado&&i.conciliacao.linhasSemPrevisao)notas.push(i.conciliacao.linhasSemPrevisao+' linhas de origem sem previsão; grupo usa a última data válida disponível.');
+      if(i.conciliacao&&(i.conciliacao.diagnosticos||[]).length)notas.push('Conciliação TP: '+i.conciliacao.diagnosticos.join(' | ')+'.');
+      if(i.excedenteEntrega>0)notas.push('Excedente real identificado sem aumentar o planejamento.');
       return [String(campo('KIT')??''),String(l.SKU_REAL||campo('SKU')||''),
         String(l.DESC_REAL||campo('DESCRIÇÃO')||campo('DESCRICAO')||l.PRODUTO||''),
         i.marca,i.serie,i.grafica,i.cd,String(l.ENVIO||l.Envio||''),
@@ -707,7 +779,16 @@
         i.alvo,i.dataAcordada||'',i.metaAplicada,
         porDU?r.dias:'',porDU?r.antes:'',porDU?r.dias-r.antes:'',porDU&&i.pendentePlanejado?i.pendentePlanejado/r.dias:'',
         regra,situacao,notas.join(' '),String(l._SOURCE||'PCP'),String(l.ID??l._ROW_ID??''),
-        String(l.JOIN_KEY||campo('Chave')||campo('CHAVE')||''),cenario,i.tipo];
+        String(l.JOIN_KEY||campo('Chave')||campo('CHAVE')||''),cenario,i.tipo,
+        i.entregueBruto,i.realizado,i.real,i.realizado-i.real,i.excedenteEntrega,
+        i.coletadoTP,i.coletadoBrutoTP,i.excedenteColeta,
+        (i.eventosReal||[]).map(function(e){return fmtPrazo(e.data)+': '+fmt(e.volume,true);}).join(' | '),
+        (i.eventosColeta||[]).map(function(e){return fmtPrazo(e.data)+': '+fmt(e.volume,true);}).join(' | '),
+        linhasOrigemAuditaveis(i),
+        Array.from(new Set((i.conciliacao?i.conciliacao.linhas:[l]).map(function(r){return r['SÉRIE']||r.SERIE||'';}))).join(' | '),
+        i.conciliacao?i.conciliacao.regra:'Linha de origem',
+        composicaoAuditavel(i,cenarioId),movimentosAuditaveis(i,'entrega'),movimentosAuditaveis(i,'coleta'),
+        i.conciliacao?(i.conciliacao.diagnosticos||[]).join(' | '):''];
     });
     return {nome:'Meta_Armazem_Base_Auditavel',cenario:cenario,cabecalho:cabecalho,linhas:linhas};
   }
@@ -764,7 +845,7 @@
   // Auditoria exclusiva do Realizado. NÃO modifica a estrutura, valores,
   // exportadores ou a auditoria armazenada do quadro Planejado.
   // Entregue Geral = Entrega TP datada no motor canônico do Funil;
-  // Entregue armazém = Entrega TP recebida até o corte, limitada à linha
+  // Entregue armazém = Entrega TP recebida até o corte, limitada ao total conciliado
   // como no quadro Meta Armazém. A entrega DENTRO da meta é outra coluna.
   function montarAuditoriaRealizado(items,cenarioId){
     var cenario=cenarioId==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
@@ -773,6 +854,7 @@
     var funilDisponivel=Array.isArray(funilBase);
     function chave(l){
       if(!l)return '';
+      if(typeof window.pgMAIdLinhaRealizado==='function')return window.pgMAIdLinhaRealizado(l);
       var origem=normal(l._SOURCE||l.BASE||l._base||'PCP');
       var id=l.ID!=null?String(l.ID):'';
       var idLinha=String(l._ROW_ID||'').replace(/:total-todas$/,'');
@@ -787,13 +869,15 @@
       'Diferença Geral - Armazém','Entregue dentro da meta','Entregue fora da meta',
       'Planejado dentro da meta','Saldo para aderência','Aderência Realizado / Planejado',
       'Meta original','Meta aplicada','Prazo combinado Posi','Coleta TP (data)','Entrega TP (data)',
-      'Parcelas de Entrega TP (data: quantidade)','Recorte Funil','Diagnóstico da diferença'];
+      'Parcelas de Entrega TP (data: quantidade)','Recorte Funil','Diagnóstico da diferença',
+      'Coleta fim (re)plan','Entrega fim prevista','Linhas de origem','Série original','Regra de conciliação',
+      'Composição do agrupamento','Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação'];
     var linhas=items.map(function(i){
       var l=i.linha||{},campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
-      var vol=typeof window.pgVolumesColetaUnificadosV37==='function'?
+      var vol=!i.conciliacao&&typeof window.pgVolumesColetaUnificadosV37==='function'?
         window.pgVolumesColetaUnificadosV37(l,corte):null;
       // Mesma Entrega TP do Funil, com suas parcelas e o mesmo corte de data.
-      var geral=vol?Math.max(0,volume(vol.entrega)):0;
+      var geral=i.conciliacao?i.entregueBruto:vol?Math.max(0,volume(vol.entrega)):0;
       // Esse valor é o que já foi efetivamente calculado e exibido na aba.
       var armazem=Math.max(0,volume(i.realizado));
       var dentro=Math.max(0,volume(i.real));
@@ -801,20 +885,25 @@
       var plan=Math.max(0,volume(i.previsto));
       var saldo=Math.max(0,plan-dentro);
       var diferenca=geral-armazem;
-      var naBase=funilDisponivel?chavesFunil.has(chave(l)):null;
-      var coletaData=vol?vol.coletaTP:null, entregaData=vol?vol.entregaTP:null;
+      var naBase=funilDisponivel?(i.conciliacao?i.conciliacao.owners.every(function(r){return chavesFunil.has(chave(r));}):chavesFunil.has(chave(l))):null;
+      var datasOrigem=function(nome){return i.conciliacao?Array.from(new Set(i.conciliacao.owners.map(function(r){return data(r[nome]);}).filter(Boolean))).sort().join(' | '):'';};
+      var coletaData=i.conciliacao?datasOrigem('Coleta_TP'):vol?vol.coletaTP:null;
+      var entregaData=i.conciliacao?datasOrigem('Entrega_TP'):vol?vol.entregaTP:null;
       var motivo=[];
       if(!funilDisponivel)motivo.push('Recorte do Funil ainda não carregado.');
       else if(!naBase)motivo.push('Este registro não está na base operacional do Funil com os filtros ativos.');
-      if(!vol)motivo.push('Motor de Entrega TP do Funil indisponível.');
-      if(vol && volume(vol.entrega)>i.total)
-        motivo.push('Entrega TP excede tiragem da linha; Meta Armazém limita ao total.');
+      if(!vol&&!i.conciliacao)motivo.push('Motor de Entrega TP do Funil indisponível.');
+      if(geral>i.total)
+        motivo.push('Entrega TP excede tiragem total do agrupamento; Meta Armazém limita ao total.');
       if(diferenca!==0){
-        if(!(vol && volume(vol.entrega)>i.total && armazem===i.total))
-          motivo.push('Volumes de Entrega TP diferem entre Funil e Meta Armazém até o corte; conferir parcelas e limite da linha.');
+        if(!(geral>i.total && armazem===i.total))
+          motivo.push('Volumes de Entrega TP diferem entre Funil e Meta Armazém até o corte; conferir parcelas do agrupamento.');
       } else if(!motivo.length)motivo.push('Volumes de Entrega TP conciliados.');
       if(fora>0)motivo.push('Parte da entrega ocorreu após a meta aplicada.');
       if(saldo>0)motivo.push('Há saldo planejado dentro da meta ainda não entregue nesse prazo.');
+      if(i.conciliacao&&i.conciliacao.agrupado)motivo.push(i.conciliacao.regra+'.');
+      if(i.conciliacao&&i.conciliacao.filtroParcial)motivo.push('Filtro corresponde a parte do agrupamento: exibido grupo completo para preservar o vínculo.');
+      if(i.conciliacao&&(i.conciliacao.diagnosticos||[]).length)motivo.push('Conciliação TP: '+i.conciliacao.diagnosticos.join(' | ')+'.');
       var parcelas=(i.eventosReal||[]).map(function(e){return fmtPrazo(e.data)+': '+fmt(e.volume,true);}).join(' | ');
       return [
         String(campo('KIT')??''),String(l.SKU_REAL||campo('SKU')||''),
@@ -826,7 +915,13 @@
         plan>0?dentro/plan:null,
         i.alvo,i.metaAplicada,i.dataAcordada||'',
         coletaData||'',entregaData||i.dtEntregaTP||'',parcelas,
-        funilDisponivel?(naBase?'Sim':'Não'):'Não disponível',motivo.join(' ')
+        funilDisponivel?(naBase?'Sim':'Não'):'Não disponível',motivo.join(' '),
+        i.fimReplanColeta||'',i.dtPlan||'',
+        linhasOrigemAuditaveis(i),
+        Array.from(new Set((i.conciliacao?i.conciliacao.linhas:[l]).map(function(r){return r['SÉRIE']||r.SERIE||'';}))).join(' | '),
+        i.conciliacao?i.conciliacao.regra:'Linha de origem',
+        composicaoAuditavel(i,cenarioId),movimentosAuditaveis(i,'entrega'),movimentosAuditaveis(i,'coleta'),
+        i.conciliacao?(i.conciliacao.diagnosticos||[]).join(' | '):''
       ];
     });
     return {nome:'Meta_Armazem_Realizado_Auditavel',cenario:cenario,
@@ -886,6 +981,67 @@
       window.alert('Não foi possível baixar o Excel do Realizado: '+(e&&e.message||e)+'. Você pode usar CSV.');
     }finally{
       window.pgMAExportandoAuditoriaRealizado=false;
+      if(botao){botao.disabled=false;botao.textContent=anterior;}
+    }
+  };
+  window.pgMAObterAuditoriaColetas=function(){
+    var base=window.pgMAObterAuditoria(),atual=window.pgMAVisaoAtual;
+    var items=atual?atual.itens:[];
+    var corte=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toLocaleDateString('en-CA');
+    return {nome:'Meta_Armazem_Coletas_Auditavel',cenario:base.cenario,
+      cabecalho:base.cabecalho.concat(['Corte','% coletado TP / tiragem total','Saldo a coletar']),
+      linhas:base.linhas.map(function(linha,index){
+        var item=items[index]||{},total=volume(item.total),coletado=volume(item.coletadoTP);
+        return linha.concat([corte,total?coletado/total:null,Math.max(0,total-coletado)]);
+      })};
+  };
+  window.pgMABaixarAuditoriaColetasCSV=function(){
+    var base=window.pgMAObterAuditoriaColetas();
+    if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
+    var csv=function(v,j){
+      var txt=typeof v==='number'?String(v).replace('.',','):String(v??'');
+      if(/^%/.test(base.cabecalho[j])&&typeof v==='number')txt=pct(v,1);
+      if(/Coleta|Entrega|Meta|Prazo|Corte/.test(base.cabecalho[j])&&/^\d{4}-\d{2}-\d{2}$/.test(txt))txt=fmtPrazo(txt);
+      if(typeof v==='string'&&/^[\s]*[=+@-]/.test(txt))txt="'"+txt;
+      return '"'+txt.replace(/"/g,'""')+'"';
+    };
+    var url=URL.createObjectURL(new Blob(['\uFEFF'+[base.cabecalho].concat(base.linhas)
+      .map(function(linha){return linha.map(csv).join(';');}).join('\r\n')],
+      {type:'text/csv;charset=utf-8;'}));
+    var a=document.createElement('a');a.href=url;
+    a.download='Meta_Armazem_Coletas_Auditavel_'+(estado.cenario==='com'?'posi-nao-fere':'posi-fere')+'.csv';
+    a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  };
+  window.pgMAExportarAuditoriaColetas=async function(botao){
+    if(window.pgTPExportacaoPronta&&!window.pgTPExportacaoPronta())return;
+    if(window.pgMAExportandoAuditoriaColetas)return;
+    window.pgMAExportandoAuditoriaColetas=true;
+    var anterior=botao?botao.textContent:'';
+    if(botao){botao.disabled=true;botao.textContent='Gerando base Coletas…';}
+    try{
+      await new Promise(function(resolve){setTimeout(resolve,0);});
+      var base=window.pgMAObterAuditoriaColetas();
+      if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
+      if(typeof window.pgGerarExcelAuditoria!=='function')
+        throw new Error('Atualize a página para carregar o exportador Excel');
+      var arquivo;
+      try{arquivo=window.pgGerarExcelAuditoria(base);}
+      catch(erroExcel){
+        if(typeof window.pgGerarExcelAbas!=='function')throw erroExcel;
+        arquivo=window.pgGerarExcelAbas([{nome:'Coletas',cabecalho:base.cabecalho,linhas:base.linhas}]);
+      }
+      if(!(arquivo instanceof Blob)||!arquivo.size)
+        throw new Error('O gerador de Excel retornou um arquivo vazio.');
+      var url=URL.createObjectURL(arquivo),a=document.createElement('a');
+      a.href=url;
+      a.download='Meta_Armazem_Coletas_Auditavel_'+(estado.cenario==='com'?'posi-nao-fere':'posi-fere')+'.xlsx';
+      a.style.display='none';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},60000);
+    }catch(e){
+      window.alert('Não foi possível baixar o Excel de Coletas: '+(e&&e.message||e)+'. Você pode usar CSV.');
+    }finally{
+      window.pgMAExportandoAuditoriaColetas=false;
       if(botao){botao.disabled=false;botao.textContent=anterior;}
     }
   };
@@ -1027,8 +1183,8 @@
       (planejado>0?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
       '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(realizado,planejado)+'</span></div>';
   }
-  function matrizRealizado(m) {
-    var root=document.getElementById('maMatrizRealizado');
+  function matrizRealizado(m,tipo) {
+    var coletas=tipo==='coletas',root=document.getElementById(coletas?'maMatrizColetas':'maMatrizRealizado');
     if(!root)return;
     if(!m.linhas.length){
       root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';
@@ -1048,10 +1204,26 @@
     var h='<table class="ma-matrix-table"><colgroup><col style="width:118px">'+
       m.colunas.map(function(){return '<col style="width:94px">';}).join('')+
       '</colgroup><thead><tr>'+cabeca+'</tr></thead><tbody>';
+    function detalheColetas(x){
+      return 'Coleta TP realizada até hoje: '+fmt(x.coletadoTP,true)+
+        '\nTiragem total CD: '+fmt(x.total,true)+
+        '\nColeta TP bruta até hoje: '+fmt(x.coletadoBrutoTP,true)+
+        '\nExcedente de coleta: '+fmt(x.excedenteColeta,true)+
+        '\nSaldo a coletar: '+fmt(Math.max(0,x.total-x.coletadoTP),true);
+    }
+    function barraColetas(x){
+      var total=Math.max(0,x.total||0),coletado=Math.max(0,x.coletadoTP||0);
+      var p=total>0?Math.max(0,Math.min(100,100*coletado/total)):0;
+      var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
+      return '<div class="ma-matrix-tile" title="'+escapeHTML(total>0?detalheColetas(x):'Sem volume')+'">'+
+        (total>0?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
+        '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(coletado,total)+'</span></div>';
+    }
     function celula(x,c){
+      var detalhe=coletas?(x.total>0?detalheColetas(x):'Sem volume'):
+        x.previsto>0?detalheRealizadoMeta(x):'Sem volume planejado dentro da meta';
       return '<td class="ma-matrix-cell'+(!c.campo?' ma-matrix-total-col':'')+
-        '" title="'+escapeHTML(x.previsto>0?detalheRealizadoMeta(x):'Sem volume planejado dentro da meta')+'">'+
-        barraMatrizRealizado(x)+'</td>';
+        '" title="'+escapeHTML(detalhe)+'">'+(coletas?barraColetas(x):barraMatrizRealizado(x))+'</td>';
     }
     m.linhas.forEach(function(l){
       h+='<tr><th>'+rotuloMatriz(l.nome,25)+'</th>'+
@@ -1080,6 +1252,7 @@
     var root=document.getElementById('maMatriz'),m=modeloMatriz(items);
     window.pgMAMatrizSnapshot=m;
     matrizRealizado(m);
+    matrizRealizado(m,'coletas');
     var toggle=document.getElementById('maOutrosToggle');
     if(toggle){
       toggle.classList.toggle('hidden',!m.escondidas||m.modo!=='marcaSerie');
@@ -1089,7 +1262,7 @@
     document.querySelectorAll('[data-ma-modo]').forEach(function(btn){
       btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-modo')===estado.matrizModo));
     });
-    document.getElementById('maMatrizTitulo').textContent='Matriz · '+m.nomeModo;
+    document.getElementById('maMatrizTitulo').textContent='Previsão Armazém';
     if(!items.length){root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';return;}
     var cabeca='<th>'+m.rotuloLinha+'</th>'+
       m.colunas.map(function(c){
@@ -1133,9 +1306,11 @@
     try{window.localStorage.setItem('pgMAOrdemPrioridadeV1',JSON.stringify(ordem));}catch(e){}
     var root=document.getElementById('maMatriz'),pos=root?root.scrollLeft:0;
     var rootReal=document.getElementById('maMatrizRealizado'),posReal=rootReal?rootReal.scrollLeft:0;
+    var rootColetas=document.getElementById('maMatrizColetas'),posColetas=rootColetas?rootColetas.scrollLeft:0;
     matriz(window.pgMAUltimosItens||[]);
     if(root)root.scrollLeft=pos;
     if(rootReal)rootReal.scrollLeft=posReal;
+    if(rootColetas)rootColetas.scrollLeft=posColetas;
   };
   function rotuloTipoMaterial(v) {
     return String(v||'').toLowerCase().split('|').map(function(parte){
@@ -1192,7 +1367,7 @@
   // PNG construído do modelo completo: inclui também as linhas e colunas fora do scroll,
   // sem depender de bibliotecas externas e sem modificar dados da matriz.
   window.pgMACapturarMatriz=function(tipo) {
-    var realizado=tipo==='realizado';
+    var realizado=tipo==='realizado',coletas=tipo==='coletas';
     var m=window.pgMAMatrizSnapshot;
     if(!m||!m.linhas.length){window.alert('A matriz ainda não tem dados para capturar.');return;}
     try {
@@ -1205,9 +1380,9 @@
       ctx.scale(dpr,dpr);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
       ctx.fillStyle='#0C2340';ctx.fillRect(0,0,w,top);
       ctx.fillStyle='#fff';ctx.font='bold 17px Poppins, sans-serif';
-      ctx.fillText('META ARMAZÉM · '+(realizado?'REALIZADO · ':'')+m.nomeModo,16,29);
+      ctx.fillText((coletas?'Coletas':realizado?'Entregas':'Previsão Armazém')+' · '+m.nomeModo,16,29);
       ctx.font='11px Poppins, sans-serif';
-      ctx.fillText((realizado?'Entrega TP dentro da meta / planejado dentro da meta':'Real + previsão')+'  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta')+
+      ctx.fillText((coletas?'Coleta TP até hoje / tiragem total CD':realizado?'Entrega TP dentro da meta / planejado dentro da meta':'Real + previsão')+'  |  '+(estado.cenario==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta')+
         '  |  15/10 · SAS Bradesco 26/10 · GEE 12/11 · WAYS 30/11',16,51);
       ctx.fillStyle='#284081';ctx.fillRect(0,top,w,head);
       ctx.fillStyle='#fff';ctx.font='bold 12px Poppins, sans-serif';ctx.fillText(m.rotuloLinha,5,top+27,first-9);
@@ -1221,7 +1396,7 @@
         ctx.fillStyle='#0C2340';ctx.font=(ultimo?'bold ':'')+'12px Poppins, sans-serif';
         ctx.fillText(corta(r.nome,18),5,y+25,first-9);
         r.celulas.forEach(function(c,j){
-          var x=first+j*col,den=realizado?c.previsto:c.total,num=realizado?c.real:c.previsto;
+          var x=first+j*col,den=realizado?c.previsto:c.total,num=coletas?c.coletadoTP:realizado?c.real:c.previsto;
           var p=den?Math.max(0,Math.min(100,100*num/den)):0;
           // Preenchimento da célula inteira, preservando só 3px de respiro entre tiles.
           ctx.fillStyle='#EDF4FB';ctx.fillRect(x+3,y+3,col-6,rowH-6);
@@ -1238,7 +1413,7 @@
       ctx.fillText('Fonte: PCP direto ao CD + PCP_ACABADORAS oficiais · TOTAL ponderado pela tiragem · '+
         (estado.matrizExpandida?'Outros expandido':'Outros agrupado quando aplicável'),10,h-16);
       var a=document.createElement('a');
-      a.download='meta-armazem-matriz-'+(realizado?'realizado-':'')+m.modo+'-'+(estado.cenario==='com'?'posi-nao-fere-meta':'posi-fere-meta')+'.png';
+      a.download='meta-armazem-matriz-'+(coletas?'coletas-':realizado?'realizado-':'')+m.modo+'-'+(estado.cenario==='com'?'posi-nao-fere-meta':'posi-fere-meta')+'.png';
       a.href=canvas.toDataURL('image/png');a.click();
     }catch(e){console.error('[META ARMAZEM] Screenshot:',e);window.alert('Não foi possível capturar a matriz: '+e.message);}
   };
@@ -1282,8 +1457,15 @@
   }
   window.pgMACenario=function(c){if(c!=='com'&&c!=='sem')return;estado.cenario=c;window.processarMetaArmazem();};
   window.processarMetaArmazem=function(){
-    var base=dadosBase(), aviso=document.getElementById('maAviso');
+    var aviso=document.getElementById('maAviso'),base;
     if(!aviso)return;
+    try{base=dadosBase();}catch(erro){
+      window.pgMAVisaoAtual=null;window.pgMAUltimosItens=[];window.pgMAMatrizSnapshot=null;
+      ['maKPIs','maMatriz','maMatrizRealizado','maMatrizColetas','maTabela','maComparativo',
+        'maBarrasGrafica','maBarrasMarca','maBarrasSerie','maLegendaPrazos','maComparativoNota','maContagem']
+        .forEach(function(id){var e=document.getElementById(id);if(e)e.innerHTML='';});
+      aviso.classList.remove('hidden');aviso.textContent='Não foi possível conciliar a visão: '+erro.message;return;
+    }
     // Marca, série e gráfica seguem os filtros gerais do portal.
     // Tipo de material é um recorte local desta visão.
     document.querySelectorAll('[data-ma-cenario]').forEach(function(btn){btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-cenario')===estado.cenario));});
@@ -1304,7 +1486,11 @@
     var total=resultado.total;
     var missing=items.filter(function(l){return l.semData>0;}).length;
     aviso.classList.toggle('hidden',!missing);
-    aviso.textContent=missing?missing+' itens sem previsão válida de entrega (data, SLA ou intervalo).':'';
+    var parcial=items.filter(function(l){return l.conciliacao&&l.conciliacao.filtroParcial;}).length;
+    var falhas=items.filter(function(l){return l.conciliacao&&(l.conciliacao.diagnosticos||[]).length;}).length;
+    aviso.textContent=(missing?missing+' itens sem previsão válida de entrega (data, SLA ou intervalo). ':'')+
+      (parcial?parcial+' agrupamentos exibidos inteiros porque o filtro corresponde a parte das linhas que compartilham o mesmo realizado. Consulte a base auditável. ':'')+
+      (falhas?falhas+(falhas===1?' item':' itens')+' com falha de conciliação TP: dados indisponíveis, quantidade divergente ou identidade incompleta. Consulte os diagnósticos na base auditável.':'');
     aviso.classList.toggle('hidden',!aviso.textContent);
     document.getElementById('maKPIs').innerHTML=
       card('Tiragem total CD',fmt(total.total,!!items.length),items.length+' linhas PCP + acabadoras (sem duplicidade)','')+

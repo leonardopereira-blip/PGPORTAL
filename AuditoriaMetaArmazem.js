@@ -7,15 +7,24 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
     'Origem do cálculo','SLA (dias corridos)','Entrega início prevista','Entrega fim prevista',
     'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
     'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
-    'Fonte','ID da linha','Chave','Cenário','Tipo'
+    'Fonte','ID da linha','Chave','Cenário','Tipo',
+    'Entregue Geral','Entregue armazém','Entregue dentro da meta','Entregue fora da meta','Excedente de entrega',
+    'Coletado TP','Coletado TP bruto','Excedente de coleta','Parcelas de Entrega TP (data: quantidade)',
+    'Parcelas de Coleta TP (data: quantidade)','Linhas de origem','Série original','Regra de conciliação',
+    'Composição do agrupamento','Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação'
   ];
   var datas = [
     'Entrega TP real','Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
     'Entrega início prevista','Entrega fim prevista','Meta original','Prazo combinado Posi','Meta aplicada'
   ];
-  var quantidades = ['Tiragem total','Tiragem coletada','Dentro da meta','Fora da meta','Sem previsão','Tiragem por DU'];
+  var quantidades = ['Tiragem total','Tiragem coletada','Dentro da meta','Fora da meta','Sem previsão','Tiragem por DU',
+    'Entregue Geral','Entregue armazém','Entregue dentro da meta','Entregue fora da meta','Excedente de entrega',
+    'Coletado TP','Coletado TP bruto','Excedente de coleta'];
   var inteiros = ['SLA (dias corridos)','DU totais','DU dentro da meta','DU fora da meta'];
   var percentuais = ['% dentro da meta'];
+  var conciliacaoTexto = ['Parcelas de Entrega TP (data: quantidade)','Parcelas de Coleta TP (data: quantidade)',
+    'Linhas de origem','Série original','Regra de conciliação','Composição do agrupamento',
+    'Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação'];
   var avisos = [];
   var resultado;
 
@@ -117,10 +126,14 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
       'Kit':160,'SKU':160,'Descrição':340,'Marca':130,'Série':110,'Gráfica':160,
       'CD destino':130,'Envio':90,'Origem do cálculo':190,
       'Regra aplicada':220,'Situação':150,'Motivo / observação':340,
-      'Fonte':140,'ID da linha':150,'Chave':250,'Cenário':240,'Tipo':130
+      'Fonte':140,'ID da linha':150,'Chave':250,'Cenário':240,'Tipo':130,
+      'Parcelas de Entrega TP (data: quantidade)':320,'Parcelas de Coleta TP (data: quantidade)':320,
+      'Linhas de origem':320,'Série original':180,'Regra de conciliação':340,
+      'Composição do agrupamento':600,'Movimentos de Entrega TP':600,'Movimentos de Coleta TP':600,
+      'Diagnósticos de conciliação':360
     };
     Object.keys(larguras).forEach(function(nome) { sheet.setColumnWidth(indice_(nome), larguras[nome]); });
-    ['Descrição','Regra aplicada','Motivo / observação','Cenário'].forEach(function(nome) {
+    ['Descrição','Regra aplicada','Motivo / observação','Cenário'].concat(conciliacaoTexto).forEach(function(nome) {
       sheet.getRange(2, indice_(nome), n, 1).setWrap(true);
     });
     formato_(sheet, datas, 'dd/MM/yyyy', n);
@@ -131,6 +144,7 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
     sheet.getRange(2, indice_('Kit'), n, 2).setNumberFormat('@');
     sheet.getRange(2, indice_('ID da linha'), n, 1).setNumberFormat('@');
     sheet.getRange(2, indice_('Chave'), n, 1).setNumberFormat('@');
+    formato_(sheet, conciliacaoTexto, '@', n);
     sheet.getRange(2, 1, n, colunas.length).setValues(normalizadas);
     sheet.getRange(1, indice_('Tiragem total')).setNote('Volumes arredondados para unidades inteiras. Fora da meta é o saldo de total menos dentro e sem previsão; o percentual usa os volumes exportados.');
     sheet.getRange(1, indice_('Entrega fim prevista')).setNote('Saldo pendente: Final (re)Plan + Matriz_SLA em dias corridos. Sem início, entrega integral nessa data; sem fim, Sem data (re)Plan. O realizado usa Entrega_TP. Confirmação CD, Coleta Fim Real e baseline não participam do cálculo.');

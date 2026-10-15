@@ -1,0 +1,155 @@
+<script>
+// Conciliação exclusiva da Meta Armazém. Nunca modifica as linhas de origem.
+(function() {
+  'use strict';
+  var normal = function(v) { return String(v == null ? '' : v).normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase(); };
+  var numero = function(v) { return Math.max(0, window.pgNumeroPrazoV35(v) || 0); };
+  var data = function(v) { return window.pgNormalizarDataColeta(v) || ''; };
+  var campo = function(l, n) { return window.pgCampoColeta ? window.pgCampoColeta(l, n) : l[n]; };
+  var fimNome = 'Coleta/Internalização de estoque final (re) plan';
+  var inicioNome = 'Coleta/Internalização de estoque inicial (re) plan';
+  window.pgMAIdLinhaRealizado = function(l) {
+    l = l && l.linha || l || {};
+    return JSON.stringify([normal(l._SOURCE || l.BASE || l._base || 'PCP'),
+      l._PG_TP_LINHA != null ? 'LINHA:' + l._PG_TP_LINHA :
+      l._ROW_ID ? String(l._ROW_ID).replace(/:total-todas$/, '') : l.ID != null ? 'ID:' + l.ID : String(
+        (typeof getKey === 'function' ? getKey(Object.assign({}, l)) : JSON.stringify(l))).replace(/:total-todas$/, '')]);
+  };
+  function unicos(valores) { return Array.from(new Set(valores.filter(function(v) { return v !== ''; }))); }
+  function juntar(linhas, nome) { return unicos(linhas.map(function(l) { return String(campo(l, nome) == null ? '' : campo(l, nome)).trim(); })).join(' | '); }
+  function parcelas(owners, tipo, corte) {
+    var movimentos = new Map(), diagnosticos = [];
+    owners.forEach(function(owner) {
+      var v = window.pgVolumesColetaUnificadosV37(owner, corte), lista = v[tipo === 'entrega' ? 'eventosEntregaTP' : 'eventosColetaTP'] || [];
+      var motivo = lista.conciliacao && lista.conciliacao.motivo || '';
+      if (/indisponivel|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta/.test(motivo)) diagnosticos.push(tipo+': '+motivo);
+      lista.forEach(function(e, i) {
+        var dt = data(e.data), quantidade = numero(e.volume);
+        if (!dt || dt > corte || !quantidade) return;
+        var fisica = Number.isInteger(e.linhaMapa) && e.linhaMapa >= 2;
+        var id = fisica ? 'MAPA:' + e.linhaMapa : window.pgMAIdLinhaRealizado(owner) + ':LEGADO:' + i;
+        if (movimentos.has(id)) {
+          var anterior = movimentos.get(id);
+          if (anterior.data !== dt || anterior.volume !== quantidade || normal(anterior.kit) !== normal(e.kit)) {
+            throw new Error('Parcela TP divergente na linha do mapa ' + e.linhaMapa + '. Atualize a base antes de apurar.');
+          }
+          return;
+        }
+        movimentos.set(id, Object.assign({}, e, {data:dt, volume:quantidade, ownerId:window.pgMAIdLinhaRealizado(owner)}));
+      });
+    });
+    return {eventos:Array.from(movimentos.values()).sort(function(a,b) {
+      return a.data.localeCompare(b.data) || (a.linhaMapa || 0) - (b.linhaMapa || 0);
+    }), diagnosticos:unicos(diagnosticos)};
+  }
+  function limitar(eventos, total) {
+    var usado = 0, brutoAcumulado = 0, brutoInteiro = 0;
+    return eventos.map(function(e) {
+      brutoAcumulado += e.volume;
+      var proximo = Math.round(brutoAcumulado), parcelaInteira = proximo - brutoInteiro;
+      brutoInteiro = proximo;
+      var volume = Math.min(parcelaInteira, Math.max(0, total - usado));
+      usado += volume;
+      return Object.assign({}, e, {volume:volume});
+    }).filter(function(e) { return e.volume > 0; });
+  }
+  function soma(eventos) { return eventos.reduce((s,e) => s + e.volume, 0); }
+  function registro(linhas, owners, entrega, coleta, agrupado, chave) {
+    // Preserva o arredondamento por linha canônica do denominador, antes de somar o grupo.
+    var l = Object.assign({}, linhas[0]), total = linhas.reduce((s,r) => s + Math.round(numero(r.TIRAGEM)), 0);
+    l.TIRAGEM = total;
+    var datas = linhas.map(function(r) {
+      var inicio = data(campo(r,inicioNome)), fim = data(campo(r,fimNome));
+      return !fim ? '' : inicio && inicio > fim ? inicio : fim;
+    });
+    l._PG_MA = {linhas:linhas, owners:owners, chave:chave, ids:linhas.map(window.pgMAIdLinhaRealizado), agrupado:agrupado,
+      eventosEntrega:limitar(entrega,total), eventosColeta:limitar(coleta,total),
+      eventosEntregaBrutos:entrega,eventosColetaBrutos:coleta,
+      entregueBruto:Math.round(soma(entrega)), coletadoBruto:Math.round(soma(coleta)),
+      excedenteEntrega:Math.max(0,Math.round(soma(entrega))-total), excedenteColeta:Math.max(0,Math.round(soma(coleta))-total),
+      coletadaBruta:owners.reduce((s,r) => s + Math.round(numero(campo(r,'TIRAGEM COLETADA'))),0),
+      ultimaPrevisao:datas.filter(Boolean).sort().pop() || '',linhasSemPrevisao:datas.filter(d => !d).length,
+      regra:agrupado ? 'Agrupamento operacional: total por CD e última data (re)plan; parcelas reais preservadas' :
+        'Vínculo da linha de origem; parcelas reais preservadas'};
+    if (agrupado) {
+      // Uma única linha contém o total, o planejamento e todos os movimentos do grupo.
+      l._ROW_ID = 'META-GRUPO:' + chave;
+      ['KIT','DESCRIÇÃO','DESCRICAO','TIPO','SEGMENTO'].forEach(function(n) { l[n] = juntar(linhas,n); });
+      l.TIPO = unicos(linhas.flatMap(r => String(r.TIPO || '').split('|').map(v => normal(v)))).sort().join(' | ');
+      l.serie_corrigida = juntar(linhas,'serie_corrigida') || juntar(linhas,'SÉRIE') || juntar(linhas,'SERIE');
+      l.DESC_REAL = juntar(linhas,'DESC_REAL') || l.DESCRIÇÃO || l.DESCRICAO || '';
+      l.ID = unicos(linhas.map(function(r) { return String(r.ID != null ? r.ID : r._PG_TP_LINHA != null ? r._PG_TP_LINHA : r._ROW_ID || ''); })).join(' | ');
+      l[inicioNome] = '';
+      l[fimNome] = l._PG_MA.ultimaPrevisao;
+      l['COLETA/INTERNALIZAÇÃO FIM BASELINE'] = linhas.map(r => data(campo(r,'COLETA/INTERNALIZAÇÃO FIM BASELINE'))).filter(Boolean).sort().pop() || '';
+    }
+    return l;
+  }
+  window.pgMAPrepararLinhas = function(base, originais, corte) {
+    if (typeof window.pgIdentidadeOperacionalTPLinha !== 'function' || typeof window.pgVolumesColetaUnificadosV37 !== 'function') return base;
+    var porId = new Map((originais || []).map(l => [window.pgMAIdLinhaRealizado(l),l])), grupos = new Map();
+    var selecionadas = new Set(base.map(window.pgMAIdLinhaRealizado));
+    // O owner pode estar fora de um filtro de segmento/personalização. A conciliação precede esse recorte.
+    var universo = (originais || base).filter(function(l) {
+      if (window.pgSolicitacaoCancelada && window.pgSolicitacaoCancelada(l)) return false;
+      var acab = window.pgEhFonteAcabadora(l), destino = acab ? l['CD DESTINO'] || l.CD_FINAL || '' : l.CD_MAPA;
+      return normal(destino) !== 'WALPRINT';
+    });
+    var ownersPorChave = new Map();
+    window.pgLinhasUnicas(universo).forEach(function(l) {
+      var identidade = window.pgIdentidadeOperacionalTPLinha(l), chave = identidade.chave || window.pgMAIdLinhaRealizado(l);
+      if (!ownersPorChave.has(chave)) ownersPorChave.set(chave, []);
+      ownersPorChave.get(chave).push(l);
+    });
+    universo = window.pgUnirTotalSemDuplicidade(window.pgLinhasUnicas(universo));
+    universo = universo.filter(l => numero(l.TIRAGEM) > 0 && normal(l.MARCA_FINAL || l.UNIDADE || l.MARCA));
+    universo.forEach(function(l) {
+      var id = window.pgMAIdLinhaRealizado(l), identidade = window.pgIdentidadeOperacionalTPLinha(l), chave = identidade.chave || id;
+      if (!grupos.has(chave)) grupos.set(chave, []);
+      grupos.get(chave).push(l);
+    });
+    var resultado = [];
+    grupos.forEach(function(linhas,chave) {
+      if (!linhas.some(l => selecionadas.has(window.pgMAIdLinhaRealizado(l)))) return;
+      var owners = ownersPorChave.get(chave) || unicos(linhas.map(window.pgMAIdLinhaRealizado)).map(id => porId.get(id) || linhas.find(l => window.pgMAIdLinhaRealizado(l) === id));
+      var entrega = parcelas(owners,'entrega',corte), coleta = parcelas(owners,'coleta',corte);
+      var todos = entrega.eventos.concat(coleta.eventos), destinosKIT = new Map();
+      linhas.forEach(function(l) {
+        var kit = normal(campo(l,'KIT'));
+        if (!destinosKIT.has(kit)) destinosKIT.set(kit, []);
+        destinosKIT.get(kit).push(l);
+      });
+      // Só distribui quando TODAS as parcelas têm vínculo inequívoco; nunca FIFO ou proporção inferida.
+      var kitExato = todos.length > 0 && todos.every(e => normal(e.kit) && (destinosKIT.get(normal(e.kit)) || []).length === 1);
+      if (kitExato) kitExato = linhas.every(function(l) {
+        var kit = normal(campo(l,'KIT')), total = Math.round(numero(l.TIRAGEM));
+        return Math.round(soma(entrega.eventos.filter(e => normal(e.kit) === kit))) <= total &&
+          Math.round(soma(coleta.eventos.filter(e => normal(e.kit) === kit))) <= total;
+      });
+      var consolidado = linhas.length > 1 && (todos.length > 0 || owners.some(owner => numero(campo(owner,'TIRAGEM COLETADA')) > 0));
+      if (linhas.length === 1 || !consolidado || kitExato) {
+        linhas.forEach(function(l) {
+          var id = window.pgMAIdLinhaRealizado(l), owner = porId.get(id) || l;
+          if (!selecionadas.has(id)) return;
+          var pertence = e => kitExato ? destinosKIT.get(normal(e.kit))[0] === l : linhas.length === 1 || e.ownerId === id;
+          var preparado = registro([l],linhas.length === 1 ? owners : [owner],entrega.eventos.filter(pertence),coleta.eventos.filter(pertence),false,chave);
+          if (kitExato) {
+            var idsMovimentos = new Set(entrega.eventos.concat(coleta.eventos).filter(pertence).map(e => e.ownerId));
+            preparado._PG_MA.owners = owners.filter(r => idsMovimentos.has(window.pgMAIdLinhaRealizado(r)) || window.pgMAIdLinhaRealizado(r) === id);
+          }
+          preparado._PG_MA.regra = kitExato ? 'KIT exato da parcela vinculado à linha de origem' : preparado._PG_MA.regra;
+          preparado._PG_MA.diagnosticos = entrega.diagnosticos.concat(coleta.diagnosticos);
+          resultado.push(preparado);
+        });
+      } else {
+        var preparado = registro(linhas,owners,entrega.eventos,coleta.eventos,true,chave);
+        preparado._PG_MA.diagnosticos = entrega.diagnosticos.concat(coleta.diagnosticos);
+        preparado._PG_MA.filtroParcial = linhas.some(l => !selecionadas.has(window.pgMAIdLinhaRealizado(l)));
+        resultado.push(preparado);
+      }
+    });
+    return resultado;
+  };
+})();
+</script>

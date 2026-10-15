@@ -205,6 +205,13 @@ function _processarDadosDashboardBruto() {
     console.log('[cache] PCP_ACABADORAS: leitura concluida, ' + dataAcab.length + ' linhas; processando');
     if (dataAcab.length > 1) {
       var headersAcab = dataAcab[0].map(limparHeader);
+      var headersAcabNormalizados = headersAcab.map(function(h) { return h.toUpperCase(); });
+      var indiceClienteAcab = headersAcabNormalizados.indexOf('CLIENTE_PERSONALIZADO');
+      var indiceCapaAcab = headersAcabNormalizados.indexOf('CAPA_PERSONALIZADA');
+      // As colunas podem se deslocar quando a origem recebe novos campos.
+      // O índice antigo só atende cargas que ainda não tenham o cabeçalho.
+      if (indiceClienteAcab < 0) indiceClienteAcab = 88;
+      if (indiceCapaAcab < 0) indiceCapaAcab = 89;
      
       for (var i = 1; i < dataAcab.length; i++) {
         var statusAcab = String(dataAcab[i][33] || "").trim().toUpperCase();
@@ -261,8 +268,8 @@ function _processarDadosDashboardBruto() {
         if (pgExcluirPESV1_(obj)) continue;
         if(obj["Chave"]) {
           obj["AVALIACAO"] = personalizacaoSimNao(obj.Avaliacao ?? obj.AVALIACAO);
-          obj["CLIENTE_PERSONALIZADO"] = personalizacaoSimNao(dataAcab[i][88]); // CK
-          obj["CAPA_PERSONALIZADA"] = personalizacaoSimNao(dataAcab[i][89]); // CL
+          obj["CLIENTE_PERSONALIZADO"] = personalizacaoSimNao(dataAcab[i][indiceClienteAcab]);
+          obj["CAPA_PERSONALIZADA"] = personalizacaoSimNao(dataAcab[i][indiceCapaAcab]);
           obj["_SOURCE"] = "ACABADORA";
           obj['_PG_TP_LINHA'] = i + 1;
           result.push(obj);

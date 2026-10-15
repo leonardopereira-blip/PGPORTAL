@@ -27,14 +27,15 @@ test('Avaliacao Sim fixa meta em 26\/10 sem interferencia da Posi', () => {
   assert.match(armazem, /elegivel=!avaliacaoSim&&!!regras&&dataAcordada>alvo/);
 });
 
-test('Auditoria exporta mesmo conjunto de colunas, sem OP e com Tipo no final', () => {
+test('Auditoria exporta mesmo conjunto de colunas, sem OP e com Tipo na posição original', () => {
   const a = armazem.match(/var cabecalho=\[([\s\S]*?)\];/);
   const b = auditoria.match(/var colunas = \[([\s\S]*?)\];/);
   assert.ok(a && b);
   const extrair = s => [...s.matchAll(/'([^']+)'/g)].map(m => m[1]);
   const cols = extrair(a[1]);
   assert.deepEqual(cols, extrair(b[1]));
-  assert.equal(cols.at(-1), 'Tipo');
+  assert.equal(cols[36], 'Tipo');
+  assert.ok(cols.indexOf('Entregue Geral') > cols.indexOf('Tipo'));
   assert.ok(!cols.includes('OP'));
 });
 

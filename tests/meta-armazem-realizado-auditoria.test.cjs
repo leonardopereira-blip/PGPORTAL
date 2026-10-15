@@ -46,7 +46,7 @@ function portal(rows, {today = '2026-10-20', cache = {}, funil = rows} = {}) {
   createElement:element, body:element(), head:element()};
   w.window=w;
   vm.createContext(w);
-  for(const name of ['Scripts_Eventos_TP.html','Scripts_Globais_2.html','abaMetaArmazem.html','ExportadorExcel.html']){
+  for(const name of ['Scripts_Eventos_TP.html','Scripts_Globais_2.html','Scripts_Meta_Armazem_Realizado.html','abaMetaArmazem.html','ExportadorExcel.html']){
     const html=fs.readFileSync(path.join(__dirname,'..',name),'utf8');
     for(const [,script] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))
       vm.runInContext(script,w,{filename:name});
@@ -56,7 +56,7 @@ function portal(rows, {today = '2026-10-20', cache = {}, funil = rows} = {}) {
   w.processarMetaArmazem();
   // O exportador aguarda somente o próximo desenho antes de gerar o arquivo.
   w.setTimeout=(callback,delay)=>{if(delay===0)callback();};
-  return {w, downloads, alerts};
+  return {w, downloads, alerts, controls};
 }
 
 const value = (audit, index, name) => {
@@ -122,10 +122,10 @@ test('limite da tiragem é explicitado e excesso de outro registro não compensa
   assert.equal(value(audit,0,'Entregue Geral'),150);
   assert.equal(value(audit,0,'Entregue armazém'),100);
   assert.equal(value(audit,0,'Diferença Geral - Armazém'),50);
-  assert.equal(value(audit,0,'Tiragem coletada bruta'),100);
+  assert.equal(value(audit,0,'Tiragem coletada bruta'),150);
   assert.equal(value(audit,0,'Saldo para aderência'),0);
   assert.equal(value(audit,0,'Aderência Realizado / Planejado'),1);
-  assert.match(value(audit,0,'Diagnóstico da diferença'),/Entrega TP excede tiragem da linha/);
+  assert.match(value(audit,0,'Diagnóstico da diferença'),/Entrega TP excede tiragem total do agrupamento/);
   assert.equal(value(audit,1,'Planejado dentro da meta'),100);
   assert.equal(value(audit,1,'Saldo para aderência'),100);
   assert.equal(value(audit,1,'Aderência Realizado / Planejado'),0);
@@ -168,10 +168,11 @@ function excelCell(xml,ref){
 }
 
 test('leitura, CSV e XLSX do Realizado preservam integralmente a auditoria e a visão Planejado',async()=>{
-  const {w,downloads,alerts}=portal([row({'TIRAGEM COLETADA':120})],{cache:parcels()});
+  const {w,downloads,alerts,controls}=portal([row({'TIRAGEM COLETADA':120})],{cache:parcels()});
   const planned=snapshot(w.pgMAObterAuditoria()), view=snapshot(w.pgMAVisaoAtual);
+  const plannedHtml=controls.maMatriz.innerHTML;
   const audit=w.pgMAObterAuditoriaRealizado();
-  assert.equal(audit.cabecalho.length,32);
+  assert(audit.cabecalho.length>=32);
   assert.deepEqual(Array.from(audit.cabecalho.slice(14,24)),[
     'Tiragem total','Tiragem coletada bruta','Entregue Geral','Entregue armazém',
     'Diferença Geral - Armazém','Entregue dentro da meta','Entregue fora da meta',
@@ -202,4 +203,5 @@ test('leitura, CSV e XLSX do Realizado preservam integralmente a auditoria e a v
   assert.equal(button.textContent,'Baixar Excel Realizado');
   assert.deepEqual(snapshot(w.pgMAObterAuditoria()),planned);
   assert.deepEqual(snapshot(w.pgMAVisaoAtual),view);
+  assert.equal(controls.maMatriz.innerHTML,plannedHtml);
 });

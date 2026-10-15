@@ -43,6 +43,15 @@
             envio: normal(primeiro(linha, ['ENVIO', 'BT']))
         };
     };
+    // Identidade somente para conciliação; mantém a mesma regra de envio do motor.
+    window.pgIdentidadeOperacionalTPLinha = function(linha) {
+        const id = identidadeLinha(linha);
+        const fonte = id.acabadora ? 'ACABADORA' : 'PCP';
+        const partes = id.partes.slice();
+        const completa = partes.every(textoCompleto) && (id.acabadora || textoCompleto(id.envio));
+        return { fonte, partes, acabadora: id.acabadora, envio: id.envio, completa,
+            chave: completa ? chave([fonte, ...partes, ...(id.acabadora ? [] : [id.envio])]) : '' };
+    };
     function indexarMapa(mapa) {
         if (!mapa || typeof mapa !== 'object' || Array.isArray(mapa)) return null;
         const anterior = indicesMapa.get(mapa);
