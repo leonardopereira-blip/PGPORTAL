@@ -8759,7 +8759,8 @@ const ETAPAS_MAPA = [
   { nome: 'Form. Kit (Início)', plan: ['Formação de kit/Encaixotamento início (re) plan'], real: ['Formação de kit/Encaixotamento Início Real'] },
   { nome: 'Form. Kit (Fim)', plan: ['Formação de kit/Encaixotamento Final (re) plan'], real: ['Formação de kit/Encaixotamento Final Real'] },
   { nome: 'Coleta Mapa', plan: ['DT_Vencido', 'Dt_a_vencer'], real: ['Coleta_TP'] },
-  { nome: 'Coletado a menos', plan: [], real: [] }
+  { nome: 'Coletado a menos', plan: [], real: [] },
+  { nome: 'Coletado a mais', plan: [], real: [] }
 ];
 
 function getValFromCols(row, cols) {
@@ -8865,7 +8866,7 @@ window.construirBotoesEtapasGiro = function() {
     'Pré produção': ['Env. Arquivo', 'Rec. Boneco', 'Apv. Boneco'],
     'Produção': ['Impressão (Início)', 'Impressão (Fim)', 'Acabamento (Início)', 'Acabamento (Fim)', 'Form. Kit (Início)', 'Form. Kit (Fim)'],
     'Custos': ['Val. Custos (Início)', 'Val. Custos (Fim)', 'O.C. (Início)', 'O.C. (Fim)'],
-    'Pós': ['Coleta Mapa', 'Coletado a menos']
+    'Pós': ['Coleta Mapa', 'Coletado a menos', 'Coletado a mais']
   };
 
   function renderizarFiltrosGiro() {
@@ -9120,6 +9121,12 @@ window.reFiltrarTabelaGiro = function() {
         const prazoGiro = window.pgGiroSaldoPrazosV41(l, dtHojeISO);
         const statusColetaFonte = String(window.pgCampoColeta(l, 'STATUS COLETA') || '')
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+        const coletadoAMais = /COLETAD[OA] A MAIS|COLETA A MAIS/.test(estadoMapa.ay) ||
+            /COLETAD[OA] A MAIS|COLETA A MAIS/.test(statusColetaFonte);
+        // Usar somente o excedente medido; quando a fonte só informa o
+        // status, exibir a pendência sem inventar uma quantidade.
+        const excedenteColeta = coletadoAMais && estadoMapa.total > 0
+            ? Math.max(0, estadoMapa.coletada - estadoMapa.total) : 0;
         const pendenteMapa = estadoMapa.pendente || prazoGiro.totalPendente > 0;
         const saldoColeta = prazoGiro.temCampos ? prazoGiro.totalPendente : estadoMapa.saldo;
         const coletadoAMenos = saldoColeta > 0 &&
@@ -9127,7 +9134,7 @@ window.reFiltrarTabelaGiro = function() {
         // ---> 1. TRAVA DA COLUNA EE <---
         // AY e saldo do mapa prevalecem sobre EE e sobre a data PCP para pendências de coleta
         let statusEE = String(l["STATUS_EE"] || "").trim().toUpperCase();
-        if (!pendenteMapa && (statusEE === "OK" || statusEE === "NÃO COLETADO" || statusEE === "NAO COLETADO")) {
+        if (!pendenteMapa && !coletadoAMais && (statusEE === "OK" || statusEE === "NÃO COLETADO" || statusEE === "NAO COLETADO")) {
             return;
         }
 
@@ -9141,7 +9148,7 @@ window.reFiltrarTabelaGiro = function() {
             statusFinalStr = 'Cancelado';
         } else if (coletadoAMenos) {
             statusFinalStr = 'Coletado a menos';
-        } else if (pendenteMapa) {
+        } else if (pendenteMapa || coletadoAMais) {
             statusFinalStr = 'Em Aberto';
         } else if (estadoMapa.concluida || ultEtapaStatus.includes("CONCLU") || ultEtapaStatus.includes("FINALIZADO") || isDateFilled(coletaReal)) {
             statusFinalStr = 'Concluído';
@@ -9281,11 +9288,18 @@ window.reFiltrarTabelaGiro = function() {
                 itensPrazo.forEach(e => {
                     if (!(e.volume > 0)) return;
                     const atraso = e.dias === null ? 0 : e.dias;
-                    if (e.dias !== null && !validaNoSlider(atraso)) return;
+                    // Sem data equivale somente à faixa 0; nunca ignora o máximo.
+                    if (!validaNoSlider(atraso)) return;
                     selecionadas.push({ nome:'Coleta Mapa', dias:atraso,
                         semPrazo:e.dias === null, tipoPrazo:e.categoria,
                         volume:e.volume });
                 });
+            }
+
+            if (coletadoAMais && window.GIRO_ETAPAS_SELECIONADAS.has('Coletado a mais') &&
+                validaNoSlider(0)) {
+                selecionadas.push({nome:'Coletado a mais', dias:0, semPrazo:true,
+                    volume:excedenteColeta});
             }
 
             // Se NENHUMA pendência passar nos botões + slider simultaneamente, oculta a linha inteira!
@@ -9335,18 +9349,20 @@ window.reFiltrarTabelaGiro = function() {
 
         if (statusFinalStr === 'Em Aberto') {
             // Redundância de segurança geral da linha
-            if (!(etapaPendente.includes('Coleta Mapa') && !(planosFinais.get(l) || window.pgDataPlanoColetaLinha(l))) && (escalaSlider < minRange || escalaSlider > maxRange)) return;
+            if (escalaSlider < minRange || escalaSlider > maxRange) return;
         }
 
         let grafica = String(l["GRAFICA_FINAL"] || l["GRÁFICA"] || "N/A").trim();
         let marca = String(l["UNIDADE"] || l["MARCA_FINAL"] || "N/A").trim();
-        let serie = String(l["SÉRIE"] || l["Série"] || l["SERIE"] || "-").trim();
+        let serie = window.pgSerieCorrigidaFunil(l);
         let envio = String(l["ENVIO"] || l["Envio"] || "-").trim();
         let cd = String(l["CD DESTINO"] || l["CD_FINAL"] || l["CD"] || "-").trim();
         let sku = String(l["SKU_REAL"] || l["SKU"] || "-").trim();
         let tiragemBase = window.arredondar ? window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"] || 0) : 0;
-        let ehLinhaColeta = coletadoAMenos || etapaPendente.includes('Coleta Mapa');
-        let tiragemExibida = ehLinhaColeta ? saldoColeta : tiragemBase;
+        let ehLinhaColeta = coletadoAMenos || etapaPendente.includes('Coleta Mapa') ||
+            etapaPendente.includes('Coletado a mais');
+        let tiragemExibida = etapaPendente.includes('Coletado a mais') && !pendenteMapa
+            ? excedenteColeta : (ehLinhaColeta ? saldoColeta : tiragemBase);
 
         // CHAVE DE AGRUPAMENTO 100% BLINDADA (Identidade Absoluta)
         let chaveGrupo = window.pgGiroChaveObs('MASTER', `${grafica}|${marca}|${serie}|${envio}|${cd}`);
@@ -9361,7 +9377,7 @@ window.reFiltrarTabelaGiro = function() {
 
         if (ehLinhaColeta) {
             const grupoSaldo = grupos[chaveGrupo];
-            grupoSaldo.coletadoAMenos = true;
+            grupoSaldo.coletadoAMenos = grupoSaldo.coletadoAMenos || coletadoAMenos;
             if (!grupoSaldo.saldosColeta) grupoSaldo.saldosColeta = new Map();
 
             // BA/AZ repetidos na mesma JOIN_KEY contam uma única vez no total do grupo.
