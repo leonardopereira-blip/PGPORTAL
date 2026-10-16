@@ -226,12 +226,13 @@ test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos c
   a.splice(2, 0, []);
   const mapaLinha = Array(50).fill('');
   mapaLinha[1] = 'CD ERRADO PCP'; // B: nao usar
-  mapaLinha[2] = 'LOGPRINT'; // C: nao usar
+  mapaLinha[2] = 'ATHOS'; // C: GRÁFICA PCP é a única coluna PCP usada
   mapaLinha[4] = 'MP-ATHOS-SKU-2'; // E: codigo mapa
   mapaLinha[6] = 'JUNDIAÍ - SP'; // G: CD ORIGINAL
   mapaLinha[7] = 'V1'; // H: envio original
-  mapaLinha[11] = 'SKU-2'; // L: SKU
-  mapaLinha[13] = 'ATHOS'; // N: GRAFICA ORIGINAL
+  mapaLinha[10] = 'K-1'; // K: KIT original
+  mapaLinha[11] = 'SKU-2'; // L: SKU original
+  mapaLinha[13] = 'LOGPRINT'; // N: gráfica original, não deve ser usada
   mapaLinha[39] = 20; // AN: Volume Coletado
   mapaLinha[45] = '14/10/2026'; // AT: Coleta TP
   mapaLinha[49] = 'V1'; // AX: envio normalizado
@@ -287,7 +288,7 @@ test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos c
   assert.equal(r.totalAthos, 110);
   assert.equal(r.recebidoAthos, 50);
   assert.equal(r.produzidoAthos, 80, 'saida fisica da ATHOS confirma 20 sem BP');
-  assert.equal(r.coletadoAthos, 20, 'saída efetiva somente de AN no Mapa original');
+  assert.equal(r.coletadoAthos, 20, 'saída efetiva somente de AN no Mapa original com gráfica PCP=ATHOS');
   assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.coletado]), [['CD JDI',110,20]]);
   assert.deepEqual(Array.from(r.linhasGraficas, row => row.linha), [3, 4]);
   assert.deepEqual(Array.from(r.linhasAthos, row => row.linha), [2, 4]);
@@ -382,4 +383,36 @@ test('CSV auditável preserva quantidades negativas e neutraliza fórmulas em ca
   const expCsv = h.blobs[2].parts.join('');
   assert.match(expCsv, /COLETADO ATHOS/);
   assert.match(expCsv, /"CD JDI"/);
+});
+
+
+test('TEMP SAS ADAPT lê Athos pela coluna C; destino, envio, SKU, kit e AN são originais', () => {
+  const baseP=[pLinha({SKU:'SKU-1'})];
+  const baseA=[aLinha({'CD DESTINO':'-', 'TIRAGEM A ENTREGAR (total por CD)':100})];
+  const mapa=[
+    {sku:'SKU-1',destino:'JUNDIAÍ - SP',codigoMapa:'MP-873303-SAD-V1-ATHOS',kit:'KIT-1',coletado:15},
+    {sku:'SKU-1',destino:'CD JDI',codigoMapa:'MP-873303-SAD-V1-ATHOS',kit:'KIT-2',coletado:25},
+    {sku:'SKU-1',destino:'CD JDI',codigoMapa:'MP-873303-SAD-V1-ATHOS',kit:'KIT-1',coletado:15}
+  ];
+  const result=contexto.pgTempSasAdaptResumo_(tabela(pHeader,baseP),tabela(aHeader,baseA),hoje,mapa);
+  assert.equal(result.coletadoAthos,40,'somar kits diferentes do mesmo mapa, mas não repetir a mesma linha/kit');
+  assert.equal(result.produzidoAthos,40);
+  assert.equal(result.linhasAthos[0].coletado,40);
+  assert.deepEqual(Array.from(result.expedicoesAthos, e=>[e.destino,e.total,e.coletado]),[['CD JDI',100,40]]);
+  assert.match(result.linhasAthos[0].codigosMapa,/MP-873303-SAD-V1-ATHOS/);
+});
+
+test('quando PCP_ACABADORAS não informa CD, expedição tem CD real do mapa e saldo sem CD explícito', () => {
+  const baseP=[pLinha({SKU:'SKU-1'})];
+  const baseA=[aLinha({'CD DESTINO':'-', 'TIRAGEM A ENTREGAR (total por CD)':100})];
+  const mapa=[
+    {sku:'SKU-1',destino:'JUNDIAÍ - SP',codigoMapa:'MP-JDI',kit:'KIT-1',coletado:25},
+    {sku:'SKU-1',destino:'FORTALEZA',codigoMapa:'MP-FOR',kit:'KIT-2',coletado:15}
+  ];
+  const result=contexto.pgTempSasAdaptResumo_(tabela(pHeader,baseP),tabela(aHeader,baseA),hoje,mapa);
+  assert.equal(result.coletadoAthos,40);
+  assert.equal(result.totalAthos,100);
+  assert.equal(result.expedicoesAthos.reduce((sum,x)=>sum+x.total,0),100,'não duplica o programa entre os CDs');
+  assert.deepEqual(Array.from(result.expedicoesAthos, e=>[e.destino,e.total,e.coletado]),
+    [['CD NÃO INFORMADO',60,0],['CD JDI',25,25],['CD FOR',15,15]]);
 });

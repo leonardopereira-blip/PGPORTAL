@@ -100,13 +100,15 @@ function pgTempSasAdaptLerColunas_(nomes, campos) {
 
 function pgTempSasAdaptDestino_(valor) {
   var s = pgTempSasAdaptNormalizar_(valor);
+  if (!s || s === '-' || s === '–' || s === 'N/A' || s === 'NAO INFORMADO') return '';
   if (/(?:^|\W)(?:JDI|JUNDIAI)(?:\W|$)/.test(s)) return 'CD JDI';
   if (/(?:^|\W)(?:FOR|FORTALEZA|ITAITINGA)(?:\W|$)/.test(s)) return 'CD FOR';
   if (/(?:^|\W)(?:RP|RIBEIRAO PRETO)(?:\W|$)/.test(s)) return 'CD RP';
   return s.replace(/^CD\s+/, '');
 }
-// As saidas da ATHOS sao lidas das colunas originais do Mapa, nunca de
-// GRAFICA PCP / CD PCP (campos transformados pela planilha).
+// Somente na TEMP SAS ADAPT: a expedidora vem de GRAFICA PCP (coluna C).
+// Codigo, Kit, destino, envio, SKU e volume saem das colunas ORIGINAIS do
+// Mapa de Saida. Nao usar CD PCP ou dados transformados de outra visao.
 function pgTempSasAdaptLerSaidasMapa_() {
   var nomes = ['MAPA DE SAÍDA','MAPA DE SAIDA','MAPA DE SAIDA '];
   var meta = pgMetadadosPlanilhaCache_(pgFonteExternaCache_(nomes));
@@ -114,9 +116,9 @@ function pgTempSasAdaptLerSaidasMapa_() {
   if (!aba) throw new Error('TEMP SAS ADAPT: Mapa de Saída não encontrado');
   var grade = meta.abas.filter(function(x) { return x.title === aba; })[0].gridProperties;
   var prefixo = "'" + aba.replace(/'/g, "''") + "'!";
-  // E=codigo mapa, G=destino original, H=envio original, L=SKU,
-  // N=grafica original, AN=volume coletado, AT=Coleta TP, AX=envio normalizado.
-  var letras = ['E','G','H','L','N','AN','AT','AX'];
+  // C=GRAFICA PCP; E=mapa; G=CD original; H=envio original;
+  // K=kit original; L=SKU original; AN=coleta fisica; AT=data coleta.
+  var letras = ['C','E','G','H','K','L','AN','AT'];
   var retorno = Sheets.Spreadsheets.Values.batchGet(meta.id, {
     ranges: letras.map(function(col) { return prefixo + col + '2:' + col + grade.rowCount; }),
     valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER'
@@ -126,14 +128,15 @@ function pgTempSasAdaptLerSaidasMapa_() {
   retorno.forEach(function(r) { n = Math.max(n, (r.values || []).length); });
   for (var i = 0; i < n; i++) {
     var v = retorno.map(function(r) { return r.values && r.values[i] && r.values[i][0] != null ? r.values[i][0] : ''; });
-    var grafica = pgTempSasAdaptNormalizar_(v[4]);
-    var envio = pgTempSasAdaptNormalizar_(v[7] || v[2]);
-    var coletado = pgTempSasAdaptNumero_(v[5]);
+    var grafica = pgTempSasAdaptNormalizar_(v[0]);
+    var envio = pgTempSasAdaptNormalizar_(v[3]);
+    var coletado = pgTempSasAdaptNumero_(v[6]);
     if ((grafica !== 'ATHOS' && grafica.indexOf('ATHOS ') !== 0) || envio !== 'V1' || coletado <= 0) continue;
-    var sku = pgTempSasAdaptNormalizar_(v[3]), destino = pgTempSasAdaptDestino_(v[1]);
+    var sku = pgTempSasAdaptNormalizar_(v[5]), destino = pgTempSasAdaptDestino_(v[2]);
     if (!sku || !destino) continue;
-    saidas.push({sku: sku, destino: destino, codigoMapa: pgTempSasAdaptNormalizar_(v[0]),
-      coletado: coletado, dataColeta: pgTempSasAdaptDiaISO_(v[6]), linhaMapa: i + 2});
+    saidas.push({sku: sku, destino: destino, codigoMapa: pgTempSasAdaptNormalizar_(v[1]),
+      kit: pgTempSasAdaptNormalizar_(v[4]), coletado: coletado,
+      dataColeta: pgTempSasAdaptDiaISO_(v[7]), linhaMapa: i + 2});
   }
   return saidas;
 }
@@ -228,7 +231,10 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
     var sku = pgTempSasAdaptNormalizar_(m.sku), destino = pgTempSasAdaptDestino_(m.destino);
     if (!skusOrigem[sku] || !destino) return;
     var codigo = pgTempSasAdaptNormalizar_(m.codigoMapa);
-    var chave = JSON.stringify([sku, destino, codigo || 'LINHA ' + m.linhaMapa]);
+    // O mesmo mapa pode levar diversos kits do mesmo SKU. Somar kits distintos,
+    // mantendo protecao contra repeticao identica de mapa/SKU/CD/kit.
+    var kit = pgTempSasAdaptNormalizar_(m.kit);
+    var chave = JSON.stringify([sku, destino, codigo || 'LINHA ' + m.linhaMapa, kit]);
     var volume = Math.max(0, pgTempSasAdaptNumero_(m.coletado));
     if (!parcelasMapa[chave] || parcelasMapa[chave].volume < volume) {
       parcelasMapa[chave] = {sku: sku, destino: destino, codigo: codigo, volume: volume};
@@ -236,10 +242,21 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
   });
   Object.keys(parcelasMapa).forEach(function(chave) {
     var m = parcelasMapa[chave], k = JSON.stringify([m.sku, m.destino]);
-    if (!saidaPorDestino[k]) saidaPorDestino[k] = {restante: 0, mapas: []};
+    if (!saidaPorDestino[k]) saidaPorDestino[k] = {sku:m.sku, destino:m.destino, restante: 0, mapas: []};
     saidaPorDestino[k].restante += m.volume;
     if (m.codigo && saidaPorDestino[k].mapas.indexOf(m.codigo) < 0) saidaPorDestino[k].mapas.push(m.codigo);
   });
+  // As parcelas que já têm CD explícito no PCP_ACABADORAS são consumidas
+  // antes das linhas sem CD; um destino informado nunca perde sua quantidade.
+  var destinosInformados = Object.create(null);
+  for(var ac=1;ac<athos.length;ac++){
+    var al=athos[ac]||[];
+    var aSku=pgTempSasAdaptNormalizar_(al[a.SKU]);
+    if(!skusOrigem[aSku]||pgTempSasAdaptNormalizar_(al[a['GRÁFICA']])!=='ATHOS'||
+      pgTempSasAdaptNormalizar_(al[a.ENVIO])!=='V1')continue;
+    var aCD=pgTempSasAdaptDestino_(al[a['CD DESTINO']]);
+    if(aCD)destinosInformados[JSON.stringify([aSku,aCD])]=true;
+  }
   for (var j = 1; j < athos.length; j++) {
     var l = athos[j] || [];
     if (pgTempSasAdaptNormalizar_(l[a['GRÁFICA']]) !== 'ATHOS') continue;
@@ -257,15 +274,53 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
     var dataFinalISO = pgTempSasAdaptDiaISO_(dataFinalRaw);
     var apontada = Boolean(dataFinalISO && dataFinalISO <= hoje);
     var destinoCD = pgTempSasAdaptDestino_(l[a['CD DESTINO']]);
-    var chaveSaida = JSON.stringify([codigo, destinoCD]);
-    var saidaSkuCD = saidaPorDestino[chaveSaida];
-    var confirmadoMapa = saidaSkuCD ? Math.min(Math.max(0, volume), saidaSkuCD.restante) : 0;
-    if (saidaSkuCD) saidaSkuCD.restante = Math.max(0, saidaSkuCD.restante - confirmadoMapa);
-    // Somente a quantidade AN do Mapa de Saída original entra na coleta da Athos.
-    // Finalização BP e coletas das gráficas não antecipam nem duplicam expedições.
-    if (!expedicoesAthos[destinoCD]) expedicoesAthos[destinoCD] = {destino:destinoCD, total:0, coletado:0};
-    expedicoesAthos[destinoCD].total += volume;
-    expedicoesAthos[destinoCD].coletado += confirmadoMapa;
+    // O PCP_ACABADORAS pode não trazer CD para a saída Athos. Nesse caso,
+    // a confirmação usa os destinos originais G do mapa por SKU, sem CD PCP.
+    // Não se presume destino para volume ainda não expedido quando há vários CDs.
+    var chavesSaida = destinoCD
+      ? [JSON.stringify([codigo,destinoCD])]
+      : Object.keys(saidaPorDestino).filter(function(k){
+          var e=saidaPorDestino[k];
+          return e.sku===codigo && !destinosInformados[JSON.stringify([codigo,e.destino])];
+        }).sort();
+    var saldoLinha = Math.max(0,volume),confirmadoMapa=0,codigosConfirmados=[];
+    var volumesPorDestino=Object.create(null),cdsComMapa=[];
+    chavesSaida.forEach(function(k){
+      var saida=saidaPorDestino[k];
+      if(!saida)return;
+      cdsComMapa.push(saida.destino);
+      var parcial=Math.min(saldoLinha,Math.max(0,saida.restante));
+      saldoLinha-=parcial;
+      saida.restante-=parcial;
+      confirmadoMapa+=parcial;
+      if(parcial>0){
+        volumesPorDestino[saida.destino]=(volumesPorDestino[saida.destino]||0)+parcial;
+        saida.mapas.forEach(function(c){if(codigosConfirmados.indexOf(c)<0)codigosConfirmados.push(c);});
+      }
+    });
+    var destinoUnico=destinoCD||(cdsComMapa.length===1?cdsComMapa[0]:'');
+    if(destinoUnico){
+      // Sem CD no PCP mas um único CD no Mapa: todo o plano cabe nele.
+      if(!expedicoesAthos[destinoUnico])expedicoesAthos[destinoUnico]={destino:destinoUnico,total:0,coletado:0};
+      expedicoesAthos[destinoUnico].total+=volume;
+    }else{
+      // Sem CD e com diversos destinos: exibir só o que foi comprovado;
+      // não atribuir artificialmente o saldo ao CD de uma coleta parcial.
+      var semDestino=Math.max(0,volume-confirmadoMapa);
+      if(semDestino){
+        var indefinido='CD NÃO INFORMADO';
+        if(!expedicoesAthos[indefinido])expedicoesAthos[indefinido]={destino:indefinido,total:0,coletado:0};
+        expedicoesAthos[indefinido].total+=semDestino;
+      }
+      Object.keys(volumesPorDestino).forEach(function(cd){
+        if(!expedicoesAthos[cd])expedicoesAthos[cd]={destino:cd,total:0,coletado:0};
+        expedicoesAthos[cd].total+=volumesPorDestino[cd];
+      });
+    }
+    Object.keys(volumesPorDestino).forEach(function(cd){
+      if(!expedicoesAthos[cd])expedicoesAthos[cd]={destino:cd,total:0,coletado:0};
+      expedicoesAthos[cd].coletado+=volumesPorDestino[cd];
+    });
     coletadoAthos += confirmadoMapa;
     // Uma coleta Athos -> CD comprova finalizacao mesmo sem a data BP.
     // Quando BP ja finalizou, nao somar duas vezes a mesma tiragem.
@@ -295,7 +350,7 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
       envio: 'V1', rawUnit: String(l[a.UNIDADE] || ''), caracteristica: caract,
       total: volume, recebidoRaw: recebida, recebido: 0, recebidoReconhecido: 0,
       produzido: volumeProduzido, coletado: confirmadoMapa, producaoApontada: finalizacaoComprovada,
-      saidaMapa: confirmadoMapa, codigosMapa: saidaSkuCD ? saidaSkuCD.mapas.join(', ') : '',
+      saidaMapa: confirmadoMapa, codigosMapa: codigosConfirmados.join(', '),
       dataFinalizacao: pgTempSasAdaptData_(dataFinalRaw), dataFinalizacaoISO: dataFinalISO,
       dataFinalizacaoRaw: dataFinalRaw, statusFinalizacao: statusFinal,
       dataAcabamento: pgTempSasAdaptData_(l[a['Acbto Final Real']]), dataAcabamentoRaw: l[a['Acbto Final Real']],
