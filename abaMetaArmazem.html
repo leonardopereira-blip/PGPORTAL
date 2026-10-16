@@ -444,6 +444,15 @@
     var segmento=normal(l.SEGMENTO), s=serieDaLinha(l), tipo=normal(l.TIPO);
     var grafica=normal(l.GRAFICA_FINAL || l['GRÁFICA'] || l.GRAFICA);
     if (grafica.indexOf('POSIGRAF')<0) return null;
+    // Séries "Vários" de CQT e SPE: usar a última data armazém
+    // acordada para a marca, pois não existe uma série específica para casar.
+    if (s==='VARIOS'&&(marca==='CQT'||marca==='SPE')){
+      var ultimaData=REGRAS.reduce(function(ultima,r){
+        if(normal(r.marca)!==marca)return ultima;
+        return r.datas.reduce(function(max,d){return d>max?d:max;},ultima);
+      },'');
+      if(ultimaData)return [{marca:marca,segmento:segmento,serie:s,tipo:tipo,datas:[ultimaData]}];
+    }
     var matches=REGRAS.filter(function(r){
       return normal(r.marca)===marca && normal(r.segmento)===segmento &&
         (!r.serie || serie(r.serie)===s) && (!r.tipo || normal(r.tipo)===tipo);
