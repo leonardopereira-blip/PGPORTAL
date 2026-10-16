@@ -157,8 +157,8 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
   var hoje = hojeISO == null ? pgTempSasAdaptDiaISO_(new Date()) : pgTempSasAdaptDiaISO_(hojeISO);
   if (!hoje) throw new Error('TEMP SAS ADAPT: data de referencia invalida');
   var operacoes = Object.create(null), graficas = Object.create(null), skusOrigem = Object.create(null);
-  var skusAthos = Object.create(null), linhasGraficas = [], linhasAthos = [], diagnosticos = [];
-  var pcpTotal = 0, saiuBruto = 0, saiu = 0, totalAthos = 0, produzido = 0, qtdApontamentos = 0;
+  var skusAthos = Object.create(null), expedicoesAthos = Object.create(null), linhasGraficas = [], linhasAthos = [], diagnosticos = [];
+  var pcpTotal = 0, saiuBruto = 0, saiu = 0, totalAthos = 0, produzido = 0, coletadoAthos = 0, qtdApontamentos = 0;
   function graficaObj(nome) {
     if (!graficas[nome]) graficas[nome] = { nome: nome, total: 0, saiu: 0, saiuBruto: 0, excedente: 0 };
     return graficas[nome];
@@ -256,16 +256,23 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
     var dataFinalRaw = l[a['Formação de kit/Encaixotamento Final Real']];
     var dataFinalISO = pgTempSasAdaptDiaISO_(dataFinalRaw);
     var apontada = Boolean(dataFinalISO && dataFinalISO <= hoje);
-    var chaveSaida = JSON.stringify([codigo, pgTempSasAdaptDestino_(l[a['CD DESTINO']])]);
+    var destinoCD = pgTempSasAdaptDestino_(l[a['CD DESTINO']]);
+    var chaveSaida = JSON.stringify([codigo, destinoCD]);
     var saidaSkuCD = saidaPorDestino[chaveSaida];
     var confirmadoMapa = saidaSkuCD ? Math.min(Math.max(0, volume), saidaSkuCD.restante) : 0;
     if (saidaSkuCD) saidaSkuCD.restante = Math.max(0, saidaSkuCD.restante - confirmadoMapa);
+    // Somente a quantidade AN do Mapa de Saída original entra na coleta da Athos.
+    // Finalização BP e coletas das gráficas não antecipam nem duplicam expedições.
+    if (!expedicoesAthos[destinoCD]) expedicoesAthos[destinoCD] = {destino:destinoCD, total:0, coletado:0};
+    expedicoesAthos[destinoCD].total += volume;
+    expedicoesAthos[destinoCD].coletado += confirmadoMapa;
+    coletadoAthos += confirmadoMapa;
     // Uma coleta Athos -> CD comprova finalizacao mesmo sem a data BP.
     // Quando BP ja finalizou, nao somar duas vezes a mesma tiragem.
     var volumeProduzido = Math.max(apontada ? volume : 0, confirmadoMapa);
     var finalizacaoComprovada = apontada || confirmadoMapa > 0;
     if (!skusAthos[codigo]) skusAthos[codigo] = {
-      sku: codigo, total: 0, recebido: 0, recebidoReconhecido: 0, produzido: 0,
+      sku: codigo, total: 0, recebido: 0, recebidoReconhecido: 0, produzido: 0, coletado: 0,
       producaoApontada: false, qtdApontamentos: 0, recebimentos: Object.create(null), linhas: []
     };
     var item = skusAthos[codigo];
@@ -274,6 +281,7 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
     item.recebido = Math.max(item.recebido, recebida);
     if (recebida > 0) item.recebimentos[String(recebida)] = true;
     item.produzido += volumeProduzido;
+    item.coletado += confirmadoMapa;
     item.producaoApontada = item.producaoApontada || finalizacaoComprovada;
     item.qtdApontamentos += finalizacaoComprovada ? 1 : 0;
     totalAthos += volume;
@@ -286,7 +294,7 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
       id: l[a.ID], sku: codigo, grafica: 'ATHOS', destino: pgTempSasAdaptNormalizar_(l[a['CD DESTINO']]),
       envio: 'V1', rawUnit: String(l[a.UNIDADE] || ''), caracteristica: caract,
       total: volume, recebidoRaw: recebida, recebido: 0, recebidoReconhecido: 0,
-      produzido: volumeProduzido, producaoApontada: finalizacaoComprovada,
+      produzido: volumeProduzido, coletado: confirmadoMapa, producaoApontada: finalizacaoComprovada,
       saidaMapa: confirmadoMapa, codigosMapa: saidaSkuCD ? saidaSkuCD.mapas.join(', ') : '',
       dataFinalizacao: pgTempSasAdaptData_(dataFinalRaw), dataFinalizacaoISO: dataFinalISO,
       dataFinalizacaoRaw: dataFinalRaw, statusFinalizacao: statusFinal,
@@ -314,7 +322,7 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
       l.recebimentoDivergente = divergente;
     });
     return { sku: sku, total: item.total, recebido: item.recebido,
-      recebidoReconhecido: item.recebidoReconhecido, produzido: item.produzido,
+      recebidoReconhecido: item.recebidoReconhecido, produzido: item.produzido, coletado: item.coletado,
       producaoApontada: item.producaoApontada, qtdApontamentos: item.qtdApontamentos,
       recebimentoDivergente: divergente };
   }).sort(function(x, y) { return x.sku.localeCompare(y.sku); });
@@ -326,9 +334,12 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
   return {
     dataReferencia: hoje, pcpTotal: pcpTotal, saiuGraficas: saiu, saiuGraficasBruto: saiuBruto,
     totalAthos: totalAthos, recebidoAthos: recebidoAthos, recebidoAthosReconhecido: recebidoReconhecido,
-    produzidoAthos: produzido, producaoApontada: qtdApontamentos > 0, qtdApontamentos: qtdApontamentos,
+    produzidoAthos: produzido, coletadoAthos: coletadoAthos,
+    producaoApontada: qtdApontamentos > 0, qtdApontamentos: qtdApontamentos,
     graficas: Object.keys(graficas).map(function(k) { return graficas[k]; })
       .sort(function(x, y) { return y.total - x.total || x.nome.localeCompare(y.nome); }),
+    expedicoesAthos: Object.keys(expedicoesAthos).map(function(k) { return expedicoesAthos[k]; })
+      .sort(function(x, y) { return y.total - x.total || x.destino.localeCompare(y.destino); }),
     athosPorSku: athosPorSku, pcpPorSku: pcpPorSku,
     linhasGraficas: linhasGraficas, linhasAthos: linhasAthos,
     qtdLinhasGraficas: linhasGraficas.length, qtdLinhasAthos: linhasAthos.length, diagnosticos: diagnosticos

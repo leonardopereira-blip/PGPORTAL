@@ -20,15 +20,15 @@
         <p id="pgTempAthosRecebido" class="text-xs text-slate-500 mt-1"></p>
       </div>
       <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <p class="text-[11px] font-bold uppercase text-slate-500">Produzido na Athos</p>
-        <p id="pgTempProduzidoPct" class="text-2xl font-black text-emerald-700 mt-2">—</p>
-        <p id="pgTempProduzidoVolume" class="text-xs text-slate-500 mt-1"></p>
+        <p class="text-[11px] font-bold uppercase text-slate-500">Coletado Athos</p>
+        <p id="pgTempColetadoPct" class="text-2xl font-black text-emerald-700 mt-2">—</p>
+        <p id="pgTempColetadoVolume" class="text-xs text-slate-500 mt-1"></p>
       </div>
     </div>
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
         <div class="flex flex-wrap justify-between items-center gap-2">
-          <h3 class="text-sm font-black text-slate-800">Gráficas</h3>
+          <h3 class="text-sm font-black text-slate-800">Expedições das gráficas</h3>
           <button type="button" onclick="window.pgExportarTempSasAdapt('graficas')"
             class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Baixar CSV</button>
         </div>
@@ -41,7 +41,20 @@
       </div>
       <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
         <div class="flex flex-wrap justify-between items-center gap-2">
-          <h3 class="text-sm font-black text-slate-800">Athos</h3>
+          <h3 class="text-sm font-black text-slate-800">Expedições Athos · CD</h3>
+          <button type="button" onclick="window.pgExportarTempSasAdapt('expedicoesAthos')"
+            class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Baixar CSV</button>
+        </div>
+        <div class="overflow-x-auto mt-3">
+          <table class="w-full text-xs whitespace-nowrap"><thead class="text-slate-500 bg-slate-50"><tr>
+            <th class="p-2 text-left">CD destino</th><th class="p-2 text-right">Total</th>
+            <th class="p-2 text-right">Coletado</th><th class="p-2 text-right">%</th>
+          </tr></thead><tbody id="pgTempTabelaExpedicoesAthos"></tbody></table>
+        </div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 xl:col-span-2">
+        <div class="flex flex-wrap justify-between items-center gap-2">
+          <h3 class="text-sm font-black text-slate-800">Athos · SKUs</h3>
           <button type="button" onclick="window.pgExportarTempSasAdapt('athos')"
             class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Baixar CSV</button>
         </div>
@@ -54,8 +67,8 @@
           <table class="w-full text-xs whitespace-nowrap">
             <thead class="sticky top-0 bg-slate-100 text-slate-600"><tr>
               <th class="p-2 text-left">SKU</th><th class="p-2 text-right">Programado</th>
-              <th class="p-2 text-right">Recebido</th><th class="p-2 text-right">Produzido</th>
-              <th class="p-2 text-right">% produzido</th>
+              <th class="p-2 text-right">Recebido</th><th class="p-2 text-right">Coletado</th>
+              <th class="p-2 text-right">% coletado</th>
             </tr></thead><tbody id="pgTempTabelaAthos"></tbody>
           </table>
         </div>
@@ -78,6 +91,14 @@
         '</td><td class="p-2 text-right text-slate-500 tabular-nums">' + pct(l.saiu, l.total) + '</td></tr>';
     }).join('') || '<tr><td colspan="4" class="p-4 text-center text-slate-500">Nenhum registro encontrado</td></tr>';
   }
+  function expedicoesAthos(linhas) {
+    el('pgTempTabelaExpedicoesAthos').innerHTML = (linhas || []).map(function(l) {
+      return '<tr class="border-t border-slate-100"><td class="p-2 text-slate-700">' + esc(l.destino) +
+        '</td><td class="p-2 text-right tabular-nums">' + fmt(l.total) +
+        '</td><td class="p-2 text-right font-bold tabular-nums">' + fmt(l.coletado) +
+        '</td><td class="p-2 text-right text-slate-500 tabular-nums">' + pct(l.coletado, l.total) + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="p-4 text-center text-slate-500">Nenhum registro encontrado</td></tr>';
+  }
   window.pgFiltrarTempSasAdapt = function() {
     if (!ultimo) return;
     var busca = (el('pgTempFiltroSku').value || '').trim().toUpperCase();
@@ -90,8 +111,8 @@
         '<td class="p-2 font-semibold">' + esc(s.sku) + '</td>' +
         '<td class="p-2 text-right tabular-nums">' + fmt(s.total) + '</td>' +
         '<td class="p-2 text-right tabular-nums">' + fmt(s.recebido) + '</td>' +
-        '<td class="p-2 text-right tabular-nums"' + (s.producaoApontada ? '' : ' title="Finalização não comprovada pelas fontes"') + '>' + (s.producaoApontada ? fmt(s.produzido) : '—') + '</td>' +
-        '<td class="p-2 text-right tabular-nums">' + (s.producaoApontada ? pct(s.produzido, s.total) : '—') + '</td></tr>';
+        '<td class="p-2 text-right tabular-nums">' + fmt(s.coletado) + '</td>' +
+        '<td class="p-2 text-right tabular-nums">' + pct(s.coletado, s.total) + '</td></tr>';
     }).join('') || '<tr><td colspan="5" class="p-5 text-center text-slate-500">Sem SKUs para o filtro</td></tr>';
   };
   function csvValor(valor) {
@@ -103,7 +124,8 @@
     if (!ultimo) { alert('Atualize a visão antes de baixar.'); return; }
     var definicoes = {
       graficas: {nome:'SAS_ADAPT_GRAFICAS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','tiragemRaw','saiuBruto','saiuReconhecido','operacao','totalOperacao','saiuBrutoOperacao','excedenteOperacao','linhasAgrupadas','dataColeta','dataColetaRaw','entregaTP','entregaTPRaw'], linhas:ultimo.linhasGraficas},
-      athos: {nome:'SAS_ADAPT_ATHOS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','recebidoRaw','recebido','recebidoReconhecido','linhasAgrupadas','recebimentoDivergente','dataAcabamento','dataAcabamentoRaw','dataFinalizacao','dataFinalizacaoRaw','statusFinalizacao','produzido','producaoApontada','saidaMapa','codigosMapa'], linhas:ultimo.linhasAthos}
+      athos: {nome:'SAS_ADAPT_ATHOS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','recebidoRaw','recebido','recebidoReconhecido','linhasAgrupadas','recebimentoDivergente','dataAcabamento','dataAcabamentoRaw','dataFinalizacao','dataFinalizacaoRaw','statusFinalizacao','produzido','producaoApontada','saidaMapa','codigosMapa'], linhas:ultimo.linhasAthos},
+      expedicoesAthos: {nome:'SAS_ADAPT_EXPEDICOES_ATHOS', colunas:['fonte','linha','sku','destino','total','saidaMapa','codigosMapa'], linhas:ultimo.linhasAthos}
     };
     var spec = definicoes[tipo];
     if (!spec || !spec.linhas) return;
@@ -140,9 +162,10 @@
     el('pgTempSaiuVolume').textContent = fmt(d.saiuGraficas) + ' de ' + fmt(d.pcpTotal);
     el('pgTempAthosProgramado').textContent = fmt(d.totalAthos);
     el('pgTempAthosRecebido').textContent = 'Recebido: ' + fmt(d.recebidoAthos);
-    el('pgTempProduzidoPct').textContent = d.producaoApontada ? pct(d.produzidoAthos, d.totalAthos) : '—';
-    el('pgTempProduzidoVolume').textContent = d.producaoApontada ? fmt(d.produzidoAthos) + ' de ' + fmt(d.totalAthos) : 'Sem finalização ou saída confirmada · Programado: ' + fmt(d.totalAthos);
+    el('pgTempColetadoPct').textContent = pct(d.coletadoAthos, d.totalAthos);
+    el('pgTempColetadoVolume').textContent = fmt(d.coletadoAthos) + ' de ' + fmt(d.totalAthos);
     graficas(d.graficas);
+    expedicoesAthos(d.expedicoesAthos);
     window.pgFiltrarTempSasAdapt();
     var data = d.atualizadoEm ? new Date(d.atualizadoEm) : null;
     el('statusTempSasAdapt').textContent = data && !isNaN(data.getTime()) ? 'Atualizado em ' + data.toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'}) : 'Atualizado.';
@@ -155,7 +178,8 @@
     google.script.run.withSuccessHandler(function(d) {
       carregando = false;
       if (!d || typeof d.pcpTotal !== 'number' || typeof d.totalAthos !== 'number' ||
-          !Array.isArray(d.graficas) || !Array.isArray(d.athosPorSku)) {
+          !Array.isArray(d.graficas) || !Array.isArray(d.expedicoesAthos) ||
+          typeof d.coletadoAthos !== 'number' || !Array.isArray(d.athosPorSku)) {
         el('statusTempSasAdapt').textContent = 'Não foi possível carregar. Tente atualizar a visão.';
         return;
       }

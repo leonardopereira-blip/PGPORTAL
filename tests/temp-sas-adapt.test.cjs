@@ -68,6 +68,9 @@ test('três indicadores usam saída das gráficas, PCP da Athos e finalização 
   assert.equal(r.recebidoAthos, 200);
   assert.equal(r.recebidoAthosReconhecido, 130);
   assert.equal(r.produzidoAthos, 60);
+  assert.equal(r.coletadoAthos, 0, 'BP finalizado não prova coleta no Mapa de Saída');
+  assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.coletado]),
+    [['CD JDI',110,0],['CD FOR',40,0]]);
   assert.equal(r.producaoApontada, true);
   const logprint = r.graficas.find(x => x.nome === 'LOGPRINT');
   assert.equal(logprint.total, 100);
@@ -181,6 +184,10 @@ test('saída original ATHOS para CDs comprova finalização sem BP, sem duplicar
   ];
   const r = contexto.pgTempSasAdaptResumo_(tabela(pHeader, pcp), tabela(aHeader, athos), hoje, saidas);
   assert.equal(r.produzidoAthos, 63);
+  assert.equal(r.coletadoAthos, 63);
+  assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.coletado]),
+    [['CD JDI',60,43],['CD FOR',40,20]]);
+  assert.deepEqual(Array.from(r.athosPorSku, x => [x.sku,x.coletado]), [['SKU-1',63]]);
   assert.equal(r.producaoApontada, true);
   assert.deepEqual(Array.from(r.linhasAthos, x => x.saidaMapa), [43, 20]);
   assert.deepEqual(Array.from(r.linhasAthos, x => x.produzido), [43, 20]);
@@ -189,6 +196,8 @@ test('saída original ATHOS para CDs comprova finalização sem BP, sem duplicar
   athos[0]['Formação de kit/Encaixotamento Final Real'] = '15/10/2026';
   const comBP = contexto.pgTempSasAdaptResumo_(tabela(pHeader, pcp), tabela(aHeader, athos), hoje, saidas);
   assert.equal(comBP.produzidoAthos, 80);
+  assert.equal(comBP.coletadoAthos, 63, 'BP não soma nem antecipa coleta');
+  assert.deepEqual(Array.from(comBP.linhasAthos, x => x.coletado), [43,20]);
 });
 
 test('colunas de total e finalização são obrigatórias e não viram números silenciosamente errados', () => {
@@ -278,6 +287,8 @@ test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos c
   assert.equal(r.totalAthos, 110);
   assert.equal(r.recebidoAthos, 50);
   assert.equal(r.produzidoAthos, 80, 'saida fisica da ATHOS confirma 20 sem BP');
+  assert.equal(r.coletadoAthos, 20, 'saída efetiva somente de AN no Mapa original');
+  assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.coletado]), [['CD JDI',110,20]]);
   assert.deepEqual(Array.from(r.linhasGraficas, row => row.linha), [3, 4]);
   assert.deepEqual(Array.from(r.linhasAthos, row => row.linha), [2, 4]);
   assert.equal(r.dataReferencia, hoje);
@@ -321,9 +332,10 @@ test('visão exibe os três indicadores e detalhe sem as explicações de bases 
   assert.match(h.elements.get('pgTempSaiuVolume').textContent, /120/);
   assert.match(h.elements.get('pgTempAthosRecebido').textContent, /200/);
   assert.match(h.elements.get('pgTempAthosProgramado').textContent, /150/);
-  assert.match(h.elements.get('pgTempProduzidoPct').textContent, /40(?:[,.]0+)?\s*%/);
-  assert.match(h.elements.get('pgTempProduzidoVolume').textContent, /60/);
+  assert.equal(h.elements.get('pgTempColetadoPct').textContent, '0%');
+  assert.match(h.elements.get('pgTempColetadoVolume').textContent, /0 de 150/);
   assert.match(h.elements.get('pgTempTabelaGraficas').innerHTML, /LOGPRINT/);
+  assert.match(h.elements.get('pgTempTabelaExpedicoesAthos').innerHTML, /CD JDI/);
   assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-1/);
   const visible = h.html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ');
   assert.doesNotMatch(visible, /Critério|Etapa\s*[12]|MAPA DE SA[IÍ]DA|não é estoque|não comprovação/i);
@@ -333,7 +345,7 @@ test('visão exibe os três indicadores e detalhe sem as explicações de bases 
   assert.doesNotMatch(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-1/);
   const missing = frontHarness(resumo(pcp, athos.slice(1)));
   missing.context.window.pgCarregarTempSasAdapt(true);
-  assert.equal(missing.elements.get('pgTempProduzidoPct').textContent, '—');
+  assert.equal(missing.elements.get('pgTempColetadoPct').textContent, '0%');
 });
 
 test('CSV auditável preserva quantidades negativas e neutraliza fórmulas em campos de texto', () => {
@@ -365,4 +377,9 @@ test('CSV auditável preserva quantidades negativas e neutraliza fórmulas em ca
   assert.match(athosCsv, /"170"/);
   assert.match(athosCsv, /"15\/10\/2026"/);
   assert.match(athosCsv, /"Finalizado"/);
+  h.context.window.pgExportarTempSasAdapt('expedicoesAthos');
+  assert.equal(h.downloads.length, 3);
+  const expCsv = h.blobs[2].parts.join('');
+  assert.match(expCsv, /COLETADO ATHOS/);
+  assert.match(expCsv, /"CD JDI"/);
 });
