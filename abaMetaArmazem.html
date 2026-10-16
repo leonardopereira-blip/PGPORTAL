@@ -173,7 +173,7 @@
   <div class="ma-card p-5 overflow-hidden">
     <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
       <div><h3 id="maMatrizTitulo" class="font-black text-slate-800 text-sm">Previsão Armazém</h3>
-        <p class="text-[10px] text-slate-500 mt-1">Marcas nas linhas; TOTAL GERAL primeiro. Arraste as séries prioritárias para mudar a ordem. Outros pode ser expandido; VARIOS permanece por último.</p></div>
+        <p class="text-[10px] text-slate-500 mt-1">Metas encerradas: apenas realizado até o prazo. Metas vigentes e futuras: realizado + previsão a partir de hoje. TOTAL GERAL primeiro. Arraste as séries prioritárias para mudar a ordem. Outros pode ser expandido; VARIOS permanece por último.</p></div>
       <button type="button" id="maScreenshot" onclick="window.pgMACapturarMatriz()" class="shrink-0 rounded-xl px-4 py-3 text-xs font-black text-white shadow-sm" title="Captura a tabela inteira em PNG, inclusive o conteúdo fora da rolagem">📸 Capturar tabela completa (PNG)</button>
     </div>
     <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
@@ -435,6 +435,22 @@
       entregaUnica:true,motivo:'sem-dias-uteis'};
     return {inicio:inicio,fim:fim,dias:dias,antes:antes,fracao:antes/dias};
   }
+  // Metas vencidas usam só a Entrega TP confirmada até o prazo.
+  // Para metas vigentes e futuras, o saldo (re)planejado só vale do corte em diante.
+  function fracaoFuturaDoRateio(rateio,meta,corte){
+    if(!rateio||!meta||!corte||meta<corte)return 0;
+    if(rateio.entregaUnica)return rateio.fim>=corte&&rateio.fim<=meta?1:0;
+    if(!(rateio.dias>0))return 0;
+    var inicio=rateio.inicio>corte?rateio.inicio:corte;
+    var fim=rateio.fim<meta?rateio.fim:meta;
+    if(inicio>fim)return 0;
+    var uteis=0,limite=740;
+    for(var d=new Date(inicio+'T12:00:00Z'),f=new Date(fim+'T12:00:00Z');d<=f&&limite-->0;d.setUTCDate(d.getUTCDate()+1)){
+      if(diaUtilArmazem(d))uteis++;
+    }
+    if(limite<=0)return 0;
+    return Math.min(1,uteis/rateio.dias);
+  }
   function posiRegra(l) {
     var marca=normal(l.MARCA_FINAL || l.UNIDADE || l.MARCA);
     if(l._PG_MA&&l._PG_MA.agrupado){
@@ -609,12 +625,13 @@
       var inicioUnico=inicioAusente||fallbackAplicado;
       var podeRatear=pendentePlanejado>0&&(fallbackAplicado||replanValido)&&(inicioUnico||inicioPlan)&&dtPlan;
       var rateio=podeRatear?rateioPlanejado(l,inicioPlan,dtPlan,alvo,inicioUnico):null;
-      var previstoOriginal=realDentro(alvo)+(rateio?pendentePlanejado*rateio.fracao:0);
+      var previstoOriginal=realDentro(alvo)+pendentePlanejado*fracaoFuturaDoRateio(rateio,alvo,corteEventos);
       var previstoFere=previstoOriginal,previstoNaoFere=previstoOriginal;
       if(elegivel){
         var rateioAcordo=podeRatear?
           rateioPlanejado(l,inicioPlan,dtPlan,dataAcordada,inicioUnico):null;
-        previstoNaoFere=realDentro(dataAcordada)+(rateioAcordo?pendentePlanejado*rateioAcordo.fracao:0);
+        previstoNaoFere=realDentro(dataAcordada)+
+          pendentePlanejado*fracaoFuturaDoRateio(rateioAcordo,dataAcordada,corteEventos);
       }
       var rateioAplicado=podeRatear?
         rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioUnico):null;
@@ -627,7 +644,7 @@
 
       // Distribuição pela meta original da marca, independente do cenário escolhido.
       var ate15=previstoOriginal;
-      var apos15=realFora(alvo)+(rateio?Math.max(0,pendentePlanejado-pendentePlanejado*rateio.fracao):0);
+      var apos15=Math.max(0,total-previstoOriginal-semData);
       var combinadoAdicional=Math.max(0,previstoNaoFere-previstoFere);
       var excecao=cenario==='com'?Math.max(0,previstoNaoFere-previstoOriginal):0;
       var real=realDentro(metaAplicada);
@@ -652,7 +669,7 @@
         origemColeta:origemColeta,replanValido:replanValido,motivoReplan:motivoReplan,statusSemPrevisao:statusSemPrevisao,
         datasInvertidas:datasInvertidas,fallbackAplicado:fallbackAplicado,dataFallback:dataFallback,
         slaDias:typeof window.pgDiasSLALinha==='function'?window.pgDiasSLALinha(l):null,
-        pendentePlanejado:pendentePlanejado,
+        pendentePlanejado:pendentePlanejado,corteEventos:corteEventos,
         posiPropria:posiPropria,dataAcordada:dataAcordada,metaAplicada:metaAplicada,rateioAplicado:rateioAplicado,
         combinadoAdicional:combinadoAdicional,conhecido:conhecido,
         prazos:[alvo].concat(elegivel?[dataAcordada]:[]),
@@ -717,6 +734,9 @@
       var meta=new Date(item.metaAplicada+'T12:00:00Z').getTime();
       if(!isFinite(meta))return;
       window.pgMADiasEntrega(item).forEach(function(parcela){
+        // Aging da Meta Armazém só considera previsão ainda vigente.
+        // Não altera as parcelas brutas usadas pela visão de eficiência.
+        if(!parcela.realizado&&parcela.data<item.corteEventos)return;
         var entrega=new Date(parcela.data+'T12:00:00Z').getTime(),peso=volume(parcela.volume);
         if(!isFinite(entrega)||!peso)return;
         var dias=Math.round((entrega-meta)/86400000);

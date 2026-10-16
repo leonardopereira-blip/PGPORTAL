@@ -86,7 +86,7 @@ test('matriz Entregas usa todo o volume TP até hoje sobre a tiragem CD, inclusi
   assert.equal(item.total,200);
   assert.equal(item.real,40);
   assert.equal(item.realCD,90);
-  assert.equal(item.previsto,150);
+  assert.equal(item.previsto,40, 'Meta de 15/10 já encerrada usa só a entrega ocorrida até o prazo');
   const entrega=matrixRows(controls.maMatrizRealizado.innerHTML);
   assert.deepEqual(entrega,[{name:'COC',cells:['45%','45%']},
     {name:'TOTAL GERAL',cells:['45%','45%']}]);
@@ -94,7 +94,7 @@ test('matriz Entregas usa todo o volume TP até hoje sobre a tiragem CD, inclusi
   assert.deepEqual(coleta,[{name:'COC',cells:['60%','60%']},
     {name:'TOTAL GERAL',cells:['60%','60%']}]);
   assert.deepEqual(matrixRows(controls.maMatriz.innerHTML),[
-    {name:'COC',cells:['75%','75%']},{name:'TOTAL GERAL',cells:['75%','75%']}]);
+    {name:'COC',cells:['20%','20%']},{name:'TOTAL GERAL',cells:['20%','20%']}]);
 });
 
 test('entrega fora da meta e sem previsão continua com percentual físico mesmo sem planejado dentro da meta',()=>{
@@ -219,9 +219,9 @@ test('parcelas respeitam o corte e cada data de entrega para classificar dentro 
   assert.equal(value(audit,0,'Entregue fora da meta'),50);
   assert.equal(value(audit,0,'Parcelas de Entrega TP (data: quantidade)'),
     '13/10/2026: 40 | 16/10/2026: 50');
-  assert.equal(value(audit,0,'Planejado dentro da meta'),150);
-  assert.equal(value(audit,0,'Saldo para aderência'),110);
-  assert.equal(value(audit,0,'Aderência Realizado / Planejado'),40/150);
+  assert.equal(value(audit,0,'Planejado dentro da meta'),40);
+  assert.equal(value(audit,0,'Saldo para aderência'),0);
+  assert.equal(value(audit,0,'Aderência Realizado / Planejado'),1);
   assert.equal(value(audit,0,'Corte'),'2026-10-20');
   assert.equal(value(audit,0,'% entregue TP / tiragem total'),90/200);
   assert.equal(value(audit,0,'Saldo a entregar'),110);
@@ -246,11 +246,11 @@ test('limite da tiragem é explicitado e excesso de outro registro não compensa
   assert.equal(value(audit,0,'Saldo para aderência'),0);
   assert.equal(value(audit,0,'Aderência Realizado / Planejado'),1);
   assert.match(value(audit,0,'Diagnóstico da diferença'),/Entrega TP excede tiragem total do agrupamento/);
-  assert.equal(value(audit,1,'Planejado dentro da meta'),100);
-  assert.equal(value(audit,1,'Saldo para aderência'),100);
-  assert.equal(value(audit,1,'Aderência Realizado / Planejado'),0);
+  assert.equal(value(audit,1,'Planejado dentro da meta'),0);
+  assert.equal(value(audit,1,'Saldo para aderência'),0);
+  assert.equal(value(audit,1,'Aderência Realizado / Planejado'),null);
   assert.equal(w.pgMAVisaoAtual.total.real,100);
-  assert.equal(w.pgMAVisaoAtual.total.previsto,200);
+  assert.equal(w.pgMAVisaoAtual.total.previsto,100);
 });
 
 test('recorte Funil marca Sim e Não sem eliminar a entrega da linha fora do recorte',()=>{

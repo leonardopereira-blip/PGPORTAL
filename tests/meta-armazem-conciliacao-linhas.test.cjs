@@ -203,10 +203,11 @@ test('linha simples conserva SLA, rateio e regra de somente saldo no planejament
   assert.equal(item.inicioPlan, '2026-10-14');
   assert.equal(item.dtPlan, '2026-10-17');
   assert.equal(item.pendentePlanejado, 120);
-  assert.equal(item.previsto, 160, '80 realizados + 2/3 dos 120 pendentes');
-  assert.equal(item.pos, 40);
+  assert.equal(item.previsto, 80, 'Prazo encerrado em 15/10 usa só as 80 entregas no prazo');
+  assert.equal(item.pos, 120, 'As parcelas planejadas para 14 a 17/10 venceram no corte de 20/10');
   assert.equal(item.ate15+item.apos15+item.semData, 200);
-  assert.equal(app.w.pgMADiasEntrega(item).reduce((sum,event)=>sum+event.volume,0), 200);
+  assert.equal(app.w.pgMADiasEntrega(item).reduce((sum,event)=>sum+event.volume,0), 200,
+    'API de parcelas brutas permanece íntegra para a visão de eficiência');
   checkAuditAlignment(app);
 });
 
@@ -426,7 +427,7 @@ test('quantidade de parcelas que não concilia preserva zero global e diagnósti
   assert.equal(app.w.pgVolumesColetaUnificadosV37(problematic,'2026-10-20').entrega, 0);
   assert.equal(bad.realizado, 0);
   assert.equal(bad.coletadoTP, 0);
-  assert.equal(bad.previsto, 300);
+  assert.equal(bad.previsto, 0, 'Planejamento vencido em 14/10 não equivale a entrega realizada em 20/10');
   assert.equal(bad.pendentePlanejado, 300);
   assert.equal(app.total.realCD, 40, 'Item sem divergência mantém sua entrega');
   assert.equal(app.total.coletadoTP, 40);
@@ -579,7 +580,7 @@ test('Entregas e Coletas mostram 69,4% quando os volumes realizados são iguais 
     row(233,{SKU:'SALDO-FORA',SKU_REAL:'SALDO-FORA',TIRAGEM:115,[fimPlan]:'2026-10-20'})
   ]);
   assert.equal(app.total.total,1000);
-  assert.equal(app.total.previsto,885);
+  assert.equal(app.total.previsto,694, 'Meta vencida considera só as 694 unidades entregues no prazo');
   assert.equal(app.total.real,694);
   assert.equal(app.total.realCD,694);
   assert.equal(app.total.coletadoTP,694);
