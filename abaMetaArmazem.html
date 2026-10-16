@@ -453,6 +453,15 @@
       },'');
       if(ultimaData)return [{marca:marca,segmento:segmento,serie:s,tipo:tipo,datas:[ultimaData]}];
     }
+    // EXTENSIVO, PREPARA e SEMI de SPE seguem o combinado do Ensino Médio
+    // da Posigraf, sem alterar o nome da série nem a regra das demais marcas.
+    // Reutiliza as datas oficiais existentes em REGRAS (25/10 e 12/11).
+    if(marca==='SPE'&&['EXTENSIVO','PREPARA','SEMI'].indexOf(s)>=0){
+      var regrasEM=REGRAS.filter(function(r){
+        return normal(r.marca)==='SPE'&&normal(r.segmento)==='ENSINO MEDIO'&&!r.serie&&!r.tipo;
+      });
+      if(regrasEM.length)return regrasEM;
+    }
     var matches=REGRAS.filter(function(r){
       return normal(r.marca)===marca && normal(r.segmento)===segmento &&
         (!r.serie || serie(r.serie)===s) && (!r.tipo || normal(r.tipo)===tipo);
