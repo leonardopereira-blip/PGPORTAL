@@ -9,7 +9,7 @@ const headers = [...source.match(/var colunas = \[([\s\S]*?)\];/)[1].matchAll(/'
 const volumes = ['Entregue Geral','Entregue armazém','Entregue dentro da meta','Entregue fora da meta',
   'Excedente de entrega','Coletado TP','Coletado TP bruto','Excedente de coleta'];
 const textColumns = ['Parcelas de Entrega TP (data: quantidade)','Parcelas de Coleta TP (data: quantidade)',
-  'Linhas de origem','Série original','Regra de conciliação','Composição do agrupamento',
+  'Linhas de origem','Personalização','Regra de conciliação','Composição do agrupamento',
   'Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação'];
 
 function spreadsheet() {
@@ -60,7 +60,7 @@ test('Google Sheets recebe volumes e percentuais numéricos e conciliação pres
     'Diagnósticos de conciliação': '=texto da origem',
     'Parcelas de Entrega TP (data: quantidade)': '14/10/2026: 250',
     'Parcelas de Coleta TP (data: quantidade)': '13/10/2026: 300',
-    'Série original': '6º ANO', 'Regra de conciliação': 'Total do agrupamento'
+    'Personalização': 'Capa e cliente', 'Regra de conciliação': 'Total do agrupamento'
   };
   volumes.forEach((name, i) => {values[name] = String(i + 10);});
   const app = spreadsheet(), result = app.export(payload(values));
@@ -107,4 +107,11 @@ test('Google Sheets rejeita número inválido em cada novo campo de volume', () 
     assert(result.error.includes('Número inválido') && result.error.includes(name), name);
     assert.equal(app.state.calls.length, 0, name);
   });
+});
+
+test('Coluna Personalização é texto seguro, sem duplicar campos do PCP',()=>{
+  const app=spreadsheet(),result=app.export(payload({Personalização:'Cliente personalizado'}));
+  assert.equal(result.success,true);
+  assert.equal(app.state.values[0][headers.indexOf('Personalização')],'Cliente personalizado');
+  assert(app.state.formats.some(f=>f.column===headers.indexOf('Personalização')+1 && f.format==='@'));
 });

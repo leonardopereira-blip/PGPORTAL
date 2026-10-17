@@ -7,10 +7,10 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
     'Origem do cálculo','SLA (dias corridos)','Entrega início prevista','Entrega fim prevista',
     'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
     'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
-    'Fonte','ID da linha','Chave','Cenário','Tipo',
+    'Fonte','ID da linha','Chave','Cenário','Tipo','Personalização',
     'Entregue Geral','Entregue armazém','Entregue dentro da meta','Entregue fora da meta','Excedente de entrega',
     'Coletado TP','Coletado TP bruto','Excedente de coleta','Parcelas de Entrega TP (data: quantidade)',
-    'Parcelas de Coleta TP (data: quantidade)','Linhas de origem','Série original','Regra de conciliação',
+    'Parcelas de Coleta TP (data: quantidade)','Linhas de origem','Regra de conciliação',
     'Composição do agrupamento','Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação'
   ];
   var datas = [
@@ -22,8 +22,8 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
     'Coletado TP','Coletado TP bruto','Excedente de coleta'];
   var inteiros = ['SLA (dias corridos)','DU totais','DU dentro da meta','DU fora da meta'];
   var percentuais = ['% dentro da meta'];
-  var conciliacaoTexto = ['Parcelas de Entrega TP (data: quantidade)','Parcelas de Coleta TP (data: quantidade)',
-    'Linhas de origem','Série original','Regra de conciliação','Composição do agrupamento',
+  var conciliacaoTexto = ['Personalização','Parcelas de Entrega TP (data: quantidade)','Parcelas de Coleta TP (data: quantidade)',
+    'Linhas de origem','Regra de conciliação','Composição do agrupamento',
     'Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação'];
   var avisos = [];
   var resultado;
@@ -128,7 +128,7 @@ function gerarPlanilhaMetaArmazemAuditavel(payload) {
       'Regra aplicada':220,'Situação':150,'Motivo / observação':340,
       'Fonte':140,'ID da linha':150,'Chave':250,'Cenário':240,'Tipo':130,
       'Parcelas de Entrega TP (data: quantidade)':320,'Parcelas de Coleta TP (data: quantidade)':320,
-      'Linhas de origem':320,'Série original':180,'Regra de conciliação':340,
+      'Linhas de origem':320,'Personalização':175,'Regra de conciliação':340,
       'Composição do agrupamento':600,'Movimentos de Entrega TP':600,'Movimentos de Coleta TP':600,
       'Diagnósticos de conciliação':360
     };

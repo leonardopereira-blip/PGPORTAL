@@ -170,6 +170,17 @@
   </div>
   <div id="maAviso" class="hidden text-xs bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900"></div>
   <div id="maKPIs" class="grid grid-cols-2 xl:grid-cols-4 gap-3"></div>
+
+  <div class="ma-card p-5 overflow-hidden" id="maGraficoAderenciaWrap">
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+      <div>
+        <h3 class="font-black text-slate-800 text-sm">Evolução da aderência às metas</h3>
+        <p class="text-[10px] text-slate-500 mt-1">Aderência acumulada por data da meta aplicada, ponderada pela tiragem. Marcos encerrados: realizado dentro da meta; próximos marcos: realizado + previsão vigente.</p>
+      </div>
+      <button type="button" id="maCapturarGrafico" class="ma-pill shrink-0" onclick="window.pgMACapturarGrafico()">Capturar gráfico completo (PNG)</button>
+    </div>
+    <div id="maGraficoAderencia" class="overflow-x-auto max-w-full" aria-label="Gráfico de aderência das metas encerradas e futuras"></div>
+  </div>
   <div class="ma-card p-5 overflow-hidden">
     <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
       <div><h3 id="maMatrizTitulo" class="font-black text-slate-800 text-sm">Previsão Armazém</h3>
@@ -828,6 +839,21 @@
     return i.conciliacao?Array.from(new Set(i.conciliacao.ids.concat(i.conciliacao.owners.map(window.pgMAIdLinhaRealizado)))).join(' | '):
       String(i.linha._PG_TP_LINHA||i.linha.ID||i.linha._ROW_ID||'');
   }
+
+  // Os campos de personalização já vêm do PCP; não modificamos a base de origem.
+  function personalizacaoAuditavel(item){
+    var linhas=item.conciliacao?item.conciliacao.linhas:[item.linha];
+    var capa=false,cliente=false,conhecido=false;
+    linhas.forEach(function(l){
+      var cap=l.CAPA_PERSONALIZADA,cli=l.CLIENTE_PERSONALIZADO;
+      if(cap!=null&&String(cap).trim())conhecido=true;
+      if(cli!=null&&String(cli).trim())conhecido=true;
+      if(normal(cap)==='SIM')capa=true;
+      if(normal(cli)==='SIM')cliente=true;
+    });
+    return !conhecido?'':capa&&cliente?'Capa e cliente':
+      capa?'Capa personalizada':cliente?'Cliente personalizado':'Não';
+  }
   function montarAuditoria(items,cenarioId){
     var cenario=cenarioId==='com'?'Combinado Posi não fere a meta':'Combinado Posi Fere a Meta';
     var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio',
@@ -836,10 +862,10 @@
       'Origem do cálculo','SLA (dias corridos)','Entrega início prevista','Entrega fim prevista',
       'Meta original','Prazo combinado Posi','Meta aplicada','DU totais','DU dentro da meta',
       'DU fora da meta','Tiragem por DU','Regra aplicada','Situação','Motivo / observação',
-      'Fonte','ID da linha','Chave','Cenário','Tipo',
+      'Fonte','ID da linha','Chave','Cenário','Tipo','Personalização',
       'Entregue Geral','Entregue armazém','Entregue dentro da meta','Entregue fora da meta','Excedente de entrega',
       'Coletado TP','Coletado TP bruto','Excedente de coleta','Parcelas de Entrega TP (data: quantidade)',
-      'Parcelas de Coleta TP (data: quantidade)','Linhas de origem','Série original','Regra de conciliação',
+      'Parcelas de Coleta TP (data: quantidade)','Linhas de origem','Regra de conciliação',
       'Composição do agrupamento','Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação'];
     var linhas=items.map(function(i){
       var l=i.linha||{},campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
@@ -887,13 +913,12 @@
         i.alvo,i.dataAcordada||'',i.metaAplicada,
         porDU?r.dias:'',porDU?r.antes:'',porDU?r.dias-r.antes:'',porDU&&i.pendentePlanejado?i.pendentePlanejado/r.dias:'',
         regra,situacao,notas.join(' '),String(l._SOURCE||'PCP'),String(l.ID??l._ROW_ID??''),
-        String(l.JOIN_KEY||campo('Chave')||campo('CHAVE')||''),cenario,i.tipo,
+        String(l.JOIN_KEY||campo('Chave')||campo('CHAVE')||''),cenario,i.tipo,personalizacaoAuditavel(i),
         i.entregueBruto,i.realizado,i.real,i.realizado-i.real,i.excedenteEntrega,
         i.coletadoTP,i.coletadoBrutoTP,i.excedenteColeta,
         (i.eventosReal||[]).map(function(e){return fmtPrazo(e.data)+': '+fmt(e.volume,true);}).join(' | '),
         (i.eventosColeta||[]).map(function(e){return fmtPrazo(e.data)+': '+fmt(e.volume,true);}).join(' | '),
         linhasOrigemAuditaveis(i),
-        Array.from(new Set((i.conciliacao?i.conciliacao.linhas:[l]).map(function(r){return r['SÉRIE']||r.SERIE||'';}))).join(' | '),
         i.conciliacao?i.conciliacao.regra:'Linha de origem',
         composicaoAuditavel(i,cenarioId),movimentosAuditaveis(i,'entrega'),movimentosAuditaveis(i,'coleta'),
         i.conciliacao?(i.conciliacao.diagnosticos||[]).join(' | '):''];
@@ -972,13 +997,13 @@
     }
     var chavesFunil=new Set(funilDisponivel?funilBase.map(chave):[]);
     var cabecalho=['Kit','SKU','Descrição','Marca','Série','Gráfica','CD destino','Envio',
-      'Fonte','ID da linha','Chave','Tipo','Cenário','Corte',
+      'Fonte','ID da linha','Chave','Tipo','Personalização','Cenário','Corte',
       'Tiragem total','Tiragem coletada bruta','Entregue Geral','Entregue armazém',
       'Diferença Geral - Armazém','Entregue dentro da meta','Entregue fora da meta',
       'Planejado dentro da meta','Saldo para aderência','Aderência Realizado / Planejado',
       'Meta original','Meta aplicada','Prazo combinado Posi','Coleta TP (data)','Entrega TP (data)',
       'Parcelas de Entrega TP (data: quantidade)','Recorte Funil','Diagnóstico da diferença',
-      'Coleta fim (re)plan','Entrega fim prevista','Linhas de origem','Série original','Regra de conciliação',
+      'Coleta fim (re)plan','Entrega fim prevista','Linhas de origem','Regra de conciliação',
       'Composição do agrupamento','Movimentos de Entrega TP','Movimentos de Coleta TP','Diagnósticos de conciliação',
       '% entregue TP / tiragem total','Saldo a entregar'];
     var linhas=items.map(function(i){
@@ -1020,7 +1045,7 @@
         String(l.DESC_REAL||campo('DESCRIÇÃO')||campo('DESCRICAO')||l.PRODUTO||''),
         i.marca,i.serie,i.grafica,i.cd,String(l.ENVIO||l.Envio||''),
         String(l._SOURCE||'PCP'),String(l.ID??l._ROW_ID??''),
-        String(l.JOIN_KEY||campo('Chave')||campo('CHAVE')||''),i.tipo,cenario,corte,
+        String(l.JOIN_KEY||campo('Chave')||campo('CHAVE')||''),i.tipo,personalizacaoAuditavel(i),cenario,corte,
         i.total,i.coletadaBruta,geral,armazem,diferenca,dentro,fora,plan,saldo,
         plan>0?dentro/plan:null,
         i.alvo,i.metaAplicada,i.dataAcordada||'',
@@ -1028,7 +1053,6 @@
         funilDisponivel?(naBase?'Sim':'Não'):'Não disponível',motivo.join(' '),
         i.fimReplanColeta||'',i.dtPlan||'',
         linhasOrigemAuditaveis(i),
-        Array.from(new Set((i.conciliacao?i.conciliacao.linhas:[l]).map(function(r){return r['SÉRIE']||r.SERIE||'';}))).join(' | '),
         i.conciliacao?i.conciliacao.regra:'Linha de origem',
         composicaoAuditavel(i,cenarioId),movimentosAuditaveis(i,'entrega'),movimentosAuditaveis(i,'coleta'),
         i.conciliacao?(i.conciliacao.diagnosticos||[]).join(' | '):'',
@@ -1050,7 +1074,7 @@
     if(!base.linhas.length){window.alert('Não há itens nesta seleção para exportar.');return;}
     var csv=function(v,j){
       var txt=typeof v==='number'?String(v).replace('.',','):String(v??'');
-      if((j===23||/^%/.test(base.cabecalho[j]))&&typeof v==='number')txt=pct(v,1);
+      if((base.cabecalho[j]==='Aderência Realizado / Planejado'||/^%/.test(base.cabecalho[j]))&&typeof v==='number')txt=pct(v,1);
       if(typeof v==='string'&&/^[\s]*[=+@-]/.test(txt))txt="'"+txt;
       return '"'+txt.replace(/"/g,'""')+'"';
     };
@@ -1373,6 +1397,104 @@
       });
     });
   }
+
+  // Todas as metas anteriores entram no denominador acumulado.
+  // O numerador usa o fechamento de cada coorte: real para data vencida
+  // ou realizado + previsão do próprio item quando a meta ainda está aberta.
+  window.pgMAModeloGraficoAderencia=function(items,corte){
+    var porData=Object.create(null);
+    (items||[]).forEach(function(i){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(i.metaAplicada||'')||!(i.total>0))return;
+      var g=porData[i.metaAplicada]||(porData[i.metaAplicada]={data:i.metaAplicada,totalMeta:0,aderenteMeta:0});
+      g.totalMeta+=i.total;
+      g.aderenteMeta+=Math.min(i.total,Math.max(0,i.metaAplicada<corte?i.real:i.previsto));
+    });
+    var total=0,aderente=0;
+    return Object.keys(porData).sort().map(function(data){
+      var g=porData[data];total+=g.totalMeta;aderente+=g.aderenteMeta;
+      return {data:data,passada:data<corte,total:total,aderente:aderente,
+        pct:total?aderente*100/total:0,totalMeta:g.totalMeta,aderenteMeta:g.aderenteMeta};
+    });
+  };
+  function desenharGraficoAderencia(items){
+    var root=document.getElementById('maGraficoAderencia');if(!root)return;
+    var corte=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toISOString().slice(0,10);
+    var pontos=window.pgMAModeloGraficoAderencia(items,corte);
+    if(!pontos.length){
+      root.innerHTML='<p class="text-xs text-slate-500 text-center p-5">Sem metas aplicadas para este recorte.</p>';return;
+    }
+    var w=Math.max(900,pontos.length*108+160),h=355;
+    var x0=63,x1=w-35,y0=93,y1=270,n=pontos.length;
+    var step=n>1?(x1-x0)/(n-1):0;
+    var x=function(i){return n===1?(x0+x1)/2:x0+i*step;};
+    var y=function(p){return y1-(Math.max(0,Math.min(100,p))/100)*(y1-y0);};
+    var encerradas=pontos.filter(function(p){return p.passada;}).length;
+    var separador=encerradas===0?x0:encerradas===n?x1:(x(encerradas-1)+x(encerradas))/2;
+    var ultima=encerradas?pontos[encerradas-1].data:'';
+    var pctTexto=function(v){return v.toFixed(1).replace('.',',')+'%';};
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" role="img" aria-label="Evolução da aderência às metas">';
+    svg+='<rect width="'+w+'" height="'+h+'" rx="12" fill="#ffffff"/>';
+    svg+='<text x="24" y="29" fill="#0C2340" font-family="Arial,sans-serif" font-weight="700" font-size="16">Aderência acumulada às metas aplicadas</text>';
+    svg+='<text x="24" y="50" fill="#64748b" font-family="Arial,sans-serif" font-size="11">Percentual ponderado pela tiragem dos marcos até cada data</text>';
+    svg+='<rect x="'+x0+'" y="'+y0+'" width="'+Math.max(0,separador-x0)+'" height="'+(y1-y0)+'" fill="#eaf3fc"/>';
+    svg+='<rect x="'+separador+'" y="'+y0+'" width="'+Math.max(0,x1-separador)+'" height="'+(y1-y0)+'" fill="#f1f3f5"/>';
+    for(var t=0;t<=100;t+=20){
+      var yy=y(t);
+      svg+='<line x1="'+x0+'" y1="'+yy+'" x2="'+x1+'" y2="'+yy+'" stroke="#d7e1ea" stroke-width="1"/>';
+      svg+='<text x="'+(x0-12)+'" y="'+(yy+4)+'" fill="#64748b" text-anchor="end" font-size="11" font-family="Arial,sans-serif">'+t+'%</text>';
+    }
+    if(encerradas&&encerradas<n){
+      svg+='<line x1="'+separador+'" x2="'+separador+'" y1="'+(y0-9)+'" y2="'+(y1+12)+'" stroke="#64748b" stroke-width="1.8" stroke-dasharray="5 5"/>';
+      svg+='<text x="'+separador+'" y="'+(y0-18)+'" fill="#334155" text-anchor="middle" font-size="10" font-weight="700" font-family="Arial,sans-serif">Última meta: '+fmtPrazo(ultima).slice(0,5)+'</text>';
+    }
+    for(var i=1;i<n;i++){
+      var cor=pontos[i].passada?'#418EDE':'#64748b';
+      svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pct)+'" x2="'+x(i)+'" y2="'+y(pontos[i].pct)+'" stroke="'+cor+
+        '" stroke-width="3" stroke-linecap="round"'+(pontos[i].passada?'':' stroke-dasharray="6 5"')+'/>';
+    }
+    pontos.forEach(function(p,i){
+      var xx=x(i),yy=y(p.pct),cor=p.passada?'#418EDE':'#64748b';
+      var dica=fmtPrazo(p.data)+' · '+(p.passada?'Realizado':'Previsto')+': '+pctTexto(p.pct)+
+        ' ('+fmt(p.aderente,true)+' / '+fmt(p.total,true)+')';
+      svg+='<circle cx="'+xx+'" cy="'+yy+'" r="5.5" fill="'+cor+'" stroke="#fff" stroke-width="2"><title>'+escapeHTML(dica)+'</title></circle>';
+      svg+='<text x="'+xx+'" y="'+(yy-12)+'" font-size="11" font-family="Arial,sans-serif" text-anchor="middle" font-weight="700" fill="#0C2340">'+pctTexto(p.pct)+'</text>';
+      svg+='<text x="'+xx+'" y="'+(y1+22)+'" font-size="11" font-family="Arial,sans-serif" text-anchor="middle" fill="#334155">'+fmtPrazo(p.data).slice(0,5)+'</text>';
+    });
+    svg+='<rect x="'+x0+'" y="316" width="12" height="12" rx="3" fill="#d2e7f8"/>'+
+      '<text x="'+(x0+19)+'" y="326" font-size="11" font-family="Arial,sans-serif" fill="#475569">Metas já encerradas</text>';
+    svg+='<rect x="'+(x0+190)+'" y="316" width="12" height="12" rx="3" fill="#e5e7eb"/>'+
+      '<text x="'+(x0+209)+'" y="326" font-size="11" font-family="Arial,sans-serif" fill="#475569">Metas de hoje e futuras</text>';
+    svg+='</svg>';
+    root.innerHTML=svg;
+  }
+  window.pgMACapturarGrafico=function(){
+    var root=document.getElementById('maGraficoAderencia'),svg=root&&root.querySelector('svg');
+    if(!svg){window.alert('Não há gráfico para capturar.');return;}
+    var xml=new XMLSerializer().serializeToString(svg),vb=svg.viewBox.baseVal;
+    var canvas=document.createElement('canvas'),escala=3;
+    canvas.width=Math.round(vb.width*escala);canvas.height=Math.round(vb.height*escala);
+    var ctx=canvas.getContext('2d');
+    if(!ctx){window.alert('Não foi possível criar a imagem.');return;}
+    var svgURL=URL.createObjectURL(new Blob([xml],{type:'image/svg+xml;charset=utf-8'})),imagem=new Image();
+    imagem.onload=function(){
+      try{
+        ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(imagem,0,0,canvas.width,canvas.height);
+        canvas.toBlob(function(blob){
+          if(!blob){window.alert('Não foi possível gerar o PNG.');return;}
+          var pngURL=URL.createObjectURL(blob),a=document.createElement('a');
+          a.href=pngURL;
+          a.download='Meta_Armazem_Aderencia_'+(typeof dtHojeISO!=='undefined'?dtHojeISO:'')+'.png';
+          document.body.appendChild(a);a.click();a.remove();
+          setTimeout(function(){URL.revokeObjectURL(pngURL);},60000);
+        },'image/png');
+      }catch(erro){window.alert('Falha ao exportar o gráfico: '+erro.message);}
+      finally{URL.revokeObjectURL(svgURL);}
+    };
+    imagem.onerror=function(){URL.revokeObjectURL(svgURL);window.alert('Falha ao preparar o PNG.');};
+    imagem.src=svgURL;
+  };
+
   function matriz(items) {
     var root=document.getElementById('maMatriz'),m=modeloMatriz(items);
     window.pgMAMatrizSnapshot=m;
@@ -1594,7 +1716,7 @@
     if(!aviso)return;
     try{base=dadosBase();}catch(erro){
       window.pgMAVisaoAtual=null;window.pgMAUltimosItens=[];window.pgMAMatrizSnapshot=null;
-      ['maKPIs','maMatriz','maMatrizRealizado','maMatrizColetas','maTabela','maComparativo',
+      ['maKPIs','maGraficoAderencia','maMatriz','maMatrizRealizado','maMatrizColetas','maTabela','maComparativo',
         'maBarrasGrafica','maBarrasMarca','maBarrasSerie','maLegendaPrazos','maComparativoNota','maContagem']
         .forEach(function(id){var e=document.getElementById(id);if(e)e.innerHTML='';});
       aviso.classList.remove('hidden');aviso.textContent='Não foi possível conciliar a visão: '+erro.message;return;
@@ -1637,6 +1759,7 @@
     distribuicao(items,'marca','maBarrasMarca');
     distribuicao(items,'serie','maBarrasSerie');
     matriz(items);
+    desenharGraficoAderencia(items);
     comparativoMeta(items,total);
     var atual='';var rows='';
     rank.forEach(function(g){

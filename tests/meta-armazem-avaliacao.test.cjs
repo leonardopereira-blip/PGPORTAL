@@ -37,6 +37,8 @@ test('Auditoria exporta mesmo conjunto de colunas, sem OP e com Tipo na posiçã
   assert.equal(cols[36], 'Tipo');
   assert.ok(cols.indexOf('Entregue Geral') > cols.indexOf('Tipo'));
   assert.ok(!cols.includes('OP'));
+  assert.ok(!cols.includes('Série original'));
+  assert.equal(cols.filter(nome=>nome==='Personalização').length,1);
 });
 
 test('Percentuais mostram graficas fora e XLSX possui fallback e tipos', () => {
