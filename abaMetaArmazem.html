@@ -173,7 +173,7 @@
   <div class="ma-card p-5 overflow-hidden">
     <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 mb-3">
       <div><h3 id="maMatrizTitulo" class="font-black text-slate-800 text-sm">Previsão Armazém</h3>
-        <p class="text-[10px] text-slate-500 mt-1">Metas encerradas: apenas realizado até o prazo. Metas vigentes e futuras: realizado + previsão a partir de hoje. TOTAL GERAL primeiro. Arraste as séries prioritárias para mudar a ordem. Outros pode ser expandido; VARIOS permanece por último.</p></div>
+        <p class="text-[10px] text-slate-500 mt-1">Metas encerradas: apenas realizado até o prazo. Metas vigentes e futuras: realizado + previsão a partir de hoje. TOTAL GERAL primeiro. Arraste as séries prioritárias para mudar a ordem. Outros inclui VARIOS e pode ser expandido.</p></div>
       <button type="button" id="maScreenshot" onclick="window.pgMACapturarMatriz()" class="shrink-0 rounded-xl px-4 py-3 text-xs font-black text-white shadow-sm" title="Captura a tabela inteira em PNG, inclusive o conteúdo fora da rolagem">📸 Capturar tabela completa (PNG)</button>
     </div>
     <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
@@ -1187,7 +1187,7 @@
       var prioridade=series.filter(seriePrioritaria).sort(function(a,b){
         return ordemMatriz().indexOf(a)-ordemMatriz().indexOf(b);
       });
-      var outras=series.filter(function(x){return !seriePrioritaria(x)&&x!=='VARIOS';})
+      var outras=series.filter(function(x){return !seriePrioritaria(x);})
         .sort(function(a,b){
           return soma(items.filter(function(x){return x.serie===b;})).total-
             soma(items.filter(function(x){return x.serie===a;})).total||ordenarMatriz(a,b);
@@ -1196,7 +1196,7 @@
       var mostrar=estado.matrizExpandida?outras.map(function(v){return {nome:v,campo:'serie',valores:[v],prioritaria:false};}):
         outras.length?[{nome:'OUTROS',campo:'serie',valores:outras,prioritaria:false}]:[];
       colunas=[geral].concat(prioridade.map(function(v){return {nome:v,campo:'serie',valores:[v],prioritaria:true};}))
-        .concat(mostrar).concat(series.indexOf('VARIOS')>=0?[{nome:'VARIOS',campo:'serie',valores:['VARIOS'],prioritaria:false}]:[]);
+        .concat(mostrar);
     }
     function totalColuna(base,c){
       var linhas=c.campo?base.filter(function(x){return c.valores.indexOf(x[c.campo])>=0;}):base;
