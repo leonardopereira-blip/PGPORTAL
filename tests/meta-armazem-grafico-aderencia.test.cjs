@@ -61,6 +61,20 @@ test('gráfico e PNG estão isolados das funções de cálculo e usam SVG comple
   assert.match(source,/fill="#f1f3f5"/);
 });
 
+test('rótulos do gráfico são inteiros e as porcentagens calculadas preservam as casas decimais',()=>{
+  assert.match(source,/var pctTexto=function\(v\)\{return Math\.round\(v\)\+'%';\};/);
+  const w=engine('2026-10-17');
+  const pontos=w.pgMAModeloGraficoAderencia([
+    linha('2026-10-15',1000,795,900),
+    linha('2026-10-20',1000,800,843)
+  ],'2026-10-17');
+  assert.equal(pontos[0].pct,79.5);
+  assert.equal(pontos[1].pct,81.9);
+  assert.equal(Math.round(pontos[0].pct),80);
+  assert.equal(Math.round(pontos[1].pct),82);
+  assert.match(source,/Aderência às metas armazém/);
+});
+
 test('auditorias não exibem Série original e usam dados já existentes de personalização',()=>{
   assert.doesNotMatch(source,/'Série original'/);
   assert.match(source,/l\.CAPA_PERSONALIZADA/);

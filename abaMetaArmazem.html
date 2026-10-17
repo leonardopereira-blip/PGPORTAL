@@ -174,7 +174,7 @@
   <div class="ma-card p-5 overflow-hidden" id="maGraficoAderenciaWrap">
     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
       <div>
-        <h3 class="font-black text-slate-800 text-sm">Evolução da aderência às metas</h3>
+        <h3 class="font-black text-slate-800 text-sm">Aderência às metas armazém</h3>
         <p class="text-[10px] text-slate-500 mt-1">Aderência acumulada por data da meta aplicada, ponderada pela tiragem. Marcos encerrados: realizado dentro da meta; próximos marcos: realizado + previsão vigente.</p>
       </div>
       <button type="button" id="maCapturarGrafico" class="ma-pill shrink-0" onclick="window.pgMACapturarGrafico()">Capturar gráfico completo (PNG)</button>
@@ -1431,10 +1431,10 @@
     var encerradas=pontos.filter(function(p){return p.passada;}).length;
     var separador=encerradas===0?x0:encerradas===n?x1:(x(encerradas-1)+x(encerradas))/2;
     var ultima=encerradas?pontos[encerradas-1].data:'';
-    var pctTexto=function(v){return v.toFixed(1).replace('.',',')+'%';};
+    var pctTexto=function(v){return Math.round(v)+'%';};
     var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" role="img" aria-label="Evolução da aderência às metas">';
     svg+='<rect width="'+w+'" height="'+h+'" rx="12" fill="#ffffff"/>';
-    svg+='<text x="24" y="29" fill="#0C2340" font-family="Arial,sans-serif" font-weight="700" font-size="16">Aderência acumulada às metas aplicadas</text>';
+    svg+='<text x="24" y="29" fill="#0C2340" font-family="Arial,sans-serif" font-weight="700" font-size="16">Aderência às metas armazém</text>';
     svg+='<text x="24" y="50" fill="#64748b" font-family="Arial,sans-serif" font-size="11">Percentual ponderado pela tiragem dos marcos até cada data</text>';
     svg+='<rect x="'+x0+'" y="'+y0+'" width="'+Math.max(0,separador-x0)+'" height="'+(y1-y0)+'" fill="#eaf3fc"/>';
     svg+='<rect x="'+separador+'" y="'+y0+'" width="'+Math.max(0,x1-separador)+'" height="'+(y1-y0)+'" fill="#f1f3f5"/>';
