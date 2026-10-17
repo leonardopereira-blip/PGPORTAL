@@ -249,7 +249,7 @@
 (function () {
   'use strict';
   // Datas e coortes do "Combinado_Posi" recebido em 28/09/2026.
-  // Usar apenas a data final acordada como exceção; o volume segue o rateio por DU.
+  // O fim (re)plan pode identificar um marco oficial; o volume segue o rateio por DU.
   var REGRAS = [
     'COC|ENSINO FUNDAMENTAL 1|3º ANO|ALUNO||||2026-09-04',
     'COC|ENSINO FUNDAMENTAL 1|3º ANO|ALUNO||||2026-08-28',
@@ -495,13 +495,41 @@
     }
     return rateioDiasUteis(inicio,fim,meta);
   }
-  function prazoDaLinha(l,cenario){
+  function marcoPosiPeloReplan(l,regras){
+    // Sem coorte única ou intervalo válido, conserva o prazo final existente.
+    if(!regras||regras.length!==1)return '';
+    var campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
+    var fim=data(campo('Coleta/Internalização de estoque final (re) plan'));
+    if(!fim||!rateioDiasUteis(fim,fim,fim))return '';
+    var inicioRaw=campo('Coleta/Internalização de estoque inicial (re) plan');
+    if(inicioRaw!=null&&String(inicioRaw).trim()!==''){
+      var inicio=data(inicioRaw);
+      if(!inicio||!rateioDiasUteis(inicio,fim,fim))return '';
+    }
+    return regras[0].datas.indexOf(fim)>=0?fim:'';
+  }
+  function mesmosPrazos(prazos){
+    var primeiro=prazos[0];
+    return prazos.length>0&&prazos.every(function(p){return p.alvo===primeiro.alvo&&p.metaAplicada===primeiro.metaAplicada&&p.dataAcordada===primeiro.dataAcordada;});
+  }
+  function prazoDaLinha(l,cenario,preservarPrazoFinal){
+    if(l._PG_MA&&l._PG_MA.agrupado&&!preservarPrazoFinal){
+      var selecionados=l._PG_MA.linhas.map(function(r){return prazoDaLinha(r,cenario);});
+      var anteriores=l._PG_MA.linhas.map(function(r){return prazoDaLinha(r,cenario,true);});
+      if(mesmosPrazos(anteriores)&&mesmosPrazos(selecionados))return selecionados[0];
+      return prazoDaLinha(l,cenario,true);
+    }
     var marca=normal(l.MARCA_FINAL||l.UNIDADE||l.MARCA),grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA);
     var avaliacaoSim=normal(l.AVALIACAO||l.Avaliacao)==='SIM';
     var alvo=avaliacaoSim?META_AVALIACAO:metaOriginal(marca),cd=normal(l.CD_FINAL||l['CD DESTINO']);
     if(!avaliacaoSim&&alvo===META&&grafica==='LEOGRAF'&&normal(l.UNIDADE)==='EI')alvo=META_LEOGRAF_EI;
     var posiPropria=grafica==='POSIGRAF'&&cd==='POSIGRAF',regras=posiPropria?posiRegra(l):null;
     var dataAcordada=(regras||[]).reduce(function(ultima,r){return r.datas.reduce(function(a,d){return d>a?d:a;},ultima);},'');
+    if(cenario==='com'&&!avaliacaoSim&&!preservarPrazoFinal){
+      var marco=marcoPosiPeloReplan(l,regras);
+      if(marco)dataAcordada=marco;
+    }
+    // Um combinado anterior a 15/10 não antecipa a meta original.
     var elegivel=!avaliacaoSim&&!!regras&&dataAcordada>alvo;
     return {avaliacaoSim:avaliacaoSim,alvo:alvo,posiPropria:posiPropria,dataAcordada:dataAcordada,
       elegivel:elegivel,metaAplicada:cenario==='com'&&elegivel?dataAcordada:alvo};
@@ -518,6 +546,12 @@
   };
   function dadosBase(opcoes) {
     var cenario=opcoes&&(opcoes.cenario==='com'||opcoes.cenario==='sem')?opcoes.cenario:estado.cenario;
+    var filtroMetaAplicada=null;
+    if(!(opcoes&&Array.isArray(opcoes.base))&&window.filtrosGeraisIniciados){
+      var controlesMeta=Array.from(document.querySelectorAll('.chk-geral-MetaAplicada'));
+      if(controlesMeta.length)filtroMetaAplicada=new Set(controlesMeta.filter(function(c){return c.checked;})
+        .map(function(c){return String(c.value).trim();}));
+    }
     var hojeEventos=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toLocaleDateString('en-CA');
     var corteEventos=opcoes&&opcoes.corte?data(opcoes.corte):hojeEventos;
     corteEventos=corteEventos&&corteEventos<hojeEventos?corteEventos:hojeEventos;
@@ -544,10 +578,26 @@
       var grafica=normal(l.GRAFICA_FINAL||l['GRÁFICA']||l.GRAFICA)||'NÃO INFORMADA';
       var s=serieDaLinha(l),conciliacao=l._PG_MA;
       var campo=function(n){return window.pgCampoColeta?window.pgCampoColeta(l,n):l[n];};
-      var prazosOrigem=(conciliacao?conciliacao.linhas:[l]).map(function(r){return prazoDaLinha(r,cenario);});
+      var linhasOrigem=conciliacao?conciliacao.linhas:[l];
+      var prazosOrigem=linhasOrigem.map(function(r){return prazoDaLinha(r,cenario);});
+      var prazoPosiPreservado=false,prazosAnterioresDivergentes=false;
+      if(conciliacao&&conciliacao.agrupado){
+        // Não atribui movimentos compartilhados a marcos diferentes sem KIT seguro.
+        var prazosAnteriores=linhasOrigem.map(function(r){return prazoDaLinha(r,cenario,true);});
+        prazosAnterioresDivergentes=!mesmosPrazos(prazosAnteriores);
+        if(!prazosAnterioresDivergentes&&!mesmosPrazos(prazosOrigem)){
+          prazosOrigem=prazosAnteriores;
+          prazoPosiPreservado=true;
+        }
+      }
       var prazo=prazosOrigem[0];
-      if(prazosOrigem.some(function(p){return p.alvo!==prazo.alvo||p.metaAplicada!==prazo.metaAplicada||p.dataAcordada!==prazo.dataAcordada;}))
+      if(prazosAnterioresDivergentes||!mesmosPrazos(prazosOrigem))
         throw new Error('O agrupamento '+String(l.SKU_REAL||l.SKU||'')+' tem metas diferentes entre as linhas de origem. É necessário identificar as parcelas por KIT antes de apurar esse grupo.');
+      // O filtro global antecede a conciliação; confirme a meta efetiva do grupo.
+      if(filtroMetaAplicada){
+        var metaFiltrada=cenario===estado.cenario?prazo.metaAplicada:prazoDaLinha(l,estado.cenario).metaAplicada;
+        if(!filtroMetaAplicada.has(metaFiltrada))return null;
+      }
       var avaliacaoSim=prazo.avaliacaoSim,alvo=prazo.alvo,cd=normal(l.CD_FINAL||l['CD DESTINO']);
       var posiPropria=prazo.posiPropria,dataAcordada=prazo.dataAcordada,elegivel=prazo.elegivel,metaAplicada=prazo.metaAplicada;
 
@@ -635,7 +685,9 @@
       }
       var rateioAplicado=podeRatear?
         rateioPlanejado(l,inicioPlan,dtPlan,metaAplicada,inicioUnico):null;
-      var previsto=cenario==='sem'?previstoFere:previstoNaoFere;
+      // A Meta Aplicada manda no realizado; o replan participa apenas do saldo.
+      var real=realDentro(metaAplicada);
+      var previsto=real+pendentePlanejado*fracaoFuturaDoRateio(rateioAplicado,metaAplicada,corteEventos);
       var semData=pendentePlanejado>0&&!rateioAplicado?pendentePlanejado:0;
       var statusSemPrevisao=semData>0&&fimAusente?'Sem data (re)Plan':'Sem previsão';
       if(semData>0&&!motivoReplan)motivoReplan='Intervalo de entrega invertido ou inválido.';
@@ -647,7 +699,6 @@
       var apos15=Math.max(0,total-previstoOriginal-semData);
       var combinadoAdicional=Math.max(0,previstoNaoFere-previstoFere);
       var excecao=cenario==='com'?Math.max(0,previstoNaoFere-previstoOriginal):0;
-      var real=realDentro(metaAplicada);
       var realTem=realizadoTem;
       var origemColeta=fallbackAplicado?(realizadoTem?'Entrega TP + simulação baseline/meta':'Simulação baseline/meta'):
         realizadoTem?(pendentePlanejado>0?'Entrega TP + (re)plan':'Entrega TP'):
@@ -671,6 +722,7 @@
         slaDias:typeof window.pgDiasSLALinha==='function'?window.pgDiasSLALinha(l):null,
         pendentePlanejado:pendentePlanejado,corteEventos:corteEventos,
         posiPropria:posiPropria,dataAcordada:dataAcordada,metaAplicada:metaAplicada,rateioAplicado:rateioAplicado,
+        prazoPosiPreservado:prazoPosiPreservado,
         combinadoAdicional:combinadoAdicional,conhecido:conhecido,
         prazos:[alvo].concat(elegivel?[dataAcordada]:[]),
         cd:cd
@@ -762,7 +814,7 @@
         kit:campo('KIT')||'',tiragem:Math.round(volume(l.TIRAGEM)),tipo:l.TIPO||'',serie:serieDaLinha(l),
         inicioReplan:data(campo('Coleta/Internalização de estoque inicial (re) plan')),
         fimReplan:data(campo('Coleta/Internalização de estoque final (re) plan')),
-        baseline:data(campo('COLETA/INTERNALIZAÇÃO FIM BASELINE')),meta:prazoDaLinha(l,cenario).metaAplicada};
+        baseline:data(campo('COLETA/INTERNALIZAÇÃO FIM BASELINE')),meta:prazoDaLinha(l,cenario,i.prazoPosiPreservado).metaAplicada};
     }));
   }
   function movimentosAuditaveis(i,tipo){
@@ -813,7 +865,8 @@
       if(i.semData>0)notas.push(i.motivoReplan||'Intervalo de entrega inválido.');
       if(i.datasInvertidas)notas.push('Início e fim (re)plan invertidos na origem: exibidos corrigidos nesta visão.');
       if(i.fallbackAplicado)notas.push('Zerar sem previsão ligado: data simulada = maior entre Coleta Fim Baseline e Meta Armazém aplicada, sem SLA adicional.');
-      if(i.realizado>0&&i.dtEntregaTP)notas.push('Tiragem realizada nas respectivas datas de Entrega_TP.');
+      if(i.realizado>0&&i.dtEntregaTP)notas.push('Realizado comparado à Meta Aplicada nas respectivas datas de Entrega_TP, independentemente do (re)plan.');
+      if(i.prazoPosiPreservado)notas.push('Marcos Posi diferentes sem vínculo seguro das parcelas: mantido o prazo anterior do agrupamento.');
       if(i.pendentePlanejado>0&&r&&!i.fallbackAplicado){
         notas.push('Somente o saldo pendente usa Final (re)Plan + Matriz_SLA.');
         if(i.inicioAusente)notas.push('Início planejado vazio: saldo pendente integral na entrega prevista pelo fim (re)plan + SLA, sem rateio.');
@@ -958,6 +1011,7 @@
       if(fora>0)motivo.push('Parte da entrega ocorreu após a meta aplicada.');
       if(saldo>0)motivo.push('Há saldo planejado dentro da meta ainda não entregue nesse prazo.');
       if(i.conciliacao&&i.conciliacao.agrupado)motivo.push(i.conciliacao.regra+'.');
+      if(i.prazoPosiPreservado)motivo.push('Marcos Posi diferentes sem vínculo seguro das parcelas: mantido o prazo anterior do agrupamento.');
       if(i.conciliacao&&i.conciliacao.filtroParcial)motivo.push('Filtro corresponde a parte do agrupamento: exibido grupo completo para preservar o vínculo.');
       if(i.conciliacao&&(i.conciliacao.diagnosticos||[]).length)motivo.push('Conciliação TP: '+i.conciliacao.diagnosticos.join(' | ')+'.');
       var parcelas=(i.eventosReal||[]).map(function(e){return fmtPrazo(e.data)+': '+fmt(e.volume,true);}).join(' | ');
