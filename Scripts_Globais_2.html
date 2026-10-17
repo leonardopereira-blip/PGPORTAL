@@ -823,7 +823,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
     'Capa personalizada': 'CAPA_PERSONALIZADA',
      'Avaliação': 'AVALIACAO', 'Meta Aplicada': '__META_ARMAZEM__'
 };
-    // O filtro visual distingue CD e Acabadora de KN/Raízes pelo destino original.
+    // O filtro visual usa o destino original somente para KN e Raízes Acabadora.
     // Roteamento e cálculos continuam usando exclusivamente CD_MAPA na PCP.
     window.pgNormalizarDestinoFiltro = function(valor) {
         const nome = String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -847,12 +847,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
         if (fonteAcab) return mapa;
         const original = window.pgNormalizarDestinoFiltro(
             l.CD_DESTINO ?? l.CD_DESTINO_PCP_ORIGINAL ?? l['CD DESTINO'] ?? '');
-        const familia = valor => {
-            if (valor === 'KN' || valor === 'KN ACABADORA') return 'KN';
-            if (valor === 'RAÍZES' || valor === 'RAÍZES ACABADORA') return 'RAÍZES';
-            return '';
-        };
-        return familia(mapa) && familia(mapa) === familia(original) ? original : mapa;
+        return original === 'KN' || original === 'RAÍZES ACABADORA' ? original : mapa;
     };
 
     window.toggleFilterMenuGeral = function(idCat, event) {

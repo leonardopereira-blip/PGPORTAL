@@ -292,77 +292,128 @@ test('destino OCEANO segue para Acabadora sem alterar a grafica OCEANO nem a lis
   assert.equal(p.w.pgUnirTotalSemDuplicidade(todas).reduce((s, l) => s + l.TIRAGEM, 0), 401);
 });
 
-test('filtro unico distingue KN e Raizes pelo original da mesma familia sem alterar roteamento', () => {
+test('filtro visual usa KN e Raizes Acabadora originais mesmo com mapa diferente ou vazio', () => {
   const linhas = [
-    { ...pcp('kn-cd', 'LOGPRINT', 'KN'), CD_DESTINO: 'KN' },
-    { ...pcp('kn-acab-visual', 'LOGPRINT', 'KN'), CD_DESTINO: 'KN ACABADORA' },
-    { ...pcp('raizes-cd', 'LOGPRINT', 'RAIZES'), CD_DESTINO: 'Raízes' },
-    { ...pcp('raizes-acab-visual', 'LOGPRINT', 'RAIZES'), CD_DESTINO: 'RAIZES ACABADORA' },
-    { ...pcp('kn-rota-acab', 'LOGPRINT', 'KN ACABADORA'), CD_DESTINO_PCP_ORIGINAL: 'KN' },
-    { ...pcp('raizes-rota-acab', 'LOGPRINT', 'RAIZES ACABADORA'), CD_DESTINO_PCP_ORIGINAL: 'Raízes' }
+    { ...pcp('kn-cd', 'LOGPRINT', 'CD JDI'), CD_DESTINO: 'KN', TIRAGEM:101 },
+    { ...pcp('raizes-cd', 'LOGPRINT', 'CD JDI'), CD_DESTINO: 'RAIZES ACABADORA', TIRAGEM:102 },
+    { ...pcp('kn-vazio', 'LOGPRINT', ''), CD_DESTINO: 'KN', TIRAGEM:103 },
+    { ...pcp('raizes-vazio', 'LOGPRINT', ''), CD_DESTINO: 'Raízes Acabadora', TIRAGEM:104 },
+    { ...pcp('kn-outra-familia', 'LOGPRINT', 'RAIZES'), CD_DESTINO: 'KN', TIRAGEM:105 },
+    { ...pcp('raizes-outra-familia', 'LOGPRINT', 'KN'), CD_DESTINO: 'RAIZES ACABADORA', TIRAGEM:106 },
+    { ...pcp('kn-alias-original', 'LOGPRINT', 'KN ACABADORA'), CD_DESTINO_PCP_ORIGINAL: 'KN', TIRAGEM:107 },
+    { ...pcp('raizes-alias-espaco', 'LOGPRINT', 'CD RP'), 'CD DESTINO':'RAIZES ACABADORA', TIRAGEM:108 },
+    { ...acabadora('acabadora-cd-proprio', 'HR'), CD_DESTINO:'KN', TIRAGEM:109,
+      'TIRAGEM A ENTREGAR (total por CD)':109 }
   ];
   const p = portal(linhas);
   assert.deepEqual(p.checks.get('CDDestino').map(cb => cb.value),
-    ['KN', 'KN ACABADORA', 'RAÍZES', 'RAÍZES ACABADORA']);
+    ['CD JDI', 'KN', 'RAÍZES ACABADORA']);
   assert.equal(p.checks.has('CD_DESTINO'), false);
   assert.equal(Object.hasOwn(p.w.mapCamposProducao, 'CD_DESTINO'), false);
-  p.w.checkOnlyGeral('CDDestino', 'KN ACABADORA');
-  assert.deepEqual(p.linhas, [linhas[1]]);
+  p.w.checkOnlyGeral('CDDestino', 'KN');
+  assert.deepEqual(p.linhas, [linhas[0],linhas[2],linhas[4],linhas[6]]);
+  assert.equal(p.linhas.reduce((s,l)=>s+l.TIRAGEM,0),416);
   p.w.checkOnlyGeral('CDDestino', 'RAÍZES ACABADORA');
-  assert.deepEqual(p.linhas, [linhas[3]]);
+  assert.deepEqual(p.linhas, [linhas[1],linhas[3],linhas[5],linhas[7]]);
+  assert.equal(p.linhas.reduce((s,l)=>s+l.TIRAGEM,0),420);
+  p.w.checkOnlyGeral('CDDestino', 'CD JDI');
+  assert.deepEqual(p.linhas, [linhas[8]], 'Acabadora conserva o CD proprio, sem aplicar a excecao PCP');
   p.w.checkAllGeral('CDDestino', true);
-  for (const l of linhas) {
-    const semOriginal = { ...l };
-    delete semOriginal.CD_DESTINO;
-    delete semOriginal.CD_DESTINO_PCP_ORIGINAL;
+  assert.deepEqual(p.linhas,linhas);
+  assert.equal(p.linhas.reduce((s,l)=>s+l.TIRAGEM,0),945);
+  const semOriginais=linhas.map(l=>{
+    const copia={...l};
+    if(copia._SOURCE==='PCP'){
+      delete copia.CD_DESTINO;
+      delete copia.CD_DESTINO_PCP_ORIGINAL;
+      delete copia['CD DESTINO'];
+    }
+    return copia;
+  });
+  const referencia=portal(semOriginais);
+  linhas.forEach((l,i)=>{
+    const semOriginal=semOriginais[i];
     assert.equal(p.w.pgEhDestinoAcabadora(l), p.w.pgEhDestinoAcabadora(semOriginal));
     assert.equal(p.w.pgEhDestinoAcabadoraGraficaFiltro(l),
       p.w.pgEhDestinoAcabadoraGraficaFiltro(semOriginal));
+    assert.equal(p.w.pgDestinoAcabadoraCongelado(l),p.w.pgDestinoAcabadoraCongelado(semOriginal));
+  });
+  assert.equal(p.w.pgEhDestinoAcabadora(linhas[2]),true,'Mapa vazio segue para Acabadora apesar do filtro visual KN');
+  assert.equal(p.w.pgEhDestinoAcabadora(linhas[3]),true);
+  const ids=base=>Array.from(base,l=>l._ROW_ID);
+  for(const origem of ['TODOS','GRAFICA','ACABADORA']){
+    for(const destino of ['TODOS','CD','ACAB']){
+      p.selecionar(origem,destino);
+      referencia.selecionar(origem,destino);
+      assert.deepEqual(ids(p.linhas),ids(referencia.linhas),'Origem/Destino preserva as mesmas linhas');
+      assert.deepEqual(ids(p.w.dadosBaseTPPortal),ids(referencia.w.dadosBaseTPPortal));
+      assert.deepEqual(ids(p.w.dadosBaseForecastColeta),ids(referencia.w.dadosBaseForecastColeta));
+      assert.deepEqual(ids(p.w.dadosBaseColetaFunil),ids(referencia.w.dadosBaseColetaFunil));
+      assert.equal(Array.from(p.w.dadosTotalCanonico).reduce((s,l)=>s+l.TIRAGEM,0),
+        Array.from(referencia.w.dadosTotalCanonico).reduce((s,l)=>s+l.TIRAGEM,0));
+    }
   }
-  assert.equal(p.w.pgEhDestinoAcabadoraGraficaFiltro(linhas[1]), false);
-  assert.equal(p.w.pgEhDestinoAcabadoraGraficaFiltro(linhas[3]), false);
   p.selecionar('GRAFICA', 'ACAB');
-  assert.deepEqual(p.linhas, [linhas[4], linhas[5]]);
+  assert.deepEqual(p.linhas, [linhas[2],linhas[3],linhas[6]],'Rota continua seguindo CD_MAPA');
 });
 
-test('caixa acento e espacos consolidam destino; outros mapas e vazios preservam a soberania', () => {
+test('filtro normaliza as duas excecoes e usa CD_MAPA para KN Acabadora, Raizes simples e demais originais', () => {
   const raizes = [' raízes ', 'RAIZES', 'Raízes'].map((nome, i) =>
     ({ ...pcp(`raizes-${i}`, 'LOGPRINT', nome), CD_DESTINO: 'OUTRO DESTINO' }));
   const cdJdi = [' cd jdi ', 'CD JDI', 'Cd  Jdi'].map((nome, i) =>
     ({ ...pcp(`jdi-${i}`, 'LOGPRINT', nome), CD_DESTINO: 'KN ACABADORA' }));
-  const knFamiliaDiferente = { ...pcp('kn-outro-original', 'LOGPRINT', 'kn'), CD_DESTINO: 'RAIZES ACABADORA' };
-  const raizesFamiliaDiferente = { ...pcp('raizes-outro-original', 'LOGPRINT', 'raízes'), CD_DESTINO: 'KN ACABADORA' };
+  const knOriginais=[' kn ','KN','Kn'].map((nome,i)=>
+    ({...pcp(`kn-original-${i}`,'LOGPRINT','CD RP'),CD_DESTINO:nome}));
+  const raizesOriginais=[' raízes  acabadora ','RAIZES ACABADORA','Raízes Acabadora'].map((nome,i)=>
+    ({...pcp(`raizes-original-${i}`,'LOGPRINT','CD RP'),CD_DESTINO:nome}));
+  const raizesSimples = { ...pcp('raizes-original-simples', 'LOGPRINT', 'KN ACABADORA'), CD_DESTINO:'Raízes' };
+  const originalVazio = { ...pcp('original-vazio', 'LOGPRINT', 'CD JDI'), CD_DESTINO:'' };
   const vazio = { ...pcp('vazio-original-preenchido', 'LOGPRINT', ''), CD_DESTINO: 'CD JDI' };
   const oceano = { ...pcp('oceano-original-cd', 'LOGPRINT', 'OCEANO'), CD_DESTINO: 'CD JDI' };
-  const p = portal([...raizes, ...cdJdi, knFamiliaDiferente, raizesFamiliaDiferente, vazio, oceano]);
+  const linhas=[...raizes,...cdJdi,...knOriginais,...raizesOriginais,raizesSimples,originalVazio,vazio,oceano];
+  const p = portal(linhas);
 
   assert.deepEqual(p.checks.get('CDDestino').map(cb => cb.value),
-    ['(Vazio)', 'CD JDI', 'KN', 'OCEANO', 'RAÍZES']);
+    ['(Vazio)','CD JDI','KN','KN ACABADORA','OCEANO','RAÍZES','RAÍZES ACABADORA']);
   p.w.checkOnlyGeral('CDDestino', 'RAÍZES');
-  assert.deepEqual(p.linhas, [...raizes, raizesFamiliaDiferente]);
+  assert.deepEqual(p.linhas,raizes);
   p.w.checkOnlyGeral('CDDestino', 'CD JDI');
-  assert.deepEqual(p.linhas, cdJdi);
+  assert.deepEqual(p.linhas,[...cdJdi,originalVazio]);
   p.w.checkOnlyGeral('CDDestino', 'KN');
-  assert.deepEqual(p.linhas, [knFamiliaDiferente]);
+  assert.deepEqual(p.linhas,knOriginais);
+  p.w.checkOnlyGeral('CDDestino', 'RAÍZES ACABADORA');
+  assert.deepEqual(p.linhas,raizesOriginais);
+  p.w.checkOnlyGeral('CDDestino', 'KN ACABADORA');
+  assert.deepEqual(p.linhas,[raizesSimples]);
   p.w.checkOnlyGeral('CDDestino', '(Vazio)');
   assert.deepEqual(p.linhas, [vazio]);
   assert.equal(p.w.pgEhDestinoAcabadora(vazio), true);
   assert.equal(p.w.pgEhDestinoAcabadora(oceano), true);
+  p.w.checkAllGeral('CDDestino',true);
+  assert.deepEqual(p.linhas,linhas);
+  assert.equal(p.linhas.reduce((s,l)=>s+l.TIRAGEM,0),1600);
 });
 
-test('nova fatia mantém destino normalizado desmarcado e a seleção da mesma familia', () => {
-  const kn = { ...pcp('kn-inicial', 'LOGPRINT', 'KN'), CD_DESTINO: 'KN' };
-  const raizes = pcp('raizes-inicial', 'LOGPRINT', 'Raízes');
-  const novaRaizes = pcp('raizes-nova', 'LOGPRINT', '  RAIZES  ');
-  const novoKn = { ...pcp('kn-novo', 'LOGPRINT', 'kn'), CD_DESTINO: ' kn ' };
-  const p = portal([kn, raizes]);
+test('nova fatia preserva selecao do destino visual normalizado e Marcar Todos restaura o volume', () => {
+  const kn = { ...pcp('kn-inicial', 'LOGPRINT', 'CD JDI'), CD_DESTINO: 'KN',TIRAGEM:90 };
+  const raizes = { ...pcp('raizes-inicial', 'LOGPRINT', 'CD RP'),CD_DESTINO:'Raízes Acabadora',TIRAGEM:110 };
+  const mapaExistente = { ...pcp('kn-acab-inicial', 'LOGPRINT', 'KN ACABADORA'),CD_DESTINO:'KN ACABADORA',TIRAGEM:20 };
+  const novaRaizes = { ...pcp('raizes-nova', 'LOGPRINT', ''),CD_DESTINO:'  RAIZES  ACABADORA ',TIRAGEM:40 };
+  const novoKn = { ...pcp('kn-novo', 'LOGPRINT', 'RAIZES'), CD_DESTINO: ' kn ',TIRAGEM:60 };
+  const novoMapa = { ...pcp('kn-acab-novo', 'LOGPRINT', 'KN ACABADORA'),CD_DESTINO:'KN ACABADORA',TIRAGEM:30 };
+  const p = portal([kn, raizes,mapaExistente]);
   p.w.checkOnlyGeral('CDDestino', 'KN');
-  p.anexar([novaRaizes, novoKn]);
+  p.anexar([novaRaizes, novoKn,novoMapa]);
 
   assert.deepEqual(p.checks.get('CDDestino').map(cb => [cb.value, cb.checked]),
-    [['KN', true], ['RAÍZES', false]]);
+    [['KN',true],['KN ACABADORA',false],['RAÍZES ACABADORA',false]]);
   assert.deepEqual(p.linhas, [kn, novoKn]);
   assert.deepEqual(Array.from(p.w.dadosTotalCanonico), [kn, novoKn]);
+  assert.equal(p.linhas.reduce((s,l)=>s+l.TIRAGEM,0),150);
+  p.w.checkOnlyGeral('CDDestino','RAÍZES ACABADORA');
+  assert.deepEqual(p.linhas,[raizes,novaRaizes]);
+  assert.equal(p.linhas.reduce((s,l)=>s+l.TIRAGEM,0),150);
   p.w.checkAllGeral('CDDestino', true);
-  assert.deepEqual(p.linhas, [kn, raizes, novaRaizes, novoKn]);
+  assert.deepEqual(p.linhas, [kn,raizes,mapaExistente,novaRaizes,novoKn,novoMapa]);
+  assert.equal(p.linhas.reduce((s,l)=>s+l.TIRAGEM,0),350);
 });
