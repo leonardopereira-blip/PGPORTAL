@@ -75,6 +75,19 @@ test('rótulos do gráfico são inteiros e as porcentagens calculadas preservam 
   assert.match(source,/Aderência às metas armazém/);
 });
 
+test('legendas Realizado e Projeção conservam a série acumulada',()=>{
+  assert.ok(source.includes('>Realizado</text>'));
+  assert.ok(source.includes('>Projeção</text>'));
+  assert.doesNotMatch(source,/Metas já encerradas|Metas de hoje e futuras/);
+  const w=engine('2026-10-17');
+  const p=w.pgMAModeloGraficoAderencia([
+    linha('2026-10-15',100,60,100),
+    linha('2026-11-20',100,0,100)
+  ],'2026-10-17');
+  assert.equal(p[0].pct,60);
+  assert.equal(p[1].pct,80);
+});
+
 test('auditorias não exibem Série original e usam dados já existentes de personalização',()=>{
   assert.doesNotMatch(source,/'Série original'/);
   assert.match(source,/l\.CAPA_PERSONALIZADA/);
