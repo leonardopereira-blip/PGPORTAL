@@ -75,17 +75,35 @@ test('rótulos do gráfico são inteiros e as porcentagens calculadas preservam 
   assert.match(source,/Aderência às metas armazém/);
 });
 
-test('legendas Realizado e Projeção conservam a série acumulada',()=>{
-  assert.ok(source.includes('>Realizado</text>'));
-  assert.ok(source.includes('>Projeção</text>'));
-  assert.doesNotMatch(source,/Metas já encerradas|Metas de hoje e futuras/);
+test('Entrega por meta e Aderência acumulada têm legendas acima do gráfico',()=>{
+  const grafico=source.slice(source.indexOf('  function desenharGraficoAderencia(items){'));
+  assert.ok(grafico.includes('>Entrega por meta</text>'));
+  assert.ok(grafico.includes('>Aderência acumulada</text>'));
+  assert.doesNotMatch(grafico,/Metas já encerradas|Metas de hoje e futuras/);
+  assert.ok(grafico.indexOf('>Entrega por meta</text>')<grafico.indexOf('for(var i=1;i<n;i++){'));
   const w=engine('2026-10-17');
   const p=w.pgMAModeloGraficoAderencia([
-    linha('2026-10-15',100,60,100),
+    linha('2026-10-15',900,700,900),
     linha('2026-11-20',100,0,100)
   ],'2026-10-17');
-  assert.equal(p[0].pct,60);
+  assert.ok(Math.abs(p[0].pctMeta-700/900*100)<1e-9);
+  assert.equal(p[1].pctMeta,100);
   assert.equal(p[1].pct,80);
+  assert.equal(p[1].aderente,800);
+  assert.equal(p[1].total,1000);
+});
+
+test('Entrega por meta respeita o corte e não compensa excedentes',()=>{
+  const w=engine('2026-10-17');
+  const p=w.pgMAModeloGraficoAderencia([
+    linha('2026-10-16',100,80,110),
+    linha('2026-10-16',100,0,70),
+    linha('2026-10-18',100,10,110)
+  ],'2026-10-17');
+  assert.equal(p[0].pctMeta,40);
+  assert.equal(p[1].pctMeta,100);
+  assert.equal(p[1].pct,60);
+  assert.deepEqual(Array.from(p,x=>x.passada),[true,false]);
 });
 
 test('auditorias não exibem Série original e usam dados já existentes de personalização',()=>{
