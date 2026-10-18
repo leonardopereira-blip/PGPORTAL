@@ -13,14 +13,16 @@ vm.createContext(ctx);
 vm.runInContext(helper[0], ctx);
 const exibir = ctx.window.pgREPercentualExibido;
 
-test('percentual sobe ao inteiro superior, sem ultrapassar 100%', () => {
+test('percentual usa arredondamento matemático comum, sem ultrapassar 100%', () => {
   for (const [bruto, exibido] of [
-    [0, 0], [0.01, 1], [86, 86], [86.0001, 87],
-    [86.49, 87], [86.5, 87], [86.99, 87], [99.01, 100],
+    [0, 0], [0.01, 0], [0.49, 0], [0.5, 1],
+    [86, 86], [86.0001, 86], [86.49, 86], [86.5, 87],
+    [86.99, 87], [99.01, 99], [99.5, 100],
     [100, 100], [100.01, 100], [-1, 0], [NaN, 0]
   ]) {
     assert.equal(exibir(bruto), exibido, String(bruto));
   }
+  assert.match(fonte, /Math\.round\(Math\.max\(0, Math\.min\(100, n\)\)\)/);
 });
 
 test('tabela, curva e tooltip usam o mesmo percentual exibido', () => {

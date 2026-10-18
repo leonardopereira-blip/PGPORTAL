@@ -10446,7 +10446,7 @@ let arrGrupos = Object.values(grupos);
 // Mantém os percentuais brutos para os cálculos e gráficos; só arredonda na tela.
 window.pgREPercentualExibido = function(valor) {
     const n = Number(valor);
-    return Number.isFinite(n) ? Math.ceil(Math.max(0, Math.min(100, n))) : 0;
+    return Number.isFinite(n) ? Math.round(Math.max(0, Math.min(100, n))) : 0;
 };
 
 window.processarReportExecutiva = function() {
