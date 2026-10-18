@@ -10442,6 +10442,13 @@ let arrGrupos = Object.values(grupos);
 // REPORT EXECUTIVA POR MARCA
 // ============================================================================
 
+// Uma regra única de exibição para tabela, curva e status da Report Executiva.
+// Mantém os percentuais brutos para os cálculos e gráficos; só arredonda na tela.
+window.pgREPercentualExibido = function(valor) {
+    const n = Number(valor);
+    return Number.isFinite(n) ? Math.ceil(Math.max(0, Math.min(100, n))) : 0;
+};
+
 window.processarReportExecutiva = function() {
     const tbody = document.getElementById('reTabelaMarcas');
     if (!tbody) return;
@@ -10734,12 +10741,12 @@ window.processarReportExecutiva = function() {
         if (!(d > 0)) return 0;
         return Math.max(0, Math.min(100, (Number(n || 0) / d) * 100));
     };
-    const pctTxt = v => `${Math.round(Number(v || 0))}%`;
+    const pctTxt = v => `${window.pgREPercentualExibido(v)}%`;
 
     const status = (real, plan) => {
-        // A bolinha e o numero mostrado usam o MESMO arredondamento.
-        const realExibido = Math.round(Number(real || 0));
-        const planExibido = Math.round(Number(plan || 0));
+        // A bolinha e o número mostrado seguem o MESMO teto percentual.
+        const realExibido = window.pgREPercentualExibido(real);
+        const planExibido = window.pgREPercentualExibido(plan);
         if (realExibido >= planExibido) return 'green';
         if (planExibido - realExibido <= 5) return 'yellow';
         return 'red';
@@ -11340,7 +11347,7 @@ window.renderReportExecutivaCurvaSemanal = function() {
                 meta.data.forEach((pt, i) => {
                     const valor = ds.data[i];
                     if (valor === null || valor === undefined || !Number.isFinite(Number(valor))) return;
-                    const txt = `${Math.round(Number(valor))}%`;
+                    const txt = `${window.pgREPercentualExibido(valor)}%`;
                     ctx.lineWidth = 3;
                     ctx.strokeStyle = '#ffffff';
                     ctx.strokeText(txt, pt.x, pt.y - 5);
@@ -11440,7 +11447,7 @@ window.renderReportExecutivaCurvaSemanal = function() {
                                 : realVolume[context.dataIndex];
                             const bruto = Math.round(Number(n || 0)).toLocaleString('pt-BR');
                             const base = Math.round(total).toLocaleString('pt-BR');
-                            return `${context.dataset.label}: ${Number(context.raw).toFixed(1)}% (${bruto} / ${base})`;
+                            return `${context.dataset.label}: ${window.pgREPercentualExibido(context.raw)}% (${bruto} / ${base})`;
                         }
                     }
                 }
