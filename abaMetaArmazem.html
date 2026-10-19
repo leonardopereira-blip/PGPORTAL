@@ -482,7 +482,7 @@
     }
     // EXTENSIVO, PREPARA e SEMI de SPE seguem o combinado do Ensino Médio
     // da Posigraf, sem alterar o nome da série nem a regra das demais marcas.
-    // Reutiliza as datas oficiais existentes em REGRAS (25/10 e 12/11).
+    // Reutiliza os marcos do Ensino Médio: 25/10 torna-se meta 26/10; 12/11 permanece.
     if(marca==='SPE'&&['EXTENSIVO','PREPARA','SEMI'].indexOf(s)>=0){
       var regrasEM=REGRAS.filter(function(r){
         return normal(r.marca)==='SPE'&&normal(r.segmento)==='ENSINO MEDIO'&&!r.serie&&!r.tipo;
@@ -517,7 +517,11 @@
       var inicio=data(inicioRaw);
       if(!inicio||!rateioDiasUteis(inicio,fim,fim))return '';
     }
-    return regras[0].datas.indexOf(fim)>=0?fim:'';
+    // O marco oficial pode cair em domingo: reconhece tanto a data original
+    // do (re)Plan quanto a segunda-feira que passa a ser a Meta Aplicada.
+    return regras[0].datas.some(function(d){
+      return d&&(d===fim||ajustarDomingoPrevisto(d)===fim);
+    })?fim:'';
   }
   function mesmosPrazos(prazos){
     var primeiro=prazos[0];
@@ -540,6 +544,10 @@
       var marco=marcoPosiPeloReplan(l,regras);
       if(marco)dataAcordada=marco;
     }
+    // Se um marco de meta cair em domingo, o prazo aplicável passa para
+    // segunda-feira. O (re)Plan, o SLA e as datas de entrega NÃO são alterados.
+    alvo=ajustarDomingoPrevisto(alvo);
+    dataAcordada=ajustarDomingoPrevisto(dataAcordada);
     // Um combinado anterior a 15/10 não antecipa a meta original.
     var elegivel=!avaliacaoSim&&!!regras&&dataAcordada>alvo;
     return {avaliacaoSim:avaliacaoSim,alvo:alvo,posiPropria:posiPropria,dataAcordada:dataAcordada,
@@ -629,11 +637,13 @@
       if(datasInvertidas){var trocarData=inicioColeta;inicioColeta=fimReplanColeta;fimReplanColeta=trocarData;}
       var replanValido=!!fimReplanColeta&&(inicioAusente||!!inicioColeta&&fimReplanColeta>=inicioColeta);
       var motivoReplan=fimAusente?'Sem data (re)Plan':!replanValido?'Intervalo de entrega inválido.':'';
+      var slaDaRota=typeof window.pgDiasSLALinha==='function'?window.pgDiasSLALinha(l):null;
       var inicioPlan=replanValido&&!inicioAusente&&typeof window.pgDataPlanoEntregaSLA==='function'?
         window.pgDataPlanoEntregaSLA(l,inicioColeta):null;
       var dtPlan=replanValido&&typeof window.pgDataPlanoEntregaSLA==='function'?
         window.pgDataPlanoEntregaSLA(l,fimReplanColeta):null;
-      // Ajustar a previsão após aplicar o SLA, antes de classificar ou ratear o saldo.
+      // SLA é aplicado primeiro; domingo vira segunda no prazo de entrega,
+      // inclusive Posigraf -> Posigraf (SLA 0). A data de coleta permanece original.
       inicioPlan=ajustarDomingoPrevisto(inicioPlan);
       dtPlan=ajustarDomingoPrevisto(dtPlan);
       if(replanValido&&(!dtPlan||!inicioAusente&&!inicioPlan))motivoReplan='Rota sem SLA válido na Matriz_SLA.';
@@ -730,7 +740,7 @@
         fimReplanColeta:fimReplanColeta,fimColetaUsada:fallbackAplicado?dataFallback:(replanValido?fimReplanColeta:null),
         origemColeta:origemColeta,replanValido:replanValido,motivoReplan:motivoReplan,statusSemPrevisao:statusSemPrevisao,
         datasInvertidas:datasInvertidas,fallbackAplicado:fallbackAplicado,dataFallback:dataFallback,
-        slaDias:typeof window.pgDiasSLALinha==='function'?window.pgDiasSLALinha(l):null,
+        slaDias:slaDaRota,
         pendentePlanejado:pendentePlanejado,corteEventos:corteEventos,
         posiPropria:posiPropria,dataAcordada:dataAcordada,metaAplicada:metaAplicada,rateioAplicado:rateioAplicado,
         prazoPosiPreservado:prazoPosiPreservado,

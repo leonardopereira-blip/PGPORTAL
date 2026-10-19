@@ -399,9 +399,14 @@ window.pgDataPlanoColetaLinha = function(l) {
 // Zero é um prazo válido; rota ausente não recebe prazo inventado.
 window.pgDiasSLALinha = function(l) {
     const matriz = window.PG_MATRIZ_SLA;
-    if (!Array.isArray(matriz)) return null;
     const norm = v => String(v ?? '').normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
+    const fornecedor = norm(l.GRAFICA_FINAL || window.pgCampoColeta(l, 'GRÁFICA') || l.GRAFICA);
+    const destino = norm(l.CD_FINAL || window.pgCampoColeta(l, 'CD DESTINO') || l.CD);
+    // Operação interna: Posigraf coleta e entrega no mesmo local (SLA zero).
+    // Preserva os demais prazos da Matriz_SLA, inclusive rotas sem correspondência.
+    if (fornecedor === 'POSIGRAF' && destino === 'POSIGRAF') return 0;
+    if (!Array.isArray(matriz)) return null;
     if (window.pgMatrizSLAReferencia !== matriz) {
         const rotas = new Map();
         const cabecalho = matriz.findIndex(r => norm(r[0]) === 'FORNECEDOR');
@@ -423,8 +428,6 @@ window.pgDiasSLALinha = function(l) {
         window.pgMatrizSLARotas = rotas;
         window.pgMatrizSLAReferencia = matriz;
     }
-    const fornecedor = norm(l.GRAFICA_FINAL || window.pgCampoColeta(l, 'GRÁFICA') || l.GRAFICA);
-    const destino = norm(l.CD_FINAL || window.pgCampoColeta(l, 'CD DESTINO') || l.CD);
     const dias = window.pgMatrizSLARotas.get(fornecedor + '\u001f' + destino);
     return dias === undefined ? null : dias;
 };

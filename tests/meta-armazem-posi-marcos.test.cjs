@@ -72,12 +72,12 @@ test('Posi: fim (re)Plan que coincide com marco oficial seleciona a meta desse m
     [row({'SÉRIE':'INF 2 ANOS'}), '2026-10-16'],
     [row({SEGMENTO:'ENSINO FUNDAMENTAL 1','SÉRIE':'3º ANO',[fim]:'2026-10-20'}), '2026-10-20'],
     [spe({[fim]:'2026-10-26'}), '2026-10-26'],
-    [spe({[fim]:'2026-11-15'}), '2026-11-15'],
+    [spe({[fim]:'2026-11-15'}), '2026-11-16'],
     [spe({'SÉRIE':'4º ANO',[fim]:'2026-11-20'}), '2026-11-20'],
     [spe({'SÉRIE':'5º ANO',TIPO:'PROFESSOR',[fim]:'2026-10-16'}), '2026-10-16'],
     [spe({SEGMENTO:'ENSINO FUNDAMENTAL 2','SÉRIE':'6º ANO',[fim]:'2026-10-12'}), '2026-10-15'],
-    [spe({SEGMENTO:'ENSINO MEDIO','SÉRIE':'1ª SERIE',[fim]:'2026-10-25'}), '2026-10-25'],
-    [spe({SEGMENTO:'PRE VESTIBULAR','SÉRIE':'EXTENSIVO',[fim]:'2026-10-25'}), '2026-10-25']
+    [spe({SEGMENTO:'ENSINO MEDIO','SÉRIE':'1ª SERIE',[fim]:'2026-10-25'}), '2026-10-26'],
+    [spe({SEGMENTO:'PRE VESTIBULAR','SÉRIE':'EXTENSIVO',[fim]:'2026-10-25'}), '2026-10-26']
   ];
   for (const [source, expected] of cases)
     assert.equal(w.pgMAMetaAplicadaDaLinha(source), expected, JSON.stringify(source));
@@ -94,7 +94,7 @@ test('Posi: sem correspondência exata ou intervalo confiável preserva prazo fi
   ];
   for (const extra of cases)
     assert.equal(w.pgMAMetaAplicadaDaLinha(row(extra)), '2026-11-10', JSON.stringify(extra));
-  assert.equal(w.pgMAMetaAplicadaDaLinha(spe({[fim]:'2026-11-01'})), '2026-11-15');
+  assert.equal(w.pgMAMetaAplicadaDaLinha(spe({[fim]:'2026-11-01'})), '2026-11-16');
 });
 
 test('marco intermediário não muda Vários, avaliação, outras rotas nem cenário fere', () => {
@@ -139,17 +139,64 @@ test('piso de 15/10 permite entrega real antes da meta mesmo depois do replan de
   assert.equal(value(app.w.pgMAObterAuditoriaRealizado(),0,'Entregue fora da meta'), 0);
 });
 
-test('marco em domingo permanece oficial e a previsão continua com ajuste de domingo e SLA', () => {
-  const source = spe({SEGMENTO:'ENSINO MEDIO','SÉRIE':'1ª SERIE',[fim]:'2026-10-25'});
-  const app = portal([source], {today:'2026-10-20'});
-  assert.equal(app.items[0].metaAplicada, '2026-10-25');
-  assert.equal(app.items[0].dtPlan, '2026-10-26');
-  assert.equal(app.items[0].previsto, 0);
-  assert.equal(app.items[0].pos, 100);
-  const withSLA = portal([row()], {today:'2026-10-15',sla:2});
-  assert.equal(withSLA.items[0].metaAplicada, '2026-10-16');
-  assert.equal(withSLA.items[0].dtPlan, '2026-10-19');
-  assert.equal(withSLA.items[0].previsto, 0);
+test('Posigraf -> Posigraf: SLA 0, coleta domingo 25/10 e meta passa para segunda 26/10', () => {
+  const source=spe({SEGMENTO:'ENSINO MEDIO','SÉRIE':'1ª SERIE',
+    [inicio]:'2026-10-25',[fim]:'2026-10-25'});
+  const app=portal([source],{today:'2026-10-19',sla:1});
+  const item=app.items[0];
+  assert.equal(item.metaAplicada,'2026-10-26');
+  assert.equal(app.w.pgDiasSLALinha(source),0,'rota interna prevalece sobre o 1 da matriz');
+  assert.equal(app.w.pgDataPlanoEntregaSLA(source,'2026-10-25'),'2026-10-25');
+  assert.equal(item.slaDias,0);
+  assert.equal(item.inicioPlan,'2026-10-26');
+  assert.equal(item.dtPlan,'2026-10-26','previsão de domingo passa para segunda, mantendo SLA 0');
+  assert.equal(item.previsto,100);
+  assert.equal(item.pos,0);
+  const audit=app.w.pgMAObterAuditoria();
+  assert.equal(value(audit,0,'SLA (dias corridos)'),0);
+  assert.equal(value(audit,0,'Entrega início prevista'),'2026-10-26');
+  assert.equal(value(audit,0,'Entrega fim prevista'),'2026-10-26');
+  assert.equal(value(audit,0,'Dentro da meta'),100);
+});
+
+test('marcos de domingo são adiados para segunda na Meta Aplicada (sem mudar replan)', () => {
+  const w=motor();
+  for (const [base,original,esperada] of [
+    [spe({SEGMENTO:'ENSINO MEDIO','SÉRIE':'1ª SERIE'}),'2026-10-25','2026-10-26'],
+    [spe({SEGMENTO:'ENSINO FUNDAMENTAL 1','SÉRIE':'1º ANO',TIPO:'ALUNO'}),'2026-11-15','2026-11-16']
+  ]) {
+    for (const fimReplan of [original,esperada]) {
+      const source={...base,[inicio]:fimReplan,[fim]:fimReplan};
+      assert.equal(w.pgMAMetaAplicadaDaLinha(source),esperada,
+        'Marco de domingo e replan na segunda devem apontar a mesma meta');
+      assert.equal(source[fim],fimReplan,'a data operacional original não é alterada');
+    }
+    const app=portal([{...base,[inicio]:original,[fim]:original}],{today:'2026-10-19',sla:1});
+    assert.equal(app.items[0].metaAplicada,esperada);
+    assert.equal(app.items[0].dtPlan,esperada);
+    const audit=app.w.pgMAObterAuditoria();
+    assert.equal(value(audit,0,'Meta aplicada'),esperada);
+    assert.equal(value(audit,0,'Prazo combinado Posi'),esperada);
+    assert.equal(value(audit,0,'Coleta fim (re)plan'),original);
+  }
+});
+
+test('SLA e ajuste de domingo continuam válidos nas outras rotas', () => {
+  const externa=row({CD_FINAL:'CD JDI',CD_MAPA:'CD JDI','CD DESTINO':'CD JDI'});
+  const app=portal([externa],{today:'2026-10-15',sla:2});
+  assert.equal(app.w.pgDiasSLALinha(externa),2);
+  assert.equal(app.items[0].dtPlan,'2026-10-19','16/10 + 2 dias cai no domingo e avança para segunda');
+  assert.equal(app.items[0].metaAplicada,'2026-10-15');
+  assert.equal(app.items[0].previsto,0);
+  assert.equal(app.w.pgDiasSLALinha({...externa,CD_FINAL:'CD FOR','CD DESTINO':'CD FOR'}),null,
+    'rota não cadastrada não ganha SLA inventado');
+  const externaSLAZero=row({GRAFICA_FINAL:'FORMA CERTA','GRÁFICA':'FORMA CERTA',
+    CD_FINAL:'CD JDI',CD_MAPA:'CD JDI','CD DESTINO':'CD JDI',
+    [inicio]:'2026-10-25',[fim]:'2026-10-25'});
+  const mesmoDomingo=portal([externaSLAZero],{today:'2026-10-19',sla:0});
+  assert.equal(mesmoDomingo.items[0].slaDias,0);
+  assert.equal(mesmoDomingo.items[0].dtPlan,'2026-10-26',
+    'previsão de domingo passa para segunda também em rotas externas');
 });
 
 test('sem KIT inequívoco, marcos distintos preservam prazo final e total do agrupamento', () => {
