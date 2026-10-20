@@ -1,9 +1,14 @@
 # Fluxo de trabalho do PGPORTAL
 
+- Antes de iniciar qualquer alteracao ou envio, atualize a main a partir do GitHub (pull em copia limpa; preserve e concilie pendencias locais antes). Leia tambem o HEAD salvo no Apps Script e compare com o GitHub; recupere alteracoes feitas diretamente no Google e confira a versao ativa quando houver divergencia. Guarde copia das fontes antes de conciliar. Nunca envie o repositorio por cima de mudancas externas ainda nao incorporadas.
+- Ao preparar o envio aos testes, atualize `.github/pgportal-base-google.json` com o scriptId e SHA-256 de cada arquivo (chave TIPO:nome; normalize CRLF para LF) do HEAD efetivamente lido antes da alteracao. O workflow confere essa base novamente antes do push e interrompe o envio se o Google mudou durante o trabalho. Nao substitua a base por hashes locais para contornar uma divergencia.
 - Altere somente o que o usuario solicitar. Preserve calculos e telas fora do pedido.
 - Quando implementar uma alteracao solicitada, envie o commit para `main` no GitHub, salvo se o usuario pedir outro destino ou pedir para nao enviar. O usuario nao deve precisar abrir VS Code ou executar o push manualmente.
 - Use verificacoes locais proporcionais a alteracao. Nao abra navegador de teste ou previa, a menos que o usuario solicite.
 - A atualizacao automatica do ambiente de testes e feita pelo workflow `.github/workflows/atualizar-testes.yml`, quando configurado e ativado.
+- Pelo ChatGPT comum, use as ferramentas da integracao GitHub para ler e editar este repositorio. Uma alteracao salva na `main` aciona o workflow sem depender do Work, de terminal local ou de computador ligado. Consulte `FLUXO_TESTES.md`.
+- Quando o pedido for somente publicar/republicar no `/dev`, atualize `PUBLICAR_DEV.json` na `main` com um novo `solicitado_em` em UTC e o motivo. Esse arquivo aciona o mesmo workflow, sem exigir mudanca no codigo nem acesso a `workflow_dispatch`.
+- Antes de afirmar falta de acesso, tente as ferramentas GitHub disponiveis na conversa. Se uma ferramenta negar escrita ou estiver ausente, informe a operacao e a limitacao observadas; nao invente uma falha de publicacao. Nunca registre credenciais no arquivo de solicitacao.
 - Nunca crie versao, publique ou atualize implantacao de producao sem um pedido explicito do usuario. Nao execute `publicar.cmd` como parte das alteracoes.
 - Credenciais devem ficar em GitHub Secrets ou nos arquivos locais de autenticacao. Nunca as adicione ao repositorio, mensagens ou logs.
-- Ao terminar, informe de forma curta o commit enviado e, quando houver acesso ao resultado do workflow, se o ambiente de testes foi atualizado. Nao declare a atualizacao dos testes apenas porque o push GitHub passou.
+- Ao terminar, informe de forma curta o commit enviado e o resultado do workflow desse commit. Sucesso significa que os arquivos foram salvos e relidos no Google; sem conseguir consultar o resultado, informe que a atualizacao dos testes ainda nao foi confirmada. Nao declare a atualizacao dos testes apenas porque o commit GitHub passou.

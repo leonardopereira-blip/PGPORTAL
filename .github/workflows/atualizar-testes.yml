@@ -10,6 +10,8 @@ on:
       - '*.html'
       - appsscript.json
       - .clasp.json
+      - PUBLICAR_DEV.json
+      - .github/pgportal-base-google.json
       - .github/workflows/atualizar-testes.yml
 
 permissions:
@@ -27,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: actions/setup-node@v4
@@ -50,7 +52,16 @@ jobs:
           if (!process.env.CLASPRC_JSON) {
             throw new Error('Configure o segredo CLASPRC_JSON para autorizar o envio aos testes.');
           }
-          const auth = JSON.parse(process.env.CLASPRC_JSON);
+          let auth;
+          try {
+            auth = JSON.parse(process.env.CLASPRC_JSON);
+          } catch {
+            throw new Error('O segredo CLASPRC_JSON precisa conter JSON valido.');
+          }
+          const refreshToken = auth?.tokens?.default?.refresh_token || auth?.token?.refresh_token || auth?.refresh_token;
+          if (!refreshToken) {
+            throw new Error('CLASPRC_JSON precisa de refresh_token renovavel; um access_token temporario nao sustenta a automacao.');
+          }
           const config = JSON.parse(fs.readFileSync('.clasp.json', 'utf8'));
           config.scriptId = scriptId;
           config.rootDir = '.';
@@ -59,13 +70,80 @@ jobs:
           fs.writeFileSync(path.join(os.homedir(), '.clasprc.json'), JSON.stringify(auth), {mode: 0o600});
           NODE
 
-      - name: Atualizar codigo usado nos testes
-        run: node node_modules/@google/clasp/build/src/index.js push --force < /dev/null
-
-      - name: Registrar atualizacao
+      - name: Salvar e conferir codigo usado nos testes
         run: |
-          COMMIT_TESTES=$(git rev-parse HEAD)
-          printf 'Codigo enviado ao HEAD do projeto de testes: `%s`.\n\nNenhuma versao ou implantacao de producao foi criada ou alterada.\n' "$COMMIT_TESTES" >> "$GITHUB_STEP_SUMMARY"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { createHash } from 'node:crypto';
+          import { isDeepStrictEqual } from 'node:util';
+          import { initAuth } from './node_modules/@google/clasp/build/src/auth/auth.js';
+          import { initClaspInstance } from './node_modules/@google/clasp/build/src/core/clasp.js';
+
+          let etapa = 'autenticacao';
+          try {
+            const { credentials } = await initAuth({});
+            if (!credentials) throw new Error('AUTH_MISSING');
+            const clasp = await initClaspInstance({ credentials });
+            const { files: locais } = await clasp.files.collectLocalFiles();
+            if (!locais.length) throw new Error('FILES_MISSING');
+
+            etapa = 'conferencia das alteracoes externas';
+            const chave = file => `${file.type}:${file.remotePath}`;
+            const hash = source => createHash('sha256').update(source.replace(/\r\n/g, '\n')).digest('hex');
+            const hashes = files => Object.fromEntries(files.map(file => [chave(file), hash(file.source)]));
+            const base = JSON.parse(fs.readFileSync('.github/pgportal-base-google.json', 'utf8'));
+            if (base.scriptId !== clasp.options.project.scriptId) throw new Error('BASE_TARGET_MISMATCH');
+            const antes = await clasp.files.fetchRemote();
+            const hashesAntes = hashes(antes);
+            // Aceita repeticao e bloqueia diferencas externas detectadas nesta leitura.
+            if (!isDeepStrictEqual(base.files, hashesAntes) && !isDeepStrictEqual(hashes(locais), hashesAntes)) {
+              throw new Error('REMOTE_CHANGED');
+            }
+
+            etapa = 'envio';
+            // Usa o mesmo push do clasp: salva o HEAD, sem versao ou deploy.
+            await clasp.files.push();
+            etapa = 'verificacao';
+            const remotos = await clasp.files.fetchRemote();
+            const porChave = new Map(remotos.map(file => [chave(file), file]));
+            const iguais = locais.every(local => {
+              const remoto = porChave.get(chave(local));
+              if (!remoto) return false;
+              return local.type === 'JSON'
+                ? isDeepStrictEqual(JSON.parse(local.source), JSON.parse(remoto.source))
+                : local.source.replace(/\r\n/g, '\n') === remoto.source.replace(/\r\n/g, '\n');
+            });
+            if (!iguais || locais.length !== remotos.length) throw new Error('VERIFY_MISMATCH');
+
+            const resumo = `Codigo do commit \`${process.env.GITHUB_SHA}\` salvo e conferido no HEAD do projeto de testes (${locais.length} arquivos). O /dev usa esse codigo salvo.\n\nNenhuma versao ou implantacao de producao foi criada ou alterada.\n`;
+            console.log(resumo);
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, resumo);
+          } catch (error) {
+            const apiError = error.cause?.error || error;
+            const status = apiError.response?.status || apiError.status;
+            const detalhe = String(apiError.response?.data?.error || error.message || '');
+            let diagnostico = `Falha na etapa de ${etapa}. Consulte o destino e a autorizacao configurados para os testes.`;
+            if (/invalid_grant|invalid_client|AUTH_MISSING/i.test(detalhe)) {
+              diagnostico = 'Google recusou a renovacao da credencial. Renove o login da conta editora e atualize o segredo CLASPRC_JSON com refresh_token; nao use access_token avulso.';
+            } else if (status === 401 || status === 403) {
+              diagnostico = `Google respondeu HTTP ${status}. Confira se a conta da credencial pode editar PGPORTAL_TESTES_SCRIPT_ID e se a Apps Script API esta habilitada para essa conta.`;
+            } else if (error.cause?.code === 'SYNTAX_ERROR') {
+              diagnostico = 'Google recusou o codigo por erro de sintaxe. Corrija os arquivos do commit antes de publicar novamente.';
+            } else if (error.message === 'VERIFY_MISMATCH') {
+              diagnostico = 'O envio terminou, mas a leitura do Google divergiu do commit. A atualizacao do /dev nao foi confirmada; confira se houve outra edicao no projeto.';
+            } else if (error.message === 'FILES_MISSING') {
+              diagnostico = 'Nenhum arquivo do portal foi encontrado. Confira a configuracao .clasp.json antes de publicar.';
+            } else if (error.message === 'REMOTE_CHANGED') {
+              diagnostico = 'O Apps Script mudou desde a leitura inicial. Nenhum envio foi feito. Recupere e concilie as edicoes do Google com a main e atualize a base antes de repetir.';
+            } else if (error.message === 'BASE_TARGET_MISMATCH') {
+              diagnostico = 'A base lida pertence a outro projeto. Confira o destino de testes antes de enviar.';
+            }
+            // Nunca imprimir o objeto de erro: ele pode conter cabecalhos OAuth.
+            console.error(`::error::${diagnostico}`);
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Atualizacao dos testes nao confirmada. ${diagnostico}\n`);
+            process.exitCode = 1;
+          }
+          NODE
 
       - name: Remover autenticacao temporaria
         if: always()

@@ -205,9 +205,7 @@ window.exportarSkusFiltradosSheets = function() {
                 <button onclick="abrirGrafico('abaFalhasPlan', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📋 Falhas de Plan.</button>
                 <button onclick="abrirGrafico('abaQualidade', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">💎 ICP & Acurácia</button>
                 <span class="text-[9px] text-neutral-600 uppercase mt-3 mb-1">Arquivos</span>
-                <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('resumo')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📈 Resumo Executivo</button>
-                <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('wip')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📁 WIP (Andamento)</button>
-                <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('aderencia')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📉 Aderência (Produtividade)</button>
+                <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('resumoExec')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📈 Resumo Executivo</button>
                 <span class="text-[9px] text-neutral-600 uppercase mt-3 mb-1">Caixas</span>
                 <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('caixas')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📦 Acompanhamento</button>
                 <span class="text-[9px] text-neutral-600 uppercase mt-3 mb-1">Papel</span>
@@ -703,16 +701,6 @@ window.exportarSkusFiltradosSheets = function() {
             document.getElementById(viewId).classList.add('view-visible');
             document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('menu-active'));
             if(btnElement) btnElement.classList.add('menu-active');
-            if(viewId === 'viewPreProd') {
-                setTimeout(() => {
-                    if(typeof receberDadosPreProd === 'function' && window.DADOS_PREPROD_CACHE) {
-                        receberDadosPreProd(window.DADOS_PREPROD_CACHE);
-                    } 
-                    else if(typeof carregarPreProducao === 'function') {
-                        carregarPreProducao();
-                    }
-                }, 100);
-            }
             window.dispatchEvent(new Event('resize'));
         }
 
