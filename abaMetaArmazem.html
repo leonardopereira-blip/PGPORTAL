@@ -1715,17 +1715,12 @@
     // As áreas transparentes facilitam passar o mouse também nos trechos entre os pontos.
     for(var i=1;i<n;i++){
       var atual=pontos[i];
-      var dicaTracoAcu=fmtPrazo(atual.data)+' · Aderência acumulada: '+pctTexto(atual.pct)+
-        ' ('+fmt(atual.aderente,true)+' / '+fmt(atual.total,true)+')'+composicaoMeta(atual.data,true);
       var dicaTracoMeta=fmtPrazo(atual.data)+' · Entrega por meta: '+pctTexto(atual.pctMeta)+
         ' ('+fmt(atual.aderenteMeta,true)+' / '+fmt(atual.totalMeta,true)+')'+composicaoMeta(atual.data,false);
       svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pct)+'" x2="'+x(i)+'" y2="'+y(atual.pct)+
         '" stroke="'+corAcumulada+'" stroke-width="3" stroke-linecap="round" stroke-dasharray="7 5"/>';
       svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pctMeta)+'" x2="'+x(i)+'" y2="'+y(atual.pctMeta)+
         '" stroke="'+corMeta+'" stroke-width="3" stroke-linecap="round"/>';
-      svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pct)+'" x2="'+x(i)+'" y2="'+y(atual.pct)+
-        '" stroke="transparent" stroke-width="13" pointer-events="stroke"><title>'+
-        escapeHTML(dicaTracoAcu)+'</title></line>';
       svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pctMeta)+'" x2="'+x(i)+'" y2="'+y(atual.pctMeta)+
         '" stroke="transparent" stroke-width="13" pointer-events="stroke"><title>'+
         escapeHTML(dicaTracoMeta)+'</title></line>';
@@ -1735,7 +1730,7 @@
       var dicaMeta=fmtPrazo(p.data)+' · Entrega por meta: '+pctTexto(p.pctMeta)+
         ' ('+fmt(p.aderenteMeta,true)+' / '+fmt(p.totalMeta,true)+')'+composicaoMeta(p.data,false);
       var dicaAcumulada=fmtPrazo(p.data)+' · Aderência acumulada: '+pctTexto(p.pct)+
-        ' ('+fmt(p.aderente,true)+' / '+fmt(p.total,true)+')'+composicaoMeta(p.data,true);
+        ' ('+fmt(p.aderente,true)+' / '+fmt(p.total,true)+')';
       svg+='<rect x="'+(xx-4.5)+'" y="'+(ya-4.5)+'" width="9" height="9" rx="1" fill="'+corAcumulada+'" stroke="#fff" stroke-width="1.5"><title>'+escapeHTML(dicaAcumulada)+'</title></rect>';
       svg+='<circle cx="'+xx+'" cy="'+ym+'" r="5.5" fill="'+corMeta+'" stroke="#fff" stroke-width="1.8"><title>'+escapeHTML(dicaMeta)+'</title></circle>';
       // Um rótulo acima do ponto da meta e outro abaixo do acumulado, sem sobreposição.
