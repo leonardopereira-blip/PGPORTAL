@@ -1552,6 +1552,27 @@
       var g=porData[data]||(porData[data]={data:data,totalMeta:0,aderenteMeta:0});
       g.totalMeta+=meta;g.aderenteMeta+=aderente;
     }
+    function projecaoPosiAte(i,meta){
+      var total=Math.max(0,volume(i.total));
+      var entregaAte=(i.eventosReal||[]).reduce(function(s,e){
+        return s+(e.data&&e.data<=meta?volume(e.volume):0);
+      },0);
+      // Para meta encerrada, somente Entrega TP efetiva: não reabre histórico.
+      if(meta<corte)return Math.min(total,entregaAte);
+      var entregue=Math.min(total,volume(i.realCD));
+      // O coletado já integra a previsão, mas NÃO é registrado como entregue.
+      // PCP (TIRAGEM COLETADA) e Coleta TP são fontes alternativas, não parcelas somáveis.
+      var coletado=Math.min(total,Math.max(entregue,volume(i.coletadaBruta),volume(i.coletadoTP)));
+      var coletadoPendente=Math.max(0,coletado-entregue);
+      var aindaNaoColetado=Math.max(0,total-entregue-coletadoPendente);
+      // Rateio mantém a programação para o que ainda não foi coletado.
+      // Limitar ao saldo não coletado evita contar de novo a tiragem já coletada.
+      var programado=(window.pgMADiasEntrega(i)||[]).reduce(function(s,p){
+        return s+(!p.realizado&&p.data&&p.data>=corte&&p.data<=meta?volume(p.volume):0);
+      },0);
+      return Math.min(total,entregaAte+coletadoPendente+
+        Math.min(aindaNaoColetado,programado));
+    }
     (items||[]).forEach(function(i){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(i.metaAplicada||'')||!(i.total>0))return;
       acrescentar(i.metaAplicada,i.total,Math.min(i.total,Math.max(0,
@@ -1580,6 +1601,7 @@
         // Todas as entregas do mesmo recorte contam, independentemente do SKU
         // que recebeu prioridade no (re)Plan. Não há compensação ENTRE recortes.
         var entregueAte=g.itens.reduce(function(s,i){
+          if(m.data>'2026-10-16')return s+projecaoPosiAte(i,m.data);
           return s+window.pgMADiasEntrega(i).reduce(function(ac,p){
             if(!p.data||p.data>m.data||!p.realizado&&p.data<corte)return ac;
             return ac+volume(p.volume);
