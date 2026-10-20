@@ -1575,8 +1575,12 @@
     }
     (items||[]).forEach(function(i){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(i.metaAplicada||'')||!(i.total>0))return;
-      acrescentar(i.metaAplicada,i.total,Math.min(i.total,Math.max(0,
-        i.metaAplicada<corte?i.real:i.previsto)));
+      // Todos os prazos futuros usam a mesma composição: entregue + coletado pendente
+      // + saldo ainda não coletado previsto. Não restringir essa regra à Posigraf.
+      // Marcos de 15 e 16/10 e demais prazos vencidos seguem só o realizado.
+      var aderente=i.metaAplicada<corte?i.real:
+        Math.min(i.total,Math.max(volume(i.previsto),projecaoPosiAte(i,i.metaAplicada)));
+      acrescentar(i.metaAplicada,i.total,Math.max(0,aderente));
       if(estado.cenario!=='com'||!i.posi)return;
       var coorte=coortePosi(i.linha);
       if(!coorte)return;
@@ -1593,8 +1597,9 @@
       // As metas de 15 e 16/10 permanecem exatamente como estavam.
       g.itens.forEach(function(i){
         if(i.metaAplicada<='2026-10-16')return;
-        acrescentar(i.metaAplicada,-i.total,-Math.min(i.total,Math.max(0,
-          i.metaAplicada<corte?i.real:i.previsto)));
+        var aderenteAnterior=Math.min(i.total,Math.max(volume(i.previsto),
+          projecaoPosiAte(i,i.metaAplicada)));
+        acrescentar(i.metaAplicada,-i.total,-Math.max(0,aderenteAnterior));
       });
       var acumuladoCreditado=0,pctAnterior=0;
       g.marcos.forEach(function(m){
