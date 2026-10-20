@@ -1546,19 +1546,69 @@
   // O numerador usa o fechamento de cada coorte: real para data vencida
   // ou realizado + previsão do próprio item quando a meta ainda está aberta.
   window.pgMAModeloGraficoAderencia=function(items,corte){
-    var porData=Object.create(null);
+    var porData=Object.create(null),gruposPosi=new Map();
+    function acrescentar(data,meta,aderente){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(data)||!meta)return;
+      var g=porData[data]||(porData[data]={data:data,totalMeta:0,aderenteMeta:0});
+      g.totalMeta+=meta;g.aderenteMeta+=aderente;
+    }
     (items||[]).forEach(function(i){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(i.metaAplicada||'')||!(i.total>0))return;
-      var g=porData[i.metaAplicada]||(porData[i.metaAplicada]={data:i.metaAplicada,totalMeta:0,aderenteMeta:0});
-      g.totalMeta+=i.total;
-      g.aderenteMeta+=Math.min(i.total,Math.max(0,i.metaAplicada<corte?i.real:i.previsto));
+      acrescentar(i.metaAplicada,i.total,Math.min(i.total,Math.max(0,
+        i.metaAplicada<corte?i.real:i.previsto)));
+      if(estado.cenario!=='com'||!i.posi)return;
+      var coorte=coortePosi(i.linha);
+      if(!coorte)return;
+      var marcos=marcosPosi(coorte.regra);
+      if(!marcos.some(function(m){return m.data>'2026-10-16';}))return;
+      if(!gruposPosi.has(coorte.chave))
+        gruposPosi.set(coorte.chave,{marcos:marcos,itens:[]});
+      gruposPosi.get(coorte.chave).itens.push(i);
+    });
+    gruposPosi.forEach(function(g){
+      var total=g.itens.reduce(function(s,i){return s+i.total;},0);
+      if(!total)return;
+      // Retira somente as metas FUTURAS da distribuição de SKUs.
+      // As metas de 15 e 16/10 permanecem exatamente como estavam.
+      g.itens.forEach(function(i){
+        if(i.metaAplicada<='2026-10-16')return;
+        acrescentar(i.metaAplicada,-i.total,-Math.min(i.total,Math.max(0,
+          i.metaAplicada<corte?i.real:i.previsto)));
+      });
+      var acumuladoCreditado=0,pctAnterior=0;
+      g.marcos.forEach(function(m){
+        // Todas as entregas do mesmo recorte contam, independentemente do SKU
+        // que recebeu prioridade no (re)Plan. Não há compensação ENTRE recortes.
+        var entregueAte=g.itens.reduce(function(s,i){
+          return s+window.pgMADiasEntrega(i).reduce(function(ac,p){
+            if(!p.data||p.data>m.data||!p.realizado&&p.data<corte)return ac;
+            return ac+volume(p.volume);
+          },0);
+        },0);
+        var metaAcumulada=total*m.pct;
+        if(m.data<='2026-10-16'){
+          // Não recalcula o resultado dos marcos já fechados.
+          acumuladoCreditado=Math.min(metaAcumulada,entregueAte);
+          pctAnterior=m.pct;
+          return;
+        }
+        var parcelaMeta=Math.max(0,total*(m.pct-pctAnterior));
+        var credito=Math.max(0,Math.min(parcelaMeta,
+          Math.min(metaAcumulada,entregueAte)-acumuladoCreditado));
+        // Não emprestar atrasos de um marco para outro, mesmo dentro da coorte.
+        acrescentar(m.data,parcelaMeta,credito);
+        acumuladoCreditado+=credito;
+        pctAnterior=m.pct;
+      });
     });
     var total=0,aderente=0;
-    return Object.keys(porData).sort().map(function(data){
-      var g=porData[data];total+=g.totalMeta;aderente+=g.aderenteMeta;
-      return {data:data,passada:data<corte,total:total,aderente:aderente,
-        pct:total?aderente*100/total:0,pctMeta:g.totalMeta?g.aderenteMeta*100/g.totalMeta:0,totalMeta:g.totalMeta,aderenteMeta:g.aderenteMeta};
-    });
+    return Object.keys(porData).sort().filter(function(d){return porData[d].totalMeta>0.00001;})
+      .map(function(data){
+        var g=porData[data];total+=g.totalMeta;aderente+=g.aderenteMeta;
+        return {data:data,passada:data<corte,total:total,aderente:aderente,
+          pct:total?aderente*100/total:0,pctMeta:g.totalMeta?g.aderenteMeta*100/g.totalMeta:0,
+          totalMeta:g.totalMeta,aderenteMeta:g.aderenteMeta};
+      });
   };
   function desenharGraficoAderencia(items){
     var root=document.getElementById('maGraficoAderencia');if(!root)return;
