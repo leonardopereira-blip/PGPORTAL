@@ -523,6 +523,137 @@
       return d&&(d===fim||ajustarDomingoPrevisto(d)===fim);
     })?fim:'';
   }
+
+  // Posigraf: 30/40/50/100 são metas ACUMULADAS sobre a tiragem do recorte.
+  // Prioriza (re)Plan, sem dividir uma tiragem e sem realocar prazos <=16/10.
+  var distribuicaoPosi={fonte:null,primeiro:null,ultimo:null,quantidade:0,metas:new Map()};
+  var montandoPosi=false,identidadesPosi=new WeakMap(),sequenciaPosi=0;
+  function idPosi(l){
+    if(typeof window.pgMAIdLinhaRealizado==='function')return window.pgMAIdLinhaRealizado(l);
+    if(!identidadesPosi.has(l))identidadesPosi.set(l,'REGISTRO:'+(++sequenciaPosi));
+    return identidadesPosi.get(l);
+  }
+  function marcosPosi(r){
+    var mapa=new Map(),percentuais=[.3,.4,.5,1];
+    r.datas.forEach(function(d,i){if(d){
+      d=ajustarDomingoPrevisto(d);
+      mapa.set(d,Math.max(percentuais[i],mapa.get(d)||0));
+    }});
+    var marcos=Array.from(mapa,function(par){return {data:par[0],pct:par[1]};})
+      .sort(function(a,b){return a.data.localeCompare(b.data);});
+    if(marcos.length===1)marcos[0].pct=1;
+    var anterior=0;
+    marcos.forEach(function(m){m.pct=Math.max(anterior,m.pct);anterior=m.pct;});
+    return marcos;
+  }
+  function coortePosi(l){
+    var origens=l._PG_MA&&l._PG_MA.agrupado?l._PG_MA.linhas:[l],base=null;
+    for(var i=0;i<origens.length;i++){
+      var r=posiRegra(origens[i]);
+      if(!r||r.length!==1)return null;
+      var chave=JSON.stringify([normal(r[0].marca),normal(r[0].segmento),
+        serie(r[0].serie),normal(r[0].tipo)]);
+      if(base&&base.chave!==chave)return null;
+      base={chave:chave,regra:r[0]};
+    }
+    return base;
+  }
+  function replanPosi(l){
+    var campo=window.pgCampoColeta?window.pgCampoColeta(l,'Coleta/Internalização de estoque final (re) plan'):
+      l['Coleta/Internalização de estoque final (re) plan'];
+    var raw=data(campo);
+    var comSLA=raw&&typeof window.pgDataPlanoEntregaSLA==='function'?
+      data(window.pgDataPlanoEntregaSLA(l,raw)):raw;
+    return ajustarDomingoPrevisto(comSLA||raw);
+  }
+  function proximidadePosi(a,b){
+    return a?Math.abs(new Date(a+'T12:00:00Z')-new Date(b+'T12:00:00Z'))/86400000:99999;
+  }
+  function selecionarPosi(linhas,necessario,dataMarco){
+    var escolhidas=[],soma=0;
+    if(necessario<=0||!linhas.length)return escolhidas;
+    // Em cada etapa, primeiro as linhas planejadas na própria data.
+    var grupos=[linhas.filter(function(l){return l.replan===dataMarco;}),
+      linhas.filter(function(l){return l.replan!==dataMarco;})];
+    grupos.forEach(function(candidatas){
+      var disponiveis=candidatas.slice();
+      while(disponiveis.length&&soma<necessario){
+        var resto=necessario-soma,melhor=-1,erro=Infinity;
+        disponiveis.forEach(function(l,i){
+          var diferenca=Math.abs(resto-l.total);
+          // Verifica pares para não perder uma combinação de linhas inteiras mais próxima.
+          for(var j=0;j<disponiveis.length;j++)
+            if(j!==i)diferenca=Math.min(diferenca,Math.abs(resto-l.total-disponiveis[j].total));
+          if(diferenca<erro||(diferenca===erro&&
+            (melhor<0||proximidadePosi(l.replan,dataMarco)<proximidadePosi(disponiveis[melhor].replan,dataMarco)))){
+            melhor=i;erro=diferenca;
+          }
+        });
+        if(melhor<0)break;
+        var proximo=disponiveis[melhor];
+        if(soma>0&&Math.abs(resto)<=Math.abs(resto-proximo.total))break;
+        // Quando a linha é grande demais, uma meta parcial pode ficar aproximada para baixo.
+        if(!soma&&proximo.total>necessario*2&&grupos[1].length&&candidatas===grupos[0])break;
+        escolhidas.push(proximo);soma+=proximo.total;disponiveis.splice(melhor,1);
+      }
+    });
+    return escolhidas;
+  }
+  function montarDistribuicaoPosi(fonte,corte){
+    if(!Array.isArray(fonte)||!fonte.length)return;
+    if(distribuicaoPosi.fonte===fonte&&distribuicaoPosi.quantidade===fonte.length&&
+      distribuicaoPosi.primeiro===fonte[0]&&distribuicaoPosi.ultimo===fonte[fonte.length-1])return;
+    montandoPosi=true;
+    try{
+      var base=fonte.filter(function(l){
+        if(window.pgSolicitacaoCancelada&&window.pgSolicitacaoCancelada(l))return false;
+        var acab=typeof window.pgEhFonteAcabadora==='function'&&window.pgEhFonteAcabadora(l);
+        return normal(acab?(l['CD DESTINO']||l.CD_FINAL||''):(l.CD_MAPA||''))!=='WALPRINT';
+      });
+      if(typeof window.pgLinhasUnicas==='function')base=window.pgLinhasUnicas(base);
+      if(typeof window.pgUnirTotalSemDuplicidade==='function')base=window.pgUnirTotalSemDuplicidade(base);
+      if(typeof window.pgMAPrepararLinhas==='function')base=window.pgMAPrepararLinhas(base,fonte,corte);
+      var grupos=new Map(),metas=new Map();
+      base.forEach(function(l){
+        var coorte=coortePosi(l);
+        if(!coorte||!marcosPosi(coorte.regra).some(function(m){return m.data>'2026-10-16';}))return;
+        var anterior=prazoDaLinha(l,'com'),total=Math.round(volume(l.TIRAGEM));
+        if(!total||!anterior.elegivel)return;
+        var origens=l._PG_MA&&l._PG_MA.agrupado?l._PG_MA.linhas:[l];
+        var reg={id:idPosi(l),ids:origens.map(idPosi),total:total,
+          replan:replanPosi(l),metaAntiga:anterior.metaAplicada};
+        if(!grupos.has(coorte.chave))grupos.set(coorte.chave,{regra:coorte.regra,linhas:[]});
+        grupos.get(coorte.chave).linhas.push(reg);
+      });
+      grupos.forEach(function(g){
+        var linhas=g.linhas,marcos=marcosPosi(g.regra),total=linhas.reduce(function(s,l){return s+l.total;},0);
+        var livres=linhas.filter(function(l){return l.metaAntiga>'2026-10-16';});
+        var alocado=total-livres.reduce(function(s,l){return s+l.total;},0);
+        var futuros=marcos.filter(function(m){return m.data>'2026-10-16';});
+        futuros.forEach(function(m,i){
+          var selecionados=i===futuros.length-1?livres.slice():
+            selecionarPosi(livres,m.pct*total-alocado,m.data);
+          var escolhidos=new Set(selecionados.map(function(l){return l.id;}));
+          selecionados.forEach(function(l){
+            metas.set(l.id,m.data);l.ids.forEach(function(id){metas.set(id,m.data);});
+            alocado+=l.total;
+          });
+          livres=livres.filter(function(l){return !escolhidos.has(l.id);});
+        });
+      });
+      distribuicaoPosi={fonte:fonte,primeiro:fonte[0],ultimo:fonte[fonte.length-1],
+        quantidade:fonte.length,metas:metas};
+    }finally{montandoPosi=false;}
+  }
+  function metaDistribuidaPosi(l){
+    if(montandoPosi)return '';
+    if(Array.isArray(window.dadosGlobais)&&window.dadosGlobais.length)
+      montarDistribuicaoPosi(window.dadosGlobais,typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toLocaleDateString('en-CA'));
+    var linhas=l._PG_MA&&l._PG_MA.agrupado?l._PG_MA.linhas:[l];
+    var datas=linhas.map(function(r){return distribuicaoPosi.metas.get(idPosi(r));});
+    return datas.length&&datas[0]&&datas.every(function(d){return d===datas[0];})?datas[0]:'';
+  }
+
   function mesmosPrazos(prazos){
     var primeiro=prazos[0];
     return prazos.length>0&&prazos.every(function(p){return p.alvo===primeiro.alvo&&p.metaAplicada===primeiro.metaAplicada&&p.dataAcordada===primeiro.dataAcordada;});
@@ -541,7 +672,7 @@
     var posiPropria=grafica==='POSIGRAF'&&cd==='POSIGRAF',regras=posiPropria?posiRegra(l):null;
     var dataAcordada=(regras||[]).reduce(function(ultima,r){return r.datas.reduce(function(a,d){return d>a?d:a;},ultima);},'');
     if(cenario==='com'&&!avaliacaoSim&&!preservarPrazoFinal){
-      var marco=marcoPosiPeloReplan(l,regras);
+      var marco=metaDistribuidaPosi(l)||marcoPosiPeloReplan(l,regras);
       if(marco)dataAcordada=marco;
     }
     // Se um marco de meta cair em domingo, o prazo aplicável passa para
@@ -559,9 +690,10 @@
   };
   // A união das datas dos dois cenários mantém as opções estáveis.
   window.pgMAMetasPossiveisDaLinha = function(l) {
-    var sem=prazoDaLinha(l,'sem').metaAplicada;
-    var com=prazoDaLinha(l,'com').metaAplicada;
-    return sem===com?[sem]:[sem,com];
+    var sem=prazoDaLinha(l,'sem').metaAplicada,com=prazoDaLinha(l,'com').metaAplicada;
+    var datas=new Set([sem,com]),coorte=coortePosi(l);
+    if(coorte)marcosPosi(coorte.regra).forEach(function(m){if(m.data>=sem)datas.add(m.data);});
+    return Array.from(datas).filter(Boolean).sort();
   };
   function dadosBase(opcoes) {
     var cenario=opcoes&&(opcoes.cenario==='com'||opcoes.cenario==='sem')?opcoes.cenario:estado.cenario;
@@ -591,6 +723,8 @@
     base=window.pgUnirTotalSemDuplicidade(base);
     if(typeof window.pgMAPrepararLinhas==='function')base=window.pgMAPrepararLinhas(base,
       opcoes&&Array.isArray(opcoes.base)?opcoes.base:window.dadosGlobais||base,corteEventos);
+    montarDistribuicaoPosi(opcoes&&Array.isArray(opcoes.base)?opcoes.base:
+      window.dadosGlobais||base,corteEventos);
     return base.map(function(l){
       var total=volume(l.TIRAGEM),marca=normal(l.MARCA_FINAL||l.UNIDADE||l.MARCA);
       if(!total||!marca)return null;
