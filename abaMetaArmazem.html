@@ -1641,6 +1641,41 @@
     var root=document.getElementById('maGraficoAderencia');if(!root)return;
     var corte=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toISOString().slice(0,10);
     var pontos=window.pgMAModeloGraficoAderencia(items,corte);
+    // Mostra quais gráfica, marca e série compõem cada marco, sem alterar seus números.
+    // Coortes da Posi participam de cada percentual acumulado do respectivo acordo.
+    function composicaoMeta(dataMeta,acumulada){
+      var mapa=new Map();
+      (items||[]).forEach(function(item){
+        if(!(item.total>0)||!item.metaAplicada)return;
+        var metas=[item.metaAplicada];
+        if(estado.cenario==='com'&&item.posi){
+          var coorte=coortePosi(item.linha);
+          if(coorte){
+            var futuros=marcosPosi(coorte.regra).filter(function(m){return m.data>'2026-10-16';});
+            if(futuros.length){
+              metas=(item.metaAplicada<='2026-10-16'?[item.metaAplicada]:[])
+                .concat(futuros.map(function(m){return m.data;}));
+            }
+          }
+        }
+        if(!metas.some(function(d){return acumulada?d<=dataMeta:d===dataMeta;}))return;
+        var grafica=String(item.grafica||'NÃO INFORMADA').trim();
+        var marca=String(item.marca||'NÃO INFORMADA').trim();
+        var nomeSerie=String(item.serie||'NÃO INFORMADA').trim();
+        var chave=grafica+'\u001f'+marca;
+        if(!mapa.has(chave))mapa.set(chave,{grafica:grafica,marca:marca,series:new Set()});
+        mapa.get(chave).series.add(nomeSerie);
+      });
+      var linhas=Array.from(mapa.values()).sort(function(a,b){
+        return a.grafica.localeCompare(b.grafica,'pt-BR',{numeric:true})||
+          a.marca.localeCompare(b.marca,'pt-BR',{numeric:true});
+      }).map(function(g){
+        return g.grafica+' · '+g.marca+' · '+
+          Array.from(g.series).sort(function(a,b){return a.localeCompare(b,'pt-BR',{numeric:true});}).join(', ');
+      });
+      return '\nGráfica · Marca · Série'+(acumulada?' (acumulado até a data)':'')+':\n'+
+        (linhas.length?linhas.join('\n'):'Nenhuma combinação identificada');
+    }
     if(!pontos.length){
       root.innerHTML='<p class="text-xs text-slate-500 text-center p-5">Sem metas aplicadas para este recorte.</p>';return;
     }
@@ -1677,18 +1712,30 @@
       svg+='<text x="'+separador+'" y="'+(y0-18)+'" fill="#334155" text-anchor="middle" font-size="10" font-weight="700" font-family="Arial,sans-serif">Última meta: '+fmtPrazo(ultima).slice(0,5)+'</text>';
     }
     // A linha Entrega por meta é independente; só o acumulado considera metas anteriores.
+    // As áreas transparentes facilitam passar o mouse também nos trechos entre os pontos.
     for(var i=1;i<n;i++){
-      svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pct)+'" x2="'+x(i)+'" y2="'+y(pontos[i].pct)+
+      var atual=pontos[i];
+      var dicaTracoAcu=fmtPrazo(atual.data)+' · Aderência acumulada: '+pctTexto(atual.pct)+
+        ' ('+fmt(atual.aderente,true)+' / '+fmt(atual.total,true)+')'+composicaoMeta(atual.data,true);
+      var dicaTracoMeta=fmtPrazo(atual.data)+' · Entrega por meta: '+pctTexto(atual.pctMeta)+
+        ' ('+fmt(atual.aderenteMeta,true)+' / '+fmt(atual.totalMeta,true)+')'+composicaoMeta(atual.data,false);
+      svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pct)+'" x2="'+x(i)+'" y2="'+y(atual.pct)+
         '" stroke="'+corAcumulada+'" stroke-width="3" stroke-linecap="round" stroke-dasharray="7 5"/>';
-      svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pctMeta)+'" x2="'+x(i)+'" y2="'+y(pontos[i].pctMeta)+
+      svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pctMeta)+'" x2="'+x(i)+'" y2="'+y(atual.pctMeta)+
         '" stroke="'+corMeta+'" stroke-width="3" stroke-linecap="round"/>';
+      svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pct)+'" x2="'+x(i)+'" y2="'+y(atual.pct)+
+        '" stroke="transparent" stroke-width="13" pointer-events="stroke"><title>'+
+        escapeHTML(dicaTracoAcu)+'</title></line>';
+      svg+='<line x1="'+x(i-1)+'" y1="'+y(pontos[i-1].pctMeta)+'" x2="'+x(i)+'" y2="'+y(atual.pctMeta)+
+        '" stroke="transparent" stroke-width="13" pointer-events="stroke"><title>'+
+        escapeHTML(dicaTracoMeta)+'</title></line>';
     }
     pontos.forEach(function(p,i){
       var xx=x(i),ya=y(p.pct),ym=y(p.pctMeta);
       var dicaMeta=fmtPrazo(p.data)+' · Entrega por meta: '+pctTexto(p.pctMeta)+
-        ' ('+fmt(p.aderenteMeta,true)+' / '+fmt(p.totalMeta,true)+')';
+        ' ('+fmt(p.aderenteMeta,true)+' / '+fmt(p.totalMeta,true)+')'+composicaoMeta(p.data,false);
       var dicaAcumulada=fmtPrazo(p.data)+' · Aderência acumulada: '+pctTexto(p.pct)+
-        ' ('+fmt(p.aderente,true)+' / '+fmt(p.total,true)+')';
+        ' ('+fmt(p.aderente,true)+' / '+fmt(p.total,true)+')'+composicaoMeta(p.data,true);
       svg+='<rect x="'+(xx-4.5)+'" y="'+(ya-4.5)+'" width="9" height="9" rx="1" fill="'+corAcumulada+'" stroke="#fff" stroke-width="1.5"><title>'+escapeHTML(dicaAcumulada)+'</title></rect>';
       svg+='<circle cx="'+xx+'" cy="'+ym+'" r="5.5" fill="'+corMeta+'" stroke="#fff" stroke-width="1.8"><title>'+escapeHTML(dicaMeta)+'</title></circle>';
       // Um rótulo acima do ponto da meta e outro abaixo do acumulado, sem sobreposição.
