@@ -3151,7 +3151,15 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         if (faseId === 'ent_tp') isReal = !!(l["DATA_EA"] && String(l["DATA_EA"]).trim() !== "");
 
         setSeries.add(serie);
-        if (!matriz[marca]) matriz[marca] = {totalGeral:{base:0,real:0,bruto:0,excedente:0},series:{}};
+        if (!matriz[marca]) matriz[marca] = {
+            totalGeral:{base:0,real:0,bruto:0,excedente:0},
+            tipos:{
+                Aluno:{base:0,real:0,bruto:0,excedente:0},
+                Professor:{base:0,real:0,bruto:0,excedente:0},
+                Outros:{base:0,real:0,bruto:0,excedente:0}
+            },
+            series:{}
+        };
         if (!matriz[marca].series[serie]) matriz[marca].series[serie] = {
             Aluno:{base:0,real:0,bruto:0,excedente:0}, Professor:{base:0,real:0,bruto:0,excedente:0}, Outros:{base:0,real:0,bruto:0,excedente:0}
         };
@@ -3160,7 +3168,7 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
             ? Math.max(0, Number(window.arredondar(tFaseReal)) || 0) : 0;
         const considerado = Math.min(tBase, bruto);
         const excedente = Math.max(0, bruto - tBase);
-        for (const celula of [matriz[marca].totalGeral, matriz[marca].series[serie][tipo]]) {
+        for (const celula of [matriz[marca].totalGeral, matriz[marca].tipos[tipo], matriz[marca].series[serie][tipo]]) {
             celula.base += tBase;
             celula.real += considerado;
             celula.bruto += bruto;
@@ -3170,6 +3178,26 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
 
     const seriesOrdenadas = Array.from(setSeries).sort();
     const marcasOrdenadas = Object.keys(matriz).sort();
+    // O recorte considera a taxa global da marca, não as células individuais das séries.
+    const percentualCumprido = celula => {
+        if (!celula || celula.base <= 0) return null;
+        const p = Math.min(100, 100 * celula.real / celula.base);
+        return p < 100 && p.toFixed(1) === '100.0' ? 99.9 : p;
+    };
+    const limiteCumprido = id => {
+        const campo = document.getElementById(id);
+        const valor = campo ? String(campo.value || '').trim() : '';
+        if (!valor) return null;
+        const numero = Number(valor.replace(',', '.'));
+        return Number.isFinite(numero) && numero >= 0 && numero <= 100 ? numero : null;
+    };
+    const acimaDe = limiteCumprido('filtroCumpridoMinFunil');
+    const abaixoDe = limiteCumprido('filtroCumpridoMaxFunil');
+    const marcasVisiveis = marcasOrdenadas.filter(marca => {
+        const p = percentualCumprido(matriz[marca].totalGeral);
+        return p !== null && (acimaDe === null || p > acimaDe) &&
+            (abaixoDe === null || p < abaixoDe);
+    });
     if (marcasOrdenadas.length === 0) {
         elThead.innerHTML = `<tr><th class="p-2">Aviso</th></tr>`;
         elTbody.innerHTML = `<tr><td class="p-8 text-center text-slate-500 font-bold bg-slate-50 rounded-b-lg">Nenhum dado encontrado para a fase '${faseObj.nome}' com os filtros atuais.</td></tr>`;
@@ -3178,7 +3206,12 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
     let trTopo = `<tr>
         <th rowspan="2" class="p-2 border-r border-slate-300 sticky left-0 bg-slate-100 z-10 shadow-[1px_0_0_#CBD5E1] min-w-[120px]">Marca</th>
         <th rowspan="2" class="p-2 border-r border-slate-300 text-center bg-slate-200 text-slate-800 font-black min-w-[70px]">% Total</th>`;
-    let trBase = `<tr>`;
+    // Consolidado de cada tipo sobre todas as séries, por marca.
+    trTopo += `<th colspan="3" class="p-2 border-r border-slate-300 text-center font-black text-slate-700 bg-slate-100">Total Geral</th>`;
+    let trBase = `<tr>
+        <th class="p-1 border-r border-slate-200 text-center text-[9px] font-bold text-slate-500 bg-slate-50">Aluno</th>
+        <th class="p-1 border-r border-slate-200 text-center text-[9px] font-bold text-slate-500 bg-slate-50">Prof</th>
+        <th class="p-1 border-r border-slate-300 text-center text-[9px] font-bold text-slate-500 bg-slate-50">Outros</th>`;
     seriesOrdenadas.forEach(serie => {
         trTopo += `<th colspan="3" class="p-2 border-r border-slate-300 text-center font-black text-slate-700">${serie}</th>`;
         trBase += `
@@ -3194,8 +3227,7 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         if (!dataObj || dataObj.base === 0) {
             return `<td class="p-2 border-r ${isTotal ? 'border-slate-300 bg-slate-50' : 'border-slate-200'} text-center text-slate-300">-</td>`;
         }
-        let pct = Math.min(100, (dataObj.real / dataObj.base) * 100);
-        if (pct < 100 && pct.toFixed(1) === '100.0') pct = 99.9;
+        const pct = percentualCumprido(dataObj);
         let corClasse = window.getCorHeatmap ? window.getCorHeatmap(pct) : 'bg-slate-500 text-white';
         const detalhe = {base:dataObj.base, considerado:dataObj.real,
             bruto:dataObj.bruto, excedente:dataObj.excedente};
@@ -3209,7 +3241,7 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
                 </td>`;
     };
     let htmlBody = '';
-    marcasOrdenadas.forEach(marca => {
+    marcasVisiveis.forEach(marca => {
         let colsSerie = '';
         seriesOrdenadas.forEach(serie => {
             let sData = matriz[marca].series[serie] || {
@@ -3223,9 +3255,52 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         });
         htmlBody += `<tr class="border-b border-slate-100 hover:bg-slate-100/50 transition-colors">
             <td class="p-2 font-bold text-slate-700 border-r border-slate-200 sticky left-0 bg-white shadow-[1px_0_0_#F1F5F9]">${marca}</td>
-            ${renderCell(matriz[marca].totalGeral,true,{fase:faseId,tipo:'marca',grupo:marca})}${colsSerie}
+            ${renderCell(matriz[marca].totalGeral,true,{fase:faseId,tipo:'marca',grupo:marca})}
+            ${renderCell(matriz[marca].tipos.Aluno,false,{fase:faseId,tipo:'marca',grupo:marca,tipoMaterial:'ALUNO'})}
+            ${renderCell(matriz[marca].tipos.Professor,false,{fase:faseId,tipo:'marca',grupo:marca,tipoMaterial:'PROFESSOR'})}
+            ${renderCell(matriz[marca].tipos.Outros,false,{fase:faseId,tipo:'marca',grupo:marca,tipoMaterial:'OUTROS'})}${colsSerie}
         </tr>`;
     });
+
+    if (!marcasVisiveis.length) {
+        elTbody.innerHTML = '<tr><td colspan="' + (5 + 3 * seriesOrdenadas.length) +
+            '" class="p-6 text-center text-slate-500 font-semibold">Nenhuma marca na faixa de percentual selecionada.</td></tr>';
+        return;
+    }
+    // A linha geral agrega volumes de marcas visíveis: nunca calcula média de percentuais.
+    const novaCelula = () => ({base:0,real:0,bruto:0,excedente:0});
+    const somarCelula = (alvo, origem) => {
+        if (!origem) return;
+        for (const campo of ['base','real','bruto','excedente']) alvo[campo] += origem[campo] || 0;
+    };
+    const totalFiltrado = {
+        geral:novaCelula(),
+        tipos:{Aluno:novaCelula(),Professor:novaCelula(),Outros:novaCelula()},
+        series:{}
+    };
+    const tipos = ['Aluno','Professor','Outros'];
+    marcasVisiveis.forEach(marca => {
+        const linha = matriz[marca];
+        somarCelula(totalFiltrado.geral, linha.totalGeral);
+        tipos.forEach(tipo => somarCelula(totalFiltrado.tipos[tipo], linha.tipos[tipo]));
+        Object.keys(linha.series).forEach(serie => {
+            if (!totalFiltrado.series[serie]) {
+                totalFiltrado.series[serie] = {Aluno:novaCelula(),Professor:novaCelula(),Outros:novaCelula()};
+            }
+            tipos.forEach(tipo => somarCelula(totalFiltrado.series[serie][tipo], linha.series[serie][tipo]));
+        });
+    });
+    const colsTotalSeries = seriesOrdenadas.map(serie => {
+        const grupo = totalFiltrado.series[serie] || {};
+        return tipos.map(tipo => renderCell(grupo[tipo])).join('');
+    }).join('');
+    htmlBody += `<tr class="border-t-2 border-slate-400 bg-slate-100 font-black">
+        <td class="p-2 text-slate-800 border-r border-slate-300 sticky left-0 bg-slate-100">TOTAL GERAL</td>
+        ${renderCell(totalFiltrado.geral,true)}
+        ${renderCell(totalFiltrado.tipos.Aluno)}
+        ${renderCell(totalFiltrado.tipos.Professor)}
+        ${renderCell(totalFiltrado.tipos.Outros)}${colsTotalSeries}
+    </tr>`;
     elTbody.innerHTML = htmlBody;
 };
 
