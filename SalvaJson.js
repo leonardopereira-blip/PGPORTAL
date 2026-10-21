@@ -698,7 +698,50 @@ function enviarEmailsPendenciasGiro(dados) {
 // =========================================================================
 // GERADOR DE PLANILHA - EXATAMENTE O QUE ESTÁ FILTRADO NA TELA
 // =========================================================================
-function gerarPlanilhaGiroFiltrado(dados) {
+// Resumo do Giro: somente itens efetivamente atrasados nos filtros exportados.
+// Mantém o analítico intacto, sem transformar a planilha em um consolidado.
+function pgResumoAtrasosGiro(dados) {
+  var graficas = new Map();
+  (dados || []).forEach(function(d) {
+    var dias = Number(d.dias);
+    var status = String(d.status || '').trim().toUpperCase();
+    if (!isFinite(dias) || dias >= 0 ||
+        (status !== 'EM ABERTO' && status !== 'COLETADO A MENOS')) return;
+    var volume = Number(d.tiragem);
+    if (!isFinite(volume) || volume <= 0) return;
+    var grafica = String(d.grafica || '(Sem gráfica)').trim();
+    var marca = String(d.marca || '(Sem marca)').trim();
+    var serie = String(d.serie || '(Sem série)').trim();
+    var cd = String(d.cd || '(Sem CD)').trim();
+    var analista = String(d.analista || '').trim();
+    var time = String(d.time || '').trim();
+    var chave = JSON.stringify([marca, serie, cd, analista, time]);
+    if (!graficas.has(grafica)) graficas.set(grafica, { grafica: grafica, total: 0, skus: new Set(), grupos: new Map(), pior: 0 });
+    var g = graficas.get(grafica);
+    if (!g.grupos.has(chave)) g.grupos.set(chave, {
+      marca: marca, serie: serie, cd: cd, analista: analista, time: time,
+      total: 0, skus: new Set(), pior: 0
+    });
+    var detalhe = g.grupos.get(chave);
+    g.total += volume;
+    detalhe.total += volume;
+    var sku = String(d.sku || '').trim();
+    if (sku) { g.skus.add(sku); detalhe.skus.add(sku); }
+    g.pior = Math.max(g.pior, Math.abs(dias));
+    detalhe.pior = Math.max(detalhe.pior, Math.abs(dias));
+  });
+  return Array.from(graficas.values()).sort(function(a,b) {
+    return b.total-a.total || a.grafica.localeCompare(b.grafica,'pt-BR');
+  }).map(function(g) {
+    g.detalhes = Array.from(g.grupos.values()).sort(function(a,b) {
+      return b.total-a.total || a.marca.localeCompare(b.marca,'pt-BR') ||
+        a.serie.localeCompare(b.serie,'pt-BR') || a.cd.localeCompare(b.cd,'pt-BR');
+    });
+    return g;
+  });
+}
+
+function gerarPlanilhaGiroFiltrado(dados, opcoes) {
   try {
     // Não aceitar e-mail informado pelo navegador: a identidade precisa
     // vir da sessão autenticada no servidor.
@@ -708,9 +751,12 @@ function gerarPlanilhaGiroFiltrado(dados) {
     }
     var nomeArquivo = "Giro_Filtrado_" + Utilities.formatDate(new Date(), "GMT-3", "dd_MM_yyyy_HHmm");
     var ss = SpreadsheetApp.create(nomeArquivo);
-    var aba = ss.getActiveSheet();
-    aba.setName("Giro_Filtrado");
-    
+    var criarResumoGiro = !!(opcoes && opcoes.resumoGiro === true);
+    var resumo = criarResumoGiro ? ss.getActiveSheet() : null;
+    if (resumo) resumo.setName("Resumo_Atrasos");
+    var aba = resumo ? ss.insertSheet("Giro_Filtrado") : ss.getActiveSheet();
+    if (!resumo) aba.setName("Giro_Filtrado");
+
     dados = Array.isArray(dados) ? dados.slice() : [];
     // Ordena do mais atrasado (negativo) para o mais positivo.
     dados.sort(function(a, b) { return a.dias - b.dias; });
@@ -733,14 +779,16 @@ function gerarPlanilhaGiroFiltrado(dados) {
     var temObservacoes = observacoes.some(function(nota) { return !!nota; });
 
     var cabecalho = ["Gráfica", "Marca", "Série", "CD", "SKU", "Descrição",
-        "Status Geral", "Etapa Pendente", "Dias de Atraso", "Tiragem"];
+        "Status Geral", "Etapa Pendente", "Dias de Atraso", "Tiragem",
+        "Analista", "Time"];
     if (temObservacoes) cabecalho.push("Observações");
     aba.appendRow(cabecalho);
     aba.getRange(1, 1, 1, cabecalho.length).setFontWeight("bold").setBackground("#0f172a").setFontColor("#ffffff");
 
     var linhas = dados.map(function(d, i) {
       var linha = [d.grafica, d.marca, d.serie, d.cd || '', d.sku, d.desc,
-          d.status, d.pendencia, d.dias, d.tiragem];
+          d.status, d.pendencia, d.dias, d.tiragem,
+          d.analista || '', d.time || ''];
       if (temObservacoes) linha.push(observacoes[i]);
       return linha;
     });
@@ -749,6 +797,41 @@ function gerarPlanilhaGiroFiltrado(dados) {
         aba.getRange(2, 1, linhas.length, cabecalho.length).setValues(linhas);
     }
     aba.autoResizeColumns(1, cabecalho.length);
+    aba.setFrozenRows(1);
+
+    if (resumo) {
+      var agrupado = pgResumoAtrasosGiro(dados);
+      var titulosResumo = ["Gráfica", "Marca", "Série", "CD", "Qtd. SKUs",
+          "Tiragem atrasada", "Maior atraso (dias)", "Analista", "Time"];
+      resumo.getRange(1, 1, 1, titulosResumo.length).setValues([titulosResumo])
+          .setFontWeight("bold").setBackground("#0f172a").setFontColor("#ffffff");
+      resumo.setFrozenRows(1);
+
+      // Um subtotal por gráfica, seguido dos recortes marca x série x CD.
+      // Ordenação decrescente pela tiragem TOTAL atrasada de cada gráfica.
+      var linhasResumo = [], subtotais = [];
+      agrupado.forEach(function(g) {
+        subtotais.push(linhasResumo.length + 2);
+        linhasResumo.push([g.grafica, "TOTAL DA GRÁFICA", "", "",
+            g.skus.size, g.total, g.pior, "", ""]);
+        g.detalhes.forEach(function(d) {
+          linhasResumo.push([g.grafica, d.marca, d.serie, d.cd,
+              d.skus.size, d.total, d.pior, d.analista, d.time]);
+        });
+      });
+      if (linhasResumo.length) {
+        resumo.getRange(2, 1, linhasResumo.length, titulosResumo.length)
+            .setValues(linhasResumo);
+        subtotais.forEach(function(l) {
+          resumo.getRange(l, 1, 1, titulosResumo.length)
+              .setFontWeight("bold").setBackground("#dbeafe");
+        });
+        resumo.getRange(2, 5, linhasResumo.length, 3).setNumberFormat("#,##0");
+      } else {
+        resumo.getRange(2, 1).setValue("Não há itens com prazo vencido entre os registros exportados.");
+      }
+      resumo.autoResizeColumns(1, titulosResumo.length);
+    }
     SpreadsheetApp.flush();
 
     var arquivo = DriveApp.getFileById(ss.getId());
