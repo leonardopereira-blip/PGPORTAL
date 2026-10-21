@@ -1687,7 +1687,7 @@
     var encerradas=pontos.filter(function(p){return p.passada;}).length;
     var separador=encerradas===0?x0:encerradas===n?x1:(x(encerradas-1)+x(encerradas))/2;
     var ultima=encerradas?pontos[encerradas-1].data:'';
-    var pctTexto=function(v){return Math.round(v)+'%';};
+    var pctTexto=function(v,arredondarParaCima){return (arredondarParaCima?Math.ceil(v-1e-9):Math.round(v))+'%';};
     var corMeta='#C46C16',corAcumulada='#284081';
     var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" role="img" aria-label="Entrega por meta e aderência acumulada">';
     svg+='<rect width="'+w+'" height="'+h+'" rx="12" fill="#ffffff"/>';
@@ -1729,7 +1729,7 @@
       var xx=x(i),ya=y(p.pct),ym=y(p.pctMeta);
       var dicaMeta=fmtPrazo(p.data)+' · Entrega por meta: '+pctTexto(p.pctMeta)+
         ' ('+fmt(p.aderenteMeta,true)+' / '+fmt(p.totalMeta,true)+')'+composicaoMeta(p.data,false);
-      var dicaAcumulada=fmtPrazo(p.data)+' · Aderência acumulada: '+pctTexto(p.pct)+
+      var dicaAcumulada=fmtPrazo(p.data)+' · Aderência acumulada: '+pctTexto(p.pct,true)+
         ' ('+fmt(p.aderente,true)+' / '+fmt(p.total,true)+')';
       svg+='<rect x="'+(xx-4.5)+'" y="'+(ya-4.5)+'" width="9" height="9" rx="1" fill="'+corAcumulada+'" stroke="#fff" stroke-width="1.5"><title>'+escapeHTML(dicaAcumulada)+'</title></rect>';
       svg+='<circle cx="'+xx+'" cy="'+ym+'" r="5.5" fill="'+corMeta+'" stroke="#fff" stroke-width="1.8"><title>'+escapeHTML(dicaMeta)+'</title></circle>';
@@ -1739,7 +1739,7 @@
       if(Math.abs(ya-ym)<20)labelAcu=ya+26;
       if(labelAcu>y1+14)labelAcu=ya-17;
       svg+='<text x="'+xx+'" y="'+labelMeta+'" font-size="11" font-family="Arial,sans-serif" text-anchor="middle" font-weight="700" fill="'+corMeta+'">'+pctTexto(p.pctMeta)+'</text>';
-      svg+='<text x="'+xx+'" y="'+labelAcu+'" font-size="11" font-family="Arial,sans-serif" text-anchor="middle" font-weight="700" fill="'+corAcumulada+'">'+pctTexto(p.pct)+'</text>';
+      svg+='<text x="'+xx+'" y="'+labelAcu+'" font-size="11" font-family="Arial,sans-serif" text-anchor="middle" font-weight="700" fill="'+corAcumulada+'">'+pctTexto(p.pct,true)+'</text>';
       svg+='<text x="'+xx+'" y="'+(y1+27)+'" font-size="11" font-family="Arial,sans-serif" text-anchor="middle" fill="#334155">'+fmtPrazo(p.data).slice(0,5)+'</text>';
     });
     svg+='</svg>';
