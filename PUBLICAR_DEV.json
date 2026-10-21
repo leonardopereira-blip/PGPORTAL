@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-10-20T04:16:23.505Z",
-  "motivo": "Conciliar Pre Impressao Arquivos da versao 141 com ajustes mais recentes de metas e grafico; somente ambiente de testes."
+  "solicitado_em": "2026-10-21T13:34:00.061Z",
+  "motivo": "Atualizar somente DEV com a correção do arredondamento para cima da linha azul de aderência acumulada; preservar demais atualizações."
 }
