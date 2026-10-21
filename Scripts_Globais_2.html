@@ -812,7 +812,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
     // 1. Adicionamos a Prioridade com as opções fixas para garantir a ordem de visualização
     window.listasMultiProducao = {
     'Prioridade': new Set(['1. 🚨 Backlog (Atrasado)', '2. 🔴 0 a 7 Dias', '3. 🟡 8 a 15 Dias', '4. 🟢 +15 Dias', '5. ⚪ (Sem Data)']),
-    'Gráfica': new Set(), 'Marca': new Set(), 'CD Destino': new Set(),
+    'Gráfica': new Set(), 'Marca': new Set(), 'Série': new Set(), 'CD Destino': new Set(),
     'Ciclo': new Set(), 'Envio': new Set(), 'Congelado': new Set(),
     'Cliente personalizado': new Set(), 'Capa personalizada': new Set(),
      'Avaliação': new Set(['Sim', 'Não']), 'Meta Aplicada': new Set()
@@ -820,7 +820,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
     
     // A Prioridade não está aqui porque ela é "calculada", não puxa do Excel puro
     window.mapCamposProducao = {
-    'Gráfica': 'GRAFICA_FINAL', 'Marca': 'UNIDADE', 'CD Destino': 'CD_MAPA',
+    'Gráfica': 'GRAFICA_FINAL', 'Marca': 'UNIDADE', 'Série': '__SERIE_CORRIGIDA__', 'CD Destino': 'CD_MAPA',
     'Ciclo': 'CICLO', 'Envio': 'ENVIO', 'Congelado': 'Congelado',
     'Cliente personalizado': 'CLIENTE_PERSONALIZADO',
     'Capa personalizada': 'CAPA_PERSONALIZADA',
@@ -841,6 +841,8 @@ window.pgAnexarDadosDashboard = function(fatia) {
         if (categoria === 'Meta Aplicada') return typeof window.pgMAMetaAplicadaDaLinha === 'function'
             ? window.pgMAMetaAplicadaDaLinha(l) : '';
         if (categoria === 'Gráfica') return l.GRAFICA_FINAL || l['GRÁFICA'] || l.GRAFICA || '';
+        if (categoria === 'Série') return typeof window.pgSerieCorrigidaFunil === 'function'
+            ? window.pgSerieCorrigidaFunil(l) : (l.serie_corrigida || l['SÉRIE'] || l.SERIE || '');
         if (categoria !== 'CD Destino') return l[window.mapCamposProducao[categoria]];
         const fonteAcab = [l?._SOURCE, l?.BASE, l?._base]
             .some(v => String(v || '').toUpperCase().includes('ACAB'));
@@ -9051,7 +9053,7 @@ window.exportarPendenciasGiroVisiveis = function() {
         if (aba) aba.location.href = res.url;
         else window.open(res.url, '_blank');
         if (res.aviso) alert(res.aviso);
-    }).withFailureHandler(falha).gerarPlanilhaGiroFiltrado(itens);
+    }).withFailureHandler(falha).gerarPlanilhaGiroFiltrado(itens, { resumoGiro: true });
 };
 
 // PG_GIRO_PRAZOS_V41
@@ -9485,10 +9487,13 @@ let arrGrupos = Object.values(grupos);
     window.pgGiroLinhasExportar = arrGrupos.flatMap(g => {
         const chaveMaster = window.pgGiroChaveObs('MASTER',
             `${g.grafica}|${g.marca}|${g.serie}|${g.envio}|${g.cd}`);
+        const responsavel = typeof window.pgResponsavelGraficaGiro === 'function'
+            ? window.pgResponsavelGraficaGiro(g.grafica) : { analista: '', time: '' };
         return g.skus.map(l => ({
             grafica: g.grafica, marca: g.marca, serie: g.serie, cd: l.cd || g.cd,
             sku: l.sku, desc: l.descricao,
             status: l.statusLinha, pendencia: l.pendencia, dias: l.escala, tiragem: l.tiragem,
+            analista: responsavel.analista, time: responsavel.time,
             chaveMaster: chaveMaster, chaveSku: window.pgGiroChaveObs('SKU', l.chaveUnica)
         }));
     });
@@ -9910,6 +9915,18 @@ let arrGrupos = Object.values(grupos);
             return g === n || g.includes(n) || n.includes(g);
         });
     }
+
+    // Compartilha o cadastro de responsáveis com os filtros existentes.
+    // Não força uma atribuição quando o nome da gráfica é ambíguo.
+    window.pgResponsavelGraficaGiro = function(grafica) {
+        const nome = pgNorm(grafica);
+        if (!nome) return { analista: '', time: '' };
+        const pessoas = Object.values(PG_PESSOAS);
+        const exatas = pessoas.filter(p => p.graficas.some(g => pgNorm(g) === nome));
+        const candidatas = exatas.length ? exatas : pessoas.filter(p => pgCasaGrafica(nome, p.graficas));
+        if (candidatas.length !== 1) return { analista: '', time: '' };
+        return { analista: candidatas[0].nome, time: candidatas[0].time };
+    };
 
     function pgPessoasDoTime(time) {
         return Object.entries(PG_PESSOAS)
