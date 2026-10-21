@@ -97,6 +97,10 @@ jobs:
             const hashesAntes = hashes(antes);
             // Aceita repeticao e bloqueia diferencas externas detectadas nesta leitura.
             if (!isDeepStrictEqual(base.files, hashesAntes) && !isDeepStrictEqual(hashes(locais), hashesAntes)) {
+              const chaves = new Set([...Object.keys(base.files), ...Object.keys(hashesAntes)]);
+              const alterados = Array.from(chaves).filter(k => base.files[k] !== hashesAntes[k]).sort();
+              // Apenas nomes de arquivos, nunca codigo-fonte nem credenciais.
+              console.error('Divergencias detectadas no Apps Script: ' + alterados.join(', '));
               throw new Error('REMOTE_CHANGED');
             }
 
