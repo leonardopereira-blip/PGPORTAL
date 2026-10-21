@@ -1095,7 +1095,7 @@ function getDadosMapaSaida() {
 
 function getDadosInspecaoCDs() {
   try {
-    var data = pgLerAbaCache_('qlogs_V4');
+    var data = pgLerAbaCache_('QLOG');
     if (data.length <= 1) return [];
     
     var headers = data[0];
