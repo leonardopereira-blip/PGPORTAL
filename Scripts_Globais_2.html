@@ -3198,6 +3198,27 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         return p !== null && (acimaDe === null || p > acimaDe) &&
             (abaixoDe === null || p < abaixoDe);
     });
+    // Colunas sem tiragem no recorte visível não precisam ocupar espaço.
+    const seriesComVolume = seriesOrdenadas.filter(serie =>
+        marcasVisiveis.some(marca => {
+            const grupo = matriz[marca].series[serie];
+            return grupo && ['Aluno','Professor','Outros'].some(tipo => grupo[tipo].base > 0);
+        })
+    );
+    const posIntensivo = seriesComVolume.findIndex(serie =>
+        String(serie).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().includes('INTENSIVO'));
+    const seriesOutros = posIntensivo >= 0 ? seriesComVolume.slice(posIntensivo) : [];
+    const agrupado = window.pgFunilOutrosAgrupado !== false && seriesOutros.length > 1;
+    const colunasTabela = (agrupado ? seriesComVolume.slice(0, posIntensivo) : seriesComVolume)
+        .map(serie => ({nome:serie,series:[serie]}));
+    if (agrupado) colunasTabela.push({nome:'OUTROS',series:seriesOutros});
+    const botaoOutros = document.getElementById('btnFunilAgruparOutros');
+    if (botaoOutros) {
+        botaoOutros.classList.toggle('hidden', seriesOutros.length < 2);
+        botaoOutros.textContent = agrupado
+            ? 'Expandir Outros (' + seriesOutros.length + ')'
+            : 'Agrupar em Outros (' + seriesOutros.length + ')';
+    }
     if (marcasOrdenadas.length === 0) {
         elThead.innerHTML = `<tr><th class="p-2">Aviso</th></tr>`;
         elTbody.innerHTML = `<tr><td class="p-8 text-center text-slate-500 font-bold bg-slate-50 rounded-b-lg">Nenhum dado encontrado para a fase '${faseObj.nome}' com os filtros atuais.</td></tr>`;
@@ -3212,8 +3233,8 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         <th class="p-1 border-r border-slate-200 text-center text-[9px] font-bold text-slate-500 bg-slate-50">Aluno</th>
         <th class="p-1 border-r border-slate-200 text-center text-[9px] font-bold text-slate-500 bg-slate-50">Prof</th>
         <th class="p-1 border-r border-slate-300 text-center text-[9px] font-bold text-slate-500 bg-slate-50">Outros</th>`;
-    seriesOrdenadas.forEach(serie => {
-        trTopo += `<th colspan="3" class="p-2 border-r border-slate-300 text-center font-black text-slate-700">${serie}</th>`;
+    colunasTabela.forEach(coluna => {
+        trTopo += `<th colspan="3" class="p-2 border-r border-slate-300 text-center font-black text-slate-700">${coluna.nome}</th>`;
         trBase += `
             <th class="p-1 border-r border-slate-200 text-center text-[9px] font-bold text-slate-500 bg-slate-50 w-20">Aluno</th>
             <th class="p-1 border-r border-slate-200 text-center text-[9px] font-bold text-slate-500 bg-slate-50 w-20">Prof</th>
@@ -3240,18 +3261,30 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
                     <div class="px-1.5 py-1 rounded shadow-sm text-[10px] font-black ${corClasse}" ${dica}>${pct.toFixed(1)}%</div>
                 </td>`;
     };
+    const novaCelula = () => ({base:0,real:0,bruto:0,excedente:0});
+    const somarCelula = (alvo, origem) => {
+        if (!origem) return;
+        for (const campo of ['base','real','bruto','excedente']) alvo[campo] += origem[campo] || 0;
+    };
+    const totalPorColuna = (seriesDaMarca, coluna) => {
+        const total = {Aluno:novaCelula(),Professor:novaCelula(),Outros:novaCelula()};
+        coluna.series.forEach(serie => {
+            const grupo = seriesDaMarca[serie];
+            if (grupo) ['Aluno','Professor','Outros'].forEach(tipo =>
+                somarCelula(total[tipo], grupo[tipo]));
+        });
+        return total;
+    };
     let htmlBody = '';
     marcasVisiveis.forEach(marca => {
         let colsSerie = '';
-        seriesOrdenadas.forEach(serie => {
-            let sData = matriz[marca].series[serie] || {
-                Aluno:{base:0,real:0,bruto:0,excedente:0},
-                Professor:{base:0,real:0,bruto:0,excedente:0},
-                Outros:{base:0,real:0,bruto:0,excedente:0}
-            };
-            colsSerie += renderCell(sData.Aluno,false,{fase:faseId,tipo:'serie',serie,marca,tipoMaterial:'ALUNO'});
-            colsSerie += renderCell(sData.Professor,false,{fase:faseId,tipo:'serie',serie,marca,tipoMaterial:'PROFESSOR'});
-            colsSerie += renderCell(sData.Outros,false,{fase:faseId,tipo:'serie',serie,marca,tipoMaterial:'OUTROS'});
+        colunasTabela.forEach(coluna => {
+            const sData = totalPorColuna(matriz[marca].series, coluna);
+            const contexto = tipo => coluna.series.length === 1
+                ? {fase:faseId,tipo:'serie',serie:coluna.series[0],marca,tipoMaterial:tipo} : null;
+            colsSerie += renderCell(sData.Aluno,false,contexto('ALUNO'));
+            colsSerie += renderCell(sData.Professor,false,contexto('PROFESSOR'));
+            colsSerie += renderCell(sData.Outros,false,contexto('OUTROS'));
         });
         htmlBody += `<tr class="border-b border-slate-100 hover:bg-slate-100/50 transition-colors">
             <td class="p-2 font-bold text-slate-700 border-r border-slate-200 sticky left-0 bg-white shadow-[1px_0_0_#F1F5F9]">${marca}</td>
@@ -3263,16 +3296,11 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
     });
 
     if (!marcasVisiveis.length) {
-        elTbody.innerHTML = '<tr><td colspan="' + (5 + 3 * seriesOrdenadas.length) +
+        elTbody.innerHTML = '<tr><td colspan="' + (5 + 3 * colunasTabela.length) +
             '" class="p-6 text-center text-slate-500 font-semibold">Nenhuma marca na faixa de percentual selecionada.</td></tr>';
         return;
     }
     // A linha geral agrega volumes de marcas visíveis: nunca calcula média de percentuais.
-    const novaCelula = () => ({base:0,real:0,bruto:0,excedente:0});
-    const somarCelula = (alvo, origem) => {
-        if (!origem) return;
-        for (const campo of ['base','real','bruto','excedente']) alvo[campo] += origem[campo] || 0;
-    };
     const totalFiltrado = {
         geral:novaCelula(),
         tipos:{Aluno:novaCelula(),Professor:novaCelula(),Outros:novaCelula()},
@@ -3290,8 +3318,8 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
             tipos.forEach(tipo => somarCelula(totalFiltrado.series[serie][tipo], linha.series[serie][tipo]));
         });
     });
-    const colsTotalSeries = seriesOrdenadas.map(serie => {
-        const grupo = totalFiltrado.series[serie] || {};
+    const colsTotalSeries = colunasTabela.map(coluna => {
+        const grupo = totalPorColuna(totalFiltrado.series, coluna);
         return tipos.map(tipo => renderCell(grupo[tipo])).join('');
     }).join('');
     htmlBody += `<tr class="border-t-2 border-slate-400 bg-slate-100 font-black">
@@ -3302,6 +3330,128 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         ${renderCell(totalFiltrado.tipos.Outros)}${colsTotalSeries}
     </tr>`;
     elTbody.innerHTML = htmlBody;
+};
+
+
+window.pgFunilAlternarOutros = function() {
+    window.pgFunilOutrosAgrupado = window.pgFunilOutrosAgrupado === false;
+    window.renderTabelaMarcaSerieTipo();
+};
+
+window.pgCapturarTabelaFunil = function() {
+    const cabecalho = document.getElementById('thFunilNovaTabela');
+    const corpo = document.getElementById('tbFunilNovaTabela');
+    if (!cabecalho || !corpo || !cabecalho.rows.length || !corpo.rows.length) {
+        window.alert('A tabela ainda não está disponível para captura.');
+        return;
+    }
+    try {
+        // Desenha todas as células a partir do DOM, sem depender da área visível da rolagem.
+        const cabRows = Array.from(cabecalho.rows);
+        const corpoRows = Array.from(corpo.rows);
+        const numeroColunas = Array.from(cabRows[0].cells).reduce((n, celula) => n + (celula.colSpan || 1), 0);
+        const larguras = Array.from({length:numeroColunas}, (_,i) => i === 0 ? 158 : i === 1 ? 92 : 83);
+        const deslocamentos = [0];
+        larguras.forEach(w => deslocamentos.push(deslocamentos[deslocamentos.length - 1] + w));
+        const margem = 18, topo = 70, alturaCabecalho = 32, alturaLinha = 34;
+        const largura = deslocamentos[numeroColunas] + margem * 2;
+        const altura = topo + cabRows.length * alturaCabecalho + corpoRows.length * alturaLinha + margem;
+        const escala = Math.max(0.1, Math.min(2, 16000 / largura, 16000 / altura,
+            Math.sqrt(38000000 / (largura * altura))));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(largura * escala);
+        canvas.height = Math.ceil(altura * escala);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Não foi possível criar a imagem.');
+        ctx.scale(escala, escala);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, largura, altura);
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 17px Arial, sans-serif';
+        ctx.fillText('Visão Detalhada: Marca / Série / Tipo', margem, 26);
+        const select = document.getElementById('selectFaseNovaTabela');
+        const fase = select && select.selectedOptions && select.selectedOptions[0]
+            ? select.selectedOptions[0].textContent.trim() : '';
+        const filtroMin = document.getElementById('filtroCumpridoMinFunil');
+        const filtroMax = document.getElementById('filtroCumpridoMaxFunil');
+        const limites = [];
+        if (filtroMin && filtroMin.value !== '') limites.push('acima de ' + filtroMin.value + '%');
+        if (filtroMax && filtroMax.value !== '') limites.push('abaixo de ' + filtroMax.value + '%');
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px Arial, sans-serif';
+        ctx.fillText('Fase: ' + fase + '  |  % Total da marca: ' +
+            (limites.length ? limites.join(' e ') : 'sem filtro'), margem, 48);
+
+        const linhas = cabRows.concat(corpoRows);
+        const ocupadas = Array(numeroColunas).fill(0);
+        linhas.forEach((linha, indiceLinha) => {
+            const noCabecalho = indiceLinha < cabRows.length;
+            const y = topo + (noCabecalho ? indiceLinha * alturaCabecalho :
+                cabRows.length * alturaCabecalho + (indiceLinha - cabRows.length) * alturaLinha);
+            const alturaBase = noCabecalho ? alturaCabecalho : alturaLinha;
+            const geral = !noCabecalho && linha.textContent.indexOf('TOTAL GERAL') >= 0;
+            let coluna = 0;
+            Array.from(linha.cells).forEach(celula => {
+                while (coluna < numeroColunas && ocupadas[coluna] > 0) coluna++;
+                if (coluna >= numeroColunas) return;
+                const colspan = Math.max(1, celula.colSpan || 1);
+                const rowspan = Math.max(1, celula.rowSpan || 1);
+                const x = margem + deslocamentos[coluna];
+                const larguraCelula = deslocamentos[Math.min(numeroColunas, coluna + colspan)] - deslocamentos[coluna];
+                const alturaCelula = alturaBase * rowspan;
+                ctx.fillStyle = noCabecalho ? (indiceLinha === 0 ? '#e2e8f0' : '#f1f5f9') :
+                    geral ? '#dbeafe' : indiceLinha % 2 ? '#ffffff' : '#f8fafc';
+                ctx.fillRect(x, y, larguraCelula, alturaCelula);
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.lineWidth = 0.7;
+                ctx.strokeRect(x, y, larguraCelula, alturaCelula);
+                const texto = String(celula.textContent || '').trim().replace(/\s+/g, ' ');
+                const indicador = !noCabecalho ? celula.querySelector('div') : null;
+                if (indicador && texto.endsWith('%')) {
+                    const estilos = window.getComputedStyle ? window.getComputedStyle(indicador) : null;
+                    const bg = estilos && estilos.backgroundColor;
+                    const percentual = Number(texto.replace('%', '').replace(',', '.'));
+                    ctx.fillStyle = bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent'
+                        ? bg : percentual >= 90 ? '#10b981' : percentual >= 70 ? '#facc15' :
+                            percentual >= 40 ? '#f97316' : '#f43f5e';
+                    ctx.fillRect(x + 4, y + 4, larguraCelula - 8, alturaCelula - 8);
+                    ctx.fillStyle = estilos && estilos.color ? estilos.color : '#ffffff';
+                    ctx.font = 'bold 11px Arial, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(texto, x + larguraCelula / 2, y + alturaCelula / 2, larguraCelula - 12);
+                } else {
+                    ctx.fillStyle = noCabecalho || geral ? '#0f172a' : '#334155';
+                    ctx.font = (noCabecalho || coluna === 0 || geral ? 'bold ' : '') +
+                        (noCabecalho ? '10px' : '11px') + ' Arial, sans-serif';
+                    ctx.textAlign = coluna === 0 ? 'left' : 'center';
+                    ctx.fillText(texto, coluna === 0 ? x + 8 : x + larguraCelula / 2,
+                        y + alturaCelula / 2, larguraCelula - 12);
+                }
+                for (let i = coluna; i < Math.min(numeroColunas, coluna + colspan); i++) {
+                    ocupadas[i] = Math.max(ocupadas[i], rowspan);
+                }
+                coluna += colspan;
+            });
+            for (let i = 0; i < ocupadas.length; i++) {
+                if (ocupadas[i] > 0) ocupadas[i]--;
+            }
+        });
+        canvas.toBlob(blob => {
+            if (!blob) { window.alert('Não foi possível gerar o PNG.'); return; }
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'Funil_Marca_Serie_Tipo_' + new Date().toISOString().slice(0, 10) + '.png';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+        }, 'image/png');
+    } catch (erro) {
+        window.alert('Falha ao capturar a tabela: ' + erro.message);
+    }
 };
 
 window.processarFunil = function() {
