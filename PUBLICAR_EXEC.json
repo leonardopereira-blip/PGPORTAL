@@ -1,9 +1,9 @@
 {
-  "solicitado_em": "2026-10-23T05:28:04.653Z",
+  "solicitado_em": "2026-10-23T06:01:06.581Z",
   "autorizado": true,
-  "commit_validado": "815ac7bafaf8b20bc5f16b2a96c484e4ee20224d",
-  "versao_ativa_esperada": 148,
-  "descricao_ativa_esperada": "Meta Armazem: filtros percentuais nas tres matrizes (d003ed0)",
+  "commit_validado": "b7057420e89b47dbebf6d900b8205f25ed998737",
+  "versao_ativa_esperada": 149,
+  "descricao_ativa_esperada": "PGPORTAL filtros por serie e planejado D-1 · commit 815ac7b",
   "deployment_sufixo": "UbCXgp",
-  "motivo": "Atualizar somente a implantacao /exec PGPORTAL identificada pela versao 148, para incluir filtros de series e planejados D-1."
+  "motivo": "Ocultar nas matrizes Previsao Armazem, Coletas e Entregas qualquer coluna 100% sem volume (apenas tracos), inclusive no PNG; manter 0% valido."
 }
