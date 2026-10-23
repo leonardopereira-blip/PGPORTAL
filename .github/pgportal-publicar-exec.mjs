@@ -22,7 +22,8 @@ const mesmoMapa = (a,b) => {
 const pedido=JSON.parse(fs.readFileSync('PUBLICAR_EXEC.json','utf8'));
 const config=JSON.parse(fs.readFileSync('.clasp.json','utf8'));
 const base=JSON.parse(fs.readFileSync('.github/pgportal-base-google.json','utf8'));
-if (!pedido.autorizado || !/^AKfy[A-Za-z0-9_-]{30,}$/.test(pedido.deployment_id))
+if (!pedido.autorizado || !/^[A-Za-z0-9_-]{6}$/.test(pedido.deployment_sufixo) ||
+    !Number.isInteger(pedido.versao_ativa_esperada) || !pedido.descricao_ativa_esperada)
   throw Error('Pedido de publicacao /exec invalido.');
 if (base.scriptId!==config.scriptId)throw Error('Projeto diverge da base Google confirmada.');
 if (!/^[0-9a-f]{40}$/.test(pedido.commit_validado))
@@ -44,27 +45,23 @@ const conferir=async ()=>{
 };
 await conferir();
 const antes=await clasp.project.listDeployments();
-const existente=(antes.results||[]).find(d=>d.deploymentId===pedido.deployment_id);
-if(!existente) {
-  const versoes=(antes.results||[]).filter(d=>d.deploymentConfig).map(d=>({
-    versao:d.deploymentConfig.versionNumber,
-    descricao:String(d.deploymentConfig.description||'').slice(0,70),
-    tipo:(d.entryPoints||[]).map(e=>e.entryPointType).join(','),
-    sufixo:String(d.deploymentId||'').slice(-6)
-  }));
-  console.log('Implantacoes do projeto (IDs truncados): '+JSON.stringify(versoes));
-  throw Error('Implantacao /exec nao pertence ao projeto configurado.');
-}
+const candidatos=(antes.results||[]).filter(d=>
+  d.deploymentConfig?.versionNumber===pedido.versao_ativa_esperada &&
+  d.deploymentConfig?.description===pedido.descricao_ativa_esperada &&
+  String(d.deploymentId||'').endsWith(pedido.deployment_sufixo) &&
+  (d.entryPoints||[]).some(e=>e.entryPointType==='WEB_APP'));
+if(candidatos.length!==1)throw Error('Nenhuma implantacao WEB_APP unica corresponde a versao, descricao e sufixo informados.');
+const existente=candidatos[0];
 const versaoAnterior=existente.deploymentConfig?.versionNumber;
 const descricao='PGPORTAL filtros por serie e planejado D-1 · commit '+pedido.commit_validado.slice(0,7);
 const novaVersao=await clasp.project.version(descricao);
 await conferir(); // Alteracao concorrente apos criar a versao bloqueia o redeploy.
-const resultado=await clasp.project.deploy(descricao,pedido.deployment_id,novaVersao);
-if(resultado.deploymentId!==pedido.deployment_id ||
+const resultado=await clasp.project.deploy(descricao,existente.deploymentId,novaVersao);
+if(resultado.deploymentId!==existente.deploymentId ||
    resultado.deploymentConfig?.versionNumber!==novaVersao)
   throw Error('API nao confirmou a versao e o destino esperado.');
 const depois=await clasp.project.listDeployments();
-const ativo=(depois.results||[]).find(d=>d.deploymentId===pedido.deployment_id);
+const ativo=(depois.results||[]).find(d=>d.deploymentId===existente.deploymentId);
 if(ativo?.deploymentConfig?.versionNumber!==novaVersao)
   throw Error('Implantacao atualizada, mas releitura da versao nao confirmou.');
 resumo('Publicado em /exec: versao '+novaVersao+' (anterior '+versaoAnterior+').');
