@@ -1514,7 +1514,19 @@
       linhas.forEach(function(linha){items=items.concat(linha.celulas[j].itens);});
       return Object.assign(soma(items),{itens:items});
     });
-    return Object.assign({},modelo,{linhas:linhas,total:total,geral:soma(total.length?total[0].itens:[]),
+    // Coluna sem tiragem em todas as linhas aparece apenas como "–".
+    // Oculta-a depois do filtro de cada quadro, preservando 0% valido
+    // (tiragem > 0) e o TOTAL GERAL ponderado.
+    var indicesVisiveis=modelo.colunas.map(function(_,j){return j;}).filter(function(j){
+      return j===0||linhas.some(function(linha){return linha.celulas[j].total>0;});
+    });
+    var colunasVisiveis=indicesVisiveis.map(function(j){return modelo.colunas[j];});
+    var linhasVisiveis=linhas.map(function(linha){
+      return Object.assign({},linha,{celulas:indicesVisiveis.map(function(j){return linha.celulas[j];})});
+    });
+    var totalVisivel=indicesVisiveis.map(function(j){return total[j];});
+    return Object.assign({},modelo,{colunas:colunasVisiveis,linhas:linhasVisiveis,
+      total:totalVisivel,geral:soma(total[0]?total[0].itens:[]),
       temBase:!!modelo.linhas.length,faixaPercentual:{min:min,max:max}});
   }
   // Entrega TP até o corte / tiragem total CD, sobre as mesmas linhas e

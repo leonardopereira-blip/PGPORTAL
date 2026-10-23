@@ -84,7 +84,7 @@ test('TOTAL GERAL pondera apenas as séries dentro da faixa e oculta as demais c
   assert.equal(100 * m.total[0].previsto / m.total[0].total, 85);
   const a = m.linhas.find(l => l.nome === 'A');
   assert.equal(a.celulas[1].previsto / a.celulas[1].total, 1);
-  assert.equal(a.celulas[2].total, 0, 'não mantém a série fora da faixa');
+  assert.ok(!m.colunas.some(c => c.nome === '2º ANO'), 'não exibe a série fora da faixa');
   assert.equal(a.total.total, 100, 'recalcula o total da marca pela série aceita');
   assert.equal(p.w.pgMAMatrizSnapshot, m, 'compatibilidade do snapshot da previsão');
 });
@@ -96,8 +96,10 @@ test('0% traz marca com serie zerada mesmo que seu total original seja maior', (
   p.render(); p.faixa('previsao', null, 0);
   const m = p.w.pgMAMatrizesSnapshot.previsao;
   assert.deepEqual(p.nomes('previsao'), ['A']);
-  assert.equal(m.linhas[0].celulas[1].total, 0, 'a serie 100% some');
-  assert.equal(m.linhas[0].celulas[2].total, 200, 'a serie 0% permanece');
+  assert.ok(!m.colunas.some(c => c.nome === '1º ANO'), 'oculta a série 100% sem volume selecionado');
+  const serieZero = m.colunas.findIndex(c => c.nome === '2º ANO');
+  assert.ok(serieZero >= 0, 'a série 0% permanece');
+  assert.equal(m.linhas[0].celulas[serieZero].total, 200);
   assert.equal(m.linhas[0].total.previsto, 0);
   assert.equal(m.total[0].total, 200);
   assert.equal(m.total[0].previsto, 0);
@@ -121,7 +123,7 @@ test('OUTROS filtra cada serie escondida antes de recompor o total ponderado', (
   const extensivo = m.colunas.findIndex(c => c.nome === 'EXTENSIVO');
   const semi = m.colunas.findIndex(c => c.nome === 'SEMI');
   assert.equal(m.linhas[0].celulas[extensivo].total, 100);
-  assert.equal(m.linhas[0].celulas[semi].total, 0);
+  assert.equal(semi, -1, 'série vazia não gera coluna quando OUTROS é expandido');
   assert.equal(m.total[0].total, 100, 'expandir nao duplica tiragem');
 });
 
@@ -193,6 +195,43 @@ test('PNG de cada quadro captura seu recorte e não captura linhas escondidas', 
   p.faixa('realizado', 100, null); p.w.pgMACapturarMatriz('realizado');
   assert.equal(p.downloads.length, 3);
   assert.match(p.alerts.at(-1), /não tem dados/);
+});
+
+
+test('colunas inteiras com traço desaparecem em cada matriz e no PNG; 0% permanece', () => {
+  const p = portal([
+    item('SAS', 100, 0, 0, 0, {grafica: 'FORMA CERTA'}),
+    item('GEE', 200, 0, 0, 0, {grafica: 'IMOS'}),
+    item('MAR', 300, 100, 100, 100, {grafica: 'MAXI'})
+  ]);
+  p.render('graficaMarca');
+  for (const tipo of ['previsao', 'coletas', 'realizado']) {
+    const original = p.w.pgMAMatrizesSnapshot[tipo];
+    assert.ok(original.colunas.some(c => c.nome === 'MAR'), 'sem filtro a marca tem dados');
+  }
+  p.faixa('coletas', null, 0);
+  const coletas = p.w.pgMAMatrizesSnapshot.coletas;
+  assert.deepEqual(Array.from(coletas.colunas, c => c.nome), ['TOTAL GERAL', 'GEE', 'SAS']);
+  assert.equal(coletas.total[0].total, 300);
+  assert.equal(coletas.total[0].coletadoTP, 0);
+  assert.ok(coletas.linhas.every(l => l.celulas.length === coletas.colunas.length));
+  assert.match(p.controls.maMatrizColetas.innerHTML, /0%/);
+  assert.doesNotMatch(p.controls.maMatrizColetas.innerHTML, /ma-matriz-label">MAR</);
+  assert.ok(p.w.pgMAMatrizesSnapshot.previsao.colunas.some(c => c.nome === 'MAR'),
+    'filtro de Coletas não esconde coluna válida da Previsão');
+  p.draws.length = 0;
+  p.w.pgMACapturarMatriz('coletas');
+  assert.ok(p.draws.includes('GEE') && p.draws.includes('SAS'));
+  assert.ok(!p.draws.includes('MAR'), 'o PNG também descarta a coluna vazia');
+  for (const tipo of ['previsao', 'realizado']) {
+    p.faixa(tipo, null, 0);
+    const m = p.w.pgMAMatrizesSnapshot[tipo];
+    assert.deepEqual(Array.from(m.colunas, c => c.nome), ['TOTAL GERAL', 'GEE', 'SAS']);
+    assert.equal(m.total[0].total, 300);
+  }
+  p.w.pgMAFiltrarPercentual('coletas', true);
+  assert.ok(p.w.pgMAMatrizesSnapshot.coletas.colunas.some(c => c.nome === 'MAR'),
+    'limpar o filtro devolve a coluna com volume');
 });
 
 test('falha de conciliação limpa os três snapshots e impede captura anterior', () => {
