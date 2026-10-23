@@ -1,0 +1,57 @@
+name: Publicar PGPORTAL no exec (solicitacao explicita)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - PUBLICAR_EXEC.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pgportal-testes
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Preparar acesso ao projeto e autenticacao
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import os from 'node:os';
+          import path from 'node:path';
+          if (!process.env.CLASPRC_JSON) throw Error('Credencial CLASPRC_JSON ausente.');
+          const auth = JSON.parse(process.env.CLASPRC_JSON);
+          const refresh = auth?.tokens?.default?.refresh_token ||
+            auth?.token?.refresh_token || auth?.refresh_token;
+          if (!refresh) throw Error('Credencial renovavel ausente.');
+          const config = JSON.parse(fs.readFileSync('.clasp.json','utf8'));
+          if (!/^[A-Za-z0-9_-]{20,}$/.test(config.scriptId)) throw Error('scriptId invalido.');
+          config.rootDir = '.';
+          config.skipSubdirectories = true;
+          fs.writeFileSync('.clasp.json', JSON.stringify(config));
+          fs.writeFileSync(path.join(os.homedir(),'.clasprc.json'), JSON.stringify(auth), {mode:0o600});
+          NODE
+
+      - name: Validar HEAD, preservar trabalho alheio e atualizar implantacao existente
+        run: node .github/pgportal-publicar-exec.mjs
+
+      - name: Apagar autenticacao temporaria
+        if: always()
+        run: rm -f "$HOME/.clasprc.json"
