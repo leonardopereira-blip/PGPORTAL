@@ -100,7 +100,7 @@
                 }
                 return ini ? acumulados[ini - 1] : 0;
             });
-            const cor = ['#2e7d32', '#00897b', '#558b2f', '#00695c'][i % 4];
+            const cor = ['#6b7280', '#4b5563', '#9ca3af', '#374151'][i % 4];
             return {
                 label: e + '-26', data: volumes.map(v => Math.min(100, v / grupo.total * 100)),
                 borderColor: cor, backgroundColor: cor, fill: false, tension: 0.12,
