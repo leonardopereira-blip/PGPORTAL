@@ -636,7 +636,7 @@ window.getVolFase = function(linha, fObj, tBase) {
     }
     
 // V46 — única fonte de realizado/planejado de Acabamento para Funil e Report.
-window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar) {
+window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar, cortePlanoIso) {
     const fase = FASES.find(f => f.id === 'acab');
     const novo = () => ({ den: 0, real: 0, plan: 0,
         pcp: {den: 0, real: 0, plan: 0}, acab: {den: 0, real: 0, plan: 0} });
@@ -661,7 +661,7 @@ window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar) {
         const real = permitido && dataReal && dataReal <= hojeIso &&
             dataFoiPreenchida(l, fase) ? volume : 0;
         const dataPlan = permitido ? window.pgDataPlanoFaseFunil(l, fase, tRef) : null;
-        const dias = dataPlan ? calcDiffDiasISO(dataPlan, hojeIso) : null;
+        const dias = dataPlan ? calcDiffDiasISO(dataPlan, cortePlanoIso || hojeIso) : null;
         const plan = dataPlan && dias !== null && dias >= 3 ? volume : 0;
         [total, porGrupo[grupo]].forEach(alvo => {
             alvo.den += volume;
@@ -10836,6 +10836,8 @@ window.processarReportExecutiva = function() {
         : diaAtualReV57;
 
     window.pgREDataCorteV57 = hojeIso;
+    // Os realizados seguem o seletor; somente as colunas Plan. usam D-1.
+    const cortePlanejadoRE = diaAnteriorReV57;
 
     // Seletor ao lado das opcoes de colunas da Report Executiva.
     let seletorReV57 = painelRE.querySelector('[data-pg-re-corte-v57]');
@@ -11033,7 +11035,7 @@ window.processarReportExecutiva = function() {
     // O acabamento registrado permanece integral. A coleta real so complementa
     // o volume faltante, sem transformar coleta parcial em 100% da linha.
     const pgAcabamentoReportV46 = window.pgMetricasAcabamentoRealV46(
-        tRef, hojeIso, chaveLinha);
+        tRef, hojeIso, chaveLinha, cortePlanejadoRE);
     const acabPorMarca = pgAcabamentoReportV46.porGrupo;
     const acabTotal = pgAcabamentoReportV46.total;
     const faseAcabReportV50 = FASES.find(f => f.id === 'acab');
@@ -11133,7 +11135,7 @@ window.processarReportExecutiva = function() {
             }
 
             const dtPlan = window.pgDataPlanoFaseFunil(l, faseKitReportV58, tRef);
-            const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
+            const dias = dtPlan ? calcDiffDiasISO(dtPlan, cortePlanejadoRE) : null;
             linhasKitReportAuditoriaPortal.push({ linha: l, volume, dtPlan, dtReal,
                 plan: dtPlan && dias !== null && dias >= 3 ? volume : 0,
                 real: dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, faseKitReportV58) ? volume : 0 });
@@ -11234,7 +11236,7 @@ window.processarReportExecutiva = function() {
                 const dtPlan = tipoReal === 'entrega'
                     ? window.pgDataPlanoEntregaSLA(l)
                     : window.pgDataPlanoColetaLinha(l);
-                const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
+                const dias = dtPlan ? calcDiffDiasISO(dtPlan, cortePlanejadoRE) : null;
                 const volumePlan = tiragem(l);
                 // Inclui o futuro na curva, sem antecipá-lo no total da tabela.
                 if (dtPlan && volumePlan > 0) {

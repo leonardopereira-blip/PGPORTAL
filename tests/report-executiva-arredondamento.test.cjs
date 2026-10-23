@@ -42,3 +42,34 @@ test('cálculos e dados brutos da curva continuam sem arredondamento', () => {
   assert.match(fonte, /const pct = \(n, d\) => \{/);
   assert.match(fonte, /return Math\.max\(0, Math\.min\(100, \(Number\(n \|\| 0\) \/ d\) \* 100\)\);/);
 });
+
+test('Report Executiva usa D-1 apenas para planejados, mantendo títulos e realizados', () => {
+  assert.match(fonte, /const cortePlanejadoRE = diaAnteriorReV57;/);
+  assert.match(fonte, /tRef, hojeIso, chaveLinha, cortePlanejadoRE/);
+  assert.match(fonte, /const dias = dtPlan \? calcDiffDiasISO\(dtPlan, cortePlanejadoRE\) : null;\s*linhasKitReportAuditoriaPortal/);
+  assert.match(fonte, /const dias = dtPlan \? calcDiffDiasISO\(dtPlan, cortePlanejadoRE\) : null;\s*const volumePlan/);
+  assert.match(fonte, /pgVolumesColetaUnificadosV37\(l, hojeIso\)/);
+  assert.match(fonte, /thEntCD\.textContent = \x60Coleta \(Plan\. \$\{fmtData\(hojeIso\)\}\)\x60/);
+});
+
+test('acabamento preserva realizado de hoje, mas calcula plano pelo corte opcional D-1', () => {
+  const trecho = fonte.match(/window\.pgMetricasAcabamentoRealV46 = function\([\s\S]*?\n\};/);
+  assert.ok(trecho);
+  const rows = [{TIRAGEM: 100, ACAB_REAL: '2026-10-23', PLAN: '2026-10-20'}];
+  const app = {window: {
+    dadosAcabamentoOrigem: rows,
+    arredondar: v => v,
+    pgEhFonteAcabadora: () => false,
+    pgDataPlanoFaseFunil: l => l.PLAN
+  }, FASES: [{id: 'acab', colReal: 'ACAB_REAL'}],
+    getKey: () => 'A', belongsToPhase: () => true,
+    extrairDataISO: v => v, dataFoiPreenchida: () => true,
+    calcDiffDiasISO: (dt, hoje) =>
+      (Date.parse(hoje + 'T12:00:00Z') - Date.parse(dt + 'T12:00:00Z')) / 86400000};
+  vm.runInNewContext(trecho[0], app);
+  const atual = app.window.pgMetricasAcabamentoRealV46('replan', '2026-10-23', () => 'A');
+  const d1 = app.window.pgMetricasAcabamentoRealV46('replan', '2026-10-23', () => 'A', '2026-10-22');
+  assert.equal(atual.total.plan, 100);
+  assert.equal(d1.total.plan, 0);
+  assert.equal(d1.total.real, 100);
+});

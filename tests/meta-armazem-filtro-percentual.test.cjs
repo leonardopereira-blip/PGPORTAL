@@ -73,19 +73,71 @@ test('três quadros usam percentuais próprios sem alterar base, KPIs ou outras 
   assert.equal(p.controls.maKPIs.innerHTML, 'KPIs completos');
 });
 
-test('TOTAL GERAL pondera somente linhas visíveis e preserva as células de cada série', () => {
+test('TOTAL GERAL pondera apenas as séries dentro da faixa e oculta as demais células', () => {
   const p = portal([item('A', 100, 100, 30, 10), item('A', 100, 0, 30, 10, {serie: '2º ANO'}),
     item('B', 300, 240, 150, 90), item('C', 100, 10, 0, 0)]);
   p.render(); p.faixa('previsao', 40, null);
   const m = p.w.pgMAMatrizesSnapshot.previsao;
   assert.deepEqual(p.nomes('previsao').sort(), ['A', 'B']);
-  assert.equal(m.total[0].total, 500);
+  assert.equal(m.total[0].total, 400);
   assert.equal(m.total[0].previsto, 340);
-  assert.equal(100 * m.total[0].previsto / m.total[0].total, 68);
+  assert.equal(100 * m.total[0].previsto / m.total[0].total, 85);
   const a = m.linhas.find(l => l.nome === 'A');
   assert.equal(a.celulas[1].previsto / a.celulas[1].total, 1);
-  assert.equal(a.celulas[2].previsto / a.celulas[2].total, 0, 'filtra o total da linha, não cada célula');
+  assert.equal(a.celulas[2].total, 0, 'não mantém a série fora da faixa');
+  assert.equal(a.total.total, 100, 'recalcula o total da marca pela série aceita');
   assert.equal(p.w.pgMAMatrizSnapshot, m, 'compatibilidade do snapshot da previsão');
+});
+
+test('0% traz marca com serie zerada mesmo que seu total original seja maior', () => {
+  const p = portal([item('A', 100, 100, 80, 70),
+    item('A', 200, 0, 0, 0, {serie: '2º ANO'}),
+    item('B', 300, 150, 0, 0)]);
+  p.render(); p.faixa('previsao', null, 0);
+  const m = p.w.pgMAMatrizesSnapshot.previsao;
+  assert.deepEqual(p.nomes('previsao'), ['A']);
+  assert.equal(m.linhas[0].celulas[1].total, 0, 'a serie 100% some');
+  assert.equal(m.linhas[0].celulas[2].total, 200, 'a serie 0% permanece');
+  assert.equal(m.linhas[0].total.previsto, 0);
+  assert.equal(m.total[0].total, 200);
+  assert.equal(m.total[0].previsto, 0);
+  assert.match(p.controls.maMatriz.innerHTML, /0%/);
+});
+
+test('OUTROS filtra cada serie escondida antes de recompor o total ponderado', () => {
+  const p = portal([item('A', 100, 100, 0, 0, {serie: '1º ANO'}),
+    item('A', 100, 0, 0, 0, {serie: 'EXTENSIVO'}),
+    item('A', 300, 240, 30, 20, {serie: 'SEMI'}),
+    item('B', 200, 200, 0, 0)]);
+  p.render(); p.faixa('previsao', null, 0);
+  let m = p.w.pgMAMatrizesSnapshot.previsao;
+  assert.deepEqual(p.nomes('previsao'), ['A']);
+  const outros = m.colunas.findIndex(c => c.nome === 'OUTROS');
+  assert.ok(outros >= 0, 'serie secundaria agrupada');
+  assert.equal(m.linhas[0].celulas[outros].total, 100);
+  assert.equal(m.total[0].total, 100);
+  p.w.pgMAAlternarOutros();
+  m = p.w.pgMAMatrizesSnapshot.previsao;
+  const extensivo = m.colunas.findIndex(c => c.nome === 'EXTENSIVO');
+  const semi = m.colunas.findIndex(c => c.nome === 'SEMI');
+  assert.equal(m.linhas[0].celulas[extensivo].total, 100);
+  assert.equal(m.linhas[0].celulas[semi].total, 0);
+  assert.equal(m.total[0].total, 100, 'expandir nao duplica tiragem');
+});
+
+test('faixa exata aceita extremos e quadros continuam independentes', () => {
+  const p = portal([item('A', 100, 0, 100, 0),
+    item('A', 100, 100, 0, 100, {serie: '2º ANO'})]);
+  p.render();
+  p.faixa('previsao', 0, 0);
+  p.faixa('coletas', 100, 100);
+  p.faixa('realizado', 100, 100);
+  assert.equal(p.w.pgMAMatrizesSnapshot.previsao.total[0].total, 100);
+  assert.equal(p.w.pgMAMatrizesSnapshot.previsao.total[0].previsto, 0);
+  assert.equal(p.w.pgMAMatrizesSnapshot.coletas.total[0].total, 100);
+  assert.equal(p.w.pgMAMatrizesSnapshot.coletas.total[0].coletadoTP, 100);
+  assert.equal(p.w.pgMAMatrizesSnapshot.realizado.total[0].total, 100);
+  assert.equal(p.w.pgMAMatrizesSnapshot.realizado.total[0].realCD, 100);
 });
 
 test('limites aceitam decimais e vírgula, ignoram entradas inválidas e não arredondam antes do filtro', () => {

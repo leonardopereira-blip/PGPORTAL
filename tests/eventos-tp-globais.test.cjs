@@ -161,11 +161,11 @@ test('Report curva usa o planejado da tabela sem somar acabadora e preserva cort
   const fonte=w.reCurvaFonteCDV43,tabela=w.pgReportAuditoriaPortal.coletaCD;
   assert.equal(fonte.eventosPlano,tabela.eventosPlano);
   assert.equal(fonte.eventosPlanoHistorico,tabela.eventosPlano);
-  assert.equal(fonte.planejadoHoje,600);
+  assert.equal(fonte.planejadoHoje,300, 'planejado da Report usa D-1, 12/10');
   assert.equal(fonte.planejadoHoje,tabela.total.plan);
   assert.equal(fonte.eventosPlano.length,4,'a acabadora do diario nao amplia o planejado da Report');
   const soma=corte=>fonte.eventosPlano.reduce((s,r)=>s+(r.dtPlan<=corte?r.tiragem:0),0);
-  assert.equal(soma('2026-10-13'),tabela.total.plan);
+  assert.equal(soma('2026-10-12'),tabela.total.plan);
   const pontos=w.reCurvaPeriodos,forecast=w.chart.data.datasets[0].data;
   const setembro=pontos.findIndex(p=>p.fim==='2026-09-30');
   const semana10=pontos.findIndex(p=>p.fim==='2026-10-10');

@@ -1470,20 +1470,48 @@
     var numero=Number(valor.replace(',','.'));
     return Number.isFinite(numero)&&numero>=0&&numero<=100?numero:null;
   }
-  // Recorte de apresentação independente por quadro. A base calculada, os KPIs
-  // e as auditorias permanecem completos; o total da tabela soma as linhas visíveis.
+  // O filtro atua no menor agrupamento visivel (marca x serie, ou
+  // grafica x marca). OUTROS tambem e avaliado serie a serie antes de reagrupar.
+  // Cada total e recalculado com a tiragem selecionada, sem media de percentuais.
+  // KPIs e auditorias continuam refletindo a base integral.
   function filtrarModeloMatriz(modelo,tipo){
     var ids=camposFaixaMatriz(tipo),min=limiteFaixaMatriz(ids[0]),max=limiteFaixaMatriz(ids[1]);
     var campo=tipo==='coletas'?'coletadoTP':tipo==='realizado'?'realCD':'previsto';
-    var linhas=modelo.linhas.filter(function(linha){
-      var total=linha.total.total;
-      if(!(total>0))return false;
-      var p=Math.max(0,Math.min(100,100*linha.total[campo]/total));
-      return (min===null||p>min)&&(max===null||p<max);
-    });
+    function naFaixa(resumo){
+      if(!(resumo.total>0))return false;
+      var p=Math.max(0,Math.min(100,100*resumo[campo]/resumo.total));
+      if(min!==null&&max!==null&&min===max)return Math.abs(p-min)<1e-9;
+      return (min===null||p>min||(min===100&&p===100))&&
+        (max===null||p<max||(max===0&&p===0));
+    }
+    var linhas=modelo.linhas.map(function(linha){
+      var base=linha.celulas[0].itens||[],selecionados=[];
+      if(min===null&&max===null)selecionados=base;
+      else if(modelo.modo==='marca') {
+        if(naFaixa(soma(base)))selecionados=base;
+      } else {
+        // Modo Marca x Series: avaliar cada serie, inclusive as de OUTROS.
+        // Modo Grafica x Marca: avaliar cada marca naquela grafica.
+        var chave=modelo.modo==='graficaMarca'?'marca':'serie',agrupados=new Map();
+        base.forEach(function(item){
+          if(!agrupados.has(item[chave]))agrupados.set(item[chave],[]);
+          agrupados.get(item[chave]).push(item);
+        });
+        agrupados.forEach(function(grupo){
+          if(naFaixa(soma(grupo)))selecionados=selecionados.concat(grupo);
+        });
+      }
+      return {nome:linha.nome,total:soma(selecionados),
+        celulas:modelo.colunas.map(function(coluna){
+          var itens=coluna.campo?selecionados.filter(function(item){
+            return coluna.valores.indexOf(item[coluna.campo])>=0;
+          }):selecionados;
+          return Object.assign(soma(itens),{itens:itens});
+        })};
+    }).filter(function(linha){return linha.total.total>0;});
     var total=modelo.colunas.map(function(coluna,j){
       var items=[];
-      linhas.forEach(function(linha){items=items.concat(linha.celulas[j].itens||[]);});
+      linhas.forEach(function(linha){items=items.concat(linha.celulas[j].itens);});
       return Object.assign(soma(items),{itens:items});
     });
     return Object.assign({},modelo,{linhas:linhas,total:total,geral:soma(total.length?total[0].itens:[]),
@@ -1846,7 +1874,7 @@
       btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-modo')===estado.matrizModo));
     });
     document.querySelectorAll('[data-ma-percent-label]').forEach(function(el){
-      el.textContent=estado.matrizModo==='graficaMarca'?'% TOTAL DA GRÁFICA':'% TOTAL DA MARCA';
+      el.textContent=estado.matrizModo==='graficaMarca'?'% GRÁFICA × MARCA':estado.matrizModo==='marcaSerie'?'% POR SÉRIE':'% TOTAL DA MARCA';
     });
     document.getElementById('maMatrizTitulo').textContent='Previsão Armazém';
     if(!m.linhas.length){root.innerHTML='<p class="text-sm text-slate-400">'+(m.temBase?'Nenhuma linha na faixa de percentual selecionada.':'Sem dados para esta seleção.')+'</p>';return;}
