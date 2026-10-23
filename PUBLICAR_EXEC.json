@@ -1,7 +1,7 @@
 {
-  "solicitado_em": "2026-10-23T05:23:00Z",
+  "solicitado_em": "2026-10-23T05:28:00Z",
   "autorizado": true,
   "commit_validado": "815ac7bafaf8b20bc5f16b2a96c484e4ee20224d",
   "deployment_id": "AKfycbwU2z5sKfnXsnZ7_xRgXYSv6zgsbehvTw3ESSQVMx-OC0l8mBHIMlJpdZIec-pAgtrC2A",
-  "motivo": "Publicar as correcoes de filtro percentual por serie e planejados D-1 na implantacao /exec existente."
+  "motivo": "Conferir a implantacao correta do PGPORTAL antes de publicar; nao atualizar deployment desconhecido."
 }

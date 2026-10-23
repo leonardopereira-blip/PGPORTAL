@@ -45,7 +45,16 @@ const conferir=async ()=>{
 await conferir();
 const antes=await clasp.project.listDeployments();
 const existente=(antes.results||[]).find(d=>d.deploymentId===pedido.deployment_id);
-if(!existente)throw Error('Implantacao /exec nao pertence ao projeto configurado.');
+if(!existente) {
+  const versoes=(antes.results||[]).filter(d=>d.deploymentConfig).map(d=>({
+    versao:d.deploymentConfig.versionNumber,
+    descricao:String(d.deploymentConfig.description||'').slice(0,70),
+    tipo:(d.entryPoints||[]).map(e=>e.entryPointType).join(','),
+    sufixo:String(d.deploymentId||'').slice(-6)
+  }));
+  console.log('Implantacoes do projeto (IDs truncados): '+JSON.stringify(versoes));
+  throw Error('Implantacao /exec nao pertence ao projeto configurado.');
+}
 const versaoAnterior=existente.deploymentConfig?.versionNumber;
 const descricao='PGPORTAL filtros por serie e planejado D-1 · commit '+pedido.commit_validado.slice(0,7);
 const novaVersao=await clasp.project.version(descricao);
