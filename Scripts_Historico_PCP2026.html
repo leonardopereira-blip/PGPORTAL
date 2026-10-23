@@ -1,0 +1,166 @@
+<script>
+// Base independente do PCP corrente: ciclo 2026, com as datas reais originais
+// (principalmente 2025). A comparação desloca cada corte em um ano, sem
+// reescrever as datas da fonte nem acrescentar linhas aos filtros da produção.
+(function() {
+    const estado = { status: 'ocioso', rows: [], atualizadoEm: '', erro: '' };
+    const texto = valor => String(valor == null ? '' : valor).normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').toUpperCase().trim().replace(/\s+/g, ' ');
+    const vazio = valor => !valor || ['-', '(VAZIO)', 'N/A', 'NAO INFORMADO', 'NAO INFORMADA'].includes(valor);
+    const grafica = valor => texto(valor).replace(/^STAR\s*7$/, 'STAR7');
+
+    function serie(valor) {
+        const partes = String(valor == null ? '' : valor).split(/[|;]/).map(v => v.trim()).filter(Boolean);
+        if (partes.length > 1) return 'VARIOS';
+        const s = texto(partes[0] || valor);
+        if (vazio(s) || s === 'SEM SERIE') return '';
+        if (/^VARI[AO]S$/.test(s)) return 'VARIOS';
+        if (/^(EXT|EXTENSIVO)$/.test(s)) return 'EXTENSIVO';
+        if (/^(PV(?:\s+E)?|PRE[\s-]*VEST(?:IBULAR)?)$/.test(s)) return 'PRE-VEST';
+        const infantil = s.match(/^INF(?:ANTIL)?\s*(I|II|III|IV|V|[1-5])\s*(?:º|ª|°|O|0|A)?\s*(?:ANOS?)?$/);
+        if (infantil) {
+            const idade = { I: 1, II: 2, III: 3, IV: 4, V: 5 }[infantil[1]] || Number(infantil[1]);
+            return 'INF ' + idade;
+        }
+        const ano = s.match(/^([1-9])\s*(?:º|ª|°|O|0)?\s*ANO$/);
+        if (ano) return ano[1] + ' ANO';
+        const seriado = s.match(/^([1-3])\s*(?:A|ª|º|°|O|0)?\s*SERIE$/);
+        return seriado ? seriado[1] + ' SERIE' : s;
+    }
+
+    function cd(valor) {
+        let s = texto(valor);
+        if (typeof window.pgNormalizarDestinoFiltro === 'function') s = texto(window.pgNormalizarDestinoFiltro(s));
+        if (vazio(s)) return '';
+        if (/\bJDI\b|\bJUNDIAI\b/.test(s)) return 'JDI';
+        if (/\bFOR\b|\bFORTALEZA\b/.test(s)) return 'FOR';
+        if (/^(?:CD\s+)?RP$|\bRIBEIRAO(?:\s+PRETO)?\b/.test(s)) return 'RP';
+        // São José do Rio Preto continua distinto de Ribeirão Preto.
+        return s.replace(/^CD\s+/, '').replace(/\s*-\s*[A-Z]{2}$/, '').trim();
+    }
+
+    function envio(valor) {
+        const s = texto(valor).replace(/\s+/g, '');
+        const m = s.match(/^V0*([1-9]\d*)(?:-(?:20)?\d{2})?$/);
+        return m ? 'V' + Number(m[1]) : s;
+    }
+
+    function corteAnterior(iso) {
+        const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return '';
+        const ano = Number(m[1]) - 1, mes = Number(m[2]);
+        // O mesmo dia/mês, limitando 29/02 ao último dia do fevereiro anterior.
+        const dia = Math.min(Number(m[3]), new Date(ano, mes, 0, 12).getDate());
+        return `${ano}-${m[2]}-${String(dia).padStart(2, '0')}`;
+    }
+
+    function selecoes() {
+        const filtros = {};
+        const normalizadores = { 'Gráfica': grafica, Marca: texto, 'Série': serie, 'CD Destino': cd, Envio: envio };
+        Object.keys(normalizadores).forEach(categoria => {
+            const id = categoria.replace(/\s+/g, '').replace('.', '');
+            const checks = Array.from(document.querySelectorAll('.chk-geral-' + id));
+            const selecionados = checks.filter(c => c.checked).map(c => normalizadores[categoria](c.value));
+            // Envio sempre é explícito: o histórico V3/V4 não entra quando o
+            // portal oferece somente V1. Os demais menus completos não restringem.
+            filtros[categoria] = categoria === 'Envio'
+                ? new Set(checks.length ? selecionados : ['V1'])
+                : checks.length && selecionados.length < checks.length ? new Set(selecionados) : null;
+        });
+        return filtros;
+    }
+
+    function calcular(rows, periodos, filtros) {
+        const campos = { 'Gráfica': ['grafica', grafica], Marca: ['unidade', texto], 'Série': ['serie', serie], 'CD Destino': ['cd', cd] };
+        const envios = filtros.Envio || new Set(['V1']);
+        const grupos = new Map();
+        rows.forEach(linha => {
+            const e = envio(linha.envio);
+            if (!envios.has(e)) return;
+            if (!Object.keys(campos).every(categoria => !filtros[categoria] || filtros[categoria].has(campos[categoria][1](linha[campos[categoria][0]])))) return;
+            const volume = Math.max(0, Number(linha.tiragem) || 0);
+            if (!(volume > 0)) return;
+            if (!grupos.has(e)) grupos.set(e, { total: 0, eventos: [] });
+            const grupo = grupos.get(e);
+            // AL compõe a base mesmo quando BH não foi preenchida.
+            grupo.total += volume;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(linha.dataReal || '')) grupo.eventos.push({ data: linha.dataReal, volume });
+        });
+        const cortes = periodos.map(p => corteAnterior(p.corteReal || p.fim));
+        return Array.from(grupos).sort((a, b) => Number(a[0].slice(1)) - Number(b[0].slice(1))).map(([e, grupo], i) => {
+            const eventos = grupo.eventos.sort((a, b) => a.data.localeCompare(b.data));
+            const datas = [], acumulados = [];
+            let acumulado = 0;
+            eventos.forEach(evento => { acumulado += evento.volume; datas.push(evento.data); acumulados.push(acumulado); });
+            const volumes = cortes.map(corte => {
+                let ini = 0, fim = datas.length;
+                while (ini < fim) {
+                    const meio = Math.floor((ini + fim) / 2);
+                    if (datas[meio] <= corte) ini = meio + 1; else fim = meio;
+                }
+                return ini ? acumulados[ini - 1] : 0;
+            });
+            const cor = ['#2e7d32', '#00897b', '#558b2f', '#00695c'][i % 4];
+            return {
+                label: e + '-26', data: volumes.map(v => Math.min(100, v / grupo.total * 100)),
+                borderColor: cor, backgroundColor: cor, fill: false, tension: 0.12,
+                borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 4, pointHitRadius: 14,
+                order: -1, pgHistorico2026: { total: grupo.total, volumes, cortes }
+            };
+        });
+    }
+
+    function atualizarStatus(mensagem) {
+        const elemento = document.getElementById('reHistorico2026Status');
+        const botao = document.getElementById('reHistorico2026Retry');
+        if (elemento) elemento.textContent = mensagem || '';
+        if (botao) botao.hidden = estado.status !== 'erro';
+    }
+
+    function carregar(repetir) {
+        if (estado.status === 'carregando' || (estado.status === 'pronto' && !repetir) || (estado.status === 'erro' && !repetir)) return;
+        estado.status = 'carregando'; estado.erro = '';
+        atualizarStatus('Carregando comparação V1-26…');
+        const falha = erro => {
+            estado.status = 'erro'; estado.rows = [];
+            estado.erro = String(erro && erro.message || erro || 'Histórico indisponível.');
+            atualizarStatus('Não foi possível carregar a comparação do ciclo 2026.');
+        };
+        try {
+            google.script.run.withSuccessHandler(resposta => {
+                if (!resposta || !Array.isArray(resposta.rows) || resposta.error || Number(resposta.ciclo) !== 2026) {
+                    falha(resposta && resposta.error || 'Resposta histórica inválida.'); return;
+                }
+                estado.rows = resposta.rows; estado.atualizadoEm = resposta.atualizadoEm || '';
+                estado.status = 'pronto';
+                if (typeof window.renderReportExecutivaCurvaSemanal === 'function') window.renderReportExecutivaCurvaSemanal();
+            }).withFailureHandler(falha).getDadosHistoricoPCP2026();
+        } catch (erro) { falha(erro); }
+    }
+
+    function preparar(periodos) {
+        if (estado.status === 'ocioso') carregar(false);
+        if (estado.status !== 'pronto') return [];
+        const filtros = selecoes();
+        const datasets = calcular(estado.rows, periodos, filtros);
+        atualizarStatus(!filtros.Envio.size ? '' : datasets.length
+            ? 'Ciclo 2026: coletas reais no mesmo período do ano anterior (datas originais de 2025/2026).'
+            : 'Sem dados do ciclo 2026 para os filtros selecionados.');
+        return datasets;
+    }
+
+    function tooltip(contexto) {
+        const historico = contexto.dataset.pgHistorico2026;
+        const indice = contexto.dataIndex;
+        const formatar = valor => Math.round(Number(valor || 0)).toLocaleString('pt-BR');
+        const data = historico.cortes[indice] || '';
+        const dataBR = data ? data.slice(8, 10) + '/' + data.slice(5, 7) + '/' + data.slice(0, 4) : '—';
+        return [
+            `${contexto.dataset.label}: ${window.pgREPercentualExibido(contexto.raw)}% (${formatar(historico.volumes[indice])} / ${formatar(historico.total)})`,
+            'Coletas reais acumuladas até ' + dataBR
+        ];
+    }
+
+    window.pgREHistorico2026 = { estado, texto, serie, cd, envio, corteAnterior, selecoes, calcular, carregar, preparar, tooltip };
+})();
+</script>

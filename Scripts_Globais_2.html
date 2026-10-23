@@ -11502,6 +11502,8 @@ window.renderReportExecutivaCurvaSemanal = function() {
         corteReal: corteRealPeriodo(p),
         fechamentoSetembro: p.fim === '2026-09-30' && p.fim < hojeIso
     }));
+    const curvasHistorico2026 = window.pgREHistorico2026
+        ? window.pgREHistorico2026.preparar(window.reCurvaPeriodos) : [];
 
     const acumuladoAte = (fimIso, campoData, campoVolume, limitarHoje) => {
         let soma = 0;
@@ -11595,9 +11597,10 @@ window.renderReportExecutivaCurvaSemanal = function() {
                     const txt = `${window.pgREPercentualExibido(valor)}%`;
                     ctx.lineWidth = 3;
                     ctx.strokeStyle = '#ffffff';
-                    ctx.strokeText(txt, pt.x, pt.y - 5);
-                    ctx.fillStyle = dsIndex === 0 ? '#2f5597' : '#ff9800';
-                    ctx.fillText(txt, pt.x, pt.y - 5);
+                    const y = pt.y - (ds.pgHistorico2026 ? 20 : 5);
+                    ctx.strokeText(txt, pt.x, y);
+                    ctx.fillStyle = ds.borderColor;
+                    ctx.fillText(txt, pt.x, y);
                 });
             });
             ctx.restore();
@@ -11635,7 +11638,8 @@ window.renderReportExecutivaCurvaSemanal = function() {
                     pointHitRadius: 14,
                     spanGaps: false,
                     order: 0
-                }
+                },
+                ...curvasHistorico2026
             ]
         },
         plugins: [pluginLabels],
@@ -11653,7 +11657,8 @@ window.renderReportExecutivaCurvaSemanal = function() {
                     { intersect: true },
                     true
                 );
-                if (alvo && alvo.style) alvo.style.cursor = pontos.length ? 'pointer' : 'default';
+                const historico = pontos.length && chart.data.datasets[pontos[0].datasetIndex]?.pgHistorico2026;
+                if (alvo && alvo.style) alvo.style.cursor = pontos.length && !historico ? 'pointer' : 'default';
             },
 
             onClick(event, elements, chart) {
@@ -11664,6 +11669,8 @@ window.renderReportExecutivaCurvaSemanal = function() {
                     true
                 );
                 if (!pontos.length) return;
+                // A extração existente pertence ao PCP corrente, não ao histórico.
+                if (chart.data.datasets[pontos[0].datasetIndex]?.pgHistorico2026) return;
 
                 const indice = pontos[0].index;
                 window.reExtrairCurvaPonto(indice, chart.canvas);
@@ -11687,6 +11694,7 @@ window.renderReportExecutivaCurvaSemanal = function() {
                     callbacks: {
                         label(context) {
                             if (context.raw === null) return null;
+                            if (context.dataset.pgHistorico2026) return window.pgREHistorico2026.tooltip(context);
                             const n = context.datasetIndex === 0
                                 ? metaVolume[context.dataIndex]
                                 : realVolume[context.dataIndex];

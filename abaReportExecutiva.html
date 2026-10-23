@@ -187,6 +187,21 @@
         font-size: 13px;
         color: #222222;
     }
+
+    #abaReportExecutiva .re-history-status {
+        min-height: 18px;
+        margin: 4px 0 0;
+        text-align: center;
+        font: 12px Arial, Helvetica, sans-serif;
+        color: #666666;
+    }
+
+    #abaReportExecutiva #reHistorico2026Retry {
+        margin-left: 8px;
+        color: #25633a;
+        text-decoration: underline;
+        cursor: pointer;
+    }
 </style>
 
 <div class="re-wrap">
@@ -246,6 +261,10 @@
             <canvas id="reCurvaEntregas"></canvas>
         </div>
         <div class="re-chart-caption">Curva de entrega</div>
+        <div class="re-history-status" aria-live="polite">
+            <span id="reHistorico2026Status"></span>
+            <button type="button" id="reHistorico2026Retry" hidden onclick="window.pgREHistorico2026.carregar(true)">Tentar novamente</button>
+        </div>
     </div>
 </div>
 </div>
