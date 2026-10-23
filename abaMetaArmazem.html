@@ -187,7 +187,15 @@
         <p class="text-[10px] text-slate-500 mt-1">Metas encerradas: apenas realizado até o prazo. Metas vigentes e futuras: realizado + previsão a partir de hoje. TOTAL GERAL primeiro. Arraste as séries prioritárias para mudar a ordem. Outros inclui VARIOS e pode ser expandido.</p></div>
       <button type="button" id="maScreenshot" onclick="window.pgMACapturarMatriz()" class="shrink-0 rounded-xl px-4 py-3 text-xs font-black text-white shadow-sm" title="Captura a tabela inteira em PNG, inclusive o conteúdo fora da rolagem">📸 Capturar tabela completa (PNG)</button>
     </div>
-    <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      <span data-ma-percent-label class="text-[10px] font-bold text-slate-500">% TOTAL DA MARCA</span>
+      <label class="text-xs font-semibold text-slate-600">Acima de (%)
+        <input id="maPercentualMinPrevisao" type="number" min="0" max="100" step="0.1" placeholder="0" onchange="window.pgMAFiltrarPercentual('previsao')" class="w-20 text-xs font-semibold text-slate-700 border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:border-indigo-500">
+      </label>
+      <label class="text-xs font-semibold text-slate-600">Abaixo de (%)
+        <input id="maPercentualMaxPrevisao" type="number" min="0" max="100" step="0.1" placeholder="100" onchange="window.pgMAFiltrarPercentual('previsao')" class="w-20 text-xs font-semibold text-slate-700 border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:border-indigo-500">
+      </label>
+      <button type="button" onclick="window.pgMAFiltrarPercentual('previsao',true)" class="text-xs font-semibold text-slate-600 border border-slate-300 rounded px-2 py-1 hover:bg-slate-100">Limpar</button>
       <button type="button" id="maOutrosToggle" class="ma-pill hidden" onclick="window.pgMAAlternarOutros()" title="Exibe individualmente as séries menores, sem duplicar no total">Expandir Outros</button>
     </div>
     <div id="maMatriz" class="overflow-x-auto max-w-full" aria-label="Matriz com rolagem horizontal"></div>
@@ -200,6 +208,16 @@
         <p class="text-[10px] text-slate-500 mt-1">Coleta TP realizada até hoje ÷ tiragem total CD. Segue os mesmos itens, filtros e ordenação dos quadros acima. Excedentes ficam identificados na base auditável.</p>
       </div>
       <button type="button" class="ma-pill shrink-0" onclick="window.pgMACapturarMatriz('coletas')" title="Captura a matriz de coletas completa, incluindo colunas fora da rolagem">Capturar Coletas (PNG)</button>
+    </div>
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      <span data-ma-percent-label class="text-[10px] font-bold text-slate-500">% TOTAL DA MARCA</span>
+      <label class="text-xs font-semibold text-slate-600">Acima de (%)
+        <input id="maPercentualMinColetas" type="number" min="0" max="100" step="0.1" placeholder="0" onchange="window.pgMAFiltrarPercentual('coletas')" class="w-20 text-xs font-semibold text-slate-700 border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:border-indigo-500">
+      </label>
+      <label class="text-xs font-semibold text-slate-600">Abaixo de (%)
+        <input id="maPercentualMaxColetas" type="number" min="0" max="100" step="0.1" placeholder="100" onchange="window.pgMAFiltrarPercentual('coletas')" class="w-20 text-xs font-semibold text-slate-700 border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:border-indigo-500">
+      </label>
+      <button type="button" onclick="window.pgMAFiltrarPercentual('coletas',true)" class="text-xs font-semibold text-slate-600 border border-slate-300 rounded px-2 py-1 hover:bg-slate-100">Limpar</button>
     </div>
     <div id="maMatrizColetas" class="overflow-x-auto max-w-full" aria-label="Matriz de coleta realizada sobre tiragem total CD, com rolagem horizontal"></div>
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4 border-t border-slate-200 pt-4">
@@ -218,6 +236,16 @@
         <p class="text-[10px] text-slate-500 mt-1">Entrega TP realizada até hoje ÷ tiragem total CD. Segue os mesmos itens, filtros e ordenação dos quadros acima. Excedentes ficam identificados na base auditável.</p>
       </div>
       <button type="button" class="ma-pill shrink-0" onclick="window.pgMACapturarMatriz('realizado')" title="Captura a matriz de entregas completa, incluindo colunas fora da rolagem">Capturar Entregas (PNG)</button>
+    </div>
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      <span data-ma-percent-label class="text-[10px] font-bold text-slate-500">% TOTAL DA MARCA</span>
+      <label class="text-xs font-semibold text-slate-600">Acima de (%)
+        <input id="maPercentualMinRealizado" type="number" min="0" max="100" step="0.1" placeholder="0" onchange="window.pgMAFiltrarPercentual('realizado')" class="w-20 text-xs font-semibold text-slate-700 border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:border-indigo-500">
+      </label>
+      <label class="text-xs font-semibold text-slate-600">Abaixo de (%)
+        <input id="maPercentualMaxRealizado" type="number" min="0" max="100" step="0.1" placeholder="100" onchange="window.pgMAFiltrarPercentual('realizado')" class="w-20 text-xs font-semibold text-slate-700 border border-slate-300 rounded px-2 py-1 bg-white outline-none focus:border-indigo-500">
+      </label>
+      <button type="button" onclick="window.pgMAFiltrarPercentual('realizado',true)" class="text-xs font-semibold text-slate-600 border border-slate-300 rounded px-2 py-1 hover:bg-slate-100">Limpar</button>
     </div>
     <div id="maMatrizRealizado" class="overflow-x-auto max-w-full" aria-label="Matriz de entrega realizada sobre tiragem total CD, com rolagem horizontal"></div>
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4 border-t border-slate-200 pt-4">
@@ -1432,6 +1460,35 @@
       total:colunas.map(function(c){return totalColuna(items,c);}),
       escondidas:escondidas,geral:soma(items)};
   }
+  function camposFaixaMatriz(tipo){
+    var sufixo=tipo==='coletas'?'Coletas':tipo==='realizado'?'Realizado':'Previsao';
+    return ['maPercentualMin'+sufixo,'maPercentualMax'+sufixo];
+  }
+  function limiteFaixaMatriz(id){
+    var campo=document.getElementById(id),valor=campo?String(campo.value||'').trim():'';
+    if(!valor)return null;
+    var numero=Number(valor.replace(',','.'));
+    return Number.isFinite(numero)&&numero>=0&&numero<=100?numero:null;
+  }
+  // Recorte de apresentação independente por quadro. A base calculada, os KPIs
+  // e as auditorias permanecem completos; o total da tabela soma as linhas visíveis.
+  function filtrarModeloMatriz(modelo,tipo){
+    var ids=camposFaixaMatriz(tipo),min=limiteFaixaMatriz(ids[0]),max=limiteFaixaMatriz(ids[1]);
+    var campo=tipo==='coletas'?'coletadoTP':tipo==='realizado'?'realCD':'previsto';
+    var linhas=modelo.linhas.filter(function(linha){
+      var total=linha.total.total;
+      if(!(total>0))return false;
+      var p=Math.max(0,Math.min(100,100*linha.total[campo]/total));
+      return (min===null||p>min)&&(max===null||p<max);
+    });
+    var total=modelo.colunas.map(function(coluna,j){
+      var items=[];
+      linhas.forEach(function(linha){items=items.concat(linha.celulas[j].itens||[]);});
+      return Object.assign(soma(items),{itens:items});
+    });
+    return Object.assign({},modelo,{linhas:linhas,total:total,geral:soma(total.length?total[0].itens:[]),
+      temBase:!!modelo.linhas.length,faixaPercentual:{min:min,max:max}});
+  }
   // Entrega TP até o corte / tiragem total CD, sobre as mesmas linhas e
   // agrupamentos de Coletas. O volume já vem limitado por agrupamento,
   // sem usar o excedente de um item para compensar outro.
@@ -1468,7 +1525,7 @@
     var coletas=tipo==='coletas',root=document.getElementById(coletas?'maMatrizColetas':'maMatrizRealizado');
     if(!root)return;
     if(!m.linhas.length){
-      root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';
+      root.innerHTML='<p class="text-sm text-slate-400">'+(m.temBase?'Nenhuma linha na faixa de percentual selecionada.':'Sem dados para esta seleção.')+'</p>';
       return;
     }
     // Reutiliza exatamente colunas, grupos, séries prioritárias, Outros, Vários
@@ -1774,10 +1831,11 @@
   };
 
   function matriz(items) {
-    var root=document.getElementById('maMatriz'),m=modeloMatriz(items);
+    var root=document.getElementById('maMatriz'),base=modeloMatriz(items),m=filtrarModeloMatriz(base,'previsao');
+    window.pgMAMatrizesSnapshot={previsao:m,coletas:filtrarModeloMatriz(base,'coletas'),realizado:filtrarModeloMatriz(base,'realizado')};
     window.pgMAMatrizSnapshot=m;
-    matrizRealizado(m);
-    matrizRealizado(m,'coletas');
+    matrizRealizado(window.pgMAMatrizesSnapshot.realizado);
+    matrizRealizado(window.pgMAMatrizesSnapshot.coletas,'coletas');
     var toggle=document.getElementById('maOutrosToggle');
     if(toggle){
       toggle.classList.toggle('hidden',!m.escondidas||m.modo!=='marcaSerie');
@@ -1787,8 +1845,11 @@
     document.querySelectorAll('[data-ma-modo]').forEach(function(btn){
       btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-modo')===estado.matrizModo));
     });
+    document.querySelectorAll('[data-ma-percent-label]').forEach(function(el){
+      el.textContent=estado.matrizModo==='graficaMarca'?'% TOTAL DA GRÁFICA':'% TOTAL DA MARCA';
+    });
     document.getElementById('maMatrizTitulo').textContent='Previsão Armazém';
-    if(!items.length){root.innerHTML='<p class="text-sm text-slate-400">Sem dados para esta seleção.</p>';return;}
+    if(!m.linhas.length){root.innerHTML='<p class="text-sm text-slate-400">'+(m.temBase?'Nenhuma linha na faixa de percentual selecionada.':'Sem dados para esta seleção.')+'</p>';return;}
     var cabeca='<th>'+m.rotuloLinha+'</th>'+
       m.colunas.map(function(c){
         var arrastavel=c.prioritaria,extra=c.nome==='OUTROS';
@@ -1889,11 +1950,16 @@
     estado.matrizExpandida=!estado.matrizExpandida;
     matriz(window.pgMAUltimosItens||[]);
   };
+  window.pgMAFiltrarPercentual=function(tipo,limpar){
+    if(['previsao','coletas','realizado'].indexOf(tipo)<0)return;
+    if(limpar)camposFaixaMatriz(tipo).forEach(function(id){var campo=document.getElementById(id);if(campo)campo.value='';});
+    matriz(window.pgMAUltimosItens||[]);
+  };
   // PNG construído do modelo completo: inclui também as linhas e colunas fora do scroll,
   // sem depender de bibliotecas externas e sem modificar dados da matriz.
   window.pgMACapturarMatriz=function(tipo) {
     var realizado=tipo==='realizado',coletas=tipo==='coletas';
-    var m=window.pgMAMatrizSnapshot;
+    var m=window.pgMAMatrizesSnapshot&&window.pgMAMatrizesSnapshot[coletas?'coletas':realizado?'realizado':'previsao'];
     if(!m||!m.linhas.length){window.alert('A matriz ainda não tem dados para capturar.');return;}
     try {
       var col=100,first=118,head=48,rowH=44,top=82,foot=42;
@@ -1993,7 +2059,7 @@
     var aviso=document.getElementById('maAviso'),base;
     if(!aviso)return;
     try{base=dadosBase();}catch(erro){
-      window.pgMAVisaoAtual=null;window.pgMAUltimosItens=[];window.pgMAMatrizSnapshot=null;
+      window.pgMAVisaoAtual=null;window.pgMAUltimosItens=[];window.pgMAMatrizSnapshot=null;window.pgMAMatrizesSnapshot=null;
       ['maKPIs','maGraficoAderencia','maMatriz','maMatrizRealizado','maMatrizColetas','maTabela','maComparativo',
         'maBarrasGrafica','maBarrasMarca','maBarrasSerie','maLegendaPrazos','maComparativoNota','maContagem']
         .forEach(function(id){var e=document.getElementById(id);if(e)e.innerHTML='';});
