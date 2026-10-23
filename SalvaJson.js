@@ -447,9 +447,7 @@ function pgAtualizarArquivoCache_(arquivo, carregar) {
   if (!salvarJSONNoDrive(arquivo, dados)) throw new Error('Falha ao gravar ' + arquivo);
 }
 
-function atualizarCachePreProducao() {
-  pgAtualizarArquivoCache_('cache_pre_producao.json', getDadosPreProducao);
-}
+// cache_pre_producao.json (Resumo Executivo) e gerado pelo projeto do Resumo Executivo.
 
 function atualizarCacheQualidade() {
   pgAtualizarArquivoCache_('cache_qualidade.json', getDadosQualidade);
@@ -471,7 +469,6 @@ function atualizarTodoOCache() {
   }
   var etapas = [
     ['cache_cockpit.json', getDadosCockpit],
-    ['cache_pre_producao.json', getDadosPreProducao],
     ['cache_qualidade.json', getDadosQualidade],
     ['cache_ppm.json', getDadosPPM],
     ['cache_inspecoes.json', getDadosInspecaoCDs],

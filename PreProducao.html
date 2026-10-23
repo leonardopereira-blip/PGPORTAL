@@ -22,6 +22,14 @@
     <main class="flex-1 overflow-y-auto p-4 md:p-6 scroller bg-slate-100 relative">
         <div class="max-w-[1600px] mx-auto hidden" id="conteinerPrincipalPre">
             
+            <div id="visaoCheckAcervo" class="hidden absolute inset-0">
+                <iframe id="iframeCheckAcervo" title="Checagem de Acervo" data-src="https://script.google.com/a/macros/arcoeducacao.com.br/s/AKfycbxmPo00I1yk97bJVFLEktaN0xFRBjMj9qEddwqGhq26t706QOS9-R5b0soVAaIUFQ44/exec?embed=acervo" class="block w-full h-full bg-slate-100" style="border:0;" allow="clipboard-write" onload="if(this.getAttribute('src')) document.getElementById('loadingCheckAcervo').classList.add('hidden')"></iframe>
+                <div id="loadingCheckAcervo" class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mb-3"></div>
+                    <span class="text-indigo-800 font-black tracking-widest uppercase text-sm">Carregando Checagem de Acervo...</span>
+                </div>
+            </div>
+
             <div id="visaoCaixasPre" class="hidden">
     <div class="flex flex-wrap justify-between items-center mb-4 border-b border-slate-200 pb-2">
         <h3 class="text-sm font-black text-slate-700 uppercase tracking-widest">📦 Acompanhamento de Caixas e Embalagens</h3>
@@ -99,158 +107,11 @@
     </div>
 </div>
 
-            <div id="visaoResumoExec" class="hidden">
-                <style>
-                    .rx-tip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-left: 4px; border-radius: 9999px; background: #e2e8f0; color: #475569; font-size: 9px; font-weight: 900; cursor: help; text-transform: none; letter-spacing: 0; vertical-align: middle; }
-                    .rx-tip::after { content: attr(data-tip); position: absolute; left: 50%; top: 125%; transform: translateX(-50%); width: 260px; padding: 8px 10px; border-radius: 8px; background: #1e293b; color: #fff; font-size: 10px; font-weight: 600; line-height: 1.4; text-align: left; white-space: normal; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 9999; box-shadow: 0 8px 20px rgba(15,23,42,.25); }
-                    .rx-tip:hover::after { opacity: 1; }
-                    .rx-th-tip { cursor: help; }
-                </style>
-
-                <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-wrap items-center gap-3 relative z-40">
-                    <span class="text-[10px] font-black text-indigo-600 uppercase tracking-wider">Filtros<span class="rx-tip" data-tip="Os filtros valem para todos os indicadores, gráficos e tabelas desta tela. O padrão é Tipo Produção = Principal e Index Tiragem = 2.">i</span></span>
-                    <div id="rxFiltroUn" class="relative"></div>
-                    <div id="rxFiltroGrafica" class="relative"></div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase">Tipo Produção<span class="rx-tip" data-tip="Campo calculado a partir do Index Tiragem. Index de 1 a 4 = Principal. Index acima de 4 = Chamado. Todos = os dois ao mesmo tempo.">i</span></span>
-                        <select id="rxTipoProd" onchange="rxMudouTipoProd()" class="bg-white border border-indigo-200 text-indigo-800 rounded p-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 shadow-sm cursor-pointer">
-                            <option value="Principal">Principal</option>
-                            <option value="Chamado">Chamado</option>
-                            <option value="Todos">Todos</option>
-                        </select>
-                    </div>
-                    <div id="rxFiltroIndex" class="relative"></div>
-                    <button onclick="rxLimparFiltros()" class="ml-auto text-slate-400 hover:text-red-500 text-[10px] font-bold uppercase transition-colors">Restaurar padrão</button>
-                </div>
-
-                <h3 class="text-sm font-black text-slate-700 uppercase tracking-widest mb-3 border-b border-slate-200 pb-2">📋 Fila de Pendências<span class="rx-tip" data-tip="Pendente é o SKU que ainda não tem a data real da fase preenchida. Cada fase é contada de forma independente. Vencido: data planejada anterior a hoje. No prazo: data planejada de hoje em diante (ou sem data planejada).">i</span></h3>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-t-4 border-slate-400 flex flex-col justify-center items-center">
-                        <p class="text-[10px] font-bold text-slate-500 uppercase mb-1 text-center">Total de SKUs<span class="rx-tip" data-tip="Quantidade de SKUs da base depois de aplicados os filtros da tela.">i</span></p>
-                        <p class="text-4xl font-black text-slate-800" id="rxKpiSkuTot">-</p>
-                    </div>
-                    <div id="rxCardPendEnv"></div>
-                    <div id="rxCardPendRec"></div>
-                    <div id="rxCardPendApv"></div>
-                </div>
-
-                <h3 class="text-sm font-black text-slate-700 uppercase tracking-widest mb-3 border-b border-slate-200 pb-2">⏱️ SLA (Prazo Flexível de 2 Dias Úteis)<span class="rx-tip" data-tip="Considera apenas o que já foi realizado. Envio: no prazo se a data real é menor ou igual à planejada. Recebimento: no prazo se foi até o planejado OU até 2 dias úteis após o envio real. Aprove: no prazo se foi até o planejado OU até 2 dias úteis após o recebimento real. Fins de semana e feriados nacionais não contam como dia útil.">i</span></h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" id="rxGaugesSla"></div>
-
-                <h3 class="text-sm font-black text-slate-700 uppercase tracking-widest mb-3 border-b border-slate-200 pb-2">🎯 Aderência ao Planejado (Prazo Estrito)<span class="rx-tip" data-tip="Considera apenas o que já foi realizado. No prazo somente se a data real aconteceu na data planejada ou antes. Não há tolerância de dias úteis.">i</span></h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" id="rxGaugesAd"></div>
-
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-8">
-                    <div class="flex flex-wrap justify-between items-center mb-4 border-b border-slate-100 pb-2 gap-3">
-                        <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wide">📈 Curva de Liberação (Envio de Arquivo)<span class="rx-tip" data-tip="Duas curvas acumuladas, em % do total de SKUs filtrados: Planejado (pela data de envio planejada) e Realizado (pela data de envio real, até hoje). O eixo é contínuo, do primeiro envio planejado até a última data da base, e dias sem movimento também aparecem.">i</span></h3>
-                        <div class="flex items-center gap-1" id="rxToggleGran">
-                            <button data-g="dia" onclick="rxSetGranularidade('dia')" class="rx-gran px-3 py-1 text-[10px] font-black uppercase rounded border">Dia a dia</button>
-                            <button data-g="semana" onclick="rxSetGranularidade('semana')" class="rx-gran px-3 py-1 text-[10px] font-black uppercase rounded border">Semana a semana</button>
-                            <button data-g="mes" onclick="rxSetGranularidade('mes')" class="rx-gran px-3 py-1 text-[10px] font-black uppercase rounded border">Mês a mês</button>
-                        </div>
-                    </div>
-                    <div class="h-72 relative"><canvas id="rxChartCurva"></canvas></div>
-                    <p id="rxTextoCurva" class="mt-4 text-sm font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed"></p>
-                    <div class="mt-3 flex flex-wrap items-center gap-3">
-                        <label class="text-[10px] font-bold text-slate-500 uppercase">Simulador de previsão<span class="rx-tip" data-tip="Informe uma data para ver quanto o plano prevê de envios acumulados até ela. Se o campo ficar vazio, o texto some.">i</span></label>
-                        <input type="date" id="rxSimData" oninput="rxAtualizarSimulador()" class="bg-slate-50 border border-slate-300 rounded p-1.5 text-xs text-slate-700 outline-none focus:border-indigo-400 shadow-sm">
-                        <span id="rxTextoSim" class="text-sm font-bold text-indigo-700"></span>
-                    </div>
-                </div>
-
-                <h3 class="text-sm font-black text-slate-700 uppercase tracking-widest mb-3 border-b border-slate-200 pb-2">🚨 Resumo de Pendências<span class="rx-tip" data-tip="Ordenado de quem tem mais SKUs pendentes para quem tem menos. Considera somente SKUs pendentes em cada fase. Pendentes = SKUs com pelo menos uma fase sem data real. No Prazo = pendente com data planejada de hoje em diante. Fora do Prazo = pendente com data planejada vencida. Linha verde = nenhum SKU pendente em nenhuma fase.">i</span></h3>
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
-                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
-                        <h4 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Por Marca</h4>
-                        <div id="rxTabAtrasoMarca"></div>
-                    </div>
-                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 overflow-x-auto scroller">
-                        <h4 class="text-xs font-bold text-slate-700 uppercase mb-3 border-b border-slate-100 pb-2">Por Gráfica</h4>
-                        <div id="rxTabAtrasoGrafica"></div>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
-                    <div class="bg-indigo-50 p-3 border-b border-slate-200 flex flex-wrap items-center gap-2">
-                        <h3 class="text-xs font-black text-indigo-800 uppercase tracking-wide">📋 Detalhamento: Produção Principal<span class="rx-tip" data-tip="Agrupado por Index, Marca e Gráfica, só com SKUs ainda não aprovados (data real de aprovação vazia). Cada fase mostra Prazo / Hoje / Atraso em SKUs e, pequeno ao lado, as páginas. Prazo: planejado para depois de hoje (ou sem data). Hoje: planejado para hoje. Atraso: planejado anterior a hoje. Index de 1 a 4 = Principal.">i</span></h3>
-                        <span class="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded font-bold">Ocultando Aprovações Concluídas</span>
-                    </div>
-                    <div class="overflow-x-auto scroller">
-                        <table class="w-full text-left border-collapse">
-                            <thead><tr class="bg-white text-[10px] uppercase text-slate-400 border-b border-slate-100">
-                                <th class="p-3 font-black text-center w-10 border-r border-slate-100">#</th>
-                                <th class="p-3 font-black rx-th-tip" title="Index Tiragem (chamado)">Index (Chamado)</th>
-                                <th class="p-3 font-black rx-th-tip" title="Marca (UN)">Marca (UN)</th>
-                                <th class="p-3 font-black rx-th-tip" title="Gráfica">Gráfica</th>
-                                <th class="p-3 font-black text-center rx-th-tip" title="Total de SKUs do grupo e, entre parênteses, o total de páginas">Total (SKUs / Pgs)</th>
-                                <th class="p-3 font-black text-center border-l border-slate-100 rx-th-tip" title="Envio de arquivo pendente: no prazo / vence hoje / em atraso">Envio (Prz / Hj / Atr)</th>
-                                <th class="p-3 font-black text-center border-l border-slate-100 rx-th-tip" title="Recebimento de boneco pendente: no prazo / vence hoje / em atraso">Boneco (Prz / Hj / Atr)</th>
-                                <th class="p-3 font-black text-center border-l border-slate-100 rx-th-tip" title="Aprovação de boneco pendente: no prazo / vence hoje / em atraso">Aprove (Prz / Hj / Atr)</th>
-                            </tr></thead>
-                            <tbody id="rxTbPrincipal"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
-                    <div class="bg-red-50 p-3 border-b border-slate-200 flex items-center gap-2"><span class="text-xl">⚠️</span><h3 class="text-xs font-black text-red-800 uppercase tracking-wide">Detalhamento: Reentradas<span class="rx-tip" data-tip="Mesma leitura da tabela de Produção Principal, para Index acima de 4 (chamados). A coluna Pior Atraso mostra o maior atraso, em dias corridos, entre as três fases do grupo.">i</span></h3></div>
-                    <div class="overflow-x-auto scroller">
-                        <table class="w-full text-left border-collapse">
-                            <thead><tr class="bg-white text-[10px] uppercase text-slate-400 border-b border-slate-100">
-                                <th class="p-3 font-black text-center w-10 border-r border-slate-100">#</th>
-                                <th class="p-3 font-black rx-th-tip" title="Index Tiragem (chamado)">Index (Chamado)</th>
-                                <th class="p-3 font-black rx-th-tip" title="Marca (UN)">Marca (UN)</th>
-                                <th class="p-3 font-black rx-th-tip" title="Gráfica">Gráfica</th>
-                                <th class="p-3 font-black text-center rx-th-tip" title="Total de SKUs do grupo e, entre parênteses, o total de páginas">Total (SKUs / Pgs)</th>
-                                <th class="p-3 font-black text-center border-l border-slate-100 rx-th-tip" title="Envio de arquivo pendente: no prazo / vence hoje / em atraso">Envio (Prz / Hj / Atr)</th>
-                                <th class="p-3 font-black text-center border-l border-slate-100 rx-th-tip" title="Recebimento de boneco pendente: no prazo / vence hoje / em atraso">Boneco (Prz / Hj / Atr)</th>
-                                <th class="p-3 font-black text-center border-l border-slate-100 rx-th-tip" title="Aprovação de boneco pendente: no prazo / vence hoje / em atraso">Aprove (Prz / Hj / Atr)</th>
-                                <th class="p-3 font-black text-center border-l border-slate-100 text-red-600 rx-th-tip" title="Maior atraso, em dias corridos, entre as três fases">Pior Atraso</th>
-                            </tr></thead>
-                            <tbody id="rxTbReentradas"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
-                    <div class="bg-red-50 p-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-                        <h4 class="text-xs font-black text-red-800 uppercase tracking-wide">Extração: SKUs em Atraso<span class="rx-tip" data-tip="Uma linha por SKU. Se o SKU está vencido em mais de uma etapa, aparece um selo vermelho com a quantidade de etapas. Etapa vencida = data real vazia e data planejada anterior a hoje. Data Planejada e Dias de Atraso mostram a etapa mais antiga; o detalhe de cada etapa aparece ao passar o mouse e no CSV. O botão exporta todas as linhas.">i</span> <span id="rxQtdExtracao" class="text-[10px] font-bold text-red-600 ml-2"></span></h4>
-                        <button onclick="rxExportarAtrasos()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm">📥 Exportar (CSV)</button>
-                    </div>
-                    <div class="overflow-x-auto scroller max-h-[480px]">
-                        <table class="w-full text-left border-collapse whitespace-nowrap">
-                            <thead class="bg-white text-[9px] uppercase text-slate-500 border-b-2 border-slate-200 sticky top-0 z-10 shadow-sm">
-                                <tr>
-                                    <th class="p-2 rx-th-tip" title="Código do SKU.">SKU</th>
-                                    <th class="p-2 rx-th-tip" title="Descrição do SKU.">Descrição</th>
-                                    <th class="p-2 rx-th-tip" title="Gráfica responsável.">Gráfica</th>
-                                    <th class="p-2 rx-th-tip" title="Marca (UN).">Marca</th>
-                                    <th class="p-2 text-center rx-th-tip" title="Data planejada da etapa vencida mais antiga do SKU.">Data Planejada</th>
-                                    <th class="p-2 text-center rx-th-tip" title="Dias corridos entre a data planejada da etapa mais antiga e hoje.">Dias de Atraso</th>
-                                    <th class="p-2 rx-th-tip" title="Etapas pendentes e vencidas: Envio de Arquivo, Recebimento de Boneco ou Aprove de Boneco. O selo vermelho indica atraso em mais de uma etapa.">Fase em Atraso</th>
-                                </tr>
-                            </thead>
-                            <tbody id="rxTbExtracao" class="text-[10px] text-slate-700"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-10">
-                    <div class="flex flex-wrap justify-between items-center mb-4 border-b border-slate-100 pb-2 gap-3">
-                        <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wide">🗓️ Projeção Quinzenal<span class="rx-tip" data-tip="Total de SKUs: todos os SKUs. Total Planejado: SKUs cuja data planejada da fase é até hoje. Total Realizado: SKUs com data real da fase. Projeção por quinzena: realizado até hoje somando os pendentes com data planejada até o fim da quinzena (o que já está vencido entra na primeira quinzena). Mostra a quantidade e o % sobre o total de SKUs.">i</span></h3>
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-bold text-slate-500 uppercase">Métrica:</span>
-                            <select id="rxFaseQuinz" onchange="rxRenderQuinzenal()" class="bg-slate-50 border border-slate-300 text-slate-700 rounded p-1.5 text-xs font-bold outline-none focus:ring-1 focus:ring-indigo-500 shadow-sm">
-                                <option value="env">Envio de Arquivo</option>
-                                <option value="rec">Recebimento de Boneco</option>
-                                <option value="apv">Aprove de Boneco</option>
-                            </select>
-                        </div>
-                    </div>
-                    <h4 class="text-[10px] font-black text-slate-500 uppercase mb-2">Por Marca</h4>
-                    <div class="overflow-x-auto scroller mb-6" id="rxQuinzMarca"></div>
-                    <h4 class="text-[10px] font-black text-slate-500 uppercase mb-2">Por Gráfica</h4>
-                    <div class="overflow-x-auto scroller" id="rxQuinzGrafica"></div>
+            <div id="visaoResumoExec" class="hidden absolute inset-0">
+                <iframe id="iframeResumoExec" title="Resumo Executivo" data-src="https://script.google.com/a/macros/arcoeducacao.com.br/s/AKfycby0hS-jG65Mf5xCNkQ5-9EyJEQzgpitpSxDprk1cqQCUkh99U_0I5QzEFEKp8RlwARf/exec?embed=1" class="block w-full h-full bg-slate-100" style="border:0;" allow="clipboard-write" onload="if(this.getAttribute('src')) document.getElementById('loadingResumoExec').classList.add('hidden')"></iframe>
+                <div id="loadingResumoExec" class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mb-3"></div>
+                    <span class="text-indigo-800 font-black tracking-widest uppercase text-sm">Carregando Resumo Executivo...</span>
                 </div>
             </div>
         </div>
@@ -270,13 +131,35 @@
         let elCaixas = document.getElementById('visaoCaixasPre');
         let elRx = document.getElementById('visaoResumoExec');
         let elTitulo = document.getElementById('tituloVisaoPreProd');
+        let elAcervo = document.getElementById('visaoCheckAcervo');
 
         if(elCaixas) elCaixas.classList.add('hidden');
         if(elRx) elRx.classList.add('hidden');
+        if(elAcervo) elAcervo.classList.add('hidden');
 
-        document.getElementById('conteinerPrincipalPre').classList.remove('hidden');
+        let elContainer = document.getElementById('conteinerPrincipalPre');
+        elContainer.classList.remove('hidden');
+
+        // Check Acervo ocupa a área inteira (sem margens), para parecer nativo
+        let semMoldura = (visaoAlvo === 'checkAcervo' || visaoAlvo === 'resumoExec');
+        let elMain = elContainer.parentElement;
+        elMain.classList.toggle('p-4', !semMoldura);
+        elMain.classList.toggle('md:p-6', !semMoldura);
+        elMain.classList.toggle('overflow-y-auto', !semMoldura);
+        elMain.classList.toggle('overflow-hidden', semMoldura);
+        elContainer.classList.toggle('max-w-[1600px]', !semMoldura);
 
         let btnAtualizarTopo = document.querySelector('button[onclick^="carregarDadosCaixas"], button[onclick^="rxRecarregar"]');
+        if(btnAtualizarTopo) btnAtualizarTopo.classList.remove('hidden');
+
+        if(visaoAlvo === 'checkAcervo') {
+            if(elAcervo) elAcervo.classList.remove('hidden');
+            if(elTitulo) elTitulo.innerText = '🔎 Checagem de Acervo';
+            if(btnAtualizarTopo) btnAtualizarTopo.classList.add('hidden');
+            let ifr = document.getElementById('iframeCheckAcervo');
+            if(ifr && !ifr.getAttribute('src')) ifr.setAttribute('src', ifr.getAttribute('data-src'));
+            return;
+        }
 
         if(visaoAlvo === 'caixas') {
             if(elCaixas) elCaixas.classList.remove('hidden');
@@ -290,9 +173,19 @@
 
         if(elRx) elRx.classList.remove('hidden');
         if(elTitulo) elTitulo.innerText = '📊 Resumo Executivo';
-        if(btnAtualizarTopo) btnAtualizarTopo.setAttribute("onclick", "rxRecarregar()");
-        window.rxIniciar();
+        // A geração do JSON fica no projeto do Resumo Executivo; aqui o botão não tem função.
+        if(btnAtualizarTopo) { btnAtualizarTopo.setAttribute("onclick", "rxRecarregar()"); btnAtualizarTopo.classList.add('hidden'); }
+        let ifrRx = document.getElementById('iframeResumoExec');
+        if(ifrRx && !ifrRx.getAttribute('src')) ifrRx.setAttribute('src', ifrRx.getAttribute('data-src'));
     }
+
+    // Recarrega o Resumo Executivo (projeto separado) relendo o cache
+    window.rxRecarregar = function() {
+        let ifrRx = document.getElementById('iframeResumoExec');
+        if(!ifrRx) return;
+        document.getElementById('loadingResumoExec').classList.remove('hidden');
+        ifrRx.setAttribute('src', ifrRx.getAttribute('data-src') + '&t=' + Date.now());
+    };
 
     // ==========================================
     // MÓDULO DE CAIXAS (ATUALIZADO: CONSOLIDADO INCLUÍDO E OC REMOVIDA)
@@ -651,640 +544,4 @@
         adrHtml += renderBlockAdr("Entrega no Destino", adr.entre, "📍");
         document.getElementById('containerAderenciaCaixas').innerHTML = adrHtml;
     };
-</script>
-
-<script>
-// =====================================================================
-// RESUMO EXECUTIVO (nova tela). Independente das visões resumo/wip/aderencia.
-// Fonte: getDadosPreProducao_Cache() (cache_pre_producao.json).
-// =====================================================================
-(function() {
-    const FERIADOS = new Set([
-        '2026-01-01','2026-04-03','2026-04-21','2026-05-01','2026-09-07','2026-10-12','2026-11-02','2026-11-15','2026-11-20','2026-12-25',
-        '2027-01-01','2027-03-26','2027-04-21','2027-05-01','2027-09-07','2027-10-12','2027-11-02','2027-11-15','2027-11-20','2027-12-25'
-    ]);
-    const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-    const FASES = [
-        { k: 'env', nome: 'Envio de Arquivo', curto: 'Envio', plan: 'pEnv', real: 'rEnv' },
-        { k: 'rec', nome: 'Recebimento de Boneco', curto: 'Rec. Boneco', plan: 'pRec', real: 'rRec' },
-        { k: 'apv', nome: 'Aprove de Boneco', curto: 'Aprove', plan: 'pApv', real: 'rApv' }
-    ];
-    const S = {
-        dados: [], carregando: false, tipo: 'Principal',
-        sel: { un: [], grafica: [], index: ['2'] }, opcoes: {}, aberto: null, buscaIdx: '',
-        gran: 'dia', chart: null, planTs: [], total: 0, filtrados: [], hoje: null, extracao: []
-    };
-
-    const el = id => document.getElementById(id);
-    const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    const tip = txt => `<span class="rx-tip" data-tip="${esc(txt)}">i</span>`;
-    const num = v => Number(v || 0).toLocaleString('pt-BR');
-    const fmtP = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
-    const p2 = n => String(n).padStart(2, '0');
-    const fmtData = d => d ? p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '/' + d.getFullYear() : '-';
-    const fmtDM = d => p2(d.getDate()) + '/' + p2(d.getMonth() + 1);
-    const isoDia = d => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
-    const addDias = (d, n) => { const x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; };
-    const hojeData = () => { const h = new Date(); h.setHours(0, 0, 0, 0); return h; };
-
-    function parseData(v) {
-        if (v == null) return null;
-        const t = String(v).trim().split(' ')[0].split('T')[0];
-        if (!t || t === '-') return null;
-        let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
-        if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
-        m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
-        if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
-        return null;
-    }
-    function diaUtil(d) {
-        const w = d.getDay();
-        return w !== 0 && w !== 6 && !FERIADOS.has(isoDia(d));
-    }
-    function addDiasUteis(d, n) {
-        let x = new Date(d.getTime()), add = 0;
-        while (add < n) { x = addDias(x, 1); if (diaUtil(x)) add++; }
-        return x;
-    }
-    function contarAte(ordenado, ts) {
-        let lo = 0, hi = ordenado.length;
-        while (lo < hi) { const mid = (lo + hi) >> 1; if (ordenado[mid] <= ts) lo = mid + 1; else hi = mid; }
-        return lo;
-    }
-
-    function normalizar(r) {
-        const n = parseInt(String(r.indexTiragem == null ? '' : r.indexTiragem).trim(), 10);
-        const idx = isNaN(n) ? null : n;
-        return {
-            sku: r.sku, desc: r.descricao || '',
-            un: String(r.un || '').trim().toUpperCase() || 'N/A',
-            grafica: String(r.grafica || '').trim().toUpperCase() || 'N/A',
-            idx: idx, paginas: parseInt(r.paginas, 10) || 0,
-            tipoProd: (idx !== null && idx <= 4) ? 'Principal' : 'Chamado',
-            pEnv: parseData(r.dtEnvioPlan), rEnv: parseData(r.dtEnvioReal),
-            pRec: parseData(r.dtRecBonPlan), rRec: parseData(r.dtRecBonReal),
-            pApv: parseData(r.dtApvBonPlan), rApv: parseData(r.dtApvBonReal)
-        };
-    }
-
-    // Mescla b em a (mesma chave SKU+Index+Gráfica) fase a fase, ficando com o pior cenário:
-    // pendente vence realizado; entre pendentes, vale o planejado mais antigo;
-    // entre realizados, vale o par plan/real com maior atraso. Retorna true se houve divergência.
-    function mesclarPior(a, b) {
-        let div = false;
-        const dif = (x, y) => (x ? x.getTime() : null) !== (y ? y.getTime() : null);
-        FASES.forEach(f => {
-            const pa = a[f.plan], ra = a[f.real], pb = b[f.plan], rb = b[f.real];
-            if (dif(pa, pb) || dif(ra, rb)) div = true;
-            if (!ra && !rb) { if (pb && (!pa || pb < pa)) a[f.plan] = pb; return; }
-            if (!ra) return;
-            if (!rb) { a[f.plan] = pb; a[f.real] = null; return; }
-            const atraso = (p, r) => p ? Math.max(0, (r - p) / 86400000) : 0;
-            if (atraso(pb, rb) > atraso(pa, ra)) { a[f.plan] = pb; a[f.real] = rb; }
-        });
-        a.paginas = Math.max(a.paginas, b.paginas);
-        return div;
-    }
-
-    // ---------------- carga ----------------
-    function mostrarLoader(ativo) {
-        if (window.setLoading) window.setLoading(ativo, 'Carregando Resumo Executivo...');
-        const l = el('loadingPreProd');
-        if (!l) return;
-        l.classList.toggle('hidden', !ativo);
-        l.classList.toggle('flex', ativo);
-    }
-    function receber(d) {
-        if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = []; } }
-        if (!Array.isArray(d) || !d.length || (d[0] && d[0].erro)) return false;
-        const mapa = new Map();
-        let dup = 0, conflito = 0;
-        d.map(normalizar).forEach(r => {
-            const k = [String(r.sku || '').trim().toUpperCase(), r.idx, r.grafica].join('|');
-            const a = mapa.get(k);
-            if (!a) { mapa.set(k, r); return; }
-            dup++;
-            if (mesclarPior(a, r)) conflito++;
-        });
-        S.dados = [...mapa.values()];
-        console.info('[RESUMO EXEC] Linhas na base: ' + d.length + ' | chaves distintas SKU+Index+Gráfica: ' + S.dados.length + ' | SKUs distintos: ' +
-            new Set(S.dados.map(r => String(r.sku || '').trim().toUpperCase())).size + ' | mescladas: ' + dup + ' (' + conflito + ' com datas divergentes, pior cenário aplicado).');
-        return true;
-    }
-    function carregar() {
-        if (S.carregando) return;
-        S.carregando = true;
-        mostrarLoader(true);
-        const fim = ok => {
-            S.carregando = false;
-            mostrarLoader(false);
-            if (!ok) alert('Não foi possível carregar o Resumo Executivo (base vazia ou indisponível).');
-            else render();
-        };
-        google.script.run
-            .withSuccessHandler(d => fim(receber(d)))
-            .withFailureHandler(e => {
-                console.error('[RESUMO EXEC] Cache indisponível, tentando leitura direta:', e);
-                google.script.run
-                    .withSuccessHandler(d => fim(receber(d)))
-                    .withFailureHandler(e2 => { console.error('[RESUMO EXEC] Falha:', e2); fim(false); })
-                    .getDadosPreProducao();
-            })
-            .getDadosPreProducao_Cache();
-    }
-    window.rxIniciar = function() { if (S.dados.length) render(); else carregar(); };
-    window.rxRecarregar = function() { carregar(); };
-
-    // ---------------- filtros ----------------
-    function passa(r, ign) {
-        if (S.tipo !== 'Todos' && r.tipoProd !== S.tipo) return false;
-        if (ign !== 'un' && S.sel.un.length && !S.sel.un.includes(r.un)) return false;
-        if (ign !== 'grafica' && S.sel.grafica.length && !S.sel.grafica.includes(r.grafica)) return false;
-        if (ign !== 'index' && S.sel.index.length && !S.sel.index.includes(String(r.idx))) return false;
-        return true;
-    }
-    function calcularOpcoes() {
-        const uniq = (campo, ign) => {
-            const s = new Set(S.sel[ign]);
-            S.dados.forEach(r => { if (passa(r, ign)) s.add(r[campo]); });
-            return [...s].filter(Boolean).sort();
-        };
-        S.opcoes.un = uniq('un', 'un');
-        S.opcoes.grafica = uniq('grafica', 'grafica');
-        const base = ['1', '2', '3', '4'];
-        if (S.tipo === 'Principal') S.opcoes.index = base;
-        else {
-            const outros = new Set();
-            S.dados.forEach(r => { if (r.idx !== null && r.idx > 4) outros.add(r.idx); });
-            S.opcoes.index = base.concat([...outros].sort((a, b) => a - b).map(String));
-        }
-    }
-    function listaHtml(chave) {
-        const termo = chave === 'index' ? S.buscaIdx.trim().toUpperCase() : '';
-        let h = '';
-        S.opcoes[chave].forEach((v, i) => {
-            if (termo && !String(v).toUpperCase().includes(termo)) return;
-            const ck = S.sel[chave].includes(v) ? 'checked' : '';
-            h += `<label class="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer text-[10px] font-bold text-slate-700 border-b border-slate-50 last:border-0">
-                <input type="checkbox" class="rounded text-indigo-600" ${ck} onchange="rxOpt('${chave}', ${i})">
-                <span class="truncate" title="${esc(v)}">${esc(v)}</span></label>`;
-        });
-        return h || '<div class="px-3 py-3 text-[10px] text-slate-400 font-bold">Nenhuma opção encontrada</div>';
-    }
-    function ddHtml(chave, label, dica, comBusca) {
-        const n = S.sel[chave].length;
-        const cls = n > 0 ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600';
-        const busca = comBusca
-            ? `<div class="p-2 border-b border-slate-100 bg-white sticky top-0 z-10"><input type="text" value="${esc(S.buscaIdx)}" oninput="rxBuscaIdx(this.value)" placeholder="🔍 Pesquisar index..." class="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-[11px] outline-none focus:border-indigo-400"></div>` : '';
-        return `<button onclick="rxToggleDD('${chave}')" title="${esc(dica)}" class="${cls} border px-2 py-1.5 text-[10px] font-bold rounded shadow-sm hover:border-indigo-400 flex items-center gap-2 min-w-[90px] justify-between transition-colors">
-                ${label}<span class="bg-indigo-100 text-indigo-700 px-1 rounded-full text-[9px] ${n ? '' : 'hidden'}">${n}</span>
-                <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></button>
-            <div class="${S.aberto === chave ? '' : 'hidden'} absolute left-0 z-50 mt-1 w-64 bg-white border border-slate-200 rounded-lg shadow-xl max-h-72 overflow-y-auto">
-                ${busca}
-                <div class="flex justify-between items-center px-3 py-2 border-b border-slate-100 bg-slate-50">
-                    <button onclick="rxMarcarTodos('${chave}')" class="text-[9px] font-black text-indigo-600 uppercase bg-indigo-50 px-2 py-1 rounded">Marcar todos</button>
-                    <button onclick="rxLimparDD('${chave}')" class="text-[9px] font-black text-slate-500 hover:text-red-500 uppercase bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">Limpar</button>
-                </div>
-                <div id="rxLista_${chave}">${listaHtml(chave)}</div>
-            </div>`;
-    }
-    function renderFiltros() {
-        calcularOpcoes();
-        ['rxFiltroUn', 'rxFiltroGrafica', 'rxFiltroIndex'].forEach(id => el(id).classList.add('rx-dd'));
-        el('rxFiltroUn').innerHTML = ddHtml('un', 'UN (MARCA)', 'Filtra pela marca (UN). Vazio = todas.', false);
-        el('rxFiltroGrafica').innerHTML = ddHtml('grafica', 'GRÁFICA', 'Filtra pela gráfica. Vazio = todas.', false);
-        el('rxFiltroIndex').innerHTML = ddHtml('index', 'INDEX TIRAGEM', 'Principal: opções de 1 a 4 (padrão 2). Chamado: 1 a 4 primeiro, depois os demais em ordem. Use a barra de pesquisa para achar um index.', true);
-        el('rxTipoProd').value = S.tipo;
-    }
-    window.rxToggleDD = function(chave) { S.aberto = S.aberto === chave ? null : chave; renderFiltros(); };
-    window.rxOpt = function(chave, i) {
-        const v = S.opcoes[chave][i], arr = S.sel[chave], p = arr.indexOf(v);
-        if (p > -1) arr.splice(p, 1); else arr.push(v);
-        S.aberto = chave; render();
-    };
-    window.rxMarcarTodos = function(chave) { S.sel[chave] = [...S.opcoes[chave]]; S.aberto = chave; render(); };
-    window.rxLimparDD = function(chave) { S.sel[chave] = []; S.aberto = chave; render(); };
-    window.rxBuscaIdx = function(v) { S.buscaIdx = v; const l = el('rxLista_index'); if (l) l.innerHTML = listaHtml('index'); };
-    window.rxMudouTipoProd = function() {
-        S.tipo = el('rxTipoProd').value;
-        S.sel.index = S.tipo === 'Principal' ? ['2'] : [];
-        S.buscaIdx = ''; S.aberto = null; render();
-    };
-    window.rxLimparFiltros = function() {
-        S.tipo = 'Principal'; S.sel = { un: [], grafica: [], index: ['2'] }; S.buscaIdx = ''; S.aberto = null; render();
-    };
-    document.addEventListener('click', function(e) {
-        if (!S.aberto) return;
-        const caminho = e.composedPath ? e.composedPath() : [];
-        if (caminho.some(n => n.classList && n.classList.contains('rx-dd'))) return;
-        S.aberto = null; renderFiltros();
-    });
-
-    // ---------------- regras de negócio ----------------
-    function estado(r, f, hoje) {
-        const pend = !r[f.real];
-        const venc = pend && !!r[f.plan] && r[f.plan] < hoje;
-        return { pend: pend, venc: venc };
-    }
-    // Retorna null se a fase ainda não foi realizada; true/false = no prazo.
-    function noPrazo(r, k, modo) {
-        const f = FASES.find(x => x.k === k);
-        const real = r[f.real], plan = r[f.plan];
-        if (!real) return null;
-        if (!plan || real <= plan) return true;
-        if (modo === 'ad' || k === 'env') return false;
-        const base = k === 'rec' ? r.rEnv : r.rRec;
-        if (!base) return false;
-        return real <= addDiasUteis(base, 2);
-    }
-
-    // ---------------- renderização ----------------
-    function render() {
-        S.hoje = hojeData();
-        S.filtrados = S.dados.filter(r => passa(r));
-        renderFiltros();
-        renderKpis();
-        renderGauges();
-        renderCurva();
-        renderAtraso();
-        renderDetalhamento();
-        renderExtracao();
-        window.rxRenderQuinzenal();
-    }
-
-    function cardPend(titulo, cor, dica, o) {
-        const pct = o.tot ? (o.venc / o.tot) * 100 : 0;
-        return `<div class="bg-white p-4 rounded-xl shadow-sm border-t-4 ${cor} h-full">
-            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide text-center mb-3">${titulo}${tip(dica)}</div>
-            <div class="flex items-center justify-between gap-2">
-                <div class="text-center"><div class="text-3xl font-black text-black leading-none">${num(o.tot)}</div><div class="text-[9px] text-slate-400 uppercase font-bold mt-1">Total</div></div>
-                <div class="text-center"><div class="text-2xl font-black text-red-500 leading-none">${num(o.venc)}</div><div class="text-[9px] text-red-600 uppercase font-bold mt-1">Vencidos</div></div>
-                <div class="text-center"><div class="text-2xl font-black text-blue-500 leading-none">${num(o.prazo)}</div><div class="text-[9px] text-blue-600 uppercase font-bold mt-1">No Prazo</div></div>
-                <div class="text-center"><div class="text-lg font-black text-red-600 leading-none">${fmtP(pct)}</div><div class="text-[9px] text-slate-400 uppercase font-bold mt-1">% Vencido</div></div>
-            </div></div>`;
-    }
-    function renderKpis() {
-        el('rxKpiSkuTot').textContent = num(S.filtrados.length);
-        const cfg = {
-            env: ['rxCardPendEnv', 'Envio de Arquivo Pendentes', 'border-orange-400', 'SKUs sem data real de envio de arquivo. Vencido = envio planejado anterior a hoje. No prazo = envio planejado de hoje em diante (ou sem data planejada).'],
-            rec: ['rxCardPendRec', 'Recebimento de Boneco Pendentes', 'border-blue-400', 'SKUs sem data real de recebimento de boneco. Vencido = recebimento planejado anterior a hoje. No prazo = recebimento planejado de hoje em diante (ou sem data planejada).'],
-            apv: ['rxCardPendApv', 'Aprove de Boneco Pendentes', 'border-purple-400', 'SKUs sem data real de aprovação do boneco. Vencido = aprovação planejada anterior a hoje. No prazo = aprovação planejada de hoje em diante (ou sem data planejada).']
-        };
-        FASES.forEach(f => {
-            const o = { tot: 0, venc: 0, prazo: 0 };
-            S.filtrados.forEach(r => {
-                const st = estado(r, f, S.hoje);
-                if (!st.pend) return;
-                o.tot++;
-                if (st.venc) o.venc++; else o.prazo++;
-            });
-            const c = cfg[f.k];
-            el(c[0]).innerHTML = cardPend(c[1], c[2], c[3], o);
-        });
-    }
-
-    function gaugeCard(titulo, dica, cor, o) {
-        const pct = o.tot ? (o.ok / o.tot) * 100 : 0;
-        const L = Math.PI * 45;
-        const corArco = !o.tot ? '#cbd5e1' : pct >= 90 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#ef4444';
-        return `<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 border-t-4 ${cor} text-center">
-            <div class="text-[10px] font-bold text-slate-500 uppercase mb-2">${titulo}${tip(dica)}</div>
-            <svg viewBox="0 0 110 64" class="w-48 mx-auto">
-                <path d="M10 55 A45 45 0 0 1 100 55" fill="none" stroke="#e2e8f0" stroke-width="10" stroke-linecap="round"></path>
-                <path d="M10 55 A45 45 0 0 1 100 55" fill="none" stroke="${corArco}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(L * pct / 100).toFixed(2)} ${L.toFixed(2)}"></path>
-                <text x="55" y="52" text-anchor="middle" font-size="17" font-weight="900" fill="#1e293b">${o.tot ? fmtP(pct) : '-'}</text>
-            </svg>
-            <div class="grid grid-cols-3 gap-2 mt-2 text-center">
-                <div><div class="text-lg font-black text-slate-800 leading-none">${num(o.tot)}</div><div class="text-[9px] text-slate-400 uppercase font-bold mt-1" title="SKUs com data real preenchida na fase">Realizados</div></div>
-                <div><div class="text-lg font-black text-blue-600 leading-none">${num(o.ok)}</div><div class="text-[9px] text-blue-600 uppercase font-bold mt-1" title="Realizados dentro da regra de prazo">No Prazo</div></div>
-                <div><div class="text-lg font-black text-red-500 leading-none">${num(o.tot - o.ok)}</div><div class="text-[9px] text-red-600 uppercase font-bold mt-1" title="Realizados fora da regra de prazo">Fora do Prazo</div></div>
-            </div></div>`;
-    }
-    function renderGauges() {
-        const dicasSla = {
-            env: 'Envio: no prazo se a data real é menor ou igual à data planejada.',
-            rec: 'Recebimento: no prazo se foi até a data planejada OU em até 2 dias úteis após o envio real.',
-            apv: 'Aprove: no prazo se foi até a data planejada OU em até 2 dias úteis após o recebimento real.'
-        };
-        const dicasAd = {
-            env: 'Envio realizado na data planejada ou antes. Sem tolerância.',
-            rec: 'Recebimento realizado na data planejada ou antes. Sem tolerância.',
-            apv: 'Aprove realizado na data planejada ou antes. Sem tolerância.'
-        };
-        const cores = { env: 'border-t-orange-400', rec: 'border-t-blue-400', apv: 'border-t-purple-400' };
-        let hs = '', ha = '';
-        FASES.forEach(f => {
-            const sla = { tot: 0, ok: 0 }, ad = { tot: 0, ok: 0 };
-            S.filtrados.forEach(r => {
-                const a = noPrazo(r, f.k, 'sla');
-                if (a !== null) { sla.tot++; if (a) sla.ok++; }
-                const b = noPrazo(r, f.k, 'ad');
-                if (b !== null) { ad.tot++; if (b) ad.ok++; }
-            });
-            hs += gaugeCard(f.nome, dicasSla[f.k], cores[f.k], sla);
-            ha += gaugeCard(f.nome, dicasAd[f.k], cores[f.k], ad);
-        });
-        el('rxGaugesSla').innerHTML = hs;
-        el('rxGaugesAd').innerHTML = ha;
-    }
-
-    // ---------------- curva de liberação ----------------
-    window.rxSetGranularidade = function(g) { S.gran = g; renderCurva(); };
-    function atualizarToggleGran() {
-        document.querySelectorAll('#rxToggleGran .rx-gran').forEach(b => {
-            const ativo = b.dataset.g === S.gran;
-            b.className = 'rx-gran px-3 py-1 text-[10px] font-black uppercase rounded border ' +
-                (ativo ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400');
-        });
-    }
-    function renderCurva() {
-        atualizarToggleGran();
-        const total = S.filtrados.length, hoje = S.hoje;
-        const planTs = S.filtrados.map(r => r.pEnv).filter(Boolean).map(d => d.getTime()).sort((a, b) => a - b);
-        const realTs = S.filtrados.map(r => r.rEnv).filter(Boolean).map(d => d.getTime()).sort((a, b) => a - b);
-        S.planTs = planTs; S.total = total;
-        if (S.chart) { S.chart.destroy(); S.chart = null; }
-        const txt = el('rxTextoCurva');
-        if (!total || (!planTs.length && !realTs.length)) {
-            txt.textContent = 'Sem dados de envio para os filtros selecionados.';
-            window.rxAtualizarSimulador();
-            return;
-        }
-        const inicio = new Date(planTs.length ? planTs[0] : realTs[0]);
-        const fim = new Date(Math.max(planTs.length ? planTs[planTs.length - 1] : 0, realTs.length ? realTs[realTs.length - 1] : 0));
-
-        const buckets = [];
-        if (S.gran === 'dia') {
-            for (let d = new Date(inicio); d <= fim && buckets.length < 3000; d = addDias(d, 1)) buckets.push({ ini: d, fim: d, label: fmtDM(d) });
-        } else if (S.gran === 'semana') {
-            let d = addDias(inicio, -((inicio.getDay() + 6) % 7));
-            for (; d <= fim && buckets.length < 3000; d = addDias(d, 7)) buckets.push({ ini: d, fim: addDias(d, 6), label: fmtDM(d) });
-        } else {
-            let d = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
-            for (; d <= fim && buckets.length < 3000; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
-                buckets.push({ ini: d, fim: new Date(d.getFullYear(), d.getMonth() + 1, 0), label: MESES[d.getMonth()] + '/' + String(d.getFullYear()).slice(2) });
-            }
-        }
-        const planQ = [], realQ = [], planV = [], realV = [];
-        let ip = 0, ir = 0;
-        buckets.forEach(b => {
-            const endTs = b.fim.getTime();
-            while (ip < planTs.length && planTs[ip] <= endTs) ip++;
-            planQ.push(ip); planV.push(+(ip / total * 100).toFixed(2));
-            if (b.ini > hoje) { realQ.push(null); realV.push(null); return; }
-            const lim = Math.min(endTs, hoje.getTime());
-            while (ir < realTs.length && realTs[ir] <= lim) ir++;
-            realQ.push(ir); realV.push(+(ir / total * 100).toFixed(2));
-        });
-
-        if (typeof Chart !== 'undefined') {
-            const pontos = S.gran === 'dia' ? 0 : 3;
-            S.chart = new Chart(el('rxChartCurva'), {
-                type: 'line',
-                data: {
-                    labels: buckets.map(b => b.label),
-                    datasets: [
-                        { label: 'Planejado Acumulado', data: planV, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.15)', fill: true, tension: 0.2, pointRadius: pontos, pointHitRadius: 8, borderWidth: 2 },
-                        { label: 'Realizado Acumulado', data: realV, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.18)', fill: true, tension: 0.2, pointRadius: pontos, pointHitRadius: 8, borderWidth: 2, spanGaps: false }
-                    ]
-                },
-                options: {
-                    maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-                    scales: {
-                        y: { min: 0, max: 100, ticks: { callback: v => v + '%' } },
-                        x: { ticks: { autoSkip: true, maxTicksLimit: 20 } }
-                    },
-                    plugins: {
-                        legend: { position: 'bottom' },
-                        tooltip: { callbacks: { label: c => {
-                            const q = (c.datasetIndex === 0 ? planQ : realQ)[c.dataIndex];
-                            return c.dataset.label + ': ' + fmtP(c.parsed.y) + ' (' + num(q) + ' SKUs)';
-                        } } }
-                    }
-                }
-            });
-        }
-
-        const hojeTs = hoje.getTime();
-        const planHoje = contarAte(planTs, hojeTs) / total * 100;
-        const realHoje = contarAte(realTs, hojeTs) / total * 100;
-        const diff = realHoje - planHoje;
-        const estadoTxt = Math.abs(diff) < 1 ? 'em linha' : (diff > 0 ? 'adiantado' : 'atrasado');
-        const fimSemana = addDias(hoje, (7 - hoje.getDay()) % 7);
-        const fimProxSemana = addDias(fimSemana, 7);
-        const fimProxMes = new Date(hoje.getFullYear(), hoje.getMonth() + 2, 0);
-        const pl = d => fmtP(contarAte(planTs, d.getTime()) / total * 100);
-        const comparativo = estadoTxt === 'em linha'
-            ? 'estamos em linha com o plano (diferença de ' + fmtP(Math.abs(diff)) + ')'
-            : 'estamos ' + estadoTxt + ' em ' + fmtP(Math.abs(diff)) + ' com o plano';
-        txt.textContent = 'Até o momento fizemos ' + fmtP(realHoje) + ', ' + comparativo + '. Até o fim desta semana o planejado é de ' + pl(fimSemana) +
-            ', para a próxima semana o planejado é de ' + pl(fimProxSemana) + ' e para o próximo mês é ' + pl(fimProxMes) + '.';
-        window.rxAtualizarSimulador();
-    }
-    window.rxAtualizarSimulador = function() {
-        const out = el('rxTextoSim'), v = el('rxSimData').value;
-        const d = v ? parseData(v) : null;
-        if (!d || !S.total) { out.textContent = ''; return; }
-        const pct = contarAte(S.planTs, d.getTime()) / S.total * 100;
-        out.textContent = 'A previsão planejada até dia ' + fmtDM(d) + ' é de ' + fmtP(pct);
-    };
-
-    // ---------------- resumo de atraso ----------------
-    function agrupar(chave) {
-        const m = new Map();
-        S.filtrados.forEach(r => {
-            const k = r[chave];
-            let g = m.get(k);
-            if (!g) { g = { nome: k, total: 0, pendSku: 0, env: { p: 0, pz: 0, v: 0 }, rec: { p: 0, pz: 0, v: 0 }, apv: { p: 0, pz: 0, v: 0 } }; m.set(k, g); }
-            g.total++;
-            let alguma = false;
-            FASES.forEach(f => {
-                const st = estado(r, f, S.hoje);
-                if (!st.pend) return;
-                alguma = true; g[f.k].p++;
-                if (st.venc) g[f.k].v++; else g[f.k].pz++;
-            });
-            if (alguma) g.pendSku++;
-        });
-        const venc = g => g.env.v + g.rec.v + g.apv.v;
-        return [...m.values()].sort((a, b) => b.pendSku - a.pendSku || venc(b) - venc(a) || String(a.nome).localeCompare(String(b.nome)));
-    }
-    function tabAtraso(grupos, rotulo) {
-        if (!grupos.length) return '<div class="text-xs text-slate-400 font-bold py-4 text-center">Sem dados para os filtros selecionados.</div>';
-        const tot = { nome: 'TOTAL', total: 0, pendSku: 0, env: { p: 0, pz: 0, v: 0 }, rec: { p: 0, pz: 0, v: 0 }, apv: { p: 0, pz: 0, v: 0 } };
-        grupos.forEach(g => {
-            tot.total += g.total; tot.pendSku += g.pendSku;
-            FASES.forEach(f => { tot[f.k].p += g[f.k].p; tot[f.k].pz += g[f.k].pz; tot[f.k].v += g[f.k].v; });
-        });
-        const celulas = g => FASES.map(f => `<td class="p-2 text-center border-l border-slate-100">${num(g[f.k].p)}</td>
-            <td class="p-2 text-center text-blue-600 font-bold">${num(g[f.k].pz)}</td>
-            <td class="p-2 text-center font-bold ${g[f.k].v ? 'text-red-600' : ''}">${num(g[f.k].v)}</td>`).join('');
-        const linha = (g, total) => {
-            const ok = g.pendSku === 0 && !total;
-            const cls = total ? 'bg-slate-100 font-black' : (ok ? 'bg-emerald-100 text-emerald-800 font-bold' : 'hover:bg-slate-50');
-            return `<tr class="${cls} border-b border-slate-100"><td class="p-2 ${total ? '' : 'font-bold'}" title="${ok ? 'Todos os SKUs finalizados' : ''}">${esc(g.nome)}${ok ? ' ✔' : ''}</td><td class="p-2 text-center">${num(g.pendSku)}</td>${celulas(g)}</tr>`;
-        };
-        const sub = FASES.map(() => `<th class="p-1 text-center border-l border-slate-200 rx-th-tip" title="SKUs pendentes na fase (sem data real)">Pend.</th>
-            <th class="p-1 text-center rx-th-tip" title="Pendentes com data planejada de hoje em diante">No Prazo</th>
-            <th class="p-1 text-center rx-th-tip" title="Pendentes com data planejada vencida">Fora</th>`).join('');
-        return `<table class="w-full text-left border-collapse text-xs whitespace-nowrap">
-            <thead class="bg-slate-100 text-slate-500 uppercase text-[9px]">
-                <tr>
-                    <th rowspan="2" class="p-2 rx-th-tip" title="${esc(rotulo)}">${rotulo}</th>
-                    <th rowspan="2" class="p-2 text-center rx-th-tip" title="Quantidade de SKUs com pelo menos uma fase pendente">SKUs Pend.</th>
-                    ${FASES.map(f => `<th colspan="3" class="p-1 text-center border-l border-slate-200 rx-th-tip" title="${esc(f.nome)}">${f.curto}</th>`).join('')}
-                </tr><tr>${sub}</tr>
-            </thead>
-            <tbody class="text-slate-700">${grupos.map(g => linha(g, false)).join('')}${linha(tot, true)}</tbody></table>`;
-    }
-    function renderAtraso() {
-        el('rxTabAtrasoMarca').innerHTML = tabAtraso(agrupar('un'), 'Marca');
-        el('rxTabAtrasoGrafica').innerHTML = tabAtraso(agrupar('grafica'), 'Gráfica');
-    }
-
-    // ---------------- detalhamento (ex-WIP) ----------------
-    function detalhar(reentrada) {
-        const m = new Map();
-        S.filtrados.forEach(r => {
-            if (r.rApv) return;
-            if ((r.idx !== null && r.idx > 4) !== reentrada) return;
-            const k = (r.idx == null ? 'S/ Chamado' : r.idx) + '@@' + r.un + '@@' + r.grafica;
-            let g = m.get(k);
-            if (!g) {
-                g = { idx: r.idx == null ? 'S/ Chamado' : r.idx, un: r.un, grafica: r.grafica, sku: 0, pg: 0, pior: 0 };
-                FASES.forEach(f => g[f.k] = { sP: 0, pP: 0, sH: 0, pH: 0, sA: 0, pA: 0 });
-                m.set(k, g);
-            }
-            g.sku++; g.pg += r.paginas;
-            FASES.forEach(f => {
-                if (r[f.real]) return;
-                const p = r[f.plan], o = g[f.k];
-                if (p && p < S.hoje) {
-                    o.sA++; o.pA += r.paginas;
-                    g.pior = Math.max(g.pior, Math.round((S.hoje.getTime() - p.getTime()) / 86400000));
-                } else if (p && p.getTime() === S.hoje.getTime()) { o.sH++; o.pH += r.paginas; }
-                else { o.sP++; o.pP += r.paginas; }
-            });
-        });
-        return [...m.values()].sort((a, b) => b.sku - a.sku);
-    }
-    function tabDet(el_, reentrada) {
-        const gs = detalhar(reentrada);
-        const pg = n => `<span class="text-[9px] text-slate-400">(${num(n)})</span>`;
-        const tTd = o => `<td class="p-3 text-center border-l border-slate-100 text-xs whitespace-nowrap">
-            <span class="text-blue-600 font-bold" title="No prazo">${num(o.sP)}</span>${pg(o.pP)} /
-            <span class="text-amber-600 font-bold" title="Vence hoje">${num(o.sH)}</span>${pg(o.pH)} /
-            <span class="font-black ${o.sA ? 'text-red-600' : 'text-slate-400'}" title="Em atraso">${num(o.sA)}</span>${pg(o.pA)}</td>`;
-        el(el_).innerHTML = gs.length ? gs.map((g, i) => `<tr class="border-b border-slate-100 hover:bg-slate-50">
-            <td class="p-3 text-center text-[10px] text-slate-400 font-bold border-r border-slate-100">${i + 1}</td>
-            <td class="p-3 text-xs font-black text-indigo-700">${esc(g.idx)}</td><td class="p-3 text-xs font-bold">${esc(g.un)}</td><td class="p-3 text-xs">${esc(g.grafica)}</td>
-            <td class="p-3 text-center text-xs font-black">${num(g.sku)} <span class="text-[9px] text-slate-400 font-bold">(${num(g.pg)} pgs)</span></td>
-            ${tTd(g.env)}${tTd(g.rec)}${tTd(g.apv)}${reentrada ? `<td class="p-3 text-center border-l border-slate-100 text-xs font-black ${g.pior ? 'text-red-600' : 'text-slate-400'}">${g.pior ? num(g.pior) + ' d' : '-'}</td>` : ''}</tr>`).join('')
-            : `<tr><td colspan="${reentrada ? 9 : 8}" class="p-6 text-center text-slate-400 font-bold text-xs">Nenhum registro para os filtros selecionados${reentrada ? ' (use Tipo Produção Chamado ou Todos para ver reentradas)' : ''}.</td></tr>`;
-    }
-    function renderDetalhamento() { tabDet('rxTbPrincipal', false); tabDet('rxTbReentradas', true); }
-
-    // ---------------- extração de atrasos ----------------
-    function renderExtracao() {
-        const linhas = [];
-        const dias = d => Math.round((S.hoje.getTime() - d.getTime()) / 86400000);
-        S.filtrados.forEach(r => {
-            const fs = FASES.filter(f => estado(r, f, S.hoje).venc);
-            if (!fs.length) return;
-            const pior = fs.reduce((a, f) => r[f.plan] < r[a.plan] ? f : a, fs[0]);
-            linhas.push({
-                sku: r.sku, desc: r.desc, grafica: r.grafica, un: r.un, plan: r[pior.plan], dias: dias(r[pior.plan]),
-                fases: fs.map(f => ({ nome: f.nome, plan: r[f.plan], dias: dias(r[f.plan]) }))
-            });
-        });
-        linhas.sort((a, b) => b.fases.length - a.fases.length || b.dias - a.dias);
-        S.extracao = linhas;
-        const LIM = 1000;
-        el('rxQtdExtracao').textContent = num(linhas.length) + ' SKU(s)' + (linhas.length > LIM ? ' (exibindo os ' + LIM + ' mais atrasados; o CSV leva todos)' : '');
-        el('rxTbExtracao').innerHTML = linhas.length
-            ? linhas.slice(0, LIM).map(l => {
-                const multi = l.fases.length > 1;
-                const det = l.fases.map(x => x.nome + ' (plan. ' + fmtData(x.plan) + ', ' + x.dias + ' dias)').join('\n');
-                const badge = multi ? ` <span class="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded" title="${esc(det)}">⚠ Atraso em mais de uma etapa (${l.fases.length})</span>` : '';
-                return `<tr class="border-b border-slate-100 ${multi ? 'bg-red-50' : 'hover:bg-slate-50'}">
-                <td class="p-2 font-bold">${esc(l.sku)}</td><td class="p-2">${esc(l.desc)}</td><td class="p-2">${esc(l.grafica)}</td><td class="p-2">${esc(l.un)}</td>
-                <td class="p-2 text-center">${fmtData(l.plan)}</td><td class="p-2 text-center font-black text-red-600">${num(l.dias)}</td><td class="p-2" title="${esc(det)}">${esc(l.fases.map(x => x.nome).join(' + '))}${badge}</td></tr>`;
-            }).join('')
-            : '<tr><td colspan="7" class="p-4 text-center text-slate-400 font-bold">Nenhum SKU em atraso para os filtros selecionados.</td></tr>';
-    }
-    window.rxExportarAtrasos = function() {
-        if (!S.extracao.length) { alert('Não há atrasos para exportar.'); return; }
-        const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-        let csv = '﻿SKU;Descrição;Gráfica;Marca;Data Planejada;Dias de Atraso;Fase em Atraso;Qtd Etapas em Atraso;Atraso em Mais de Uma Etapa\n';
-        S.extracao.forEach(l => { csv += [q(l.sku), q(l.desc), q(l.grafica), q(l.un), q(fmtData(l.plan)), l.dias, q(l.fases.map(x => x.nome).join(' + ')), l.fases.length, q(l.fases.length > 1 ? 'Sim' : 'Não')].join(';') + '\n'; });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-        a.download = 'atrasos_pre_producao_' + isoDia(S.hoje).replace(/-/g, '') + '.csv';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    };
-
-    // ---------------- projeção quinzenal ----------------
-    function quinzFim(d) { return d.getDate() <= 15 ? new Date(d.getFullYear(), d.getMonth(), 15) : new Date(d.getFullYear(), d.getMonth() + 1, 0); }
-    function tabQuinz(chave, rotulo, f, quinz, rotulos) {
-        const m = new Map();
-        const novo = nome => ({ nome: nome, total: 0, plan: 0, real: 0, q: quinz.map(() => 0) });
-        const tot = novo('TOTAL');
-        S.filtrados.forEach(r => {
-            const k = r[chave];
-            if (!m.has(k)) m.set(k, novo(k));
-            [m.get(k), tot].forEach(g => {
-                g.total++;
-                if (r[f.plan] && r[f.plan] <= S.hoje) g.plan++;
-                if (r[f.real]) { g.real++; return; }
-                if (!r[f.plan]) return;
-                let qi = quinz.findIndex(e => e >= r[f.plan]);
-                if (qi < 0) qi = quinz.length - 1;
-                g.q[qi]++;
-            });
-        });
-        const grupos = [...m.values()].sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
-        if (!grupos.length) return '<div class="text-xs text-slate-400 font-bold py-4 text-center">Sem dados para os filtros selecionados.</div>';
-        const linha = (g, total) => {
-            let acc = g.real;
-            const cels = g.q.map(n => {
-                acc += n;
-                const pct = g.total ? acc / g.total * 100 : 0;
-                return `<td class="p-2 text-center border-l border-slate-100 ${pct >= 100 ? 'text-emerald-600 font-black' : ''}">${num(acc)} <span class="text-[9px] text-slate-400">(${fmtP(pct)})</span></td>`;
-            }).join('');
-            const pctReal = g.total ? g.real / g.total * 100 : 0;
-            const fin = g.total > 0 && g.real === g.total;
-            const rowCls = total ? 'bg-slate-100 font-black' : (fin ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-slate-50');
-            return `<tr class="${rowCls} border-b border-slate-100"><td class="p-2 ${total ? '' : 'font-bold'}">${esc(g.nome)}${fin ? ' ✔ <span class="text-[9px] font-black uppercase">Finalizado</span>' : ''}</td>
-                <td class="p-2 text-center">${num(g.total)}</td><td class="p-2 text-center">${num(g.plan)}</td><td class="p-2 text-center">${num(g.real)}</td>
-                <td class="p-2 text-center font-bold ${fin ? 'text-emerald-700' : ''}">${fmtP(pctReal)}</td>${cels}</tr>`;
-        };
-        return `<table class="w-full text-left border-collapse text-xs whitespace-nowrap">
-            <thead class="bg-slate-100 text-slate-500 uppercase text-[9px]"><tr>
-                <th class="p-2 rx-th-tip" title="${esc(rotulo)}">${rotulo}</th>
-                <th class="p-2 text-center rx-th-tip" title="Total de SKUs do grupo, depois dos filtros">Total de SKUs</th>
-                <th class="p-2 text-center rx-th-tip" title="SKUs com data planejada da fase até hoje (posição até o momento)">Total Planejado<div class="text-[8px] normal-case text-slate-400">até o momento</div></th>
-                <th class="p-2 text-center rx-th-tip" title="SKUs com data real preenchida na fase (posição até o momento)">Total Realizado<div class="text-[8px] normal-case text-slate-400">até o momento</div></th>
-                <th class="p-2 text-center rx-th-tip" title="Total Realizado dividido pelo Total de SKUs. Linha verde com selo Finalizado = 100% realizado.">% Realizado<div class="text-[8px] normal-case text-slate-400">até o momento</div></th>
-                ${rotulos.map((r, i) => `<th class="p-2 text-center border-l border-slate-200 rx-th-tip" title="Projeção de fechamento até o fim da quinzena (${fmtData(quinz[i])}): realizado + pendentes planejados até essa data. O que já está vencido entra na primeira quinzena.">${r}</th>`).join('')}
-            </tr></thead>
-            <tbody class="text-slate-700">${grupos.map(g => linha(g, false)).join('')}${linha(tot, true)}</tbody></table>`;
-    }
-    window.rxRenderQuinzenal = function() {
-        const f = FASES.find(x => x.k === el('rxFaseQuinz').value) || FASES[0];
-        let maxPlan = null;
-        S.filtrados.forEach(r => { if (r[f.plan] && (!maxPlan || r[f.plan] > maxPlan)) maxPlan = r[f.plan]; });
-        const quinz = [];
-        let cursor = S.hoje;
-        while (quinz.length < 24) {
-            const fimQ = quinzFim(cursor);
-            quinz.push(fimQ);
-            if (!maxPlan || fimQ >= maxPlan) break;
-            cursor = addDias(fimQ, 1);
-        }
-        const cruzaAno = quinz[0].getFullYear() !== quinz[quinz.length - 1].getFullYear();
-        const rotulos = quinz.map(d => (d.getDate() === 15 ? '1ª' : '2ª') + ' Quinz. ' + MESES[d.getMonth()] + (cruzaAno ? '/' + String(d.getFullYear()).slice(2) : ''));
-        el('rxQuinzMarca').innerHTML = tabQuinz('un', 'Marca', f, quinz, rotulos);
-        el('rxQuinzGrafica').innerHTML = tabQuinz('grafica', 'Gráfica', f, quinz, rotulos);
-    };
-})();
 </script>
