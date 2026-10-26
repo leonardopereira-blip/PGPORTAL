@@ -32,7 +32,13 @@ test('IPSIS pertence a Klayton do time Camila, inclusive com caixa e espaços di
   }
 });
 
-test('cadastro compartilhado pelos filtros de analista e time cobre Star7 e IPSIS', () => {
+test('MARGRAF pertence a Klayton do time Camila, inclusive com caixa e espaços diferentes', () => {
+  for (const nome of ['MARGRAF', 'Margraf', '  margraf  ']) {
+    assert.deepEqual(w.pgResponsavelGraficaGiro(nome), {analista: 'Klayton', time: 'CAMILA'}, nome);
+  }
+});
+
+test('cadastro compartilhado pelos filtros de analista e time cobre Star7, IPSIS e MARGRAF', () => {
   const matheus = api.pessoas['matheus.vasconcelos@arcoeducacao.com.br'];
   const klayton = api.pessoas['klaytonmatos@arcoeducacao.com.br'];
   assert.ok(api.casar('STAR7', matheus.graficas));
@@ -41,23 +47,31 @@ test('cadastro compartilhado pelos filtros de analista e time cobre Star7 e IPSI
   assert.ok(api.casar('IPSIS', klayton.graficas));
   assert.ok(api.casar('IPSIS', api.graficasDoTime('CAMILA')));
   assert.equal(api.casar('IPSIS', api.graficasDoTime('JAQUELINE')), false);
+  assert.ok(api.casar('MARGRAF', klayton.graficas));
+  assert.ok(api.casar('MARGRAF', api.graficasDoTime('CAMILA')));
+  assert.equal(api.casar('MARGRAF', api.graficasDoTime('JAQUELINE')), false);
   assert.ok(api.pessoasDoTime('CAMILA').some(p => p.email === 'klaytonmatos@arcoeducacao.com.br'));
 });
 
-test('as 22 gráficas observadas na base histórica conservam os responsáveis corretos', () => {
+test('as 28 gráficas auditadas nas bases PCP e PCP_ACABADORAS têm os responsáveis corretos', () => {
   const esperados = [
     ['ANTILHAS', 'Elis', 'JAQUELINE'], ['ATHOS', 'Matheus', 'JAQUELINE'],
-    ['BERCROM', 'Amanda Costa', 'CAMILA'], ['EMBALARTE', 'Elis', 'JAQUELINE'],
-    ['FELK', 'Elis', 'JAQUELINE'], ['HR', 'Elis', 'JAQUELINE'],
+    ['BERCROM', 'Amanda Costa', 'CAMILA'], ['COAN', 'Klayton', 'CAMILA'],
+    ['EMBALARTE', 'Elis', 'JAQUELINE'], ['FELK', 'Elis', 'JAQUELINE'],
+    ['FORMA CERTA', 'Elis', 'JAQUELINE'], ['HR', 'Elis', 'JAQUELINE'],
     ['IMOS', 'Klayton', 'CAMILA'], ['IPSIS', 'Klayton', 'CAMILA'],
-    ['KN', 'Elis', 'JAQUELINE'], ['LOGPRINT', 'Amanda Costa', 'CAMILA'],
+    ['KN', 'Elis', 'JAQUELINE'], ['LEOGRAF', 'João Alberti', 'CAMILA'],
+    ['LOGPRINT', 'Amanda Costa', 'CAMILA'], ['MARGRAF', 'Klayton', 'CAMILA'],
     ['MAXI', 'Klayton', 'CAMILA'], ['META', 'Amanda Costa', 'CAMILA'],
-    ['OCEANO', 'Matheus', 'JAQUELINE'], ['PIFFER', 'Elis', 'JAQUELINE'],
+    ['MIDIOGRAF', 'Klayton', 'CAMILA'], ['OCEANO', 'Matheus', 'JAQUELINE'],
+    ['PIFFER', 'Elis', 'JAQUELINE'],
     ['POSIGRAF', 'João Alberti', 'CAMILA'], ['RAÍZES', 'Elis', 'JAQUELINE'],
     ['REPROSET', 'Klayton', 'CAMILA'], ['RICARGRAF', 'Matheus', 'JAQUELINE'],
     ['RONA', 'Matheus', 'JAQUELINE'], ['SÃO FRANCISCO', 'Elis', 'JAQUELINE'],
-    ['STAR7', 'Matheus', 'JAQUELINE'], ['WALPRINT', 'João Alberti', 'CAMILA']
+    ['STAR7', 'Matheus', 'JAQUELINE'], ['WALPRINT', 'João Alberti', 'CAMILA'],
+    ['ZIT', 'Klayton', 'CAMILA']
   ];
+  assert.equal(esperados.length, 28);
   for (const [grafica, analista, time] of esperados) {
     assert.deepEqual(w.pgResponsavelGraficaGiro(grafica), {analista, time}, grafica);
   }
