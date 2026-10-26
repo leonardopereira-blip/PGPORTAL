@@ -777,7 +777,7 @@ function gerarPlanilhaGiroFiltrado(dados, opcoes) {
 
     var cabecalho = ["Gráfica", "Marca", "Série", "CD", "SKU", "Descrição",
         "Status Geral", "Etapa Pendente", "Dias de Atraso", "Tiragem",
-        "Analista", "Time"];
+        "Analista", "Time", "Tipo", "Cliente personalizado"];
     if (temObservacoes) cabecalho.push("Observações");
     aba.appendRow(cabecalho);
     aba.getRange(1, 1, 1, cabecalho.length).setFontWeight("bold").setBackground("#0f172a").setFontColor("#ffffff");
@@ -785,7 +785,7 @@ function gerarPlanilhaGiroFiltrado(dados, opcoes) {
     var linhas = dados.map(function(d, i) {
       var linha = [d.grafica, d.marca, d.serie, d.cd || '', d.sku, d.desc,
           d.status, d.pendencia, d.dias, d.tiragem,
-          d.analista || '', d.time || ''];
+          d.analista || '', d.time || '', d.tipo || '', d.clientePersonalizado || ''];
       if (temObservacoes) linha.push(observacoes[i]);
       return linha;
     });

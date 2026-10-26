@@ -8,16 +8,17 @@ const source = fs.readFileSync(path.join(root, 'Scripts_Globais_2.html'), 'utf8'
 const giro = source.slice(source.indexOf('window.reFiltrarTabelaGiro = function()'),
   source.indexOf('\n</script>', source.indexOf('window.reFiltrarTabelaGiro = function()')));
 const servidor = fs.readFileSync(path.join(root, 'SalvaJson.js'), 'utf8');
-const exportacao = servidor.slice(servidor.indexOf('function gerarPlanilhaGiroFiltrado(dados)'),
+const exportacao = servidor.slice(servidor.indexOf('function gerarPlanilhaGiroFiltrado('),
   servidor.indexOf('function gerarPlanilhaReportExecutiva('));
 
-function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',ee=''}) {
+function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',ee='',campos={},materiais=null}) {
   const el = {};
   const linha = {TIRAGEM:100,SKU:'SKU-1',UNIDADE:'COC','GRÁFICA':'LOGPRINT',
     'CD DESTINO':'CD JDI',ENVIO:'V1','SÉRIE':'Série antiga',SERIE_CORRIGIDA:serie,
-    'TIRAGEM TOTAL':100,'TIRAGEM COLETADA':estado.coletada||0, STATUS_EE:ee};
+    'TIRAGEM TOTAL':100,'TIRAGEM COLETADA':estado.coletada||0, STATUS_EE:ee,...campos};
   const w = {
-    GIRO_DADOS_RAW:[linha],GIRO_ETAPAS_SELECIONADAS:new Set(['Coleta Mapa','Coletado a mais']),
+    GIRO_DADOS_RAW:materiais ? materiais.map(m=>({...linha,...m})) : [linha],
+    GIRO_ETAPAS_SELECIONADAS:new Set(['Coleta Mapa','Coletado a mais']),
     GIRO_SORT_RULES:[],HISTORICO_OBS_GIRO:{master:{},sku:{}},CONTEXTOS_TEMP:{},
     pgObterResumoColeta:()=>({registros:[]}),pgEstadoColetaMapa:()=>({
       ay:'',total:100,coletada:0,saldo:0,pendente:false,parcial:false,concluida:false,...estado
@@ -70,7 +71,7 @@ function executarExportacao(email,{podeTransferir=true,dados,historico={master:{
   let owner='autor@empresa.com', editor='', criações=0, cabecalho=[], linhas=[];
   const sheet={setName(){},appendRow(row){cabecalho=row},getRange(){return {setFontWeight(){return this},
     setBackground(){return this},setFontColor(){return this},setValues(rows){linhas=rows;return this}}},
-    autoResizeColumns(){}};
+    autoResizeColumns(){},setFrozenRows(){}};
   const arquivo={getOwner:()=>({getEmail:()=>owner}),
     setOwner:dest=>{if(!podeTransferir)throw Error('Política');owner=dest},
     addEditor:dest=>{editor=dest}};
@@ -117,6 +118,33 @@ test('payload filtrado inclui CD, Série corrigida e chaves das observações',(
   assert.match(linhas[0].chaveSku,/SKU-1/);
 });
 
+test('extração leva tipo e personalização da linha do SKU até a planilha',()=>{
+  const dados=executarGiro({eventos:[{categoria:'Vencida',volume:50,dias:0}],
+    estado:{pendente:true,saldo:50},materiais:[
+      {SKU:'SKU-ALUNO',TIPO:'ALUNO',CLIENTE_PERSONALIZADO:'Sim'},
+      {SKU:'SKU-PROFESSOR',TIPO:'PROFESSOR',CLIENTE_PERSONALIZADO:'Não'}
+    ]});
+  assert.deepEqual(dados.map(d=>[d.tipo,d.clientePersonalizado]),
+    [['ALUNO','Sim'],['PROFESSOR','Não']]);
+  const r=executarExportacao('colega@empresa.com',{dados});
+  assert.equal(r.resultado.success,true);
+  const tipo=r.cabecalho.indexOf('Tipo');
+  const cliente=r.cabecalho.indexOf('Cliente personalizado');
+  assert.ok(tipo>=0 && cliente>=0);
+  assert.deepEqual(r.linhas.map(l=>[l[tipo],l[cliente]]),
+    [['ALUNO','Sim'],['PROFESSOR','Não']]);
+  assert.ok(r.linhas.every(l=>l.length===r.cabecalho.length));
+});
+
+test('campos ausentes ficam vazios sem inferir tipo ou personalização',()=>{
+  const dados=executarGiro({eventos:[{categoria:'Vencida',volume:50,dias:0}],
+    estado:{pendente:true,saldo:50}});
+  const r=executarExportacao('colega@empresa.com',{dados});
+  assert.equal(r.resultado.success,true);
+  assert.equal(r.linhas[0][r.cabecalho.indexOf('Tipo')],'');
+  assert.equal(r.linhas[0][r.cabecalho.indexOf('Cliente personalizado')],'');
+});
+
 test('planilha inclui Série e CD sem criar coluna de observação quando vazia',()=>{
   const r=executarExportacao('colega@empresa.com');
   assert.equal(r.resultado.success,true);
@@ -142,7 +170,7 @@ test('observações atuais de grupo e SKU aparecem só nas linhas correspondente
   const r=executarExportacao('colega@empresa.com',{dados,historico});
   assert.equal(r.resultado.success,true);
   const idx=r.cabecalho.indexOf('Observações');
-  assert.equal(idx,10);
+  assert.equal(idx,14);
   assert.equal(r.linhas[0][idx],'Geral: Prazo atualizado\nSKU: Aguardando gráfica');
   assert.equal(r.linhas[1][idx],'');
   assert.equal(r.linhas[0][3],'CD JDI');

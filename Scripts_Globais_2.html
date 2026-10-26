@@ -9639,6 +9639,8 @@ window.reFiltrarTabelaGiro = function() {
             sku: sku,
             grafica: grafica,
             cd: cd,
+            tipo: String(l["TIPO"] || l["Tipo"] || '').trim(),
+            clientePersonalizado: String(l["CLIENTE_PERSONALIZADO"] || '').trim(),
             descricao: l["DESC_REAL"] || l["DESCRIÇÃO"] || l["PRODUTO"] || "-",
             tiragem: tiragemExibida,
             statusLinha: statusFinalStr,
@@ -9717,6 +9719,7 @@ let arrGrupos = Object.values(grupos);
         return g.skus.map(l => ({
             grafica: g.grafica, marca: g.marca, serie: g.serie, cd: l.cd || g.cd,
             sku: l.sku, desc: l.descricao,
+            tipo: l.tipo, clientePersonalizado: l.clientePersonalizado,
             status: l.statusLinha, pendencia: l.pendencia, dias: l.escala, tiragem: l.tiragem,
             analista: responsavel.analista, time: responsavel.time,
             chaveMaster: chaveMaster, chaveSku: window.pgGiroChaveObs('SKU', l.chaveUnica)
