@@ -17,11 +17,13 @@ const row = (id, extra = {}) => ({
 
 // Executa os scripts completos e o renderizador real do Funil. Apenas o DOM,
 // a pintura da curva e a comunicação de exportação são simulados.
-function portal(rows, fases = ['col_mapa', 'col_tp']) {
+function portal(rows, fases = ['col_mapa', 'col_tp'], recorte = {}) {
+  const destino = recorte.destino || 'TODOS';
+  const baseCanonica = recorte.baseCanonica || rows;
   const controles = new Map([
     ['filtroReferencia', { value: 'replan' }],
     ['pgFiltroOrigem', { value: 'TODOS' }],
-    ['pgFiltroDestino', { value: 'TODOS' }],
+    ['pgFiltroDestino', { value: destino }],
     ['containerFunilVisual', { innerHTML: '' }],
     ...tabelas.flatMap(s => [
       ['thFunil' + s, { innerHTML: '' }], ['tbFunil' + s, { innerHTML: '' }]
@@ -61,16 +63,20 @@ function portal(rows, fases = ['col_mapa', 'col_tp']) {
       vm.runInContext(script, c, { filename: nome });
     }
   }
-  vm.runInContext(`dtHojeISO='${hoje}';dtHoje=new Date('${hoje}T12:00:00');dadosFiltrados=dadosGlobais;`, c);
+  c.baseCanonicaTeste = baseCanonica;
+  vm.runInContext(`dtHojeISO='${hoje}';dtHoje=new Date('${hoje}T12:00:00');dadosFiltrados=baseCanonicaTeste;`, c);
   c.pgOrigemAtivaPortal = 'TODOS';
-  c.pgDestinoAtivoPortal = 'TODOS';
-  c.dadosBaseTPPortal = rows;
-  c.dadosBaseForecastColeta = rows;
-  c.dadosTotalCanonico = rows;
+  c.pgDestinoAtivoPortal = destino;
+  c.dadosSemFiltroCD = rows;
+  c.dadosDestinoCDFinal = baseCanonica;
+  c.dadosDestinoCDOrigem = baseCanonica;
+  c.dadosBaseTPPortal = baseCanonica;
+  c.dadosBaseForecastColeta = baseCanonica;
+  c.dadosTotalCanonico = baseCanonica;
   c.dadosTotalPCPBase = rows;
   c.dadosFasesEstaticas = rows;
   c.dadosAcabamentoOrigem = [];
-  c.pgBaseGeralReportExecutiva = rows;
+  c.pgBaseGeralReportExecutiva = baseCanonica;
   c.renderColetaFinalFunil = () => c.pgObterResumoColeta();
   c.processarFunil();
   return {
@@ -94,6 +100,67 @@ function linhaSeries(p, tabela) {
     .find(([, conteudo]) => /Séries\s+(?:100%\s+)?[Ff]inalizadas/.test(conteudo));
   assert.ok(linha, 'Tabela renderiza Séries finalizadas');
   return linha[1];
+}
+
+function linhaIndicador(p, tabela, nome) {
+  const html = p.controles.get('tbFunil' + tabela).innerHTML;
+  const linha = [...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)]
+    .find(([, conteudo]) => conteudo.match(/<td\b[^>]*>([^<]*)<\/td>/)?.[1] === nome);
+  assert.ok(linha, tabela + ' renderiza ' + nome);
+  return [...linha[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)]
+    .slice(1).map(([, conteudo]) => conteudo);
+}
+
+for (const variasMarcas of [false, true]) {
+  test('total CD por marca e gráfica conserva o recorte e as fases iniciais: ' +
+    (variasMarcas ? 'vários grupos' : 'COC da imagem'), () => {
+    const inicial = { 'ENV ARQUIVO PLAN': '2026-10-13', 'ENV ARQUIVO REAL': '2026-10-13' };
+    const coc = { MARCA_FINAL: 'COC', UNIDADE: 'COC' };
+    const direto = row('coc-cd', { ...inicial, ...coc, TIRAGEM: 1833433 });
+    const transferencia = row('coc-acabadora', {
+      ...inicial, ...coc, TIRAGEM: 763799, CD_MAPA: 'HR', CD_FINAL: 'HR', 'CD DESTINO': 'HR'
+    });
+    const baseCanonica = [direto];
+    const rows = [direto, transferencia];
+    if (variasMarcas) {
+      const outraGrafica = { GRAFICA_FINAL: 'LEOGRAF', 'GRÁFICA': 'LEOGRAF' };
+      const outroCD = row('sas-cd', { ...inicial, ...outraGrafica, TIRAGEM: 500000 });
+      baseCanonica.push(outroCD);
+      rows.push(outroCD, row('sas-acabadora', {
+        ...inicial, ...outraGrafica, TIRAGEM: 200000,
+        CD_MAPA: 'HR', CD_FINAL: 'HR', 'CD DESTINO': 'HR'
+      }));
+    }
+    const p = portal(rows, ['env', 'col_mapa'], { destino: 'CD', baseCanonica });
+    const totais = variasMarcas ? ['1833433', '500000', '2333433'] : ['1833433', '1833433'];
+    const iniciais = variasMarcas ? ['2597232', '700000', '3297232'] : ['2597232', '2597232'];
+    const fasesAntes = new Map();
+    for (const tabela of ['MarcaTiragem', 'GraficaTiragem']) {
+      const valores = linhaIndicador(p, tabela, '00 - Tiragem Total');
+      assert.deepEqual(valores, totais, tabela);
+      assert.equal(valores.slice(0, -1).reduce((s, v) => s + Number(v), 0),
+        Number(valores.at(-1)), 'soma dos grupos coincide com Total Geral');
+      const faseInicial = linhaIndicador(p, tabela, '01 - Env. Arq');
+      assert.deepEqual(faseInicial, iniciais, 'fase inicial preserva PCP destinado a acabadora');
+      fasesAntes.set(tabela, faseInicial);
+    }
+    for (const tabela of ['MarcaPct', 'GraficaPct']) {
+      const faseInicial = linhaIndicador(p, tabela, '01 - Env. Arq');
+      assert.equal(faseInicial.length, totais.length);
+      faseInicial.forEach(celula => assert.match(celula, />100%<\/span>/));
+      fasesAntes.set(tabela, faseInicial);
+    }
+    p.selecionarFases(['col_mapa']);
+    for (const tabela of ['MarcaTiragem', 'GraficaTiragem']) {
+      assert.deepEqual(linhaIndicador(p, tabela, '00 - Tiragem Total'), totais,
+        'desmarcar fase inicial conserva total CD');
+    }
+    p.selecionarFases(['env', 'col_mapa']);
+    for (const tabela of tabelas) {
+      assert.deepEqual(linhaIndicador(p, tabela, '01 - Env. Arq'), fasesAntes.get(tabela),
+        'remarcar fase inicial conserva realizado e percentual');
+    }
+  });
 }
 
 test('mapa integral com volume agendado não finaliza série sem Coleta TP', () => {

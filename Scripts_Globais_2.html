@@ -4019,35 +4019,9 @@ let tRef = document.getElementById('filtroReferencia').value;
     const pgReferenciaV56 = (tipo, nome) => pgSomarV56(
         pgAgregadosV56[tipo].get(pgNormV56(nome))
     );
-    const pgExcecoesV56 = new Set(['cus', 'oc', 'col_mapa', 'col_tp', 'ent_tp']);
-    const pgChecarV56 = (celulas, original, candidato, rotulo) => {
-        // NUNCA usa o realizado como base, nem o altera para caber no Total.
-        // So troca a referencia se uma fonte real do mesmo recorte cobrir a fase.
-        const excedentes = FASES.filter(f => !pgExcecoesV56.has(f.id) &&
-            celulas[f.id] && Number(celulas[f.id].real || 0) > original + 0.0001);
-        if (!excedentes.length) return original;
-        const semCobertura = excedentes.filter(f =>
-            Number(celulas[f.id].real || 0) > candidato + 0.0001);
-        if (semCobertura.length || !candidato) {
-            console.warn('[PG V56] Conciliacao pendente nas fontes; realizados preservados', {
-                grupo: rotulo, baseCanonica: original, baseFonte: candidato,
-                fases: semCobertura.map(f => ({fase:f.id, real:celulas[f.id].real}))
-            });
-            return original; // Nao fabrica um total a partir de um realizado.
-        }
-        return candidato;
-    };
-    const pgBrutoGrupoV56 = contexto => {
-        const grupo = contexto.grupo;
-        const tipo = contexto.tipo;
-        const grid = tipo === 'marca' ? mGrid : gGrid;
-        const brutoOriginal = Number(grid[grupo]?.total || 0);
-        const brutoFonte = pgReferenciaV56(tipo, grupo);
-        return pgChecarV56(grid[grupo] || {}, brutoOriginal, brutoFonte,
-            tipo + ':' + grupo);
-    };
-    // O Total Base do Funil é SEMPRE a base canônica já filtrada.
-    // A referência V56 continua disponível para auditoria/grupos, mas nunca substitui o total geral.
+    // Funil e totais por marca/gráfica usam a mesma base canônica já filtrada.
+    // Volumes maiores nas fases iniciais não ampliam a Tiragem Total do recorte.
+    // A referência V56 fica disponível somente para auditoria.
     const pgTotalBrutoV56 = tGeral;
     // Auditoria nao interfere em filtros, porcentagens, cronologia ou dados.
     window.pgAuditoriaBrutoV56 = {
@@ -4353,7 +4327,7 @@ let tRef = document.getElementById('filtroReferencia').value;
             + ativos.map(header).join('') + header('Total Geral');
         const inicio = nome => `<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="p-2 border-r border-slate-200 font-black sticky left-0 bg-white z-10">${esc(nome)}</td>`;
         const volume = (n,ctx) => `<td ${window.pgAtributosTooltipFunil(ctx)} class="p-2 border-r border-slate-200 ${percentual ? 'text-center' : 'text-right'} font-black bg-slate-50">${percentual ? fmtCompactoFunil(n) : window.formatarBR(n)}</td>`;
-        let h = inicio('00 - Tiragem Total') + ativos.map(g => volume(percentual ? grid[g].total : pgBrutoGrupoV56(contexto('total', g)), contexto('col_mapa',g))).join('') + volume(percentual ? tGeral : pgTotalBrutoV56, contexto('col_mapa')) + '</tr>';
+        let h = inicio('00 - Tiragem Total') + ativos.map(g => volume(grid[g].total, contexto('col_mapa',g))).join('') + volume(tGeral, contexto('col_mapa')) + '</tr>';
         fasesAtivas.forEach((f, idx) => {
             h += inicio(String(idx + 1).padStart(2, '0') + ' - ' + nomeFaseTabelaFunil(f));
             ativos.forEach(g => {
