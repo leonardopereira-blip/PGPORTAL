@@ -1,9 +1,9 @@
 {
-  "solicitado_em": "2026-10-26T13:59:10.000Z",
+  "solicitado_em": "2026-10-26T17:49:09.203Z",
   "autorizado": true,
-  "commit_validado": "a54db7fda109404d7beff7795edda09ea9488e4d",
-  "versao_ativa_esperada": 151,
-  "descricao_ativa_esperada": "Versão 151 - Status PCP - (Leozinho)",
+  "commit_validado": "62f7396d2c83d3044eb2053f3f64e1b93eeb2d0a",
+  "versao_ativa_esperada": 152,
+  "descricao_ativa_esperada": "PGPORTAL filtros por serie e planejado D-1 · commit a54db7f",
   "deployment_sufixo": "UbCXgp",
-  "motivo": "Pedido explícito do Leonardo para publicar no /exec as correções de responsáveis: Star7 Matheus/Jaqueline, IPSIS e MARGRAF Klayton/Camila. As 28 gráficas atuais estão atribuídas; 62 arquivos do Google e GitHub foram conferidos iguais. Manter a implantação e o endereço existentes."
+  "motivo": "Pedido explícito do Leonardo para publicar diretamente no /exec os dias negativos da pendência após coleta e o preenchimento vermelho integral de 0% nos três quadros (Previsão Armazém, Coletas e Entregas), incluindo a imagem exportada. GitHub e os 62 arquivos salvos no Google conferidos iguais após os testes. Manter a implantação e o endereço existentes."
 }
