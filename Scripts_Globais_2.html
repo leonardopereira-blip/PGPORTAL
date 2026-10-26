@@ -9938,7 +9938,7 @@ let arrGrupos = Object.values(grupos);
         },
         'klaytonmatos@arcoeducacao.com.br': {
             nome: 'Klayton', time: 'CAMILA',
-            graficas: ['COAN', 'MAXI', 'MIDIOGRAF', 'REPROSET', 'IMOS', 'ZIT']
+            graficas: ['COAN', 'MAXI', 'MIDIOGRAF', 'REPROSET', 'IMOS', 'ZIT', 'IPSIS']
         },
         'amanda.costa@arcoeducacao.com.br': {
             nome: 'Amanda Costa', time: 'CAMILA',
@@ -9971,6 +9971,9 @@ let arrGrupos = Object.values(grupos);
 
         // Correção de cadastro: "Antihas" é erro de digitação de ANTILHAS.
         if (normalizado === 'ANTIHAS') return 'ANTILHAS';
+
+        // A base alterna STAR7 e STAR 7 para a mesma gráfica do Matheus.
+        if (normalizado.replace(/[\s._-]+/g, '') === 'STAR7') return 'STAR 7';
 
         return normalizado;
     }
@@ -10135,9 +10138,10 @@ let arrGrupos = Object.values(grupos);
 
     function pgCasaGrafica(graficaLinha, graficasPessoa) {
         const g = pgNorm(graficaLinha);
+        if (!g) return false;
         return (graficasPessoa || []).some(x => {
             const n = pgNorm(x);
-            return g === n || g.includes(n) || n.includes(g);
+            return !!n && (g === n || g.includes(n) || n.includes(g));
         });
     }
 

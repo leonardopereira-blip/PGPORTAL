@@ -287,25 +287,7 @@ function _processarDadosDashboardBruto() {
 function atualizar_PCP_Funil_e_Atrasos() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  /* =====================================================
-     MÓDULO 1.5 – import_cal → CAL. EDIT.
-     ===================================================== */
-  const abaImportCal = ss.getSheetByName("import_cal");
-  const abacal = ss.getSheetByName("CAL. EDIT.");
-  if (!abaImportCal || !abacal) throw new Error("Aba cal edit ou import cal não encontrada.");
-  abacal.getRange("k2:at").clearContent();
-  const ultimaLinhaCal = abaImportCal.getLastRow();
-  if (ultimaLinhaCal >= 2) {
-    const dadosCal = abaImportCal
-      .getRange(2, 2, ultimaLinhaCal - 1, 36)
-      .getValues()
-      .filter(l => l[1] !== "");
-    if (dadosCal.length > 0) {
-      abacal.getRange(2, 11, dadosCal.length, dadosCal[0].length)
-        .setValues(dadosCal);
-    }
-  }
-  
+
   /* =====================================================
      MÓDULO 2 – IMPORT_MP → MAPA DE SAÍDA
      ===================================================== */
