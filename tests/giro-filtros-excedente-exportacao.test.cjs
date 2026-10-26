@@ -11,7 +11,8 @@ const servidor = fs.readFileSync(path.join(root, 'SalvaJson.js'), 'utf8');
 const exportacao = servidor.slice(servidor.indexOf('function gerarPlanilhaGiroFiltrado('),
   servidor.indexOf('function gerarPlanilhaReportExecutiva('));
 
-function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',ee='',campos={},materiais=null}) {
+function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',ee='',campos={},materiais=null,
+  pos=false,temCampos=true,ordenacao=[],retornarTela=false}) {
   const el = {};
   const linha = {TIRAGEM:100,SKU:'SKU-1',UNIDADE:'COC','GRÁFICA':'LOGPRINT',
     'CD DESTINO':'CD JDI',ENVIO:'V1','SÉRIE':'Série antiga',SERIE_CORRIGIDA:serie,
@@ -19,12 +20,12 @@ function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',e
   const w = {
     GIRO_DADOS_RAW:materiais ? materiais.map(m=>({...linha,...m})) : [linha],
     GIRO_ETAPAS_SELECIONADAS:new Set(['Coleta Mapa','Coletado a mais']),
-    GIRO_SORT_RULES:[],HISTORICO_OBS_GIRO:{master:{},sku:{}},CONTEXTOS_TEMP:{},
+    GIRO_SORT_RULES:ordenacao,HISTORICO_OBS_GIRO:{master:{},sku:{}},CONTEXTOS_TEMP:{},
     pgObterResumoColeta:()=>({registros:[]}),pgEstadoColetaMapa:()=>({
       ay:'',total:100,coletada:0,saldo:0,pendente:false,parcial:false,concluida:false,...estado
     }),
     pgGiroSaldoPrazosV41:()=>({
-      temCampos:true,totalPendente:eventos.reduce((s,e)=>s+e.volume,0),eventos
+      temCampos,totalPendente:eventos.reduce((s,e)=>s+e.volume,0),eventos
     }),
     pgCampoColeta:(r,n)=>r[n]||'',pgNumeroPrazoV35:v=>Math.max(0,Number(v)||0),
     pgGiroChaveObs:(_,x)=>x,
@@ -35,12 +36,16 @@ function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',e
   };
   const doc={getElementById:id=>el[id]??={value:id==='sldGiroDiasMin'?String(min):
     id==='sldGiroDiasMax'?String(max):id==='filtroObsStatus'?'TODOS':'',
-    checked:id==='chkGiroAberto',innerHTML:''}};
+    checked:id==='chkGiroAberto'||(id==='chkGiroPos'&&pos),innerHTML:''}};
+  class DataFixa extends Date {
+    constructor(...args) { super(...(args.length ? args : [2026,9,15,12])); }
+  }
   const make = new Function('window','document','dtHojeISO','ETAPAS_MAPA','getValFromCols',
-    'isDateFilled','parseValidDate','calcDiffDiasISO','FASES',giro);
-  make(w,doc,'2026-10-15',[],()=>null,v=>Boolean(v),v=>v?new Date(v):null,()=>0,[]);
+    'isDateFilled','parseValidDate','calcDiffDiasISO','FASES','Date',giro);
+  make(w,doc,'2026-10-15',[],()=>null,v=>Boolean(v),v=>v?new Date(v):null,()=>0,[],DataFixa);
   w.reFiltrarTabelaGiro();
-  return w.pgGiroLinhasExportar;
+  return retornarTela ? {linhas:w.pgGiroLinhasExportar,html:el.tbodyPontosAtencaoGiro.innerHTML}
+    : w.pgGiroLinhasExportar;
 }
 
 test('Coleta TP fora do máximo e parcela sem data fora da faixa não aparecem',()=>{
@@ -65,6 +70,75 @@ test('excedente AY aparece como pendência mesmo quando STATUS_EE é OK',()=>{
   assert.equal(linhas.length,1);
   assert.equal(linhas[0].pendencia,'Coletado a mais');
   assert.equal(linhas[0].tiragem,50);
+});
+
+const estadoPos = {pendente:true,parcial:true,saldo:50};
+function executarPos(opcoes={}) {
+  return executarGiro({pos:true,estado:estadoPos,
+    eventos:[{categoria:'A vencer',volume:50,dias:-20}],
+    campos:{Coleta_TP:'2026-10-09T12:00:00'},...opcoes});
+}
+
+test('Pós com coleta há 6 ou 9 dias aparece com máximo -1 e exporta dias negativos',()=>{
+  for (const [data,dias] of [['2026-10-09T12:00:00',6],['2026-10-06T12:00:00',9]]) {
+    const linhas=executarPos({max:-1,campos:{Coleta_TP:data,TIPO:'ALUNO',CLIENTE_PERSONALIZADO:'Sim'}});
+    assert.equal(linhas.length,1);
+    assert.equal(linhas[0].dias,-dias);
+    assert.equal(linhas[0].tiragem,50);
+    assert.equal(linhas[0].status,'Coletado a menos');
+    assert.equal(linhas[0].tipo,'ALUNO');
+    assert.equal(linhas[0].clientePersonalizado,'Sim');
+  }
+});
+
+test('Pós respeita os limites inclusivos dos dias desde a coleta',()=>{
+  assert.equal(executarPos({min:-6,max:-6}).length,1);
+  assert.equal(executarPos({min:-5,max:-1}).length,0);
+  assert.equal(executarPos({min:-90,max:-7}).length,0);
+});
+
+test('Pós usa a coleta como prazo e mantém parcelas futuras ou sem data como detalhes',()=>{
+  for (const dias of [-20,null]) {
+    const tela=executarPos({max:-1,eventos:[{categoria:'Parcela',volume:50,dias}],retornarTela:true});
+    assert.equal(tela.linhas.length,1);
+    assert.equal(tela.linhas[0].dias,-6);
+    assert.match(tela.html,/Coleta realizada há 6 dias/);
+    assert.match(tela.html,dias===null?/Parcela: 50 un\. \(sem data\)/:/Parcela: 50 un\. \(vence em 20 dias\)/);
+  }
+});
+
+test('Pós com coleta hoje ou futura usa zero e não entra no máximo -1',()=>{
+  for (const data of ['2026-10-15T12:00:00','2026-10-20T12:00:00']) {
+    assert.equal(executarPos({max:-1,campos:{Coleta_TP:data}}).length,0);
+    const linhas=executarPos({min:0,max:0,campos:{Coleta_TP:data}});
+    assert.equal(linhas.length,1);
+    assert.ok(linhas[0].dias===0);
+  }
+});
+
+test('Pós sem coleta mantém filtro por parcela e zero para ausência de prazo',()=>{
+  const semColeta={Coleta_TP:''};
+  const vencido=executarPos({max:-1,campos:semColeta,
+    eventos:[{categoria:'Vencida',volume:50,dias:9}]});
+  assert.equal(vencido.length,1);
+  assert.equal(vencido[0].dias,-9);
+  assert.equal(executarPos({max:-1,campos:semColeta}).length,0);
+  assert.equal(executarPos({max:-1,campos:semColeta,
+    eventos:[{categoria:'Sem data',volume:50,dias:null}]}).length,0);
+  assert.equal(executarPos({min:0,max:0,campos:semColeta,
+    eventos:[{categoria:'Sem data',volume:50,dias:null}]}).length,1);
+  assert.equal(executarPos({min:0,max:0,campos:semColeta,temCampos:false,eventos:[]}).length,1);
+  assert.equal(executarPos({max:-1,campos:semColeta,temCampos:false,eventos:[]}).length,0);
+});
+
+test('ordenação por pendência usa os dias da coleta também no Pós',()=>{
+  const tela=executarPos({max:-1,retornarTela:true,ordenacao:[{col:'pendencia',dir:'asc'}],
+    materiais:[
+      {SKU:'SKU-6',UNIDADE:'MARCA-6',Coleta_TP:'2026-10-09T12:00:00'},
+      {SKU:'SKU-9',UNIDADE:'MARCA-9',Coleta_TP:'2026-10-06T12:00:00'}
+    ]});
+  assert.equal(tela.linhas.length,2);
+  assert.ok(tela.html.indexOf('MARCA-9') < tela.html.indexOf('MARCA-6'));
 });
 
 function executarExportacao(email,{podeTransferir=true,dados,historico={master:{},sku:{}}}={}) {

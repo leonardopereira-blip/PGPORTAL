@@ -1400,7 +1400,7 @@
     var hasValue=x.total>0;
     var p=hasValue?Math.max(0,Math.min(100,100*x.previsto/x.total)):0;
     var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
-    return '<div class="ma-matrix-tile" title="'+
+    return '<div class="ma-matrix-tile"'+(hasValue&&p===0?' style="background:'+color+'"':'')+' title="'+
       escapeHTML(hasValue?detalhePercentualMeta(x,modo):'Sem volume')+'">'+
       (hasValue?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
       '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(x.previsto,x.total)+'</span></div>';
@@ -1556,7 +1556,7 @@
     var total=Math.max(0,x.total||0),realizado=Math.max(0,x.realCD||0);
     var p=total>0?Math.max(0,Math.min(100,100*realizado/total)):0;
     var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
-    return '<div class="ma-matrix-tile" title="'+
+    return '<div class="ma-matrix-tile"'+(total>0&&p===0?' style="background:'+color+'"':'')+' title="'+
       escapeHTML(total>0?detalheEntregas(x,modo):'Sem volume')+'">'+
       (total>0?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
       '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(realizado,total)+'</span></div>';
@@ -1605,7 +1605,7 @@
       var total=Math.max(0,x.total||0),coletado=Math.max(0,x.coletadoTP||0);
       var p=total>0?Math.max(0,Math.min(100,100*coletado/total)):0;
       var color=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
-      return '<div class="ma-matrix-tile" title="'+escapeHTML(total>0?detalheColetas(x):'Sem volume')+'">'+
+      return '<div class="ma-matrix-tile"'+(total>0&&p===0?' style="background:'+color+'"':'')+' title="'+escapeHTML(total>0?detalheColetas(x):'Sem volume')+'">'+
         (total>0?'<div class="ma-matrix-fill'+(p>=99.99?' ma-full':'')+'" style="width:'+p+'%;background:'+color+'"></div>':'')+
         '<span class="ma-matrix-label-inside'+(p>=70?' ma-on-blue':'')+'">'+pct(coletado,total)+'</span></div>';
     }
@@ -2032,7 +2032,7 @@
           var x=first+j*col,den=c.total,num=coletas?c.coletadoTP:realizado?c.realCD:c.previsto;
           var p=den?Math.max(0,Math.min(100,100*num/den)):0;
           // Preenchimento da célula inteira, preservando só 3px de respiro entre tiles.
-          ctx.fillStyle='#EDF4FB';ctx.fillRect(x+3,y+3,col-6,rowH-6);
+          ctx.fillStyle=den>0&&p===0?'#FAD0C3':'#EDF4FB';ctx.fillRect(x+3,y+3,col-6,rowH-6);
           ctx.fillStyle=p>=70?'#A9D1F2':p>=40?'#FCE2B9':'#FAD0C3';
           if(den>0&&p>0)ctx.fillRect(x+3,y+3,(col-6)*p/100,rowH-6);
           ctx.fillStyle='#0C2340';

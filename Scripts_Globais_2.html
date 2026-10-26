@@ -9403,17 +9403,24 @@ window.reFiltrarTabelaGiro = function() {
                 diasDesdeColeta = Math.max(0, Math.floor((hojePos - dtColetaPos) / 86400000));
             }
 
-            // V42: Pós respeita o filtro de dias por parcela, inclusive futuro.
-            // Converter dias de atraso em escala do seletor (atraso = negativo).
-            const eventosPosVisiveis = prazoGiro.eventos.filter(e => {
+            // No Pós, uma coleta já realizada deixa o saldo pendente há esses dias.
+            // Os prazos das parcelas permanecem como detalhes, sem substituir a coleta.
+            const eventosPosVisiveis = diasDesdeColeta !== null ? prazoGiro.eventos : prazoGiro.eventos.filter(e => {
                 const escala = e.dias === null ? 0 : -e.dias;
                 return escala >= minRange && escala <= maxRange;
             });
-            if (!eventosPosVisiveis.length && prazoGiro.temCampos) return;
-            if (!prazoGiro.temCampos && !(minRange <= 0 && maxRange >= 0)) return;
+            if (diasDesdeColeta !== null) {
+                const escalaColeta = -diasDesdeColeta;
+                if (escalaColeta < minRange || escalaColeta > maxRange) return;
+                diasAtraso = diasDesdeColeta;
+            } else {
+                // Sem data da coleta, preservar o filtro pelos prazos das parcelas.
+                if (!eventosPosVisiveis.length && prazoGiro.temCampos) return;
+                if (!prazoGiro.temCampos && !(minRange <= 0 && maxRange >= 0)) return;
+                diasAtraso = eventosPosVisiveis.length
+                    ? Math.max(...eventosPosVisiveis.map(e => e.dias === null ? 0 : e.dias)) : 0;
+            }
             etapaPendente = 'Coletado a menos + Coleta Mapa';
-            diasAtraso = eventosPosVisiveis.length
-                ? Math.max(...eventosPosVisiveis.map(e => e.dias === null ? 0 : e.dias)) : 0;
             pendenciasFormatadas.push(
                 `<div class="leading-tight">Coletado a menos${
                     diasDesdeColeta === null
@@ -9629,7 +9636,10 @@ window.reFiltrarTabelaGiro = function() {
             let partes = etapaPendente.split(' + ');
             partes.forEach(p => grupos[chaveGrupo].pendencias.add(p));
         }
-        if (escalaSlider < grupos[chaveGrupo].piorEscala && statusFinalStr === 'Em Aberto') grupos[chaveGrupo].piorEscala = escalaSlider;
+        if (escalaSlider < grupos[chaveGrupo].piorEscala &&
+            (statusFinalStr === 'Em Aberto' || statusFinalStr === 'Coletado a menos')) {
+            grupos[chaveGrupo].piorEscala = escalaSlider;
+        }
 
         // CHAVE DO SKU BLINDADA
         let superChaveSku = window.pgGiroChaveObs('SKU', `${grafica}|${marca}|${sku}|${envio}|${cd}`);
