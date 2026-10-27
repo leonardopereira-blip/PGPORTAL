@@ -47,6 +47,51 @@
         const el = $('ecdFalhas'); if (!el) return;
         el.innerHTML = [...estado.falhas.values()].map((falha, n) => '<p style="color:#FA4616;margin:4px 0">' + esc(rotuloGrupo(falha.item)) + ': data ' + esc(br(falha.payload.dataEntrega)) + ' não salva. ' + esc(falha.erro) + ' <button type="button" class="ecd-button" onclick="pgECDReenviar(' + n + ')">Reenviar</button></p>').join('');
     }
+    // Arrastar com o mouse desloca apenas a tabela na horizontal.
+    // Controles e campos editáveis não iniciam o gesto.
+    function ativarArraste(el) {
+        if (!el || !el.dataset || typeof el.addEventListener !== 'function' || el.dataset.ecdArraste) return;
+        el.dataset.ecdArraste = '1';
+        el.classList.add('ecd-arrastavel');
+        el.addEventListener('pointerdown', e => {
+            if (e.button !== 0 || e.pointerType === 'touch' ||
+                e.target.closest('button,input,select,textarea,a,label,[contenteditable]') ||
+                el.scrollWidth <= el.clientWidth) return;
+            const inicio = e.clientX, posicao = el.scrollLeft;
+            let moveu = false, usuarioSeleciona = document.body.style.userSelect;
+            const mover = evento => {
+                if (evento.pointerId !== e.pointerId) return;
+                const delta = evento.clientX - inicio;
+                if (!moveu && Math.abs(delta) < 5) return;
+                if (!moveu) {
+                    moveu = true;
+                    document.body.style.userSelect = 'none';
+                    el.classList.add('ecd-arrastando');
+                }
+                el.scrollLeft = posicao - delta;
+                evento.preventDefault();
+            };
+            const terminar = evento => {
+                if (evento.pointerId !== e.pointerId) return;
+                window.removeEventListener('pointermove', mover);
+                window.removeEventListener('pointerup', terminar);
+                window.removeEventListener('pointercancel', terminar);
+                document.body.style.userSelect = usuarioSeleciona;
+                el.classList.remove('ecd-arrastando');
+                if (moveu) {
+                    const bloquear = clique => {
+                        clique.preventDefault(); clique.stopPropagation();
+                        el.removeEventListener('click', bloquear, true);
+                    };
+                    el.addEventListener('click', bloquear, true);
+                    window.setTimeout(() => el.removeEventListener('click', bloquear, true), 0);
+                }
+            };
+            window.addEventListener('pointermove', mover, {passive: false});
+            window.addEventListener('pointerup', terminar);
+            window.addEventListener('pointercancel', terminar);
+        });
+    }
     function estrutura() {
         const root = $('ecdNovaVisao');
         if (!root || $('ecdQuadroSerie')) return;
@@ -72,6 +117,10 @@
           #ecdNovaVisao .ecd-table tfoot .ecd-left{position:sticky;bottom:0;z-index:14}
           #ecdNovaVisao .ecd-table tfoot .ecd-left.ecd-delivered{position:sticky;bottom:0;z-index:15;background:#d9e8f8!important;color:#0C2340}
           #ecdNovaVisao .ecd-table th,#ecdNovaVisao .ecd-table td{overflow-wrap:normal;word-break:normal}
+          #ecdNovaVisao .ecd-scroll.ecd-arrastavel{cursor:grab}
+          #ecdNovaVisao .ecd-scroll.ecd-arrastando{cursor:grabbing;user-select:none}
+          .ecd-sla-warning{display:inline-block;padding:2px 5px;margin:2px 0;border-radius:4px;background:#fecaca;color:#991b1b;font-weight:700;font-size:10px}
+          .ecd-backlog-table tr.ecd-sla-risk td{background:#fee2e2}
           .ecd-toolbar{display:flex;justify-content:flex-end;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px}
           .ecd-toolbar #ecdAviso{flex:1;margin:0}
           .ecd-table .ecd-brand{border-bottom:2px solid var(--brand)}
@@ -94,11 +143,13 @@
           <summary><span>Backlog · pendências para registrar</span><span id="ecdBacklogTotal"></span></summary>
           <div class="ecd-backlog-content"><label><input id="ecdTodasPendencias" type="checkbox" onchange="pgECDRender()">Mostrar também as pendências com previsão</label><div id="ecdBacklog" class="ecd-scroll"></div></div>
         </details>
-        <div class="ecd-legend"><span><i style="background:#b3d2f1"></i><span id="ecdLegendaEntregue">Entregue até ontem</span></span><span><i style="background:#C0DD97"></i>Coletado · em trânsito</span><span><i style="background:#FAC775"></i>Aguardando coleta</span><span>% = acumulado da linha · hachurado = feriado</span></div>
+        <div class="ecd-legend"><span><i style="background:#b3d2f1"></i><span id="ecdLegendaEntregue">Entregue até ontem</span></span><span><i style="background:#C0DD97"></i>Coletado · em trânsito</span><span><i style="background:#FAC775"></i>Aguardando coleta</span><span><i style="background:#fecaca"></i>Risco - Coleta não realizada dentro do SLA</span><span>% = acumulado da linha · hachurado = feriado</span></div>
         <p id="ecdNotaDomingo" class="ecd-note"></p>
         <details id="ecdPorMarca" class="ecd-section" open><summary><span>Quadro 1 · marca e CD</span><span id="ecdInfoMarca" class="ecd-info"></span><button id="ecdPrintMarca" type="button" class="ecd-button" onclick="pgECDCapturarQuadro('marca',this,event)" title="Capturar este quadro com todas as colunas">Capturar PNG</button></summary><div id="ecdQuadroMarca" class="ecd-scroll"></div></details>
         <details id="ecdDetalhado" class="ecd-section" open><summary><span>Quadro 2 · marca, série e CD</span><span id="ecdInfoSerie" class="ecd-info"></span><button id="ecdPrintSerie" type="button" class="ecd-button" onclick="pgECDCapturarQuadro('serie',this,event)" title="Capturar este quadro com todas as colunas">Capturar PNG</button></summary><div id="ecdQuadroSerie" class="ecd-scroll"></div></details>
         <p class="ecd-note">Os filtros da tabela alteram apenas a exibição; o Total Geral mantém a base completa. Entregue mostra sempre o acumulado até ontem, independente do período. Os percentuais diários mostram o acumulado até cada data. O plano inclui o backlog. Previsões em domingos e feriados aparecem no próximo dia de operação; a data informada permanece na exportação. Datas após o período ficam nas pendências.</p>`;
+        ativarArraste($('ecdQuadroMarca'));
+        ativarArraste($('ecdQuadroSerie'));
         $('ecdInicio').value = hoje();
         const fimPadrao = window.PG_ENTREGAS_CD_CONFIG?.fimCiclo || hoje().slice(0,4) + '-12-02';
         $('ecdFim').value = fimPadrao >= hoje() ? fimPadrao : hoje();
@@ -119,9 +170,9 @@
         return ['Total: ' + exato(volume(ps)), ...[...totais].map(([status, v]) => status + ': ' + exato(v))].join('\n');
     }
     function quadro(linhas, c, detalhado) {
-        const widths = detalhado ? [160, 145, 145, 135] : [175, 155, 135];
+        const widths = detalhado ? [160, 145, 145, 135] : [175, 155, 190, 135];
         const larguraDia = 136;
-        const labels = detalhado ? ['Marca', 'Série', 'CD', 'Entregue'] : ['Marca', 'CD', 'Entregue'];
+        const labels = detalhado ? ['Marca', 'Série', 'CD', 'Entregue'] : ['Marca', 'CD', 'Gráfica', 'Entregue'];
         const left = widths.map((_, i) => widths.slice(0, i).reduce((a, b) => a + b, 0));
         const fixo = i => 'left:' + left[i] + 'px;width:' + widths[i] + 'px;min-width:' + widths[i] + 'px;max-width:' + widths[i] + 'px';
         const col = labels.length;
@@ -140,18 +191,22 @@
             const realizado = entregueAteOntem(g);
             let h = '<td class="ecd-left ecd-delivered ecd-frozen-end ecd-cell" style="' + fixo(col - 1) + '" title="' + esc(tooltip(entreguePs)) + '"><b>' + k(realizado) + '</b><span class="ecd-sub">' + pct(realizado, g.total) + '</span></td>';
             c.dias.forEach(d => {
-                const ps = g.dias[d.data] || [], v = volume(ps); acumulado += v;
+                const ps = g.dias[d.data] || [], v = volume(ps);
+                const risco = !total ? volume(g.riscos?.[d.data]) : 0;
+                acumulado += v;
                 const transito = volume(ps.filter(p => p.status === 'TRANSITO')), entregas = volume(ps.filter(p => p.status === 'ENTREGUE'));
                 const parte = v ? Math.round(transito * 100 / v) : 0;
                 let fundo = '';
                 if (!total && v) fundo = entregas === v ? '#d9e8f8' : transito === v ? '#e6f1d9' : !transito ? '#fdf0da' : 'linear-gradient(90deg,#e6f1d9 ' + parte + '%,#fdf0da ' + parte + '%)';
+                if (risco) fundo = '#fee2e2';
                 const pills = !detalhado && !total ? [...new Set(ps.map(p => p.serie))].map(serie => {
                     const sub = ps.filter(p => p.serie === serie), sv = volume(sub), st = volume(sub.filter(p => p.status === 'TRANSITO'));
                     const cor = sub.every(p => p.status === 'ENTREGUE') ? '#b3d2f1' : st === sv ? '#C0DD97' : !st ? '#FAC775' : 'linear-gradient(90deg,#C0DD97 ' + Math.round(st * 100 / sv) + '%,#FAC775 0)';
                     return '<i class="ecd-pill" style="background:' + cor + '">' + esc(serie || 'Sem série') + '</i>';
                 }).join('') : '';
-                h += '<td class="ecd-cell ' + (d.feriado ? 'ecd-holiday' : '') + '"' + (fundo ? ' style="background:' + fundo + '"' : '') + ' title="' + esc(g.marca + ' · ' + (g.serie ? g.serie + ' · ' : '') + (g.cd || '') + ' · ' + br(d.data) + '\n' + tooltip(ps)) + '">' +
-                    (d.feriado && !v ? '—' : v ? pills + '<span><b>' + k(v) + '</b><em style="font-style:normal">' + pct(acumulado, g.total) + (acumulado >= g.total && g.total ? ' ✓' : '') + '</em></span>' + (!detalhado && !total ? '<div class="ecd-progress"><i style="width:' + (g.total ? acumulado * 100 / g.total : 0) + '%"></i></div>' : '') : '<span class="ecd-sub">' + (acumulado ? pct(acumulado, g.total) : '—') + '</span>') + '</td>';
+                const alerta = risco ? '<div class="ecd-sla-warning">Risco · ' + k(risco) + '</div>' : '';
+                h += '<td class="ecd-cell ' + (d.feriado ? 'ecd-holiday' : '') + '"' + (fundo ? ' style="background:' + fundo + '"' : '') + ' title="' + esc(g.marca + ' · ' + (g.serie ? g.serie + ' · ' : '') + (g.cd || '') + ' · ' + br(d.data) + '\n' + tooltip(ps) + (risco ? '\nRisco - Coleta não realizada dentro do SLA: ' + exato(risco) : '')) + '">' +
+                    (d.feriado && !v && !risco ? '—' : v ? pills + alerta + '<span><b>' + k(v) + '</b><em style="font-style:normal">' + pct(acumulado, g.total) + (acumulado >= g.total && g.total ? ' ✓' : '') + '</em></span>' + (!detalhado && !total ? '<div class="ecd-progress"><i style="width:' + (g.total ? acumulado * 100 / g.total : 0) + '%"></i></div>' : '') : alerta + '<span class="ecd-sub">' + (acumulado ? pct(acumulado, g.total) : '—') + '</span>') + '</td>';
             }); return h;
         }
         const body = linhas.map((g, n) => {
@@ -161,7 +216,12 @@
             let h = '<tr class="' + (fimMarca ? 'ecd-group-end' : '') + '" style="--brand:' + (estado.marcas.get(g.marca) || '#418EDE') + '">';
             if (inicioMarca) h += '<td rowspan="' + linhasMarca(n, false) + '" class="ecd-left ecd-brand ecd-label" style="' + fixo(0) + '">' + esc(g.marca) + '<span class="ecd-sub">' + k(marcaPlano.get(g.marca)) + ' no ciclo</span></td>';
             if (detalhado && inicioSerie) h += '<td rowspan="' + linhasMarca(n, true) + '" class="ecd-left ecd-label" style="' + fixo(1) + '">' + esc(g.serie || 'Sem série') + '</td>';
-            h += '<td class="ecd-left ecd-label" style="' + fixo(col - 2) + '">' + esc(g.cd) + '</td>' + celulas(g) + '</tr>'; return h;
+            h += '<td class="ecd-left ecd-label" style="' + fixo(detalhado ? col - 2 : col - 3) + '">' + esc(g.cd) + '</td>';
+            if (!detalhado) {
+                const graficas = [...new Set(g.parcelas.map(p => p.grafica).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+                h += '<td class="ecd-left ecd-label" style="' + fixo(col - 2) + '">' + esc(graficas.join(' | ') || '—') + '</td>';
+            }
+            h += celulas(g) + '</tr>'; return h;
         }).join('');
         const footerLabels = labels.slice(0, -1).map((_, i) => '<td class="ecd-left" style="' + fixo(i) + '">' + (i ? '' : 'Total geral<span class="ecd-sub">' + k(c.total.total) + ' no ciclo</span>') + '</td>').join('');
         const largura = widths.reduce((a,b) => a+b,0) + c.dias.length * larguraDia;
@@ -210,6 +270,7 @@
             const grupo = pendencias.get(chaveGrupo);
             grupo.itens.add(p.item); grupo.volume += p.volume;
             if (p.backlog) grupo.motivos.add(p.motivo);
+            if (p.riscoColetaSLA) grupo.motivos.add('Coleta atrasada');
         });
         estado.pendencias = [...pendencias.values()].map(g => {
             const itens = [...g.itens], chavesOrigem = [...new Set(itens.flatMap(chavesItem))];
@@ -228,7 +289,7 @@
             ['Gráfica', 'Marca', 'Série', 'CD', 'Situação', 'Coleta prevista', 'Plano', 'Coletado', 'Falta', 'Nova previsão'].map(t => '<th>' + t + '</th>').join('') + '</tr></thead><tbody>' + estado.pendencias.map((g, n) => {
                 const i = g.item, situacao = g.situacao === 'FUTURA' ? 'Pendência futura · após ' + br(g.aposPrevisao)
                     : g.situacao === 'PROGRAMADA' ? 'Com previsão' : 'Pendente';
-                return '<tr title="' + esc([...g.motivos].join(' · ')) + '"><td>' + esc(i.grafica) + '</td><td>' + esc(i.marca) + '</td><td>' + esc(i.serie) + '</td><td>' + esc(i.cd) + '</td><td>' + esc(situacao) + '</td><td>' + esc(g.coleta) + '</td><td title="' + exato(g.total) + '">' + k(g.total) + '</td><td>' + k(g.coletado) + ' (' + pct(g.coletado, g.total) + ')</td><td title="' + exato(g.volume) + '">' + k(g.volume) + '</td><td><input class="ecd-input-date" type="date" aria-label="Nova previsão ' + esc(rotuloGrupo(i)) + '" min="' + hoje() + '" value="' + esc(i.dtEntregaManual) + '" onchange="pgECDSalvar(' + n + ',this)" ' + (itemSalvando(i) ? 'disabled' : '') + '><span class="ecd-save-state" id="ecdSalvo' + n + '"></span></td></tr>';
+                return '<tr class="' + (g.motivos.has('Coleta atrasada') ? 'ecd-sla-risk' : '') + '" title="' + esc([...g.motivos].join(' · ')) + '"><td>' + esc(i.grafica) + '</td><td>' + esc(i.marca) + '</td><td>' + esc(i.serie) + '</td><td>' + esc(i.cd) + '</td><td>' + esc(situacao) + '</td><td>' + esc(g.coleta) + '</td><td title="' + exato(g.total) + '">' + k(g.total) + '</td><td>' + k(g.coletado) + ' (' + pct(g.coletado, g.total) + ')</td><td title="' + exato(g.volume) + '">' + k(g.volume) + '</td><td><input class="ecd-input-date" type="date" aria-label="Nova previsão ' + esc(rotuloGrupo(i)) + '" min="' + hoje() + '" value="' + esc(i.dtEntregaManual) + '" onchange="pgECDSalvar(' + n + ',this)" ' + (itemSalvando(i) ? 'disabled' : '') + '><span class="ecd-save-state" id="ecdSalvo' + n + '"></span></td></tr>';
             }).join('') + '</tbody></table>' : '<p class="ecd-empty">Nenhuma pendência nos filtros selecionados.</p>';
     };
     function enviarPrevisao(pedido) {

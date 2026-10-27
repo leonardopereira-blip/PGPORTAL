@@ -29,21 +29,41 @@ test('conserva plano entre entregue, parcelas datadas e backlog sem duplicar par
   assert(c.backlog.every(p=>!p.dia));assert(c.parcelas.filter(p=>p.dia).every(p=>!p.backlog));
 });
 
-test('previsão manual mantém atraso original como histórico e libera todo saldo no calendário',()=>{
+test('data manual altera apenas o saldo sem coleta TP; coletado conserva prazo SLA original',()=>{
   const l=linha({plano:'2026-10-20',coletas:[{data:'2026-10-24',volume:30}]});
   const a=portal([l]);const chave=a.m.chave(l);
   const b=portal([l],{[chave]:{dataEntrega:'2026-10-30',versao:1}});const c=b.c();
-  assert.equal(c.total.backlog,0);assert.equal(vol(c.total.dias['2026-10-30']),100);
+  assert.equal(c.total.backlog,30,'coletado em trânsito vencido continua pendente na data original');
+  assert.equal(vol(c.total.dias['2026-10-30']),70,'somente o saldo sem coleta muda de data');
   assert.equal(b.itens[0].dtColetaPCP,'2026-10-20');
-  assert.equal(c.parcelas.filter(p=>p.status==='TRANSITO')[0].volume,30);
-  assert.equal(c.parcelas.filter(p=>p.status==='AGUARDANDO')[0].volume,70);
+  const transito=c.parcelas.find(p=>p.status==='TRANSITO');
+  const aguardando=c.parcelas.find(p=>p.status==='AGUARDANDO');
+  assert.equal(transito.volume,30);
+  assert.equal(transito.data,'2026-10-26');
+  assert.notEqual(transito.fonteEntrega,'Manual');
+  assert.equal(aguardando.volume,70);
+  assert.equal(aguardando.data,'2026-10-30');
+  assert.equal(aguardando.fonteEntrega,'Manual');
 });
 
-test('coleta real atualiza automaticamente o SLA de cada parcela e data manual permanece',()=>{
+test('SLA de coletas reais permanece por parcela após reprogramar saldo',()=>{
   const l=linha({coletas:[{data:'2026-10-26',volume:25},{data:'2026-10-27',volume:25}]});
-  const a=portal([l]);const c=a.c();assert.equal(vol(c.total.dias['2026-10-28']),25);assert.equal(vol(c.total.dias['2026-10-29']),25);
+  const a=portal([l]);const c=a.c();
+  assert.equal(vol(c.total.dias['2026-10-28']),25);
+  assert.equal(vol(c.total.dias['2026-10-29']),25);
   const chave=a.m.chave(l),b=portal([l],{[chave]:{dataEntrega:'2026-11-04'}}).c();
-  assert.equal(vol(b.total.dias['2026-11-04']),100);assert(b.parcelas.every(p=>p.fonteEntrega==='Manual'));
+  assert.equal(vol(b.total.dias['2026-10-28']),25);
+  assert.equal(vol(b.total.dias['2026-10-29']),25);
+  assert.equal(vol(b.total.dias['2026-11-04']),50);
+  assert.equal(b.parcelas.filter(p=>p.fonteEntrega==='Manual').reduce((n,p)=>n+p.volume,0),50);
+});
+
+test('coleta planejada vencida continua como risco mesmo com nova data de saldo',()=>{
+  const l=linha({plano:'2026-10-25',coletas:[{data:'2026-10-26',volume:20}]});
+  const a=portal([l]),chave=a.m.chave(l);
+  const b=portal([l],{[chave]:{dataEntrega:'2026-11-04'}}).c();
+  assert.equal(b.parcelas.filter(p=>p.status==='AGUARDANDO'&&p.riscoColetaSLA).reduce((n,p)=>n+p.volume,0),80);
+  assert.equal(b.parcelas.filter(p=>p.status==='TRANSITO').reduce((n,p)=>n+p.volume,0),20);
 });
 
 test('domingo não aparece e feriados ficam sem previsões, preservando data informada',()=>{

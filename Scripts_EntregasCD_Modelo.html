@@ -144,23 +144,21 @@
                 }
             };
             if (saldo > 0) {
-                if (dtEntregaManual && dtEntregaManual >= hoje) {
-                    adicionarEntrega(dtEntregaManual, saldo, 'Manual');
-                } else if (!conflitoEntrega && !entregaManualVencida) {
-                    // Consome as coletas reais em ordem cronológica contra o entregue.
-                    // Assim parcelas já coletadas e ainda pendentes mantêm suas próprias datas.
-                    let entregueConsumido = entregue, restanteColetado = aguardandoEntrega;
-                    eventosColeta.forEach(evento => {
-                        const consumido = Math.min(evento.volume, entregueConsumido);
-                        entregueConsumido -= consumido;
-                        const aberto = Math.min(restanteColetado, Math.max(0, evento.volume - consumido));
-                        restanteColetado -= aberto;
-                        adicionarEntrega(entregaSLA(linha, evento.data), aberto, 'Coleta TP + SLA');
-                    });
-                    if (pendenteColeta > 0 && dtColetaPrevista) {
-                        adicionarEntrega(entregaSLA(linha, dtColetaPrevista), pendenteColeta,
-                            origemColetaPrevisao === 'Manual' ? 'Coleta manual + SLA' : 'PCP original + SLA');
-                    }
+                // Uma previsão manual altera somente o saldo A COLETAR.
+                // A parcela com Coleta TP real conserva sua data de SLA original.
+                let entregueConsumido = entregue, restanteColetado = aguardandoEntrega;
+                eventosColeta.forEach(evento => {
+                    const consumido = Math.min(evento.volume, entregueConsumido);
+                    entregueConsumido -= consumido;
+                    const aberto = Math.min(restanteColetado, Math.max(0, evento.volume - consumido));
+                    restanteColetado -= aberto;
+                    adicionarEntrega(entregaSLA(linha, evento.data), aberto, 'Coleta TP + SLA');
+                });
+                if (pendenteColeta > 0 && dtEntregaManual && dtEntregaManual >= hoje) {
+                    adicionarEntrega(dtEntregaManual, pendenteColeta, 'Manual');
+                } else if (pendenteColeta > 0 && !conflitoEntrega && !entregaManualVencida && dtColetaPrevista) {
+                    adicionarEntrega(entregaSLA(linha, dtColetaPrevista), pendenteColeta,
+                        origemColetaPrevisao === 'Manual' ? 'Coleta manual + SLA' : 'PCP original + SLA');
                 }
             }
             previsoesEntrega.sort((a, b) => a.data.localeCompare(b.data));
@@ -316,14 +314,14 @@
             const entregue = status === 'ENTREGUE';
             const dataOriginal = dt || '';
             const dia = entregue ? (dt < inicio || !inicioExplicito && dt === hoje && domingo(hoje) ? 'entregue' : dt) : ajustarDia(dt);
-            const manualVigente = item.dtEntregaManual && item.dtEntregaManual >= hoje;
+            const manualVigente = status === 'AGUARDANDO' && item.dtEntregaManual && item.dtEntregaManual >= hoje;
             const atrasoColeta = status === 'AGUARDANDO' && coletaPrevista && coletaPrevista < hoje;
             // O fim selecionado limita apenas o que se vê no calendário.
             // Uma previsão futura fora da tela continua programada, não vira backlog.
             const backlog = !entregue && (!dt || dt < hoje || (atrasoColeta && !manualVigente));
             const p = {item, chave: item.chave, sku: item.sku, descricao: item.descricao, marca: item.marca,
                 serie: item.serie, cd: item.cd, grafica: item.grafica, personalizado: item.personalizado,
-                tipo: item.tipo, volume, status, backlog, dia: backlog ? '' : dia, dataOriginal,
+                tipo: item.tipo, volume, status, backlog, riscoColetaSLA: !!atrasoColeta, dia: backlog ? '' : dia, dataOriginal,
                 coletaReal: coletaReal || '', coletaPrevista: coletaPrevista || '', fonteColeta: coletaReal ? 'TP' : entregue
                     ? item.datasColeta.length ? 'TP (sem vínculo de parcela)' : 'Não informada' : item.dtColetaManual ? 'Manual' : 'PCP',
                 fonteEntrega: fonte || (item.dtEntregaManual ? 'Manual' : 'SLA'),
@@ -347,7 +345,7 @@
             item.eventosColeta.forEach(e => {
                 const consumido = Math.min(e.volume, entregueConsumido); entregueConsumido -= consumido;
                 const aberto = Math.min(restanteColetado, Math.max(0, e.volume - consumido)); restanteColetado -= aberto;
-                adicionar(item, aberto, 'TRANSITO', item.conflitoEntrega ? '' : item.dtEntregaManual || entregaSLA(item.linha, e.data), e.data, '', item.dtEntregaManual ? 'Manual' : 'SLA');
+                adicionar(item, aberto, 'TRANSITO', entregaSLA(item.linha, e.data), e.data, '', 'Coleta TP + SLA');
             });
             const coleta = item.dtColetaManual || item.dtColetaPCP;
             adicionar(item, item.pendenteColeta, 'AGUARDANDO', item.conflitoEntrega || item.conflitoColeta && !item.dtEntregaManual ? '' : item.dtEntregaManual || entregaSLA(item.linha, coleta), '', coleta,
@@ -358,7 +356,7 @@
             parcelas.forEach(p => {
                 const k = JSON.stringify([p.marca, detalhado ? p.serie : '', p.cd]);
                 if (!grupos.has(k)) grupos.set(k, {marca: p.marca, serie: detalhado ? p.serie : '', cd: p.cd, total: 0, entregue: 0, entregueAteOntem: 0, acumuladoAnterior: 0, realCD: 0, entregueHoje: 0,
-                    backlog: 0, dias: Object.create(null), parcelas: []});
+                    backlog: 0, dias: Object.create(null), riscos: Object.create(null), parcelas: []});
                 const g = grupos.get(k); g.total += p.volume; g.parcelas.push(p);
                 if (p.status === 'ENTREGUE') {
                     g.realCD += p.volume;
@@ -366,6 +364,7 @@
                     if (p.dataOriginal === hoje) g.entregueHoje += p.volume;
                 }
                 if (!p.backlog && (p.dia === 'entregue' || p.dia && p.dia < inicio)) g.acumuladoAnterior += p.volume;
+                if (p.riscoColetaSLA && p.coletaPrevista) (g.riscos[p.coletaPrevista < inicio ? inicio : p.coletaPrevista] ||= []).push(p);
                 if (p.backlog) g.backlog += p.volume;
                 else if (p.dia === 'entregue') g.entregue += p.volume;
                 else { if (!g.dias[p.dia]) g.dias[p.dia] = []; g.dias[p.dia].push(p); }
@@ -376,7 +375,7 @@
                 .sort((a, b) => (a.marca.localeCompare(b.marca, 'pt-BR', {numeric: true}) ||
                 a.serie.localeCompare(b.serie, 'pt-BR', {numeric: true}) || a.cd.localeCompare(b.cd, 'pt-BR', {numeric: true})));
         };
-        const total = {marca: 'Total geral', total: 0, entregue: 0, entregueAteOntem: 0, acumuladoAnterior: 0, realCD: 0, entregueHoje: 0, backlog: 0, dias: Object.create(null), parcelas};
+        const total = {marca: 'Total geral', total: 0, entregue: 0, entregueAteOntem: 0, acumuladoAnterior: 0, realCD: 0, entregueHoje: 0, backlog: 0, dias: Object.create(null), riscos: Object.create(null), parcelas};
         parcelas.forEach(p => {
             total.total += p.volume;
             if (p.status === 'ENTREGUE') {
@@ -385,6 +384,7 @@
                 if (p.dataOriginal === hoje) total.entregueHoje += p.volume;
             }
             if (!p.backlog && (p.dia === 'entregue' || p.dia && p.dia < inicio)) total.acumuladoAnterior += p.volume;
+            if (p.riscoColetaSLA && p.coletaPrevista) (total.riscos[p.coletaPrevista] ||= []).push(p);
             if (p.backlog) total.backlog += p.volume;
             else if (p.dia === 'entregue') total.entregue += p.volume;
             else { if (!total.dias[p.dia]) total.dias[p.dia] = []; total.dias[p.dia].push(p); }

@@ -9291,15 +9291,12 @@ window.exportarPendenciasGiroVisiveis = function() {
 // TIRAGEM VENCIDA / A_Vencer e Coleta_TP. Sem usar Coleta Inicial/Final do PCP.
 window.pgGiroSaldoPrazosV41 = function(linha, hoje) {
     const p = window.pgPrazoLinhaV35(linha, hoje);
-    // Só a previsão lançada pelo analista substitui os prazos originais do Giro.
-    // Sem previsão manual, conserva DT_Vencido e Dt_a_vencer com suas pendências.
+    // A nova data só se aplica ao saldo NÃO coletado após o abatimento do TP.
+    // Datas originais de parcelas já coletadas permanecem intactas.
     let chave = '';
     try { chave = window.pgEntregasCDModelo?.chave?.(linha) || ''; } catch (_) {}
-    const manual = chave ? window.PG_ECD_PREVISOES?.[chave]?.dataEntrega : '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(manual || '')) {
-        if (p.vencida > 0) p.dtVencida = manual;
-        if (p.aVencer > 0) p.dtAVencer = manual;
-    }
+    const dataNova = chave ? window.PG_ECD_PREVISOES?.[chave]?.dataEntrega : '';
+    const manual = /^\d{4}-\d{2}-\d{2}$/.test(dataNova || '') ? dataNova : '';
     const n = v => Math.max(0, Number(v || 0));
     const v = n(p.vencida), a = n(p.aVencer);
     const temCampos = ['TIRAGEM VENCIDA', 'A_Vencer'].some(nome => {
@@ -9327,7 +9324,7 @@ window.pgGiroSaldoPrazosV41 = function(linha, hoje) {
     parcelas.forEach(([categoria, volume, data]) => {
         const saldo = Math.max(0, volume - disponivel);
         disponivel = Math.max(0, disponivel - volume);
-        incluir(categoria, saldo, data);
+        incluir(categoria, saldo, manual && saldo > 0 ? manual : data);
     });
     const vencido = eventos.filter(e => e.dias !== null && e.dias >= 0)
         .reduce((s, e) => s + e.volume, 0);
