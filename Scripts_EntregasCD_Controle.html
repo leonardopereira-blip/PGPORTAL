@@ -42,9 +42,10 @@
     function notificarPrevisoes() {
         if (typeof CustomEvent !== 'undefined' && window.dispatchEvent) window.dispatchEvent(new CustomEvent('pgportal-previsoes-atualizadas', {detail: {previsoes: estado.previsoes}}));
     }
+    const rotuloGrupo = item => [item.grafica, item.marca, item.serie || 'Sem série', item.cd].join(' · ');
     function mostrarFalhas() {
         const el = $('ecdFalhas'); if (!el) return;
-        el.innerHTML = [...estado.falhas.values()].map((falha, n) => '<p style="color:#FA4616;margin:4px 0">' + esc(falha.item.sku) + ': data ' + esc(br(falha.payload.dataEntrega)) + ' não salva. ' + esc(falha.erro) + ' <button type="button" class="ecd-button" onclick="pgECDReenviar(' + n + ')">Reenviar</button></p>').join('');
+        el.innerHTML = [...estado.falhas.values()].map((falha, n) => '<p style="color:#FA4616;margin:4px 0">' + esc(rotuloGrupo(falha.item)) + ': data ' + esc(br(falha.payload.dataEntrega)) + ' não salva. ' + esc(falha.erro) + ' <button type="button" class="ecd-button" onclick="pgECDReenviar(' + n + ')">Reenviar</button></p>').join('');
     }
     function estrutura() {
         const root = $('ecdNovaVisao');
@@ -78,8 +79,10 @@
         <div class="ecd-toolbar">
           <p id="ecdAviso" role="status"></p>
           <button id="ecdPrint" type="button" class="ecd-button" onclick="pgECDCapturar(this)" title="Captura os dois quadros completos, incluindo linhas e colunas fora da rolagem">📸 Capturar painel (PNG)</button>
-          <button id="ecdExportar" type="button" class="ecd-button" onclick="pgECDExportar(this)">Exportar para Sheets</button>
+          <button id="ecdExportarXLSX" type="button" class="ecd-button" onclick="pgECDExportarXLSX(this)">Baixar XLSX</button>
+          <button id="ecdExportar" type="button" class="ecd-button" style="background:#fff;color:#0C2340" onclick="pgECDExportar(this)">Exportar para Sheets</button>
         </div>
+        <p id="ecdSheetsStatus" class="ecd-note" role="status"></p>
         <div class="ecd-controls">
           <label>Início<input id="ecdInicio" type="date" onchange="pgECDRender()"></label>
           <label>Fim<input id="ecdFim" type="date" onchange="pgECDRender()"></label>
@@ -182,14 +185,23 @@
         $('ecdBacklogTotal').textContent = 'falta ' + k(c.total.backlog);
         const pendencias = new Map();
         c.parcelas.filter(p => p.status !== 'ENTREGUE' && ($('ecdTodasPendencias')?.checked || p.backlog)).forEach(p => {
-            if (!pendencias.has(p.chave)) pendencias.set(p.chave, {item: p.item, itens: new Set(), volume: 0, motivos: new Set()});
-            const grupo = pendencias.get(p.chave); grupo.itens.add(p.item); grupo.volume += p.volume; if (p.backlog) grupo.motivos.add(p.motivo);
+            const chaveGrupo = JSON.stringify([p.grafica, p.marca, p.serie, p.cd]);
+            if (!pendencias.has(chaveGrupo)) pendencias.set(chaveGrupo, {itens: new Set(), volume: 0, motivos: new Set()});
+            const grupo = pendencias.get(chaveGrupo); grupo.itens.add(p.item); grupo.volume += p.volume; if (p.backlog) grupo.motivos.add(p.motivo);
         });
-        estado.pendencias = [...pendencias.values()].map(g => ({...g,
-            total: [...g.itens].reduce((s, i) => s + i.total, 0), coletado: [...g.itens].reduce((s, i) => s + i.coletado, 0)}));
+        estado.pendencias = [...pendencias.values()].map(g => {
+            const itens = [...g.itens], chavesOrigem = [...new Set(itens.flatMap(chavesItem))];
+            const previsoesOrigem = Object.assign({}, ...itens.map(i => i.previsoesOrigem || {[i.chave]: i.previsao || {}}));
+            const entregas = new Set(itens.map(i => i.dtEntregaManual || ''));
+            const coletas = new Set(itens.map(i => i.dtColetaManual || i.dtColetaPCP || ''));
+            const total = itens.reduce((s, i) => s + i.total, 0), coletado = itens.reduce((s, i) => s + i.coletado, 0);
+            return {...g, total, coletado, coleta: coletas.size > 1 ? 'Datas variadas' : br([...coletas][0]),
+                item: {...itens[0], chave: chavesOrigem[0], chavesOrigem, previsoesOrigem, total, coletado,
+                    dtEntregaManual: entregas.size === 1 ? [...entregas][0] : ''}};
+        });
         $('ecdBacklog').innerHTML = estado.pendencias.length ? '<table class="ecd-backlog-table"><thead><tr>' +
-            ['Marca', 'Série', 'CD', 'SKU', 'Coleta prevista', 'Plano', 'Coletado', 'Falta', 'Nova previsão'].map(t => '<th>' + t + '</th>').join('') + '</tr></thead><tbody>' + estado.pendencias.map((g, n) => {
-                const i = g.item; return '<tr title="' + esc([...g.motivos].join(' · ') + ' · ' + i.descricao) + '"><td>' + esc(i.marca) + '</td><td>' + esc(i.serie) + '</td><td>' + esc(i.cd) + '</td><td>' + esc(i.sku) + '</td><td>' + br(i.dtColetaManual || i.dtColetaPCP) + '</td><td title="' + exato(g.total) + '">' + k(g.total) + '</td><td>' + k(g.coletado) + ' (' + pct(g.coletado, g.total) + ')</td><td title="' + exato(g.volume) + '">' + k(g.volume) + '</td><td><input class="ecd-input-date" type="date" aria-label="Nova previsão ' + esc(i.sku) + '" min="' + hoje() + '" value="' + esc(i.dtEntregaManual) + '" onchange="pgECDSalvar(' + n + ',this)" ' + (itemSalvando(i) ? 'disabled' : '') + '><span class="ecd-save-state" id="ecdSalvo' + n + '"></span></td></tr>';
+            ['Gráfica', 'Marca', 'Série', 'CD', 'Coleta prevista', 'Plano', 'Coletado', 'Falta', 'Nova previsão'].map(t => '<th>' + t + '</th>').join('') + '</tr></thead><tbody>' + estado.pendencias.map((g, n) => {
+                const i = g.item; return '<tr title="' + esc([...g.motivos].join(' · ')) + '"><td>' + esc(i.grafica) + '</td><td>' + esc(i.marca) + '</td><td>' + esc(i.serie) + '</td><td>' + esc(i.cd) + '</td><td>' + esc(g.coleta) + '</td><td title="' + exato(g.total) + '">' + k(g.total) + '</td><td>' + k(g.coletado) + ' (' + pct(g.coletado, g.total) + ')</td><td title="' + exato(g.volume) + '">' + k(g.volume) + '</td><td><input class="ecd-input-date" type="date" aria-label="Nova previsão ' + esc(rotuloGrupo(i)) + '" min="' + hoje() + '" value="' + esc(i.dtEntregaManual) + '" onchange="pgECDSalvar(' + n + ',this)" ' + (itemSalvando(i) ? 'disabled' : '') + '><span class="ecd-save-state" id="ecdSalvo' + n + '"></span></td></tr>';
             }).join('') + '</tbody></table>' : '<p class="ecd-empty">Nenhuma pendência nos filtros selecionados.</p>';
     };
     function enviarPrevisao(pedido) {
@@ -317,19 +329,71 @@
         } catch (erro) { aviso('Não foi possível capturar o painel: ' + (erro?.message || erro), true); }
         finally { estado.capturando = false; if (botao) { botao.disabled = false; botao.textContent = anterior; } }
     };
+    window.pgECDExportarXLSX = async function (botao) {
+        if (estado.gerandoXLSX) return;
+        const snapshot = estado.calendario;
+        if (!snapshot) { aviso('Período inválido. Confira Início e Fim antes de baixar XLSX.', true); return; }
+        if (!snapshot.parcelas.length) { aviso('Não há parcelas nos filtros selecionados para baixar XLSX.', true); return; }
+        if (window.pgTPExportacaoPronta && !window.pgTPExportacaoPronta()) return;
+        if (typeof window.pgGerarExcelAbas !== 'function') { aviso('Gerador XLSX indisponível. Recarregue o portal e tente novamente.', true); return; }
+        estado.gerandoXLSX = true;
+        const anterior = botao?.textContent || 'Baixar XLSX';
+        if (botao) { botao.disabled = true; botao.textContent = 'Preparando XLSX…'; }
+        aviso('Preparando o XLSX com os dois quadros e a base completa…');
+        try {
+            await new Promise(resolve => setTimeout(resolve, 30));
+            const abas = window.pgEntregasCDModelo.exportarCalendario(snapshot).map(aba =>
+                aba.nome.startsWith('Quadro_Marca_') ? {...aba, colunasCongeladas: aba.cabecalho.indexOf('Entregue') + 1} : aba);
+            const blob = window.pgGerarExcelAbas(abas), url = URL.createObjectURL(blob);
+            try {
+                const link = document.createElement('a');
+                link.download = 'Entregas_CD_' + snapshot.hoje + '.xlsx'; link.href = url; link.click();
+            } finally { setTimeout(() => URL.revokeObjectURL(url), 10000); }
+            aviso('XLSX pronto: download dos dois quadros e da base completa iniciado.');
+        } catch (erro) { aviso('Não foi possível gerar o XLSX: ' + (erro?.message || erro), true); }
+        finally { estado.gerandoXLSX = false; if (botao) { botao.disabled = false; botao.textContent = anterior; } }
+    };
+    const avisoSheets = (texto, erro = false) => {
+        const el = $('ecdSheetsStatus'); if (!el) return;
+        el.textContent = texto; el.style.color = erro ? '#FA4616' : '#0C2340';
+    };
     window.pgECDExportar = function (botao) {
+        if (estado.sheetsPendente) {
+            avisoSheets('A solicitação do Google continua em andamento. Você pode baixar XLSX enquanto aguarda.'); return;
+        }
         if (!estado.calendario) { aviso('Período inválido. Confira Início e Fim antes de exportar.', true); return; }
         if (!estado.calendario?.parcelas.length) { aviso('Não há parcelas nos filtros selecionados.', true); return; }
         if (window.pgTPExportacaoPronta && !window.pgTPExportacaoPronta()) return;
-        if (typeof google === 'undefined' || !google.script?.run) { aviso('Conexão indisponível para exportar.', true); return; }
-        const abas = window.pgEntregasCDModelo.exportarCalendario(estado.calendario);
-        botao.disabled = true; botao.textContent = 'Exportando...';
-        google.script.run.withSuccessHandler(resp => {
-            botao.disabled = false; botao.textContent = 'Exportar para Sheets';
-            if (!resp?.success || !/^https:\/\/docs\.google\.com\/spreadsheets\//.test(resp.url || '')) { aviso('Não foi possível gerar a planilha.', true); return; }
-            $('ecdAviso').innerHTML = 'Planilha criada: <a href="' + esc(resp.url) + '" target="_blank" rel="noopener noreferrer" style="color:#418EDE;text-decoration:underline">Abrir os dois quadros e a base por parcela</a>';
-        }).withFailureHandler(erro => { botao.disabled = false; botao.textContent = 'Exportar para Sheets'; aviso('Erro ao exportar: ' + (erro?.message || erro), true); })
-            .gerarPlanilhaEntregasCD({nome: 'Entregas_CD_' + hoje(), abas});
+        if (typeof google === 'undefined' || !google.script?.run) { avisoSheets('Conexão com o Google indisponível. Você pode baixar XLSX.', true); return; }
+        let abas;
+        try { abas = window.pgEntregasCDModelo.exportarCalendario(estado.calendario); }
+        catch (erro) { avisoSheets('Erro ao preparar os dados para Sheets: ' + (erro?.message || erro), true); return; }
+        const operacao = {botao, anterior: botao?.textContent || 'Exportar para Sheets'};
+        estado.sheetsPendente = operacao;
+        if (botao) { botao.disabled = true; botao.textContent = 'Criando no Google…'; }
+        avisoSheets('Criando a planilha no Google. Você pode baixar XLSX enquanto aguarda.');
+        operacao.timeout = setTimeout(() => {
+            if (estado.sheetsPendente !== operacao) return;
+            if (botao) botao.textContent = 'Aguardando Google…';
+            avisoSheets('O Google ainda não confirmou; você pode baixar XLSX. A solicitação continua em andamento.');
+        }, 60000);
+        const concluir = () => {
+            if (estado.sheetsPendente !== operacao) return false;
+            clearTimeout(operacao.timeout); estado.sheetsPendente = null;
+            if (botao) { botao.disabled = false; botao.textContent = operacao.anterior; }
+            return true;
+        };
+        const falhar = erro => {
+            if (concluir()) avisoSheets('Erro ao exportar para Sheets: ' + (erro?.message || erro || 'O Google não confirmou a criação da planilha.') + ' Você pode baixar XLSX.', true);
+        };
+        try {
+            google.script.run.withSuccessHandler(resp => {
+                if (!concluir()) return;
+                if (!resp?.success) { avisoSheets('O Google não confirmou a criação da planilha: ' + (resp?.error?.message || resp?.error || 'resposta sem confirmação') + '. Você pode baixar XLSX.', true); return; }
+                if (!/^https:\/\/docs\.google\.com\/spreadsheets\//.test(resp.url || '')) { avisoSheets('O Google respondeu sem um link válido. A criação da planilha não foi confirmada; você pode baixar XLSX.', true); return; }
+                $('ecdSheetsStatus').innerHTML = 'Planilha criada: <a href="' + esc(resp.url) + '" target="_blank" rel="noopener noreferrer" style="color:#418EDE;text-decoration:underline">Abrir os dois quadros e a base por parcela</a>';
+            }).withFailureHandler(falhar).gerarPlanilhaEntregasCD({nome: 'Entregas_CD_' + hoje(), abas});
+        } catch (erro) { falhar(erro); }
     };
     window.processarEntregasCD = function () {
         estrutura(); if (!$('ecdQuadroSerie')) return;

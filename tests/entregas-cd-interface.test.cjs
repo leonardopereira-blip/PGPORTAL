@@ -5,8 +5,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.join(__dirname, '..');
 const script = name => fs.readFileSync(path.join(root, name), 'utf8').replace(/^<script>\s*/, '').replace(/<\/script>\s*$/, '');
+const grupoSAE='LOGPRINT · SAE · 2ª SÉRIE · CD JDI',grupoSAS='LOGPRINT · SAS · 2ª SÉRIE · CD FOR';
 
-function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false,entregaOntem=false,canvasOk=true}={}) {
+function interfacePortal({adiar=false,adiarSheets=false,semGoogle=false,hojeData='2026-10-26',entregaHoje=false,entregaOntem=false,canvasOk=true}={}) {
   const nodes = new Map(), listeners = new Map();
   const criar = id => {
     const classes = new Set(); let html='';
@@ -27,7 +28,7 @@ function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false,en
     const dt=new Date(hojeData+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()-1);
     linhas.forEach(l=>l.entregas=[{data:dt.toISOString().slice(0,10),volume:25}]);
   }
-  let salvo, exportado, concluir, erro, charts=0, sync=0;
+  let salvo, exportado, concluir, erro, concluirSheets, erroSheets, xlsx, rpcSheets=0, charts=0, sync=0;
   let success, failure;
   const run={withSuccessHandler(fn){success=fn;return this;},withFailureHandler(fn){failure=fn;return this;},
     getPrevisoesEntregaCDPortal(){success({success:true,previsoes:{}});},
@@ -38,26 +39,34 @@ function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false,en
       concluir=()=>ok({success:true,previsoes:Object.fromEntries(p.previsoes.map((r,i)=>[r.chave,
         {chave:r.chave,dataEntrega:r.dataEntrega,versao:1,requestId:p.requestId+':'+i}]))});
       erro=()=>fail(new Error('Indisponível'));if(!adiar)concluir();},
-    gerarPlanilhaEntregasCD(p){exportado=p;success({success:true,url:'https://docs.google.com/spreadsheets/d/123'});}};
+    gerarPlanilhaEntregasCD(p){exportado=p;rpcSheets++;const ok=success,fail=failure;
+      concluirSheets=resp=>ok(resp||{success:true,url:'https://docs.google.com/spreadsheets/d/123'});
+      erroSheets=erro=>fail(erro||new Error('Google indisponível'));if(!adiarSheets)concluirSheets();}};
   const window={pgCampoColeta:(l,n)=>l[n],pgEhFonteAcabadora:l=>l._SOURCE==='PCP_ACABADORAS',pgSolicitacaoCancelada:()=>false,
     pgLinhasUnicas:x=>x,pgBaseForecastFiltrada:x=>x,pgBaseGeralReportExecutiva:linhas,
     pgDataPlanoColetaLinha:l=>l['Coleta/Internalização de estoque final (re) plan'],
     pgDataPlanoEntregaSLA:(l,d)=>{const dt=new Date((d||l['Coleta/Internalização de estoque final (re) plan'])+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()+2);return dt.toISOString().slice(0,10);},
     pgVolumesColetaUnificadosV37:l=>({eventosColetaTP:l.coletas,eventosEntregaTP:l.entregas}),
     pgSerieCorrigidaFunil:l=>l.serie_corrigida,pgTPExportacaoPronta:()=>true,
+    pgGerarExcelAbas:abas=>{xlsx=abas;return {size:100,type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};},
     processarEntregasCD:()=>charts++,pgGiroSincronizar:()=>sync++,
     addEventListener:(e,fn)=>listeners.set(e,fn),dispatchEvent:e=>listeners.get(e.type)?.(e)};
   class Evento {constructor(type,opts){this.type=type;this.detail=opts.detail;}}
   const capturas=[],desenhos=[];
+  const timers=new Map();let timerId=0;
+  const agendar=(fn,ms)=>{const id=++timerId;if(ms===0||ms===30)fn();else timers.set(id,{fn,ms});return id;};
   const pincel={scale(){},fillRect(){},strokeRect(){},fillText:txt=>desenhos.push(txt)};
   const canvas={getContext:()=>canvasOk?pincel:null,toBlob:fn=>fn({tipo:'image/png'})};
   const ctx=vm.createContext({window,document:{getElementById:id=>nodes.get(id)||null,
-    createElement:n=>n==='canvas'?canvas:{click(){capturas.push({nome:this.download,url:this.href,largura:canvas.width,altura:canvas.height});}}},google:{script:{run}},
-    URL:{createObjectURL:()=> 'blob:captura',revokeObjectURL(){}},setTimeout:fn=>fn(),
+    createElement:n=>n==='canvas'?canvas:{click(){capturas.push({nome:this.download,url:this.href,largura:canvas.width,altura:canvas.height});}}},google:semGoogle?undefined:{script:{run}},
+    URL:{createObjectURL:()=> 'blob:captura',revokeObjectURL(){}},setTimeout:agendar,clearTimeout:id=>timers.delete(id),
     dtHojeISO:hojeData,Date,Intl,console,CustomEvent:Evento});
   vm.runInContext(script('Scripts_EntregasCD_Modelo.html'),ctx);
   vm.runInContext(script('Scripts_EntregasCD_Controle.html'),ctx);window.processarEntregasCD();
-  return {window,nodes,linhas,capturas,desenhos,salvo:()=>salvo,exportado:()=>exportado,confirmar:()=>concluir(),falhar:()=>erro(),charts:()=>charts,sync:()=>sync};
+  return {window,nodes,linhas,capturas,desenhos,salvo:()=>salvo,exportado:()=>exportado,xlsx:()=>xlsx,rpcSheets:()=>rpcSheets,
+    confirmarSheets:resp=>concluirSheets(resp),falharSheets:erro=>erroSheets(erro),
+    tempo:ms=>{for(const [id,t]of timers)if(t.ms===ms){timers.delete(id);t.fn();}},
+    confirmar:()=>concluir(),falhar:()=>erro(),charts:()=>charts,sync:()=>sync};
 }
 
 test('tooltips agregam quantidades e não listam SKUs dos quadros',()=>{
@@ -67,7 +76,7 @@ test('tooltips agregam quantidades e não listam SKUs dos quadros',()=>{
     assert(!html.includes('SKU-01'));assert(!html.includes('SKU-02'));
     assert.match(html,/Total: 25/);assert.match(html,/Entregue: 25/);
   }
-  assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-01/,'edição das pendências individuais permanece disponível');
+  assert(a.nodes.get('ecdBacklog').innerHTML.includes(grupoSAE),'edição das pendências por gráfica, marca, série e CD permanece disponível');
 });
 
 test('captura PNG inclui os dois quadros e todo o ciclo sem depender da rolagem',async()=>{
@@ -117,6 +126,64 @@ test('falha da captura é informada e libera o botão para tentar novamente',asy
   assert.match(a.nodes.get('ecdAviso').textContent,/Não foi possível capturar/);
 });
 
+test('XLSX baixa localmente sem Google e preserva três abas, Total Geral e entregue até ontem',async()=>{
+  const a=interfacePortal({semGoogle:true}),botao=a.nodes.get('ecdExportarXLSX');botao.textContent='Baixar XLSX';
+  a.linhas.forEach(l=>{l.TIRAGEM=12455000;});
+  a.linhas[0].entregas=[{data:'2026-10-25',volume:12455000}];
+  a.linhas[1].entregas=[{data:'2026-10-25',volume:4901300},{data:'2026-10-26',volume:1000000}];
+  a.window.processarEntregasCD();a.nodes.get('ecdOcultarConcluidos').checked=true;
+  a.nodes.get('ecdInicio').value='2026-10-01';a.nodes.get('ecdFim').value='2026-10-03';a.window.pgECDRender();
+  const quadro=a.nodes.get('ecdQuadroMarca').innerHTML;
+  await a.window.pgECDExportarXLSX(botao);const abas=a.xlsx();
+  assert.deepEqual(JSON.parse(JSON.stringify(abas.map(a=>a.nome))),['Quadro_Marca_CD','Quadro_Marca_Serie_CD','Base_SKUs']);
+  assert.equal(abas[0].linhas.at(-1)[2],24910000);assert.equal(abas[0].linhas.at(-1)[4],17356300);
+  assert(abas[2].linhas.some(l=>l[1]==='SAE'));assert(abas[2].linhas.some(l=>l[1]==='SAS'));
+  assert.equal(abas[0].colunasCongeladas,5);assert.equal(abas[1].colunasCongeladas,6);
+  assert(abas[0].colunasPercentual.length>0);assert.equal(a.rpcSheets(),0);
+  assert.equal(a.capturas.length,1);assert.match(a.capturas[0].nome,/Entregas_CD_2026-10-26\.xlsx$/);
+  assert.equal(botao.disabled,false);assert.equal(botao.textContent,'Baixar XLSX');
+  assert.equal(a.nodes.get('ecdQuadroMarca').innerHTML,quadro);assert.match(a.nodes.get('ecdAviso').textContent,/XLSX pronto/);
+});
+
+test('XLSX usa o snapshot do clique e evita baixar duas vezes durante a geração',async()=>{
+  const a=interfacePortal(),botao=a.nodes.get('ecdExportarXLSX');
+  a.nodes.get('ecdInicio').value='2026-10-01';a.nodes.get('ecdFim').value='2026-10-03';a.window.pgECDRender();
+  const primeira=a.window.pgECDExportarXLSX(botao),segunda=a.window.pgECDExportarXLSX(botao);
+  a.nodes.get('ecdInicio').value='2027-01-04';a.nodes.get('ecdFim').value='2027-01-06';a.window.pgECDRender();
+  await Promise.all([primeira,segunda]);assert.equal(a.capturas.length,1);
+  assert(a.xlsx()[0].cabecalho.includes('2026-10-01'));assert(!a.xlsx()[0].cabecalho.includes('2027-01-04'));
+});
+
+test('erro do XLSX libera o botão e permite tentar novamente',async()=>{
+  const a=interfacePortal(),botao=a.nodes.get('ecdExportarXLSX');botao.textContent='Baixar XLSX';
+  const gerar=a.window.pgGerarExcelAbas;a.window.pgGerarExcelAbas=()=>{throw new Error('Falha ao montar o arquivo');};
+  await a.window.pgECDExportarXLSX(botao);assert.equal(botao.disabled,false);assert.equal(botao.textContent,'Baixar XLSX');
+  assert.equal(a.capturas.length,0);assert.match(a.nodes.get('ecdAviso').textContent,/Falha ao montar o arquivo/);
+  a.window.pgGerarExcelAbas=gerar;await a.window.pgECDExportarXLSX(botao);assert.equal(a.capturas.length,1);
+});
+
+test('Sheets lento mantém uma única solicitação, permite XLSX e confirma depois sem apagar aviso novo',async()=>{
+  const a=interfacePortal({adiarSheets:true}),sheets=a.nodes.get('ecdExportar'),xlsx=a.nodes.get('ecdExportarXLSX');
+  sheets.textContent='Exportar para Sheets';a.window.pgECDExportar(sheets);
+  assert.equal(a.rpcSheets(),1);assert.equal(sheets.disabled,true);assert.equal(xlsx.disabled,false);
+  a.tempo(60000);assert.match(a.nodes.get('ecdSheetsStatus').textContent,/Google ainda não confirmou/);
+  a.window.pgECDExportar(sheets);assert.equal(a.rpcSheets(),1,'clique repetido não cria outra planilha');
+  await a.window.pgECDExportarXLSX(xlsx);assert.equal(a.capturas.length,1);
+  const avisoXLSX=a.nodes.get('ecdAviso').textContent;
+  a.confirmarSheets();assert.equal(sheets.disabled,false);assert.equal(sheets.textContent,'Exportar para Sheets');
+  assert.match(a.nodes.get('ecdSheetsStatus').innerHTML,/Abrir os dois quadros/);
+  assert.equal(a.nodes.get('ecdAviso').textContent,avisoXLSX);
+});
+
+test('Sheets informa erro retornado e resposta sem link, sem afirmar criação confirmada',()=>{
+  const a=interfacePortal({adiarSheets:true}),botao=a.nodes.get('ecdExportar');
+  a.window.pgECDExportar(botao);a.confirmarSheets({success:false,error:'Limite de execução do Google excedido'});
+  assert.match(a.nodes.get('ecdSheetsStatus').textContent,/Limite de execução do Google excedido/);assert.equal(botao.disabled,false);
+  a.window.pgECDExportar(botao);a.confirmarSheets({success:true,url:'https://example.com'});
+  assert.match(a.nodes.get('ecdSheetsStatus').textContent,/sem um link válido/);
+  assert.match(a.nodes.get('ecdSheetsStatus').textContent,/criação da planilha não foi confirmada/);
+});
+
 test('nova visão abre backlog recolhido, põe marca/CD primeiro e mantém gráficos no fim',()=>{
   const a=interfacePortal(); const html=a.nodes.get('ecdNovaVisao').innerHTML;
   assert.match(html,/<details id="ecdPendencias" class="[^"]+">/);
@@ -152,11 +219,11 @@ test('Entregue fica congelado inclusive no Total Geral e conserva a quantidade e
 test('filtros gerais afetam quadros, pendências, plano, percentuais e as três abas exportadas',()=>{
   const a=interfacePortal();a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAS');a.window.processarEntregasCD();
   assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/SAS/);assert(!a.nodes.get('ecdQuadroSerie').innerHTML.includes('SAE'));
-  assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-02/);assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));
+  assert(a.nodes.get('ecdBacklog').innerHTML.includes(grupoSAS));assert(!a.nodes.get('ecdBacklog').innerHTML.includes(grupoSAE));
   a.window.pgECDExportar(a.nodes.get('ecdExportar'));const abas=a.exportado().abas;
   assert.deepEqual(JSON.parse(JSON.stringify(abas.map(x=>x.nome))),['Quadro_Marca_CD','Quadro_Marca_Serie_CD','Base_SKUs']);
   assert(abas[2].linhas.every(r=>r[1]==='SAS'));assert.equal(abas[2].linhas.reduce((s,r)=>s+r[15],0),100);
-  assert.equal(abas[0].linhas.at(-1)[2],100);assert.match(a.nodes.get('ecdAviso').innerHTML,/Abrir os dois quadros/);
+  assert.equal(abas[0].linhas.at(-1)[2],100);assert.match(a.nodes.get('ecdSheetsStatus').innerHTML,/Abrir os dois quadros/);
 });
 
 test('universo usa destino WALPRINT da Meta e origem física antes da união canônica',()=>{
@@ -178,24 +245,24 @@ test('universo usa destino WALPRINT da Meta e origem física antes da união can
 
 test('nova data entra de imediato no calendário, salva só entrega e confirmação compartilha versão',()=>{
   const a=interfacePortal({adiar:true});a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAE');a.window.processarEntregasCD();
-  assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-01/);a.window.pgECDSalvar(0,{value:'2026-10-29'});
+  assert(a.nodes.get('ecdBacklog').innerHTML.includes(grupoSAE));a.window.pgECDSalvar(0,{value:'2026-10-29'});
   assert.equal(a.salvo().dataEntrega,'2026-10-29');assert.deepEqual(JSON.parse(JSON.stringify(a.salvo().campos)),['dataEntrega']);
-  assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/100% ✓/);
+  assert(!a.nodes.get('ecdBacklog').innerHTML.includes(grupoSAE));assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/100% ✓/);
   assert.match(a.nodes.get('ecdAviso').textContent,/Salvando/);a.confirmar();
   assert.match(a.nodes.get('ecdAviso').textContent,/salva e compartilhada/);assert.equal(Object.values(a.window.PG_ECD_PREVISOES)[0].versao,1);
 });
 
 test('falha de gravação devolve parcela ao backlog e informa que não foi salva',()=>{
   const a=interfacePortal({adiar:true});a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAE');a.window.processarEntregasCD();
-  a.window.pgECDSalvar(0,{value:'2026-10-29'});assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));
-  a.falhar();assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-01/);assert.match(a.nodes.get('ecdAviso').textContent,/Não foi possível salvar/);
+  a.window.pgECDSalvar(0,{value:'2026-10-29'});assert(!a.nodes.get('ecdBacklog').innerHTML.includes(grupoSAE));
+  a.falhar();assert(a.nodes.get('ecdBacklog').innerHTML.includes(grupoSAE));assert.match(a.nodes.get('ecdAviso').textContent,/Não foi possível salvar/);
 });
 
 test('data salva no Giro atualiza quadro aberto sem recarregar a base ou os gráficos',()=>{
   const a=interfacePortal();const chave=a.window.pgEntregasCDModelo.chave(a.linhas[0]);
   a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chave]:{dataEntrega:'2026-10-30',versao:2}}}});
   assert.equal(a.window.PG_ECD_PREVISOES[chave].dataEntrega,'2026-10-30');
-  a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAE');a.window.processarEntregasCD();assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));
+  a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAE');a.window.processarEntregasCD();assert(!a.nodes.get('ecdBacklog').innerHTML.includes(grupoSAE));
 });
 
 test('poll antigo mantém data otimista e resposta atrasada não desfaz versão nova',()=>{
@@ -214,7 +281,7 @@ test('falha após outra pessoa salvar preserva data mais recente e mantém reenv
   a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAS');a.window.processarEntregasCD();
   a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chave]:{dataEntrega:'2026-10-31',versao:2}}}});
   a.falhar();assert.equal(a.window.PG_ECD_PREVISOES[chave].dataEntrega,'2026-10-31');
-  assert.match(a.nodes.get('ecdFalhas').innerHTML,/SKU-01/);assert.match(a.nodes.get('ecdFalhas').innerHTML,/Reenviar/);
+  assert(a.nodes.get('ecdFalhas').innerHTML.includes(grupoSAE));assert.match(a.nodes.get('ecdFalhas').innerHTML,/Reenviar/);
   a.window.pgECDReenviar(0);assert.equal(a.salvo().requestId,requestId,'reenvio incerto é idempotente');
 });
 

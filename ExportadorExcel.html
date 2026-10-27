@@ -101,21 +101,23 @@
     return '<c r="' + ref + '" s="' + (estilo === 1 ? 1 : 2) + '" t="inlineStr"><is><t xml:space="preserve">' + textoXML(valor) + '</t></is></c>';
   }
   var ESTILOS = XML + '<styleSheet xmlns="' + NS + '">' +
-    '<numFmts count="4"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="#,##0"/>' +
-    '<numFmt numFmtId="166" formatCode="0%"/><numFmt numFmtId="167" formatCode="0"/></numFmts>' +
+    '<numFmts count="5"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="#,##0"/>' +
+    '<numFmt numFmtId="166" formatCode="0%"/><numFmt numFmtId="167" formatCode="0"/>' +
+    '<numFmt numFmtId="168" formatCode="0.0%"/></numFmts>' +
     '<fonts count="2"><font><sz val="11"/><color rgb="FF172B4D"/><name val="Calibri"/></font>' +
     '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>' +
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
     '<fill><patternFill patternType="solid"><fgColor rgb="FF18365D"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<cellXfs count="8"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="top" wrapText="1"/></xf>' +
     '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>' +
     '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
     '<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
-    '<xf numFmtId="167" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
+    '<xf numFmtId="167" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+    '<xf numFmtId="168" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
     '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
   window.pgGerarExcelAuditoria = function (base) {
     if (!base || !Array.isArray(base.cabecalho) || !base.cabecalho.length || !Array.isArray(base.linhas)) throw new Error('Base auditável inválida.');
@@ -178,6 +180,7 @@
     var nomes = base.cabecalho;
     var letras = nomes.map(function (_, j) { return coluna(j + 1); });
     var estilos = nomes.map(function (nome, indice) {
+      if ((base.colunasPercentual || []).indexOf(indice) >= 0) return 7;
       if ((base.colunasData || []).indexOf(indice) >= 0) return 3;
       if ((base.colunasNumero || []).indexOf(indice) >= 0) return 4;
       return tipo(nome);
@@ -204,9 +207,12 @@
         '" customHeight="1">' + cells.join('') + '</row>');
     }
 
+    var congeladas = Number.isInteger(base.colunasCongeladas)
+      ? Math.max(0, Math.min(16383, nomes.length, base.colunasCongeladas)) : 2;
+    var primeiraLivre = coluna(congeladas + 1) + '2', painel = congeladas ? 'bottomRight' : 'bottomLeft';
     return XML + '<worksheet xmlns="' + NS + '"><dimension ref="A1:' + ultima + '"/>' +
-      '<sheetViews><sheetView workbookViewId="0"><pane xSplit="2" ySplit="1" topLeftCell="C2" activePane="bottomRight" state="frozen"/>' +
-      '<selection pane="bottomRight" activeCell="C2" sqref="C2"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="30"/>' +
+      '<sheetViews><sheetView workbookViewId="0"><pane xSplit="' + congeladas + '" ySplit="1" topLeftCell="' + primeiraLivre + '" activePane="' + painel + '" state="frozen"/>' +
+      '<selection pane="' + painel + '" activeCell="' + primeiraLivre + '" sqref="' + primeiraLivre + '"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="30"/>' +
       '<cols>' + nomes.map(function (n, j) {
         return '<col min="' + (j + 1) + '" max="' + (j + 1) + '" width="' + larguras[j] + '" customWidth="1"/>';
       }).join('') + '</cols><sheetData>' + rows.join('') + '</sheetData><autoFilter ref="A1:' + ultima + '"/>' +
