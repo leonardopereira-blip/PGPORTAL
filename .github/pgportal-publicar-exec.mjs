@@ -68,6 +68,7 @@ for (const f of fontesAtivas) {
   const conhecido=commits.some(c=>{
     try {return hash(execFileSync('git',['show',c+':'+arquivo],{encoding:'utf8',maxBuffer:20*1024*1024,stdio:['ignore','pipe','ignore']}))===esperado;} catch {return false;}
   });
+  if(!conhecido) console.log('PGPORTAL_FONTE_REVISAO '+JSON.stringify({arquivo,source:f.source}));
   if(!conhecido) throw Error('Versão ativa contém fonte não conciliada: '+arquivo+'. Publicação interrompida.');
 }
 resumo('Fontes da versão ativa conferidas no histórico validado do GitHub.');
