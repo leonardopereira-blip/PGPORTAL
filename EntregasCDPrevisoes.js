@@ -207,5 +207,15 @@ function gerarPlanilhaEntregasCD(payload) {
     throw new Error('A extração deve conter os dois quadros de Entregas CD e Base_SKUs, nesta ordem.');
   }
   var seguro = Object.assign({}, payload, {auditoriaPortal: true, abas: abas});
-  return gerarPlanilhaReportExecutiva(seguro);
+  var resultado = gerarPlanilhaReportExecutiva(seguro);
+  if (resultado && resultado.success && resultado.id) {
+    var planilha = SpreadsheetApp.openById(resultado.id);
+    abas.forEach(function(aba) {
+      if (aba.nome.indexOf('Quadro_Marca_') !== 0) return;
+      var entregue = aba.cabecalho.indexOf('Entregue');
+      if (entregue >= 0) planilha.getSheetByName(aba.nome).setFrozenColumns(entregue + 1);
+    });
+    planilha.setActiveSheet(planilha.getSheets()[0]);
+  }
+  return resultado;
 }

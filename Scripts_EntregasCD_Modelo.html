@@ -365,15 +365,31 @@
                 colunasNumero: cabecalho.map((_, i) => i).filter(i => i >= (detalhado ? 3 : 2))};
         };
         const cabecalho = ['SKU', 'Marca', 'Série', 'Descrição do SKU', 'Personalizado (S/N)', 'Aluno/Professor', 'CD', 'Gráfica',
-            'Status', 'Data coleta TP', 'Data entrega TP', 'Prev. coleta', 'Fonte coleta', 'Prev. entrega', 'Fonte entrega', 'Quantidade', 'Data no quadro', 'Pendência', 'Coletas TP do item (auditoria)'];
+            'Status', 'Data coleta TP', 'Data entrega TP', 'Prev. coleta', 'Fonte coleta', 'Prev. entrega', 'Fonte entrega', 'Quantidade', 'Data no quadro', 'Pendência', 'Coletas TP do item (auditoria)',
+            'Origem', 'Envio', 'Kit', 'OP', 'Tiragem base CD', 'Coletado', 'Entregue', 'Saldo a entregar',
+            'Aguardando entrega', 'Pendente de coleta', 'Excedente de entrega', 'Coleta PCP original',
+            'Entrega PCP + SLA original', 'Coleta manual', 'Entrega manual', 'Coleta prevista vigente',
+            'Entrega prevista vigente', 'Origem da previsão', 'Observação', 'Cliente personalizado',
+            'Capa personalizada', 'Chave da previsão', 'Origem coleta vigente', 'Parcelas de entrega previstas',
+            'Saldo sem previsão', 'Versão da previsão', 'Atualizada em', 'Usuário da previsão',
+            'Entregas TP do item (auditoria)'];
         return [aba('Quadro_Marca_CD', c.marcaCD, false), aba('Quadro_Marca_Serie_CD', c.marcaSerieCD, true), {
             nome: 'Base_SKUs', cabecalho, linhas: c.parcelas.map(p => [p.sku, p.marca, p.serie, p.descricao,
                 p.personalizado === 'Sim' ? 'S' : p.personalizado === 'Não' ? 'N' : '', p.tipo, p.cd, p.grafica,
                 p.backlog ? 'Backlog' : p.status === 'ENTREGUE' ? 'Coletado e entregue' : p.status === 'TRANSITO' ? 'Coletado aguardando entrega' : 'Pendente',
                 p.coletaReal, p.status === 'ENTREGUE' ? p.dataOriginal : '', p.coletaPrevista, p.fonteColeta,
                 p.status === 'ENTREGUE' ? '' : p.dataOriginal, p.fonteEntrega, p.volume, p.dia === 'entregue' ? '' : p.dia,
-                p.backlog ? p.motivo : '', p.item.eventosColeta.map(e => e.data + ': ' + Math.round(e.volume)).join(' / ')]),
-            colunasData: [9, 10, 11, 13, 16], colunasNumero: [15]}];
+                p.backlog ? p.motivo : '', p.item.eventosColeta.map(e => e.data + ': ' + Math.round(e.volume)).join(' / '),
+                p.item.origem, p.item.envio, p.item.kit, p.item.op, p.item.total, p.item.coletado, p.item.entregue,
+                p.item.saldo, p.item.aguardandoEntrega, p.item.pendenteColeta, p.item.excedente,
+                p.item.dtColetaPCP, p.item.dtEntregaPCP, p.item.dtColetaManual, p.item.dtEntregaManual,
+                p.item.dtColetaPrevista, p.item.dtPrevisao, p.item.origemPrevisao, p.item.previsao.observacao,
+                p.item.clientePersonalizado, p.item.capaPersonalizada, p.item.chave, p.item.origemColetaPrevisao,
+                p.item.resumoPrevisoes, p.item.semPrevisaoVolume, Number(p.item.previsao.versao || 0),
+                p.item.previsao.atualizadoEm || '', p.item.previsao.usuario || '',
+                p.item.eventosEntrega.map(e => e.data + ': ' + Math.round(e.volume)).join(' / ')]),
+            colunasData: [9, 10, 11, 13, 16, 30, 31, 32, 33, 34, 35],
+            colunasNumero: [15, 23, 24, 25, 26, 27, 28, 29, 43, 44]}];
     }
     window.pgEntregasCDModelo = {montar, quadro, exportar, chave, calendario, exportarCalendario};
 })();

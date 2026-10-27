@@ -162,6 +162,22 @@ test('três abas novas de exportação seguem a ordem e mantêm números e datas
   assert(a.c.gerarPlanilhaEntregasCD({abas}).success);assert.equal(a.exportado().abas.length,3);
 });
 
+test('download abre no primeiro painel e congela os dois quadros até Entregue',()=>{
+  const a=portal(),congeladas=[],primeira={nome:'Quadro_Marca_CD'};let ativa;
+  a.c.gerarPlanilhaReportExecutiva=()=>({success:true,id:'arquivo-criado',url:'https://docs.google.com/spreadsheets/d/arquivo-criado'});
+  a.c.SpreadsheetApp.openById=id=>{
+    assert.equal(id,'arquivo-criado');
+    return {getSheetByName:nome=>({setFrozenColumns:n=>congeladas.push([nome,n])}),
+      getSheets:()=>[primeira,{nome:'Quadro_Marca_Serie_CD'},{nome:'Base_SKUs'}],setActiveSheet:s=>{ativa=s;}};
+  };
+  const abas=[{nome:'Quadro_Marca_CD',cabecalho:['Marca','CD','Plano','Backlog','Entregue']},
+    {nome:'Quadro_Marca_Serie_CD',cabecalho:['Marca','Série','CD','Plano','Backlog','Entregue']},
+    {nome:'Base_SKUs',cabecalho:['SKU']}];
+  assert(a.c.gerarPlanilhaEntregasCD({abas}).success);
+  assert.equal(ativa,primeira);
+  assert.deepEqual(congeladas,[['Quadro_Marca_CD',5],['Quadro_Marca_Serie_CD',6]]);
+});
+
 test('grupo com 201 SKUs salva em um único lock e append; limite e lote inválido são atômicos',()=>{
   const a=portal();const corpo={requestId:'grupo-grande-001',previsoes:Array.from({length:201},(_,i)=>({
     chave:chave('SKU-'+String(i).padStart(4,'0')),campos:['dataEntrega'],dataEntrega:'2026-11-02'}))};

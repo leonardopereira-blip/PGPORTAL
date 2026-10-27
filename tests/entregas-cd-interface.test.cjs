@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const root = path.join(__dirname, '..');
 const script = name => fs.readFileSync(path.join(root, name), 'utf8').replace(/^<script>\s*/, '').replace(/<\/script>\s*$/, '');
 
-function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false,entregaOntem=false}={}) {
+function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false,entregaOntem=false,canvasOk=true}={}) {
   const nodes = new Map(), listeners = new Map();
   const criar = id => {
     const classes = new Set(); let html='';
@@ -44,12 +44,47 @@ function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false,en
     processarEntregasCD:()=>charts++,pgGiroSincronizar:()=>sync++,
     addEventListener:(e,fn)=>listeners.set(e,fn),dispatchEvent:e=>listeners.get(e.type)?.(e)};
   class Evento {constructor(type,opts){this.type=type;this.detail=opts.detail;}}
-  const ctx=vm.createContext({window,document:{getElementById:id=>nodes.get(id)||null},google:{script:{run}},
+  const capturas=[],desenhos=[];
+  const pincel={scale(){},fillRect(){},strokeRect(){},fillText:txt=>desenhos.push(txt)};
+  const canvas={getContext:()=>canvasOk?pincel:null,toBlob:fn=>fn({tipo:'image/png'})};
+  const ctx=vm.createContext({window,document:{getElementById:id=>nodes.get(id)||null,
+    createElement:n=>n==='canvas'?canvas:{click(){capturas.push({nome:this.download,url:this.href,largura:canvas.width,altura:canvas.height});}}},google:{script:{run}},
+    URL:{createObjectURL:()=> 'blob:captura',revokeObjectURL(){}},setTimeout:fn=>fn(),
     dtHojeISO:hojeData,Date,Intl,console,CustomEvent:Evento});
   vm.runInContext(script('Scripts_EntregasCD_Modelo.html'),ctx);
   vm.runInContext(script('Scripts_EntregasCD_Controle.html'),ctx);window.processarEntregasCD();
-  return {window,nodes,linhas,salvo:()=>salvo,exportado:()=>exportado,confirmar:()=>concluir(),falhar:()=>erro(),charts:()=>charts,sync:()=>sync};
+  return {window,nodes,linhas,capturas,desenhos,salvo:()=>salvo,exportado:()=>exportado,confirmar:()=>concluir(),falhar:()=>erro(),charts:()=>charts,sync:()=>sync};
 }
+
+test('tooltips agregam quantidades e não listam SKUs dos quadros',()=>{
+  const a=interfacePortal({entregaHoje:true});
+  for(const id of ['ecdQuadroMarca','ecdQuadroSerie']){
+    const html=a.nodes.get(id).innerHTML;
+    assert(!html.includes('SKU-01'));assert(!html.includes('SKU-02'));
+    assert.match(html,/Total: 25/);assert.match(html,/Entregue: 25/);
+  }
+  assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-01/,'edição das pendências individuais permanece disponível');
+});
+
+test('captura PNG inclui os dois quadros e todo o ciclo sem depender da rolagem',async()=>{
+  const a=interfacePortal({entregaOntem:true}),botao=a.nodes.get('ecdPrint');
+  botao.textContent='Capturar painel (PNG)';
+  await a.window.pgECDCapturar(botao);
+  assert.equal(a.capturas.length,2);
+  assert.match(a.capturas[0].nome,/marca-cd/);assert.match(a.capturas[1].nome,/marca-serie-cd/);
+  assert(a.capturas.every(c=>c.url==='blob:captura'&&c.largura>5000&&c.altura>0));
+  for(const texto of ['02/12','SAE','SAS','CD FOR','CD JDI','Total geral'])assert(a.desenhos.includes(texto),texto);
+  assert(!a.desenhos.some(t=>String(t).includes('SKU-')));
+  assert.equal(botao.disabled,false);assert.equal(botao.textContent,'Capturar painel (PNG)');
+  assert.match(a.nodes.get('ecdAviso').textContent,/Captura dos dois quadros concluída/);
+});
+
+test('falha da captura é informada e libera o botão para tentar novamente',async()=>{
+  const a=interfacePortal({canvasOk:false}),botao=a.nodes.get('ecdPrint');botao.textContent='Print';
+  await a.window.pgECDCapturar(botao);
+  assert.equal(a.capturas.length,0);assert.equal(botao.disabled,false);assert.equal(botao.textContent,'Print');
+  assert.match(a.nodes.get('ecdAviso').textContent,/Não foi possível capturar/);
+});
 
 test('nova visão abre backlog recolhido, põe marca/CD primeiro e mantém gráficos no fim',()=>{
   const a=interfacePortal(); const html=a.nodes.get('ecdNovaVisao').innerHTML;

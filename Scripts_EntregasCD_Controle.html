@@ -70,6 +70,7 @@
         </style>
         <div class="ecd-toolbar">
           <p id="ecdAviso" role="status"></p>
+          <button id="ecdPrint" type="button" class="ecd-button" onclick="pgECDCapturar(this)" title="Captura os dois quadros completos, incluindo linhas e colunas fora da rolagem">📸 Capturar painel (PNG)</button>
           <button id="ecdExportar" type="button" class="ecd-button" onclick="pgECDExportar(this)">Exportar para Sheets</button>
         </div>
         <div id="ecdFalhas" role="alert"></div>
@@ -93,9 +94,9 @@
     }
     const statusTexto = p => p.backlog ? 'Backlog' : p.status === 'TRANSITO' ? 'Coletado · em trânsito' : p.status === 'ENTREGUE' ? 'Entregue' : 'Aguardando coleta';
     function tooltip(ps) {
-        return ps.map(p => [p.serie, p.sku, p.grafica, exato(p.volume), statusTexto(p),
-            'Coleta ' + (p.coletaReal ? 'real ' + br(p.coletaReal) : 'prevista ' + br(p.coletaPrevista)),
-            'Entrega ' + br(p.dataOriginal) + ' · ' + p.fonteEntrega].join(' | ')).join('\n');
+        const totais = new Map();
+        (ps || []).forEach(p => totais.set(statusTexto(p), (totais.get(statusTexto(p)) || 0) + p.volume));
+        return ['Total: ' + exato(volume(ps)), ...[...totais].map(([status, v]) => status + ': ' + exato(v))].join('\n');
     }
     function quadro(linhas, c, detalhado) {
         const widths = detalhado ? [160, 145, 145, 135] : [175, 155, 135];
@@ -205,6 +206,87 @@
             versaoEsperada: Number(estado.previsoes[item.chave]?.versao || 0), requestId: 'ecd-' + Date.now() + '-' + Math.random().toString(36).slice(2)}});
     };
     window.pgECDReenviar = indice => { const pedido = [...estado.falhas.values()][indice]; if (pedido) enviarPrevisao(pedido); };
+    // Mesmo padrão dos outros painéis: PNG desenhado do modelo completo em canvas.
+    // Inclui todo o calendário, sem alterar a rolagem, os filtros ou as previsões.
+    window.pgECDCapturar = async function (botao) {
+        const c = estado.calendario;
+        if (!c?.parcelas.length) { aviso('Não há parcelas nos filtros selecionados.', true); return; }
+        if (estado.capturando) return;
+        estado.capturando = true;
+        const anterior = botao?.textContent;
+        if (botao) { botao.disabled = true; botao.textContent = 'Gerando PNG…'; }
+        try {
+            const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Não foi possível preparar a imagem.');
+            const quadros = [{nome: 'marca-cd', titulo: 'Quadro 1 · marca e CD', linhas: c.marcaCD, detalhado: false},
+                {nome: 'marca-serie-cd', titulo: 'Quadro 2 · marca, série e CD', linhas: c.marcaSerieCD, detalhado: true}];
+            for (const q of quadros) {
+                const larguras = q.detalhado ? [160, 145, 145, 135] : [175, 155, 135];
+                const fixas = larguras.reduce((a, b) => a + b, 0), largura = fixas + c.dias.length * 136;
+                const escala = Math.min(2, 16000 / largura), topo = 112, cab = 84, alturaLinha = 53;
+                const porPagina = Math.max(1, Math.floor((Math.min(8000, 16000000 / (largura * escala * escala)) - topo - cab - alturaLinha) / alturaLinha));
+                const paginas = Math.max(1, Math.ceil(q.linhas.length / porPagina));
+                const texto = (s, x, y, w, cor = '#0C2340', negrito = false) => {
+                    ctx.fillStyle = cor; ctx.font = (negrito ? 'bold ' : '') + '12px Poppins,Arial,sans-serif';
+                    ctx.fillText(String(s), x + 8, y, Math.max(1, w - 16));
+                };
+                for (let pagina = 0; pagina < paginas; pagina++) {
+                    const linhas = q.linhas.slice(pagina * porPagina, (pagina + 1) * porPagina);
+                    const altura = topo + cab + (linhas.length + 1) * alturaLinha;
+                    canvas.width = Math.ceil(largura * escala); canvas.height = Math.ceil(altura * escala);
+                    ctx.scale(escala, escala); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, largura, altura);
+                    ctx.fillStyle = '#0C2340'; ctx.fillRect(0, 0, largura, topo);
+                    texto('Entregas no CD · ' + q.titulo + ' · ' + br(c.hoje), 8, 28, largura - 16, '#fff', true);
+                    texto('Entregue · Coletado em trânsito · Aguardando coleta | % acumulado da linha | Plano inclui backlog', 8, 55, largura - 16, '#fff');
+                    texto('Ciclo até ' + br(c.fim) + ' · Plano ' + exato(c.total.total) + ' · Backlog ' + exato(c.total.backlog) +
+                        (paginas > 1 ? ' · Parte ' + (pagina + 1) + '/' + paginas : ''), 8, 82, largura - 16, '#fff');
+                    let x = fixas;
+                    c.semanas.forEach(s => { ctx.fillStyle = '#0C2340'; ctx.fillRect(x, topo, s.tamanho * 136, 32);
+                        texto(br(s.inicio) + ' a ' + br(s.fim), x, topo + 21, s.tamanho * 136, '#fff', true); x += s.tamanho * 136; });
+                    x = 0;
+                    const labels = ['Marca', ...(q.detalhado ? ['Série'] : []), 'CD', 'Entregue'];
+                    labels.forEach((label, i) => { ctx.fillStyle = '#0C2340'; ctx.fillRect(x, topo, larguras[i], cab);
+                        texto(label, x, topo + 53, larguras[i], '#fff', true);
+                        if (i === labels.length - 1) texto(c.incluiHojeEntregue ? 'até hoje' : 'até ontem', x, topo + 72, larguras[i], '#fff');
+                        x += larguras[i]; });
+                    c.dias.forEach(d => { ctx.fillStyle = d.feriado ? '#8595a5' : d.data === c.hoje ? '#FA4616' : '#418EDE';
+                        ctx.fillRect(x, topo + 32, 136, cab - 32);
+                        texto(br(d.data) + (d.feriado ? ' · feriado' : ''), x, topo + 54, 136, '#fff', true);
+                        texto(k(volume(c.total.dias[d.data])), x, topo + 74, 136, '#fff'); x += 136; });
+                    [...linhas, c.total].forEach((g, n) => {
+                        const total = n === linhas.length, y = topo + cab + n * alturaLinha;
+                        ctx.fillStyle = total ? '#0C2340' : '#fff'; ctx.fillRect(0, y, largura, alturaLinha);
+                        const valores = [total ? 'Total geral' : g.marca, ...(q.detalhado ? [total ? '' : g.serie] : []), total ? '' : g.cd];
+                        x = 0; valores.forEach((v, i) => { texto(v, x, y + 29, larguras[i], total ? '#fff' : '#0C2340', total); x += larguras[i]; });
+                        ctx.fillStyle = '#d9e8f8'; ctx.fillRect(x, y, larguras.at(-1), alturaLinha);
+                        texto(k(g.entregue), x, y + 23, larguras.at(-1), '#0C2340', true);
+                        texto(pct(g.entregue, g.total), x, y + 42, larguras.at(-1)); x += larguras.at(-1);
+                        let acumulado = g.entregue;
+                        c.dias.forEach(d => {
+                            const ps = g.dias[d.data] || [], v = volume(ps); acumulado += v;
+                            const entregas = volume(ps.filter(p => p.status === 'ENTREGUE')), transito = volume(ps.filter(p => p.status === 'TRANSITO'));
+                            if (!total) {
+                                ctx.fillStyle = d.feriado && !v ? '#edf0f3' : !v ? '#fff' : entregas === v ? '#d9e8f8' : '#fdf0da';
+                                ctx.fillRect(x, y, 136, alturaLinha);
+                                if (v && entregas !== v && transito) { ctx.fillStyle = '#e6f1d9'; ctx.fillRect(x, y, 136 * transito / v, alturaLinha); }
+                            }
+                            texto(v ? k(v) : d.feriado ? '—' : '', x, y + 23, 136, total ? '#fff' : '#0C2340', true);
+                            texto(pct(acumulado, g.total), x, y + 42, 136, total ? '#fff' : '#0C2340');
+                            ctx.strokeStyle = '#d5dee7'; ctx.strokeRect(x, y, 136, alturaLinha); x += 136;
+                        });
+                        if (!total) { ctx.fillStyle = estado.marcas.get(g.marca) || '#418EDE'; ctx.fillRect(0, y, 4, alturaLinha); }
+                    });
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                    if (!blob) throw new Error('Não foi possível gerar o PNG.');
+                    const url = URL.createObjectURL(blob), link = document.createElement('a');
+                    link.download = 'Entregas_CD_' + q.nome + '_' + c.hoje + (paginas > 1 ? '_parte-' + (pagina + 1) : '') + '.png';
+                    link.href = url; link.click(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+                }
+            }
+            aviso('Captura dos dois quadros concluída.');
+        } catch (erro) { aviso('Não foi possível capturar o painel: ' + (erro?.message || erro), true); }
+        finally { estado.capturando = false; if (botao) { botao.disabled = false; botao.textContent = anterior; } }
+    };
     window.pgECDExportar = function (botao) {
         if (!estado.calendario?.parcelas.length) { aviso('Não há parcelas nos filtros selecionados.', true); return; }
         if (window.pgTPExportacaoPronta && !window.pgTPExportacaoPronta()) return;
@@ -212,10 +294,10 @@
         const abas = window.pgEntregasCDModelo.exportarCalendario(estado.calendario);
         botao.disabled = true; botao.textContent = 'Exportando...';
         google.script.run.withSuccessHandler(resp => {
-            botao.disabled = false; botao.textContent = 'Exportar';
+            botao.disabled = false; botao.textContent = 'Exportar para Sheets';
             if (!resp?.success || !/^https:\/\/docs\.google\.com\/spreadsheets\//.test(resp.url || '')) { aviso('Não foi possível gerar a planilha.', true); return; }
             $('ecdAviso').innerHTML = 'Planilha criada: <a href="' + esc(resp.url) + '" target="_blank" rel="noopener noreferrer" style="color:#418EDE;text-decoration:underline">Abrir os dois quadros e a base por parcela</a>';
-        }).withFailureHandler(erro => { botao.disabled = false; botao.textContent = 'Exportar'; aviso('Erro ao exportar: ' + (erro?.message || erro), true); })
+        }).withFailureHandler(erro => { botao.disabled = false; botao.textContent = 'Exportar para Sheets'; aviso('Erro ao exportar: ' + (erro?.message || erro), true); })
             .gerarPlanilhaEntregasCD({nome: 'Entregas_CD_' + hoje(), abas});
     };
     window.processarEntregasCD = function () {

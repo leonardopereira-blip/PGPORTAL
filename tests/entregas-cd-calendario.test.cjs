@@ -135,3 +135,31 @@ test('exportação envia índices de formato percentual e mantém valores como r
     assert.equal(aba.linhas.at(-1)[aba.cabecalho.indexOf('% entregue')],0.3);
   }
 });
+
+test('download mantém painel por marca primeiro e base com histórico PCP, manual e TP completo',()=>{
+  const l=linha({OP:'OP-123',ENVIO:'V1',KIT:'KIT-A',DESCRIÇÃO:'Material aluno',CLIENTE_PERSONALIZADO:'Sim',
+    coletas:[{data:'2026-10-26',volume:60}],entregas:[{data:'2026-10-25',volume:20}]});
+  const inicial=portal([l]),chave=inicial.m.chave(l);
+  const a=portal([l],{[chave]:{dataColeta:'2026-10-29',dataEntrega:'2026-10-31',observacao:'Confirmado',
+    versao:3,usuario:'analista@exemplo.com',atualizadoEm:'2026-10-27T10:00:00Z'}});
+  const c=a.c(),abas=a.m.exportarCalendario(c),base=abas[2];
+  const valor=(row,nome)=>row[base.cabecalho.indexOf(nome)];
+  assert.equal(abas[0].nome,'Quadro_Marca_CD');
+  assert.equal(abas[0].linhas.at(-1)[abas[0].cabecalho.indexOf('Entregue')],c.total.entregue);
+  for(const row of base.linhas){
+    assert.equal(row.length,base.cabecalho.length);
+    assert.equal(valor(row,'OP'),'OP-123');assert.equal(valor(row,'Kit'),'KIT-A');
+    assert.equal(valor(row,'Coleta PCP original'),'2026-10-28');
+    assert.equal(valor(row,'Entrega PCP + SLA original'),'2026-10-30');
+    assert.equal(valor(row,'Coleta manual'),'2026-10-29');
+    assert.equal(valor(row,'Entrega manual'),'2026-10-31');
+    assert.equal(valor(row,'Observação'),'Confirmado');assert.equal(valor(row,'Versão da previsão'),3);
+    assert.equal(valor(row,'Usuário da previsão'),'analista@exemplo.com');
+    assert.equal(valor(row,'Coletas TP do item (auditoria)'),'2026-10-26: 60');
+    assert.equal(valor(row,'Entregas TP do item (auditoria)'),'2026-10-25: 20');
+    assert(row.every(v=>v!==undefined&&v!==null));
+  }
+  assert.equal(base.linhas.reduce((s,row)=>s+valor(row,'Quantidade'),0),c.total.total);
+  for(const nome of ['Coleta PCP original','Entrega PCP + SLA original','Coleta manual','Entrega manual'])
+    assert(base.colunasData.includes(base.cabecalho.indexOf(nome)),nome);
+});
