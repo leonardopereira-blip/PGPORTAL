@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-10-27T11:00:41.856Z",
+  "lido_em": "2026-10-27T11:01:21.219Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -45,7 +45,7 @@
     "HTML:Eficiencia_Aging_UI": "15a7d134d00a8dc6b962aea853762763f7a0bfe9678a7da025e8b75010a358cf",
     "SERVER_JS:EntregasCDPrevisoes": "9ba2212964736c257d6e69dcf995e275779307fa424ab50990c27ab50a261db4",
     "SERVER_JS:EventosTPMapa": "72b030aa9b2e6db92aca1de99f0f7954d731dd06186a9c04c8adaf43d08d511f",
-    "HTML:ExportadorExcel": "b3717142670e28524036ce53093a3780808992615b35532ce6e2a2ed23db0fe5",
+    "HTML:ExportadorExcel": "aa0b6fd746a129dd4d19a625a0c1c0931aa4e1b6151073ba357b67f341aeac41",
     "SERVER_JS:ExportarValores": "b873c7f243caa2fa43d2304b1a7c26d34a08b6027ffe2ae08c8c99fa5c808984",
     "SERVER_JS:GerenciadorVersao": "2ac962dee2581c4cbb3f81a90885fd076046fe3d1f8442d4836bb2b643b1b4c2",
     "SERVER_JS:HistoricoPCP2026": "444a1c0ceab3c50e257cd0193f0b01dd8e4e0d092ee005c86b1a70390abd16c3",
@@ -58,7 +58,7 @@
     "HTML:Scripts_Acompanhamento_Mapa": "da868d37ad728d90c935d9ab3c4dc3504672a61c9478488d0d659288d44e6e34",
     "HTML:Scripts_Eficiencia_Aging_UI": "f72b957127faa413eced959412dcd77320c52bc5202944f55e6687d8aee5c42d",
     "HTML:Scripts_Eficiencia_Aging": "c751612777fa5ca3e090fc94b0a6bc68c50ec89cfc6f793d8fdc5fea39775046",
-    "HTML:Scripts_EntregasCD_Controle": "7a26f0b4957e795e85c8d83636832cd3aaf82d5b06196d7b6db0aab73147addf",
+    "HTML:Scripts_EntregasCD_Controle": "a506254dcc351136e881cdca99ba58e81b8be653e5ae8643eda0f4e371b245e5",
     "HTML:Scripts_EntregasCD_Modelo": "8265c1adcce46aa5d540fbd5b54046495466190d9dfc080a4ad897c3aebede81",
     "HTML:Scripts_Eventos_TP": "fcb7b126a2f7d881a78e5c0e6945982a1e3ebade0fa3cd9fc1fd3827627f33ea",
     "HTML:Scripts_Giro_Registro": "05b20c0706f9627694ebf3637df5e51ee51b3e0c19a12f761ea75f750c3f147e",
