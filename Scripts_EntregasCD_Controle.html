@@ -11,6 +11,8 @@
     };
     const exato = v => Math.round(Number(v || 0)).toLocaleString('pt-BR');
     const br = d => d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '—';
+    const ontem = dia => new Date(Date.parse(dia + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
+    const entregueAteOntem = grupo => Number(grupo.entregueAteOntem || 0);
     const pct = (v, t) => (t ? Math.min(100, v * 100 / t) : 0).toLocaleString('pt-BR', {maximumFractionDigits: 1}) + '%';
     const volume = ps => (ps || []).reduce((s, p) => s + p.volume, 0);
     const chavesItem = item => [...new Set(item.chavesOrigem?.length ? item.chavesOrigem : [item.chave])];
@@ -81,7 +83,7 @@
         <div class="ecd-controls">
           <label>Início<input id="ecdInicio" type="date" onchange="pgECDRender()"></label>
           <label>Fim<input id="ecdFim" type="date" onchange="pgECDRender()"></label>
-          <label style="flex-direction:row;align-items:center;gap:8px"><input id="ecdOcultarConcluidos" type="checkbox" onchange="pgECDRender()">Ocultar materiais 100% entregues</label>
+          <label style="flex-direction:row;align-items:center;gap:8px"><input id="ecdOcultarConcluidos" type="checkbox" onchange="pgECDRender()">Ocultar linhas 100% entregues</label>
         </div>
         <div id="ecdFalhas" role="alert"></div>
         <details id="ecdPendencias" class="ecd-section ecd-backlog">
@@ -92,7 +94,7 @@
         <p id="ecdNotaDomingo" class="ecd-note"></p>
         <details id="ecdPorMarca" class="ecd-section" open><summary><span>Quadro 1 · marca e CD</span><span id="ecdInfoMarca"></span></summary><div id="ecdQuadroMarca" class="ecd-scroll"></div></details>
         <details id="ecdDetalhado" class="ecd-section" open><summary><span>Quadro 2 · marca, série e CD</span><span id="ecdInfoSerie"></span></summary><div id="ecdQuadroSerie" class="ecd-scroll"></div></details>
-        <p class="ecd-note">O período escolhe as datas exibidas. Entregue mostra o realizado até hoje; os percentuais diários mostram o acumulado até cada data. O plano inclui o backlog. Previsões em domingos e feriados aparecem no próximo dia de operação; a data informada permanece na exportação. Datas após o período ficam nas pendências.</p>`;
+        <p class="ecd-note">Os filtros da tabela alteram apenas a exibição; o Total Geral mantém a base completa. Entregue mostra sempre o acumulado até ontem, independente do período. Os percentuais diários mostram o acumulado até cada data. O plano inclui o backlog. Previsões em domingos e feriados aparecem no próximo dia de operação; a data informada permanece na exportação. Datas após o período ficam nas pendências.</p>`;
         $('ecdInicio').value = hoje();
         const fimPadrao = window.PG_ENTREGAS_CD_CONFIG?.fimCiclo || hoje().slice(0,4) + '-12-02';
         $('ecdFim').value = fimPadrao >= hoje() ? fimPadrao : hoje();
@@ -122,7 +124,7 @@
         // A primeira faixa é exclusivamente da semana. O espaço entre semana
         // e datas atravessa também Marca, Série, CD e Entregue, como na referência.
         const cantoSemana = '<th colspan="' + col + '" class="ecd-week-corner" style="width:' + widths.reduce((a,b)=>a+b,0) + 'px"></th>';
-        const header = labels.map((label, i) => '<th class="ecd-freeze ' + (i === col - 1 ? 'ecd-frozen-end ecd-delivered' : '') + '" style="' + fixo(i) + '">' + label + (i === col - 1 ? '<span class="ecd-sub">até hoje · ' + br(c.hoje) + '</span>' : '') + '</th>').join('');
+        const header = labels.map((label, i) => '<th class="ecd-freeze ' + (i === col - 1 ? 'ecd-frozen-end ecd-delivered' : '') + '" style="' + fixo(i) + '">' + label + (i === col - 1 ? '<span class="ecd-sub">até ontem · ' + br(ontem(c.hoje)) + '</span>' : '') + '</th>').join('');
         const atual = c.semanas.findIndex(s => s.inicio <= c.hoje && s.fim >= c.hoje);
         const semanas = c.semanas.map((s, n) => '<th colspan="' + s.tamanho + '">' + (n === atual ? 'Semana atual · ' : atual >= 0 && n === atual + 1 ? 'Próxima semana · ' : '') + br(s.inicio) + ' a ' + br(s.fim) + (n === c.semanas.length - 1 ? ' · fim' : '') + '</th>').join('');
         const dias = c.dias.map(d => '<th class="' + (d.feriado ? 'ecd-holiday' : d.data === c.hoje ? 'ecd-today' : '') + '">' + ['dom','seg','ter','qua','qui','sex','sáb'][new Date(d.data + 'T12:00:00Z').getUTCDay()] + ' ' + br(d.data) + '<span class="ecd-sub">' + (d.feriado ? 'feriado' + (volume(c.total.dias[d.data]) ? ' · ' + k(volume(c.total.dias[d.data])) : '') : (d.data === c.hoje ? 'hoje · ' : '') + k(volume(c.total.dias[d.data]))) + '</span></th>').join('');
@@ -130,8 +132,8 @@
         const linhasMarca = (idx, serie) => { let n = 1; while (idx + n < linhas.length && linhas[idx + n].marca === linhas[idx].marca && (!serie || linhas[idx + n].serie === linhas[idx].serie)) n++; return n; };
         function celulas(g, total = false) {
             let acumulado = g.acumuladoAnterior ?? g.entregue;
-            const entreguePs = g.parcelas.filter(p => p.status === 'ENTREGUE' && !p.backlog);
-            const realizado = g.realCD ?? g.entregue;
+            const entreguePs = g.parcelas.filter(p => p.status === 'ENTREGUE' && p.dataOriginal < c.hoje && !p.backlog);
+            const realizado = entregueAteOntem(g);
             let h = '<td class="ecd-left ecd-delivered ecd-frozen-end ecd-cell" style="' + fixo(col - 1) + '" title="' + esc(tooltip(entreguePs)) + '"><b>' + k(realizado) + '</b><span class="ecd-sub">' + pct(realizado, g.total) + '</span></td>';
             c.dias.forEach(d => {
                 const ps = g.dias[d.data] || [], v = volume(ps); acumulado += v;
@@ -159,7 +161,7 @@
         }).join('');
         const footerLabels = labels.slice(0, -1).map((_, i) => '<td class="ecd-left" style="' + fixo(i) + '">' + (i ? '' : 'Total geral<span class="ecd-sub">' + k(c.total.total) + ' no ciclo</span>') + '</td>').join('');
         const largura = widths.reduce((a,b) => a+b,0) + c.dias.length * larguraDia;
-        return '<table class="ecd-table" style="width:' + largura + 'px;min-width:100%"><colgroup>' + widths.map(w => '<col style="width:' + w + 'px">').join('') + c.dias.map(() => '<col style="width:' + larguraDia + 'px">').join('') + '</colgroup><thead><tr class="ecd-week">' + cantoSemana + semanas + '</tr><tr class="ecd-day">' + header + dias + '</tr></thead><tbody>' + body + '</tbody><tfoot><tr>' + footerLabels + celulas(c.total, true) + '</tr></tfoot></table>' + (!linhas.length ? '<p class="ecd-empty">Nenhuma parcela nos filtros selecionados.</p>' : '');
+        return '<table class="ecd-table" style="width:' + largura + 'px;min-width:100%"><colgroup>' + widths.map(w => '<col style="width:' + w + 'px">').join('') + c.dias.map(() => '<col style="width:' + larguraDia + 'px">').join('') + '</colgroup><thead><tr class="ecd-week">' + cantoSemana + semanas + '</tr><tr class="ecd-day">' + header + dias + '</tr></thead><tbody>' + body + '</tbody><tfoot><tr>' + footerLabels + celulas(c.total, true) + '</tr></tfoot></table>' + (!linhas.length ? '<p class="ecd-empty">Nenhuma linha para exibir. O Total Geral permanece completo.</p>' : '');
     }
     window.pgECDRender = function () {
         if (!$('ecdQuadroSerie')) return;
@@ -170,9 +172,9 @@
             feriados: window.PG_ENTREGAS_CD_CONFIG?.feriados}, {ocultarConcluidos: !!$('ecdOcultarConcluidos')?.checked}); }
         catch (e) { estado.calendario = null; aviso('Período inválido: ' + e.message, true); return; }
         estado.calendario = c;
-        $('ecdLegendaEntregue').textContent = 'Entregue até hoje';
-        $('ecdNotaDomingo').textContent = 'Realizado TP até hoje: ' + k(c.total.realCD ?? c.total.entregue) + ' de ' + k(c.total.total) + ' · ' + pct(c.total.realCD ?? c.total.entregue, c.total.total) +
-            ' · Origem: ' + (estado.origem === 'GRAFICA' ? 'Gráficas' : estado.origem === 'ACABADORA' ? 'Acabadoras' : 'Todas');
+        $('ecdLegendaEntregue').textContent = 'Entregue até ontem';
+        $('ecdNotaDomingo').textContent = 'Realizado TP até ontem (' + br(ontem(c.hoje)) + '): ' + k(entregueAteOntem(c.total)) + ' de ' + k(c.total.total) + ' · ' + pct(entregueAteOntem(c.total), c.total.total) +
+            ' · Origem: ' + (estado.origem === 'GRAFICA' ? 'Gráficas' : estado.origem === 'ACABADORA' ? 'Acabadoras' : 'Todas') + ' · Filtros da tabela alteram apenas a exibição; Total Geral da base completa.';
         $('ecdQuadroSerie').innerHTML = quadro(c.marcaSerieCD, c, true);
         $('ecdQuadroMarca').innerHTML = quadro(c.marcaCD, c, false);
         $('ecdInfoSerie').textContent = c.marcaSerieCD.length + ' linhas · ' + k(c.total.total);
@@ -265,7 +267,7 @@
                     ctx.scale(escala, escala); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, largura, altura);
                     ctx.fillStyle = '#0C2340'; ctx.fillRect(0, 0, largura, topo);
                     texto('Entregas no CD · ' + q.titulo + ' · ' + br(c.hoje), 8, 28, largura - 16, '#fff', true);
-                    texto('Entregue · Coletado em trânsito · Aguardando coleta | % acumulado da linha | Plano inclui backlog', 8, 55, largura - 16, '#fff');
+                    texto('Entregue até ontem · Coletado em trânsito · Aguardando coleta | Total Geral da base completa', 8, 55, largura - 16, '#fff');
                     texto('Período ' + br(c.inicio || c.hoje) + ' a ' + br(c.fim) + ' · Plano ' + exato(c.total.total) + ' · Backlog ' + exato(c.total.backlog) +
                         (paginas > 1 ? ' · Parte ' + (pagina + 1) + '/' + paginas : ''), 8, 82, largura - 16, '#fff');
                     let x = fixas;
@@ -275,7 +277,7 @@
                     const labels = ['Marca', ...(q.detalhado ? ['Série'] : []), 'CD', 'Entregue'];
                     labels.forEach((label, i) => { ctx.fillStyle = '#0C2340'; ctx.fillRect(x, topo, larguras[i], cab);
                         texto(label, x, topo + 53, larguras[i], '#fff', true);
-                        if (i === labels.length - 1) texto('até hoje · ' + br(c.hoje), x, topo + 72, larguras[i], '#fff');
+                        if (i === labels.length - 1) texto('até ontem · ' + br(ontem(c.hoje)), x, topo + 72, larguras[i], '#fff');
                         x += larguras[i]; });
                     c.dias.forEach(d => { ctx.fillStyle = d.feriado ? '#8595a5' : d.data === c.hoje ? '#FA4616' : '#418EDE';
                         ctx.fillRect(x, topo + 32, 136, cab - 32);
@@ -287,8 +289,8 @@
                         const valores = [total ? 'Total geral' : g.marca, ...(q.detalhado ? [total ? '' : g.serie] : []), total ? '' : g.cd];
                         x = 0; valores.forEach((v, i) => { texto(v, x, y + 29, larguras[i], total ? '#fff' : '#0C2340', total); x += larguras[i]; });
                         ctx.fillStyle = '#d9e8f8'; ctx.fillRect(x, y, larguras.at(-1), alturaLinha);
-                        texto(k(g.realCD ?? g.entregue), x, y + 23, larguras.at(-1), '#0C2340', true);
-                        texto(pct(g.realCD ?? g.entregue, g.total), x, y + 42, larguras.at(-1)); x += larguras.at(-1);
+                        texto(k(entregueAteOntem(g)), x, y + 23, larguras.at(-1), '#0C2340', true);
+                        texto(pct(entregueAteOntem(g), g.total), x, y + 42, larguras.at(-1)); x += larguras.at(-1);
                         let acumulado = g.acumuladoAnterior ?? g.entregue;
                         c.dias.forEach(d => {
                             const ps = g.dias[d.data] || [], v = volume(ps); acumulado += v;

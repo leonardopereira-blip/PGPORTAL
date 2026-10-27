@@ -46,7 +46,7 @@ function alinhado(app,c){
   assert.equal(c.marcaCD.reduce((s,g)=>s+g.realCD,0),ref.realCD);
   assert.equal(c.marcaSerieCD.reduce((s,g)=>s+g.realCD,0),ref.realCD);
   const abas=app.m.exportarCalendario(c),col=abas[0].cabecalho.indexOf('Entregue');
-  assert.equal(abas[0].linhas.at(-1)[col],ref.realCD);
+  assert.equal(abas[0].linhas.at(-1)[col],c.total.entregueAteOntem);
   assert.equal(abas[2].linhas.reduce((s,r)=>s+r[15],0),ref.total);
 }
 test('ECD preserva TP250 no grupo300 quando owner tem apenas100, igual à Meta Armazém',()=>{
@@ -106,15 +106,46 @@ test('grupo ambíguo conserva todas as chaves e datas individuais diferentes sem
   const comum=app.montar({[keys[0]]:{dataEntrega:'2026-10-25'},[keys[1]]:{dataEntrega:'2026-10-25'}})[0];
   assert.equal(comum.dtEntregaManual,'2026-10-25');assert.equal(comum.conflitoEntrega,false);
 });
-test('ocultar100% recalcula ambos quadros, base e totais somente com materiais em aberto',()=>{
-  const rows=[row(101,{'TIRAGEM COLETADA':100}),row(102,{SKU:'SKU-2',SKU_REAL:'SKU-2',TIRAGEM:200,'TIRAGEM COLETADA':40})];
+test('ocultar100% remove só linhas concluídas e preserva total geral e base completos',()=>{
+  const rows=[row(101,{'TIRAGEM COLETADA':100}),row(102,{SKU:'SKU-2',SKU_REAL:'SKU-2',MARCA_FINAL:'SAS',UNIDADE:'SAS',TIRAGEM:200,'TIRAGEM COLETADA':40})];
   const app=portal(rows),full=app.c(),c=app.c({}, {}, {ocultarConcluidos:true});
   assert.equal(full.total.total,300);assert.equal(full.total.realCD,140);
-  assert.equal(c.total.total,200);assert.equal(c.total.realCD,40);
-  assert(c.parcelas.every(p=>p.sku==='SKU-2'));
+  assert.equal(c.total.total,300);assert.equal(c.total.realCD,140);assert.equal(c.total.entregueAteOntem,140);
+  assert(c.parcelas.some(p=>p.sku==='SKU-1'));assert(c.parcelas.some(p=>p.sku==='SKU-2'));
   assert.equal(c.marcaCD.reduce((s,g)=>s+g.total,0),200);assert.equal(c.marcaSerieCD.reduce((s,g)=>s+g.total,0),200);
-  assert.equal(app.m.exportarCalendario(c)[2].linhas.reduce((s,r)=>s+r[15],0),200);
+  const abas=app.m.exportarCalendario(c);
+  assert.equal(abas[2].linhas.reduce((s,r)=>s+r[15],0),300);
+  assert.equal(abas[0].linhas.at(-1)[abas[0].cabecalho.indexOf('Plano')],300);
+  assert.equal(abas[0].linhas.at(-1)[abas[0].cabecalho.indexOf('Entregue')],140);
   assert.throws(()=>app.c({}, {inicio:'2026-10-22',fim:'2026-10-20'}),/período/);
+});
+test('entregue até ontem independe de datas passadas ou futuras e não inclui TP de hoje',()=>{
+  const app=portal([row(101,{'TIRAGEM COLETADA':50})],{cache:{key:[
+    movement(2,20,{entregaTP:'2026-10-18'}),movement(3,30,{entregaTP:'2026-10-20'})]}});
+  for(const config of [{inicio:'2026-10-01',fim:'2026-10-10'},{inicio:'2026-10-17',fim:'2026-10-20'},
+    {inicio:'2026-11-01',fim:'2026-11-03'}]){
+    const c=app.c({},config),aba=app.m.exportarCalendario(c)[0];
+    assert.equal(c.total.total,100);assert.equal(c.total.entregueAteOntem,20);assert.equal(c.total.realCD,50);
+    assert.equal(c.marcaCD[0].entregueAteOntem,20);assert.equal(c.marcaSerieCD[0].entregueAteOntem,20);
+    assert.equal(aba.linhas.at(-1)[aba.cabecalho.indexOf('Entregue')],20);
+    assert.equal(aba.linhas.at(-1)[aba.cabecalho.indexOf('% entregue')],0.2);
+  }
+  const domingo=portal([row(101,{'TIRAGEM COLETADA':50})],{today:'2026-10-18',cache:{key:[
+    movement(2,20,{entregaTP:'2026-10-17'}),movement(3,30,{entregaTP:'2026-10-18'})]}});
+  const c=domingo.m.calendario(domingo.montar(),{hoje:'2026-10-18',fim:'2026-12-02'});
+  assert.equal(c.total.entregue,50,'partição legada de domingo continua disponível');
+  assert.equal(c.total.entregueAteOntem,20,'domingo de hoje não entra no acumulado até ontem');
+  assert.equal(c.total.realCD,50);
+});
+test('linha concluída só hoje continua visível e grupos mistos mantêm os materiais entregues no total',()=>{
+  const rows=[row(101,{'TIRAGEM COLETADA':100}),row(102,{SKU:'SKU-2',SKU_REAL:'SKU-2',serie_corrigida:'2º ANO',TIRAGEM:200,'TIRAGEM COLETADA':40})];
+  const app=portal(rows),c=app.c({}, {}, {ocultarConcluidos:true});
+  assert.equal(c.total.total,300);assert.equal(c.marcaCD[0].total,300);
+  assert.equal(c.marcaSerieCD.length,1);assert.equal(c.marcaSerieCD[0].total,200);
+  const atual=portal([row(101,{'TIRAGEM COLETADA':100})],{cache:{key:[movement(2,100,{entregaTP:'2026-10-20'})]}});
+  const hoje=atual.c({}, {}, {ocultarConcluidos:true});
+  assert.equal(hoje.total.entregueAteOntem,0);assert.equal(hoje.total.realCD,100);
+  assert.equal(hoje.marcaCD.length,1,'100% entregue hoje ainda não é 100% até ontem');
 });
 test('período futuro inicia acumulado com previsão anterior à janela sem alterar o entregue real',()=>{
   const rows=[row(101)],app=portal(rows),key=app.m.chave(rows[0]);

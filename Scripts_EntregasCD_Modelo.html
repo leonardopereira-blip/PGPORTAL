@@ -287,7 +287,7 @@
         const fim = data(config.fim || (hoje?.slice(0, 4) + '-12-02'));
         if (!hoje || !inicio || !fim || fim < inicio) throw new Error('Defina um período com início e fim válidos.');
         if (Date.parse(fim) - Date.parse(inicio) > 369 * 86400000) throw new Error('Selecione um ciclo de até 370 dias.');
-        itens = (itens || []).filter(item => !filtros.ocultarConcluidos || !(item.total > 0 && item.entregue >= item.total));
+        itens = itens || [];
         const feriados = new Set((config.feriados || ['11-02', '11-20']).map(d => d.length === 5 ? hoje.slice(0, 4) + '-' + d : d));
         const domingo = d => new Date(d + 'T12:00:00Z').getUTCDay() === 0;
         const ajustarDia = d => {
@@ -355,22 +355,33 @@
             const grupos = new Map();
             parcelas.forEach(p => {
                 const k = JSON.stringify([p.marca, detalhado ? p.serie : '', p.cd]);
-                if (!grupos.has(k)) grupos.set(k, {marca: p.marca, serie: detalhado ? p.serie : '', cd: p.cd, total: 0, entregue: 0, acumuladoAnterior: 0, realCD: 0, entregueHoje: 0,
+                if (!grupos.has(k)) grupos.set(k, {marca: p.marca, serie: detalhado ? p.serie : '', cd: p.cd, total: 0, entregue: 0, entregueAteOntem: 0, acumuladoAnterior: 0, realCD: 0, entregueHoje: 0,
                     backlog: 0, dias: Object.create(null), parcelas: []});
                 const g = grupos.get(k); g.total += p.volume; g.parcelas.push(p);
-                if (p.status === 'ENTREGUE') { g.realCD += p.volume; if (p.dataOriginal === hoje) g.entregueHoje += p.volume; }
+                if (p.status === 'ENTREGUE') {
+                    g.realCD += p.volume;
+                    if (p.dataOriginal < hoje) g.entregueAteOntem += p.volume;
+                    if (p.dataOriginal === hoje) g.entregueHoje += p.volume;
+                }
                 if (!p.backlog && (p.dia === 'entregue' || p.dia && p.dia < inicio)) g.acumuladoAnterior += p.volume;
                 if (p.backlog) g.backlog += p.volume;
                 else if (p.dia === 'entregue') g.entregue += p.volume;
                 else { if (!g.dias[p.dia]) g.dias[p.dia] = []; g.dias[p.dia].push(p); }
             });
-            return [...grupos.values()].sort((a, b) => (a.marca.localeCompare(b.marca, 'pt-BR', {numeric: true}) ||
+            // Ocultar uma linha concluída é somente apresentação: a base e o
+            // total geral continuam com todos os materiais e movimentos.
+            return [...grupos.values()].filter(g => !filtros.ocultarConcluidos || g.entregueAteOntem < g.total)
+                .sort((a, b) => (a.marca.localeCompare(b.marca, 'pt-BR', {numeric: true}) ||
                 a.serie.localeCompare(b.serie, 'pt-BR', {numeric: true}) || a.cd.localeCompare(b.cd, 'pt-BR', {numeric: true})));
         };
-        const total = {marca: 'Total geral', total: 0, entregue: 0, acumuladoAnterior: 0, realCD: 0, entregueHoje: 0, backlog: 0, dias: Object.create(null), parcelas};
+        const total = {marca: 'Total geral', total: 0, entregue: 0, entregueAteOntem: 0, acumuladoAnterior: 0, realCD: 0, entregueHoje: 0, backlog: 0, dias: Object.create(null), parcelas};
         parcelas.forEach(p => {
             total.total += p.volume;
-            if (p.status === 'ENTREGUE') { total.realCD += p.volume; if (p.dataOriginal === hoje) total.entregueHoje += p.volume; }
+            if (p.status === 'ENTREGUE') {
+                total.realCD += p.volume;
+                if (p.dataOriginal < hoje) total.entregueAteOntem += p.volume;
+                if (p.dataOriginal === hoje) total.entregueHoje += p.volume;
+            }
             if (!p.backlog && (p.dia === 'entregue' || p.dia && p.dia < inicio)) total.acumuladoAnterior += p.volume;
             if (p.backlog) total.backlog += p.volume;
             else if (p.dia === 'entregue') total.entregue += p.volume;
@@ -385,7 +396,7 @@
                 ...c.dias.flatMap(d => [d.data + (d.feriado ? ' (feriado)' : ''), '% acumulado ' + d.data])];
             const valores = g => {
                 let acumulado = g.acumuladoAnterior ?? g.entregue;
-                const entregueAtual = g.realCD ?? g.entregue;
+                const entregueAtual = g.entregueAteOntem ?? g.entregue;
                 return [g.marca, ...(detalhado ? [g.serie || ''] : []), g.cd || '', g.total, g.backlog, entregueAtual,
                     g.total ? entregueAtual / g.total : 0, ...c.dias.flatMap(d => {
                         const v = (g.dias[d.data] || []).reduce((s, p) => s + p.volume, 0); acumulado += v;

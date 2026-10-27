@@ -83,17 +83,30 @@ test('captura PNG inclui os dois quadros e todo o ciclo sem depender da rolagem'
   assert.match(a.nodes.get('ecdAviso').textContent,/Captura dos dois quadros concluída/);
 });
 
-test('milhões e percentuais usam as mesmas unidades e precisão na tela e no PNG',async()=>{
+test('Total Geral de 24,91M e entregue até ontem permanecem completos ao ocultar concluídos e trocar período',async()=>{
   const a=interfacePortal();
-  a.linhas.forEach(l=>{l.TIRAGEM=12455000;l.entregas=[{data:'2026-10-25',volume:8678150}];});
+  a.linhas.forEach(l=>{l.TIRAGEM=12455000;});
+  a.linhas[0].entregas=[{data:'2026-10-25',volume:12455000}];
+  a.linhas[1].entregas=[{data:'2026-10-25',volume:4901300},{data:'2026-10-26',volume:1000000}];
   a.window.processarEntregasCD();
-  for(const id of ['ecdQuadroMarca','ecdQuadroSerie']){
-    const html=a.nodes.get(id).innerHTML;
-    assert.match(html,/24,91M/);assert.match(html,/17,36M/);assert.match(html,/69,7%/);
-    assert(!html.includes('17.356,3k'));
+  for(const ocultar of [false,true])for(const [inicio,fim] of [['2026-10-01','2026-10-03'],['2027-01-04','2027-01-06']]){
+    a.nodes.get('ecdOcultarConcluidos').checked=ocultar;
+    a.nodes.get('ecdInicio').value=inicio;a.nodes.get('ecdFim').value=fim;a.window.pgECDRender();
+    for(const id of ['ecdQuadroMarca','ecdQuadroSerie']){
+      const html=a.nodes.get(id).innerHTML,rodape=html.match(/<tfoot>([\s\S]*?)<\/tfoot>/)[1];
+      assert.match(rodape,/24,91M/);assert.match(rodape,/17,36M/);assert.match(rodape,/69,7%/);
+      assert.match(html,/até ontem · 25\/10/);assert(!html.includes('17.356,3k'));
+      assert.equal(html.includes('>SAE<'),!ocultar);
+    }
+    a.window.pgECDExportar(a.nodes.get('ecdExportar'));
+    assert.equal(a.exportado().abas[0].linhas.at(-1)[2],24910000);
+    assert.equal(a.exportado().abas[0].linhas.at(-1)[4],17356300);
+    assert(a.exportado().abas[2].linhas.some(r=>r[1]==='SAE'),'base preserva linhas ocultadas');
   }
+  assert.match(a.nodes.get('ecdNotaDomingo').textContent,/17,36M de 24,91M · 69,7%/);
   await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));
-  for(const texto of ['17,36M','69,7%'])assert(a.desenhos.includes(texto),texto);
+  for(const texto of ['17,36M','69,7%','até ontem · 25/10'])assert(a.desenhos.includes(texto),texto);
+  assert(a.desenhos.some(t=>String(t).includes('Plano 24.910.000')));
   assert.match(interfacePortal({entregaOntem:true}).nodes.get('ecdQuadroMarca').innerHTML,/0,1k/,'valores menores continuam em milhares');
 });
 
@@ -205,22 +218,22 @@ test('falha após outra pessoa salvar preserva data mais recente e mantém reenv
   a.window.pgECDReenviar(0);assert.equal(a.salvo().requestId,requestId,'reenvio incerto é idempotente');
 });
 
-test('realizado de hoje, inclusive feriado e domingo, integra a coluna Entregue até hoje',()=>{
+test('entregas de hoje ficam nas datas do quadro e não entram em Entregue até ontem',()=>{
   const feriado=interfacePortal({hojeData:'2026-11-02',entregaHoje:true});
   const html=feriado.nodes.get('ecdQuadroSerie').innerHTML;
   assert.match(html,/feriado · 0,1k/);assert.match(html,/style="background:#d9e8f8"/);
   const domingo=interfacePortal({hojeData:'2026-11-01',entregaHoje:true});
-  assert.equal(domingo.nodes.get('ecdLegendaEntregue').textContent,'Entregue até hoje');
-  assert.match(domingo.nodes.get('ecdNotaDomingo').textContent,/Realizado TP até hoje: 0,1k de 0,2k · 25%/);
-  assert.match(domingo.nodes.get('ecdQuadroSerie').innerHTML,/até hoje · 01\/11/);
+  assert.equal(domingo.nodes.get('ecdLegendaEntregue').textContent,'Entregue até ontem');
+  assert.match(domingo.nodes.get('ecdNotaDomingo').textContent,/Realizado TP até ontem \(31\/10\): 0k de 0,2k · 0%/);
+  assert.match(domingo.nodes.get('ecdQuadroSerie').innerHTML,/até ontem · 31\/10/);
 });
 
-test('Início e Fim escolhem datas passadas e futuras preservando o snapshot entregue até hoje',async()=>{
+test('Início e Fim escolhem datas passadas e futuras preservando entregue até ontem',async()=>{
   const a=interfacePortal({entregaOntem:true});
   a.nodes.get('ecdInicio').value='2026-10-01';a.nodes.get('ecdFim').value='2026-10-03';a.window.pgECDRender();
   let html=a.nodes.get('ecdQuadroMarca').innerHTML;
   assert.match(html,/qui 01\/10/);assert.match(html,/sáb 03\/10/);assert(!html.includes('02/12'));
-  assert.match(html,/até hoje · 26\/10/);assert.match(a.nodes.get('ecdNotaDomingo').textContent,/25%/);
+  assert.match(html,/até ontem · 25\/10/);assert.match(a.nodes.get('ecdNotaDomingo').textContent,/25%/);
   a.window.pgECDExportar(a.nodes.get('ecdExportar'));
   assert(a.exportado().abas[0].cabecalho.includes('2026-10-01'));
   assert(!a.exportado().abas[0].cabecalho.includes('2026-12-02'));
@@ -239,22 +252,22 @@ test('período futuro acumula previsões vigentes anteriores ao início sem vira
   a.window.processarEntregasCD();a.nodes.get('ecdInicio').value='2026-11-10';a.nodes.get('ecdFim').value='2026-11-11';
   a.window.pgECDRender();
   assert.match(a.nodes.get('ecdQuadroMarca').innerHTML,/<span class="ecd-sub">100%<\/span>/);
-  assert.match(a.nodes.get('ecdNotaDomingo').textContent,/Realizado TP até hoje: 0k/);
+  assert.match(a.nodes.get('ecdNotaDomingo').textContent,/Realizado TP até ontem \(25\/10\): 0k/);
   await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));assert(a.desenhos.includes('100%'));
   a.window.pgECDExportar(a.nodes.get('ecdExportar'));assert.equal(a.exportado().abas[0].linhas.at(-1).at(-1),1);
 });
 
-test('ocultar materiais concluídos recalcula ambos quadros, totais, base e captura sem alterar outras abas',async()=>{
+test('ocultar linhas concluídas muda apenas o corpo dos quadros e preserva totais e base completa',async()=>{
   const a=interfacePortal();
-  a.linhas[0].entregas=[{data:'2026-10-26',volume:100}];a.window.processarEntregasCD();
+  a.linhas[0].entregas=[{data:'2026-10-25',volume:100}];a.window.processarEntregasCD();
   a.nodes.get('ecdOcultarConcluidos').checked=true;a.window.pgECDRender();
   for(const id of ['ecdQuadroMarca','ecdQuadroSerie']){
     const html=a.nodes.get(id).innerHTML;assert(!html.includes('SAE'));assert.match(html,/SAS/);
   }
-  assert.match(a.nodes.get('ecdInfoMarca').textContent,/1 linhas · 0,1k/);
+  assert.match(a.nodes.get('ecdInfoMarca').textContent,/1 linhas · 0,2k/);
   a.window.pgECDExportar(a.nodes.get('ecdExportar'));
-  const abas=a.exportado().abas;assert(abas[2].linhas.every(r=>r[1]==='SAS'));
-  assert.equal(abas[0].linhas.at(-1)[2],100);
+  const abas=a.exportado().abas;assert(abas[2].linhas.some(r=>r[1]==='SAE'));assert(abas[2].linhas.some(r=>r[1]==='SAS'));
+  assert.equal(abas[0].linhas.at(-1)[2],200);assert.equal(abas[0].linhas.at(-1)[4],100);
   await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));assert(!a.desenhos.includes('SAE'));
   assert.equal(a.window.pgBaseGeralReportExecutiva.length,2);
   a.nodes.get('ecdOcultarConcluidos').checked=false;a.window.pgECDRender();
