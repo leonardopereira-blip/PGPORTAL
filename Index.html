@@ -1,15 +1,15 @@
 <div class="flex flex-col h-full w-full overflow-hidden bg-neutral-100">
     
     <header id="headerFiltrosProducao" class="bg-white p-4 shadow-sm relative z-[60] border-b border-neutral-200 flex-shrink-0">
-        <div id="barraFiltrosGlobais" class="max-w-[1500px] mx-auto flex flex-col xl:flex-row gap-4 items-center justify-between">
+        <div id="barraFiltrosGlobais" class="w-full flex flex-wrap items-center gap-2">
             
-            <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto relative">
+            <div class="contents">
                 <div class="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex-shrink-0">Filtros:</div>
-                <div id="containerFiltrosMultiProducao" class="flex flex-wrap gap-2 relative z-[70]"></div>
+                <div id="containerFiltrosMultiProducao" class="contents"></div>
                 <button onclick="limparFiltros()" class="bg-neutral-100 hover:bg-neutral-200 text-neutral-600 border border-neutral-300 px-2 py-1.5 rounded text-xs font-bold transition-colors shadow-sm ml-1" title="Zerar todos os filtros">🧹 Limpar</button>
             </div>
             
-            <div class="flex items-center gap-3">
+            <div class="contents">
                 <button id="btnAuditoriaPortalXlsx" type="button" onclick="pgBaixarAuditoriaPortalXlsx(this)" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1">📊 Baixar auditoria XLSX</button>
                 <div class="bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-200 shadow-sm flex items-center gap-2 flex-shrink-0">
                     <span class="text-[10px] font-bold text-indigo-800 uppercase tracking-wide">Base de Prazo:</span>
