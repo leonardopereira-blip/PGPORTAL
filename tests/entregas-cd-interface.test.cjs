@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const root = path.join(__dirname, '..');
 const script = name => fs.readFileSync(path.join(root, name), 'utf8').replace(/^<script>\s*/, '').replace(/<\/script>\s*$/, '');
 
-function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false}={}) {
+function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false,entregaOntem=false}={}) {
   const nodes = new Map(), listeners = new Map();
   const criar = id => {
     const classes = new Set(); let html='';
@@ -23,6 +23,10 @@ function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false}={
     coletas:[{data:'2026-10-26',volume:25}],entregas:[]});
   const linhas=[linha('SKU-01','SAE','CD JDI'),linha('SKU-02','SAS','CD FOR')];
   if(entregaHoje)linhas.forEach(l=>l.entregas=[{data:hojeData,volume:25}]);
+  if(entregaOntem){
+    const dt=new Date(hojeData+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()-1);
+    linhas.forEach(l=>l.entregas=[{data:dt.toISOString().slice(0,10),volume:25}]);
+  }
   let salvo, exportado, concluir, erro, charts=0, sync=0;
   let success, failure;
   const run={withSuccessHandler(fn){success=fn;return this;},withFailureHandler(fn){failure=fn;return this;},
@@ -47,10 +51,10 @@ function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false}={
   return {window,nodes,linhas,salvo:()=>salvo,exportado:()=>exportado,confirmar:()=>concluir(),falhar:()=>erro(),charts:()=>charts,sync:()=>sync};
 }
 
-test('nova visão abre backlog recolhido, põe quadro detalhado antes e mantém gráficos no fim',()=>{
+test('nova visão abre backlog recolhido, põe marca/CD primeiro e mantém gráficos no fim',()=>{
   const a=interfacePortal(); const html=a.nodes.get('ecdNovaVisao').innerHTML;
   assert.match(html,/<details id="ecdPendencias" class="[^"]+">/);
-  assert(html.indexOf('Quadro 1 · marca, série e CD')<html.indexOf('Quadro 2 · marca e CD'));
+  assert(html.indexOf('Quadro 1 · marca e CD')<html.indexOf('Quadro 2 · marca, série e CD'));
   assert(!html.includes('id="ecdCDTabs"'));
   for(const id of ['ecdFiltroMarca','ecdFiltroSerie','ecdFiltroStatus','ecdFim'])assert(!html.includes('id="'+id+'"'));
   assert(!html.includes('max-height:440px'),'nenhuma tabela deve ter rolagem vertical própria');
@@ -62,6 +66,20 @@ test('nova visão abre backlog recolhido, põe quadro detalhado antes e mantém 
   const tela=fs.readFileSync(path.join(root,'abaEntregasCD.html'),'utf8');
   assert(tela.indexOf('ecdNovaVisao')<tela.indexOf('ecdGraficosLegados'));
   assert(!tela.includes('class="hidden bg-white'));
+});
+
+test('Entregue fica congelado inclusive no Total Geral e conserva a quantidade entregue',()=>{
+  const a=interfacePortal({hojeData:'2026-10-27',entregaOntem:true});
+  const css=a.nodes.get('ecdNovaVisao').innerHTML;
+  assert.match(css, /tbody \.ecd-left\.ecd-delivered\{position:sticky;z-index:9/);
+  assert.match(css, /tfoot \.ecd-left\.ecd-delivered\{position:sticky;bottom:0;z-index:15/);
+  for(const id of ['ecdQuadroMarca','ecdQuadroSerie']){
+    const quadro=a.nodes.get(id).innerHTML;
+    const rodape=quadro.match(/<tfoot>([\s\S]*?)<\/tfoot>/)?.[1] || '';
+    assert.match(rodape,/Total geral/);
+    assert.match(rodape,/class="ecd-left ecd-delivered ecd-frozen-end ecd-cell"/);
+    assert.match(rodape,/<b>0,1k<\/b>/,'total entregue de duas parcelas de 25 deve aparecer');
+  }
 });
 
 test('filtros gerais afetam quadros, pendências, plano, percentuais e as três abas exportadas',()=>{

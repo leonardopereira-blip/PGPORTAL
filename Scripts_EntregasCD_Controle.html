@@ -58,6 +58,11 @@
           #ecdNovaVisao .ecd-table .ecd-week-corner{position:sticky;left:0;z-index:13;background:#0C2340}
           #ecdNovaVisao .ecd-table .ecd-day .ecd-freeze{z-index:12;background:#0C2340}
           #ecdNovaVisao .ecd-table .ecd-day .ecd-delivered{background:#0C2340;color:#fff}
+          /* .ecd-cell define position:relative no legado e anulava o sticky de
+             Entregue. Fixar também cada célula e o total geral, até essa coluna. */
+          #ecdNovaVisao .ecd-table tbody .ecd-left.ecd-delivered{position:sticky;z-index:9;background:#d9e8f8;color:#0C2340}
+          #ecdNovaVisao .ecd-table tfoot .ecd-left{position:sticky;bottom:0;z-index:14}
+          #ecdNovaVisao .ecd-table tfoot .ecd-left.ecd-delivered{position:sticky;bottom:0;z-index:15;background:#d9e8f8!important;color:#0C2340}
           #ecdNovaVisao .ecd-table th,#ecdNovaVisao .ecd-table td{overflow-wrap:normal;word-break:normal}
           .ecd-toolbar{display:flex;justify-content:flex-end;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px}
           .ecd-toolbar #ecdAviso{flex:1;margin:0}
@@ -74,8 +79,8 @@
         </details>
         <div class="ecd-legend"><span><i style="background:#b3d2f1"></i><span id="ecdLegendaEntregue">Entregue até ontem</span></span><span><i style="background:#C0DD97"></i>Coletado · em trânsito</span><span><i style="background:#FAC775"></i>Aguardando coleta</span><span>% = acumulado da linha · hachurado = feriado</span></div>
         <p id="ecdNotaDomingo" class="ecd-note"></p>
-        <details id="ecdDetalhado" class="ecd-section" open><summary><span>Quadro 1 · marca, série e CD</span><span id="ecdInfoSerie"></span></summary><div id="ecdQuadroSerie" class="ecd-scroll"></div></details>
-        <details id="ecdPorMarca" class="ecd-section" open><summary><span>Quadro 2 · marca e CD</span><span id="ecdInfoMarca"></span></summary><div id="ecdQuadroMarca" class="ecd-scroll"></div></details>
+        <details id="ecdPorMarca" class="ecd-section" open><summary><span>Quadro 1 · marca e CD</span><span id="ecdInfoMarca"></span></summary><div id="ecdQuadroMarca" class="ecd-scroll"></div></details>
+        <details id="ecdDetalhado" class="ecd-section" open><summary><span>Quadro 2 · marca, série e CD</span><span id="ecdInfoSerie"></span></summary><div id="ecdQuadroSerie" class="ecd-scroll"></div></details>
         <p class="ecd-note">O plano inclui o backlog. Previsões em domingos e feriados aparecem no próximo dia de operação; a data informada permanece no detalhe e na exportação. Datas após o ciclo ficam nas pendências.</p>`;
     }
     const filtro = id => $(id)?.value || '';
