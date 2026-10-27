@@ -44,6 +44,23 @@ test('cache de Tipo conserva acentos/espaços e invalida após edição da mesma
   assert.equal(p.w.pgTipoMaterialProducao(linha), '');
 });
 
+test('Tipo restrito descarta demais materiais antes de calcular prioridade sem alterar volume', () => {
+  const aluno = {...pcp('tipo-aluno'), TIPO:'Aluno'};
+  const professor = {...pcp('tipo-professor'), TIPO:'Professor'};
+  const vazio = pcp('tipo-vazio');
+  const p = portal([aluno, professor, vazio]);
+  const visitados = [];
+  p.w.obterPrioridade = l => {
+    visitados.push(l._ROW_ID);
+    return '5. ⚪ (Sem Data)';
+  };
+  p.w.checkOnlyGeral('Tipo', 'PROFESSOR');
+  assert.deepEqual(visitados, ['tipo-professor']);
+  assert.deepEqual(Array.from(p.w.dadosTotalCanonico), [professor]);
+  p.w.checkAllGeral('Tipo', true);
+  assert.deepEqual(Array.from(p.w.dadosTotalCanonico), [aluno, professor, vazio]);
+});
+
 test('troca de fatia conserva a seleção global de Tipo sem perder aluno ou categorias adicionais', () => {
   const aluno = {...pcp('aluno'), TIPO:'ALUNO'};
   const professor = {...pcp('professor'), TIPO:'PROFESSOR'};

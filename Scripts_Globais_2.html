@@ -1086,13 +1086,27 @@ function aplicarFiltros() {
     const origem = document.getElementById('pgFiltroOrigem')?.value || 'TODOS';
     const destinoExtra = origem === 'ACABADORA' ? 'CD' : (document.getElementById('pgFiltroDestino')?.value || 'CD');
     const categorias = Object.keys(selFilters);
-    const passaCategorias = l => categorias.every(k => {
+    // Quando Tipo de material é restrito, conferir primeiro essa condição
+    // barata. Linhas que não pertencem ao tipo selecionado não precisam
+    // calcular prioridade, SLA ou metas. Sem seleção restrita, o fluxo
+    // original é mantido integralmente.
+    const tiposSelecionados = selFilters['Tipo'];
+    const tipoRestrito = tiposSelecionados && tiposSelecionados.size < (window.listasMultiProducao?.['Tipo']?.size || 0);
+    const demaisCategorias = tipoRestrito ? categorias.filter(k => k !== 'Tipo') : categorias;
+    const passaCategorias = l => {
+        if (tipoRestrito) {
+            let tipo = String(window.pgValorFiltroProducao(l, 'Tipo') || '').trim();
+            if (!tipo || tipo === 'undefined' || tipo === '-') tipo = '(Vazio)';
+            if (!tiposSelecionados.has(tipo)) return false;
+        }
+        return demaisCategorias.every(k => {
         if (k === 'Meta Aplicada' && typeof window.pgMAMetaAplicadaDaLinha !== 'function') return true;
         if (k === 'Prioridade') return selFilters[k].has(window.obterPrioridade(l, tRef));
         let v = String(window.pgValorFiltroProducao(l, k) || '').trim();
         if (!v || v === 'undefined' || v === '-') v = '(Vazio)';
         return selFilters[k].has(v);
-    });
+        });
+    };
     const baseGeral = window.pgLinhasUnicas((window.dadosGlobais || []).filter(l =>
         !window.pgSolicitacaoCancelada(l) &&
         filtroExtra(l, { ignorarOrigem: true, ignorarDestino: true, ignorarRoteamento: true }) &&
