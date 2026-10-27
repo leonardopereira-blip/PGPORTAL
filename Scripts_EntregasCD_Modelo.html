@@ -1,0 +1,256 @@
+<script>
+(function() {
+    'use strict';
+    const normal = valor => String(valor ?? '').normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
+    const preenchido = valor => valor !== undefined && valor !== null && String(valor).trim() !== '';
+    const campo = (linha, nome) => typeof window.pgCampoColeta === 'function'
+        ? window.pgCampoColeta(linha, nome) : linha?.[nome];
+    const primeiro = (linha, nomes) => nomes.map(nome => campo(linha, nome)).find(preenchido) ?? '';
+    const numero = valor => {
+        if (typeof window.pgNumeroPrazoV35 === 'function') return Math.max(0, window.pgNumeroPrazoV35(valor));
+        if (typeof valor === 'number') return Math.max(0, Number.isFinite(valor) ? valor : 0);
+        let texto = String(valor ?? '').trim();
+        if (texto.includes(',')) texto = texto.replace(/\./g, '').replace(',', '.');
+        else if (/^\d{1,3}(\.\d{3})+$/.test(texto)) texto = texto.replace(/\./g, '');
+        return Math.max(0, Number(texto) || 0);
+    };
+    const data = valor => {
+        if (!preenchido(valor)) return '';
+        const texto = String(valor).trim();
+        let iso = /^\d{4}-\d{2}-\d{2}$/.test(texto) ? texto : '';
+        const brasileira = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (brasileira) iso = brasileira[3] + '-' + brasileira[2] + '-' + brasileira[1];
+        if (!iso) return '';
+        const d = new Date(iso + 'T12:00:00Z');
+        return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : '';
+    };
+    const proximoDia = iso => {
+        const d = new Date(iso + 'T12:00:00Z');
+        d.setUTCDate(d.getUTCDate() + 1);
+        return d.toISOString().slice(0, 10);
+    };
+    const simNao = valor => {
+        const n = normal(valor);
+        if (['SIM', 'S', 'TRUE', '1'].includes(n)) return 'Sim';
+        if (['NAO', 'N', 'FALSE', '0'].includes(n)) return 'Não';
+        return 'Não informado';
+    };
+    const temFonteAcabadora = linha => typeof window.pgEhFonteAcabadora === 'function'
+        ? window.pgEhFonteAcabadora(linha)
+        : [linha?._SOURCE, linha?.BASE, linha?._base].some(v => normal(v).includes('ACAB'));
+    const previsoesPorChave = previsoes => {
+        if (Array.isArray(previsoes)) return Object.fromEntries(previsoes.filter(p => p?.chave).map(p => [p.chave, p]));
+        return previsoes?.previsoes || previsoes || {};
+    };
+    const eventosReais = (volumes, tipo, hoje, usados) => {
+        const entrega = tipo === 'entrega';
+        const lista = volumes[entrega ? 'eventosEntregaTP' : 'eventosColetaTP'];
+        const agregado = entrega ? volumes.entrega : volumes.coleta;
+        const dt = data(entrega ? volumes.entregaTP : volumes.coletaTP);
+        const origem = Array.isArray(lista) ? lista
+            : numero(agregado) > 0 && dt && dt <= hoje ? [{data: dt, volume: numero(agregado)}] : [];
+        const saida = [];
+        origem.forEach(evento => {
+            const dia = data(evento?.data), volume = numero(evento?.volume);
+            if (!dia || dia > hoje || volume <= 0) return;
+            // A linha física do mapa identifica o movimento. Parcelas diferentes,
+            // mesmo com data e quantidade iguais, continuam independentes.
+            const identificador = preenchido(evento.linhaMapa) ? 'MAPA:' + evento.linhaMapa
+                : preenchido(evento.id) ? 'ID:' + evento.id : '';
+            const chave = tipo + '|' + identificador;
+            if (identificador && usados.has(chave)) return;
+            if (identificador) usados.add(chave);
+            saida.push({...evento, data: dia, volume});
+        });
+        return saida.sort((a, b) => a.data.localeCompare(b.data));
+    };
+    const entregaSLA = (linha, coleta) => data(typeof window.pgDataPlanoEntregaSLA === 'function'
+        ? (coleta === undefined ? window.pgDataPlanoEntregaSLA(linha) : window.pgDataPlanoEntregaSLA(linha, coleta)) : '');
+
+    function montar(base, previsoes, hoje) {
+        hoje = data(hoje);
+        if (!hoje) throw new Error('Informe uma data válida para calcular as entregas.');
+        const salvas = previsoesPorChave(previsoes), movimentosUsados = new Set();
+        const candidatas = (base || []).filter(linha => linha && !window.pgSolicitacaoCancelada?.(linha));
+        const linhas = typeof window.pgLinhasUnicas === 'function'
+            ? window.pgLinhasUnicas(candidatas) : Array.from(new Set(candidatas));
+        return linhas.map((linha, indice) => {
+            const origem = temFonteAcabadora(linha) ? 'ACABADORA' : 'PCP';
+            const cd = normal(primeiro(linha, ['CD_FINAL', 'CD DESTINO', 'CD_DESTINO', 'CD', 'CK']));
+            const grafica = normal(primeiro(linha, ['GRAFICA_FINAL', 'GRÁFICA', 'GRAFICA', 'BQ']));
+            const marca = String(primeiro(linha, ['MARCA_FINAL', 'UNIDADE', 'MARCA'])).trim();
+            const sku = String(primeiro(linha, ['SKU_REAL', 'SKU'])).trim();
+            const envio = String(primeiro(linha, ['ENVIO', 'Envio'])).trim();
+            const kit = String(primeiro(linha, ['KIT', 'Kit'])).trim();
+            const op = String(primeiro(linha, ['OP', 'O.P.'])).trim();
+            const join = primeiro(linha, ['JOIN_KEY', 'JOIN KEY']);
+            const chave = JSON.stringify(['ECD1', origem, marca, grafica, sku, cd, envio, join, kit, op].map(normal));
+            const rawTotalCD = campo(linha, 'TIRAGEM A ENTREGAR (total por CD)');
+            const total = Math.round(numero(origem === 'ACABADORA' && preenchido(rawTotalCD)
+                ? rawTotalCD : campo(linha, 'TIRAGEM')));
+            const volumes = window.pgVolumesColetaUnificadosV37?.(linha, hoje) || {};
+            const eventosColeta = eventosReais(volumes, 'coleta', hoje, movimentosUsados);
+            const eventosEntrega = eventosReais(volumes, 'entrega', hoje, movimentosUsados);
+            const coletado = eventosColeta.reduce((s, e) => s + e.volume, 0);
+            const entregue = eventosEntrega.reduce((s, e) => s + e.volume, 0);
+            const saldo = Math.max(0, total - entregue);
+            const pendenteColeta = Math.max(0, total - Math.max(coletado, entregue));
+            const aguardandoEntrega = Math.min(saldo, Math.max(0, coletado - entregue));
+            const datasColeta = Array.from(new Set(eventosColeta.map(e => e.data)));
+            const datasEntrega = Array.from(new Set(eventosEntrega.map(e => e.data)));
+            const dtColetaPCP = data(window.pgDataPlanoColetaLinha?.(linha));
+            const dtEntregaPCP = entregaSLA(linha);
+            const registro = typeof salvas[chave] === 'string' ? {dataEntrega: salvas[chave]} : (salvas[chave] || {});
+            const dtColetaManual = data(registro.dataColeta);
+            const dtEntregaManual = data(registro.dataEntrega || registro.data || registro.dataPrevista);
+            const manualColetaPreenchida = preenchido(registro.dataColeta);
+            const manualEntregaPreenchida = preenchido(registro.dataEntrega || registro.data || registro.dataPrevista);
+            const coletaManualVencida = manualColetaPreenchida && (!dtColetaManual || dtColetaManual < hoje);
+            const entregaManualVencida = manualEntregaPreenchida && (!dtEntregaManual || dtEntregaManual < hoje);
+            let dtColetaPrevista = '', dtPrevisao = '', origemPrevisao = 'Sem previsão';
+            let origemColetaPrevisao = 'Sem previsão';
+            if (pendenteColeta > 0) {
+                if (dtColetaManual && dtColetaManual >= hoje) {
+                    dtColetaPrevista = dtColetaManual;
+                    origemColetaPrevisao = 'Manual';
+                } else if (!manualColetaPreenchida && dtColetaPCP >= hoje) {
+                    dtColetaPrevista = dtColetaPCP;
+                    origemColetaPrevisao = 'PCP original';
+                } else if (coletaManualVencida) origemColetaPrevisao = 'Manual vencida';
+            }
+            const previsoesEntrega = [];
+            const adicionarEntrega = (dataPrevista, volume, origemPrevista) => {
+                if (dataPrevista && dataPrevista >= hoje && volume > 0) {
+                    previsoesEntrega.push({data: dataPrevista, volume, origem: origemPrevista});
+                }
+            };
+            if (saldo > 0) {
+                if (dtEntregaManual && dtEntregaManual >= hoje) {
+                    adicionarEntrega(dtEntregaManual, saldo, 'Manual');
+                } else if (!entregaManualVencida) {
+                    // Consome as coletas reais em ordem cronológica contra o entregue.
+                    // Assim parcelas já coletadas e ainda pendentes mantêm suas próprias datas.
+                    let entregueConsumido = entregue, restanteColetado = aguardandoEntrega;
+                    eventosColeta.forEach(evento => {
+                        const consumido = Math.min(evento.volume, entregueConsumido);
+                        entregueConsumido -= consumido;
+                        const aberto = Math.min(restanteColetado, Math.max(0, evento.volume - consumido));
+                        restanteColetado -= aberto;
+                        adicionarEntrega(entregaSLA(linha, evento.data), aberto, 'Coleta TP + SLA');
+                    });
+                    if (pendenteColeta > 0 && dtColetaPrevista) {
+                        adicionarEntrega(entregaSLA(linha, dtColetaPrevista), pendenteColeta,
+                            origemColetaPrevisao === 'Manual' ? 'Coleta manual + SLA' : 'PCP original + SLA');
+                    }
+                }
+            }
+            previsoesEntrega.sort((a, b) => a.data.localeCompare(b.data));
+            const previstoVolume = previsoesEntrega.reduce((s, p) => s + p.volume, 0);
+            const semPrevisaoVolume = Math.max(0, saldo - previstoVolume);
+            dtPrevisao = previsoesEntrega[0]?.data || '';
+            const origensPrevistas = [...new Set(previsoesEntrega.map(p => p.origem))];
+            origemPrevisao = origensPrevistas.length === 1 ? origensPrevistas[0]
+                : origensPrevistas.length ? 'Múltiplas origens' : entregaManualVencida ? 'Manual vencida' : 'Sem previsão';
+            const resumoPrevisoes = previsoesEntrega.map(p => `${p.data}: ${Math.round(p.volume)} (${p.origem})`).join(' / ');
+            const clientePersonalizado = simNao(primeiro(linha, ['CLIENTE_PERSONALIZADO', 'Cliente personalizado']));
+            const capaPersonalizada = simNao(primeiro(linha, ['CAPA_PERSONALIZADA', 'Capa personalizada']));
+            const personalizado = clientePersonalizado === 'Sim' || capaPersonalizada === 'Sim' ? 'Sim'
+                : clientePersonalizado === 'Não' && capaPersonalizada === 'Não' ? 'Não' : 'Não informado';
+            const serie = typeof window.pgSerieCorrigidaFunil === 'function' ? window.pgSerieCorrigidaFunil(linha)
+                : primeiro(linha, ['serie_corrigida', 'SERIE_CORRIGIDA', 'SÉRIE', 'Série', 'SERIE']);
+            return {
+                linha, chave, id: 'ecd-' + indice, cd, origem, grafica, sku, marca, serie: String(serie || ''),
+                descricao: String(primeiro(linha, ['DESC_REAL', 'DESCRIÇÃO', 'DESCRICAO', 'PRODUTO'])),
+                personalizado, clientePersonalizado, capaPersonalizada,
+                tipo: String(primeiro(linha, ['TIPO', 'Tipo'])), envio, kit, op,
+                total, coletado, entregue, saldo, aguardandoEntrega, pendenteColeta,
+                excedente: Math.max(0, entregue - total),
+                dtPlanoOriginal: dtEntregaPCP, dtColetaPCP, dtEntregaPCP,
+                dtColetaManual, dtEntregaManual, dtColetaPrevista, origemColetaPrevisao,
+                dtPrevisao, origemPrevisao, previsoesEntrega, resumoPrevisoes, semPrevisaoVolume,
+                backlog: saldo > 0 && ((!!dtEntregaPCP && dtEntregaPCP < hoje) || (!!dtColetaPCP && dtColetaPCP < hoje)),
+                semPrevisao: semPrevisaoVolume > 0,
+                status: saldo === 0 ? 'Coletado e entregue'
+                    : coletado > entregue ? 'Coletado e aguardando entrega' : 'Pendente',
+                datasColeta, datasEntrega, eventosColeta, eventosEntrega,
+                previsao: {...registro, dataColeta: dtColetaManual, dataEntrega: dtEntregaManual,
+                    observacao: String(registro.observacao || '')}
+            };
+        });
+    }
+
+    function quadro(itens, inicio, fim) {
+        inicio = data(inicio); fim = data(fim);
+        if (!inicio || !fim || inicio > fim) throw new Error('Informe um período válido.');
+        const dias = [];
+        for (let dia = inicio; dia <= fim; dia = proximoDia(dia)) dias.push(dia);
+        const cds = Array.from(new Set((itens || []).map(i => i.cd || 'CD não informado')))
+            .sort((a, b) => a.localeCompare(b, 'pt-BR', {numeric: true}));
+        const indicadores = ['Coleta PCP original', 'Entrega PCP + SLA original', 'Coletado TP', 'Entregue TP',
+            'Coleta prevista (saldo)', 'Entrega prevista (saldo)', 'Saldo sem previsão'];
+        const linhas = [];
+        ['TOTAL GERAL', ...cds].forEach(cd => {
+            const grupo = cd === 'TOTAL GERAL' ? (itens || []) : (itens || []).filter(i => (i.cd || 'CD não informado') === cd);
+            indicadores.forEach(indicador => {
+                const r = {cd, indicador, total: 0, antes: 0, depois: 0, semData: 0, valores: dias.map(() => 0)};
+                const somar = (dt, quantidade) => {
+                    const volume = numero(quantidade);
+                    if (!volume) return;
+                    r.total += volume;
+                    if (!dt) r.semData += volume;
+                    else if (dt < inicio) r.antes += volume;
+                    else if (dt > fim) r.depois += volume;
+                    else r.valores[dias.indexOf(dt)] += volume;
+                };
+                grupo.forEach(item => {
+                    if (indicador === 'Coleta PCP original') somar(item.dtColetaPCP, item.total);
+                    else if (indicador === 'Entrega PCP + SLA original') somar(item.dtEntregaPCP, item.total);
+                    else if (indicador === 'Coletado TP') item.eventosColeta.forEach(e => somar(e.data, e.volume));
+                    else if (indicador === 'Entregue TP') item.eventosEntrega.forEach(e => somar(e.data, e.volume));
+                    else if (indicador === 'Coleta prevista (saldo)') somar(item.dtColetaPrevista, item.pendenteColeta);
+                    else if (indicador === 'Entrega prevista (saldo)') item.previsoesEntrega.forEach(p => somar(p.data, p.volume));
+                    else somar('', item.semPrevisaoVolume);
+                });
+                linhas.push(r);
+            });
+        });
+        return {dias, linhas};
+    }
+
+    function exportar(itens, inicio, fim) {
+        const q = quadro(itens, inicio, fim);
+        const quadroCabecalho = ['CD', 'Indicador', 'Total da base', 'Antes do período', ...q.dias, 'Depois do período', 'Sem data'];
+        const baseCabecalho = ['SKU', 'Marca', 'Série', 'Descrição', 'Personalizado', 'Tipo', 'Status',
+            'Coleta TP (datas reais)', 'Entrega TP (datas reais)', 'CD destino', 'Origem', 'Gráfica', 'Envio', 'Kit', 'OP',
+            'Tiragem base CD', 'Coletado', 'Entregue', 'Saldo a entregar', 'Aguardando entrega', 'Pendente de coleta',
+            'Excedente de entrega', 'Coleta PCP original', 'Entrega PCP + SLA original', 'Coleta manual', 'Entrega manual',
+            'Coleta prevista vigente', 'Entrega prevista vigente', 'Origem da previsão', 'Observação',
+            'Cliente personalizado', 'Capa personalizada', 'Backlog', 'Sem previsão', 'Chave da previsão',
+            'Origem coleta vigente', 'Parcelas de entrega previstas', 'Saldo sem previsão', 'Versão da previsão',
+            'Atualizada em', 'Usuário da previsão', 'Parcelas Coleta TP (data: volume)',
+            'Parcelas Entrega TP (data: volume)'];
+        return [{
+            nome: 'Quadro', cabecalho: quadroCabecalho,
+            linhas: q.linhas.map(r => [r.cd, r.indicador, r.total, r.antes, ...r.valores, r.depois, r.semData]),
+            colunasData: [], colunasNumero: quadroCabecalho.map((_, i) => i).filter(i => i >= 2)
+        }, {
+            nome: 'Base_SKUs', cabecalho: baseCabecalho,
+            linhas: (itens || []).map(i => [i.sku, i.marca, i.serie, i.descricao, i.personalizado, i.tipo, i.status,
+                i.datasColeta.join(' / '), i.datasEntrega.join(' / '), i.cd, i.origem, i.grafica, i.envio, i.kit, i.op,
+                i.total, i.coletado, i.entregue, i.saldo, i.aguardandoEntrega, i.pendenteColeta, i.excedente,
+                i.dtColetaPCP, i.dtEntregaPCP, i.dtColetaManual, i.dtEntregaManual, i.dtColetaPrevista, i.dtPrevisao,
+                i.origemPrevisao, i.previsao.observacao, i.clientePersonalizado, i.capaPersonalizada,
+                i.backlog ? 'Sim' : 'Não', i.semPrevisao ? 'Sim' : 'Não', i.chave,
+                i.origemColetaPrevisao, i.resumoPrevisoes, i.semPrevisaoVolume,
+                Number(i.previsao.versao || 0), i.previsao.atualizadoEm || '', i.previsao.usuario || '',
+                i.eventosColeta.map(e => `${e.data}: ${Math.round(e.volume)}`).join(' / '),
+                i.eventosEntrega.map(e => `${e.data}: ${Math.round(e.volume)}`).join(' / ')]),
+            colunasData: [22, 23, 24, 25, 26, 27],
+            colunasNumero: [15, 16, 17, 18, 19, 20, 21,
+                baseCabecalho.indexOf('Saldo sem previsão'), baseCabecalho.indexOf('Versão da previsão')]
+        }];
+    }
+    window.pgEntregasCDModelo = {montar, quadro, exportar};
+})();
+</script>

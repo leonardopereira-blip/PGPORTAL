@@ -1,0 +1,268 @@
+<script>
+(function () {
+    'use strict';
+    // Tela operacional independente da Meta Armazém. Reutiliza somente a seleção
+    // canônica de linhas da visão antiga e os movimentos reais do Mapa/TP.
+    let base = [], itens = [], previsoes = {}, filtrados = [], pagina = 0;
+    let chaveEditor = '', carregamento = 0, salvando = false;
+    const $ = id => document.getElementById(id);
+    const hoje = () => typeof dtHojeISO !== 'undefined' ? dtHojeISO :
+        new Date().toLocaleDateString('en-CA');
+    const normal = valor => String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .trim().replace(/\s+/g, ' ').toUpperCase();
+    const esc = valor => String(valor ?? '').replace(/[&<>"']/g,
+        c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+    const fmt = valor => Math.round(Number(valor || 0)).toLocaleString('pt-BR');
+    const dataBR = iso => /^\d{4}-\d\d-\d\d$/.test(iso || '') ?
+        iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '—';
+    const somar = (lista, coluna) => lista.reduce((s, item) => s + Number(item[coluna] || 0), 0);
+    const deslocar = (iso, n) => {
+        const d = new Date(iso + 'T12:00:00Z');
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().slice(0, 10);
+    };
+    const scriptRun = () => typeof google !== 'undefined' && google.script?.run;
+    const aviso = (mensagem, erro) => {
+        if ($('ecdAviso')) {
+            $('ecdAviso').textContent = mensagem;
+            $('ecdAviso').className = 'text-xs mt-2 ' + (erro ? 'text-red-700' : 'text-slate-600');
+        }
+    };
+    const estrutura = () => {
+        const container = $('graficosEntregasCD');
+        if (!container || $('ecdQuadro')) return;
+        container.innerHTML = `
+          <div class="bg-white p-4 rounded-xl border border-slate-200 mb-4">
+            <div class="flex flex-wrap gap-2 items-end text-xs text-slate-700">
+              <label>De<input type="date" id="ecdInicio" class="block border rounded p-2 mt-1" onchange="pgECDRender()"></label>
+              <label>Até<input type="date" id="ecdFim" class="block border rounded p-2 mt-1" onchange="pgECDRender()"></label>
+              <button type="button" class="border rounded px-3 py-2" onclick="pgECDMoverPeriodo(-14)">← 14 dias</button>
+              <button type="button" class="border rounded px-3 py-2" onclick="pgECDPeriodoHoje()">Hoje ± 15 dias</button>
+              <button type="button" class="border rounded px-3 py-2" onclick="pgECDMoverPeriodo(14)">14 dias →</button>
+              <button type="button" id="ecdExportar" class="bg-indigo-700 text-white rounded px-4 py-2 font-bold ml-auto" onclick="pgECDExportar(this)">Exportar tudo ao Sheets</button>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-2">A extração inclui todos os SKUs dos filtros gerais, independentemente dos filtros locais abaixo. Planos originais e datas TP não são sobrescritos.</p>
+            <p id="ecdAviso" role="status" class="text-xs mt-2 text-slate-600"></p>
+          </div>
+          <div id="ecdResumo" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2 mb-4"></div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 mb-4">
+            <h3 class="text-sm font-black text-slate-800">Quadro diário por CD</h3>
+            <p class="text-[11px] text-slate-500 my-2">Passado, hoje e futuro nas colunas; planejamento original, TP real e previsão vigente separados. Os filtros locais também afetam este quadro.</p>
+            <div id="ecdQuadro" class="overflow-x-auto scroller text-xs"></div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 mb-4">
+            <div class="flex justify-between gap-3 items-center mb-3"><h3 class="text-sm font-black text-slate-800">Controle por SKU / lote</h3><span id="ecdContagem" class="text-xs text-slate-500"></span></div>
+            <div class="flex flex-wrap gap-2 text-xs mb-3">
+              <select id="ecdFiltroCD" aria-label="CD" class="border rounded px-2 py-2" onchange="pgECDRender()"><option value="">Todos os CDs</option></select>
+              <select id="ecdFiltroGrafica" aria-label="Gráfica" class="border rounded px-2 py-2" onchange="pgECDRender()"><option value="">Todas as gráficas</option></select>
+              <select id="ecdFiltroMarca" aria-label="Marca" class="border rounded px-2 py-2" onchange="pgECDRender()"><option value="">Todas as marcas</option></select>
+              <select id="ecdFiltroSerie" aria-label="Série" class="border rounded px-2 py-2" onchange="pgECDRender()"><option value="">Todas as séries</option></select>
+              <select id="ecdFiltroStatus" aria-label="Status" class="border rounded px-2 py-2" onchange="pgECDRender()">
+                <option value="">Todos os status</option><option>Coletado e aguardando entrega</option><option>Coletado e entregue</option><option>Pendente</option><option value="backlog">Backlog</option><option value="sem">Sem previsão</option>
+              </select>
+              <input id="ecdBusca" aria-label="Buscar SKU" placeholder="Buscar SKU, descrição, kit, OP..." class="border rounded px-2 py-2 min-w-40 flex-1" oninput="pgECDRender()">
+            </div>
+            <div id="ecdDetalhe" class="overflow-x-auto scroller text-xs"></div>
+            <div id="ecdPaginacao" class="flex flex-wrap justify-end items-center gap-3 text-xs mt-3"></div>
+          </div>
+          <div id="ecdEditor" class="hidden fixed inset-0 z-50 bg-slate-950/50 p-3 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Editar previsão">
+            <div class="bg-white rounded-xl shadow-xl p-5 w-full max-w-xl space-y-3">
+              <div class="flex justify-between items-start gap-3"><h3 id="ecdEditorTitulo" class="text-sm font-black">Previsão manual</h3><button type="button" aria-label="Fechar" onclick="pgECDFecharEditor()" class="text-xl px-2">×</button></div>
+              <p class="text-xs text-slate-500">Afeta somente o saldo deste lote; não altera PCP nem movimentos TP. Limpar ambas as datas e a observação salva uma nova versão do histórico.</p>
+              <div class="grid grid-cols-2 gap-3 text-xs"><label>Coleta manual<input id="ecdManualColeta" type="date" class="block w-full border rounded p-2 mt-1"></label><label>Entrega manual<input id="ecdManualEntrega" type="date" class="block w-full border rounded p-2 mt-1"></label></div>
+              <label class="block text-xs">Observação<textarea id="ecdManualObs" maxlength="500" rows="3" class="border rounded w-full p-2 mt-1" placeholder="Combinado, motivo, responsável..."></textarea></label>
+              <p id="ecdEditorMeta" class="text-[11px] text-slate-500"></p><p id="ecdEditorErro" role="alert" class="text-xs text-red-700"></p>
+              <div class="flex justify-end gap-2"><button type="button" class="border rounded px-4 py-2 text-xs" onclick="pgECDFecharEditor()">Cancelar</button><button id="ecdSalvar" type="button" class="bg-indigo-700 text-white rounded px-4 py-2 font-bold text-xs" onclick="pgECDSalvar()">Salvar previsão</button></div>
+            </div>
+          </div>`;
+        window.pgECDPeriodoHoje();
+    };
+    function atualizarItens() {
+        try { itens = window.pgEntregasCDModelo.montar(base, previsoes, hoje()); }
+        catch (e) { itens = []; aviso('Erro nos dados de Entregas CD: ' + e.message, true); }
+        const seletores = [['ecdFiltroCD', 'cd', 'Todos os CDs'], ['ecdFiltroGrafica', 'grafica', 'Todas as gráficas'],
+            ['ecdFiltroMarca', 'marca', 'Todas as marcas'], ['ecdFiltroSerie', 'serie', 'Todas as séries']];
+        seletores.forEach(([id, campo, padrao]) => {
+            const el = $(id); if (!el) return;
+            const anterior = el.value;
+            const valores = [...new Set(itens.map(i => i[campo]).filter(Boolean))].sort((a, b) =>
+                String(a).localeCompare(String(b), 'pt-BR', {numeric: true}));
+            el.innerHTML = '<option value="">' + padrao + '</option>' +
+                valores.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
+            el.value = valores.includes(anterior) ? anterior : '';
+        });
+        window.pgECDRender();
+    }
+    window.processarEntregasCD = function () {
+        estrutura();
+        const origem = $('pgFiltroOrigem')?.value || 'TODOS';
+        const global = window.pgBaseGeralReportExecutiva || window.dadosDestinoCDFinal || [];
+        const filtrada = typeof window.pgBaseForecastFiltrada === 'function' ?
+            window.pgBaseForecastFiltrada(global, origem, 'CD') : global.slice();
+        // Mesmo roteamento ATHOS/KN/RAIZES da tela anterior. Os antigos gráficos
+        // foram ocultados, mas seus contratos são mantidos para outras integrações.
+        base = filtrada.filter(l => {
+            const campo = n => typeof window.pgCampoColeta === 'function' ? window.pgCampoColeta(l, n) : l[n];
+            const fonte = typeof window.pgEhFonteAcabadora === 'function' ? window.pgEhFonteAcabadora(l) :
+                ['_SOURCE', 'BASE', '_base'].some(k => normal(l[k]).includes('ACAB'));
+            const cd = normal(l.CD_FINAL || campo('CD DESTINO') || l.CD || l.CK);
+            const destino = normal(campo('CD DESTINO') || l.CD || l.CK || l.CD_FINAL);
+            const grafica = normal(l.GRAFICA_FINAL || campo('GRÁFICA') || l.GRAFICA || l.BQ);
+            if (!cd || ['-', 'N/A', 'NA', 'SEM CD', 'SEM DESTINO', 'A DEFINIR'].includes(cd)) return false;
+            if ((destino === 'ATHOS' || destino.startsWith('ATHOS ')) && !fonte) return false;
+            if (cd === 'ATHOS' || cd.startsWith('ATHOS ')) return false;
+            if (origem === 'TODOS' && fonte && ['KN', 'RAIZES'].includes(grafica)) return false;
+            return !window.pgSolicitacaoCancelada?.(l);
+        });
+        const rodada = ++carregamento;
+        atualizarItens();
+        if (!scriptRun()) { aviso('Previsões manuais indisponíveis sem conexão com o Apps Script.', true); return; }
+        aviso('Atualizando previsões compartilhadas...');
+        google.script.run.withSuccessHandler(resp => {
+            if (rodada !== carregamento) return;
+            if (!resp?.success) { aviso('Não foi possível consultar previsões manuais.', true); return; }
+            previsoes = resp.previsoes || {};
+            atualizarItens();
+            aviso('Previsões compartilhadas atualizadas.');
+        }).withFailureHandler(erro => {
+            if (rodada === carregamento) aviso('Erro ao consultar previsões: ' + (erro?.message || erro), true);
+        }).getPrevisoesEntregaCDPortal();
+    };
+    window.pgECDPeriodoHoje = function () {
+        if (!$('ecdInicio')) return;
+        $('ecdInicio').value = deslocar(hoje(), -15);
+        $('ecdFim').value = deslocar(hoje(), 15);
+        window.pgECDRender();
+    };
+    window.pgECDMoverPeriodo = function (dias) {
+        if (!$('ecdInicio')?.value || !$('ecdFim')?.value) return;
+        $('ecdInicio').value = deslocar($('ecdInicio').value, dias);
+        $('ecdFim').value = deslocar($('ecdFim').value, dias);
+        window.pgECDRender();
+    };
+    window.pgECDRender = function () {
+        if (!$('ecdQuadro')) return;
+        const ini = $('ecdInicio').value, fim = $('ecdFim').value;
+        if (!ini || !fim || ini > fim || deslocar(ini, 92) < fim) {
+            $('ecdQuadro').textContent = 'Selecione um período válido de até 93 dias.';
+            return;
+        }
+        const filtro = id => $(id)?.value || '';
+        const busca = normal(filtro('ecdBusca'));
+        filtrados = itens.filter(i =>
+            (!filtro('ecdFiltroCD') || i.cd === filtro('ecdFiltroCD')) &&
+            (!filtro('ecdFiltroGrafica') || i.grafica === filtro('ecdFiltroGrafica')) &&
+            (!filtro('ecdFiltroMarca') || i.marca === filtro('ecdFiltroMarca')) &&
+            (!filtro('ecdFiltroSerie') || i.serie === filtro('ecdFiltroSerie')) &&
+            (!filtro('ecdFiltroStatus') || (filtro('ecdFiltroStatus') === 'backlog' ? i.backlog :
+                filtro('ecdFiltroStatus') === 'sem' ? i.semPrevisao : i.status === filtro('ecdFiltroStatus'))) &&
+            (!busca || normal([i.sku, i.descricao, i.kit, i.op, i.envio].join(' ')).includes(busca)));
+        const cards = [['Tiragem CD', somar(filtrados, 'total')], ['Coletado TP', somar(filtrados, 'coletado')],
+            ['Entregue TP', somar(filtrados, 'entregue')], ['Aguardando entrega', somar(filtrados, 'aguardandoEntrega')],
+            ['Falta coletar', somar(filtrados, 'pendenteColeta')], ['Saldo a entregar', somar(filtrados, 'saldo')],
+            ['Saldo sem previsão', somar(filtrados, 'semPrevisaoVolume')]];
+        $('ecdResumo').innerHTML = cards.map(([titulo, valor]) => '<div class="bg-white border border-slate-200 rounded-xl p-3"><div class="text-[11px] text-slate-500">' + esc(titulo) + '</div><div class="font-black text-lg text-slate-800">' + fmt(valor) + '</div></div>').join('');
+        const quadro = window.pgEntregasCDModelo.quadro(filtrados, ini, fim);
+        const dataClass = d => d === hoje() ? 'bg-indigo-100 text-indigo-900' : d < hoje() ? 'bg-slate-100 text-slate-700' : 'bg-emerald-50 text-emerald-900';
+        $('ecdQuadro').innerHTML = '<table class="min-w-full border-collapse whitespace-nowrap text-right"><thead><tr>' +
+            '<th class="sticky left-0 bg-slate-100 p-2 text-left z-10">CD</th><th class="bg-slate-100 p-2 text-left">Indicador</th><th class="bg-slate-100 p-2">Total</th><th class="bg-slate-100 p-2">Antes</th>' +
+            quadro.dias.map(d => '<th class="p-2 ' + dataClass(d) + '" title="' + d + '">' + dataBR(d).slice(0, 5) + '</th>').join('') +
+            '<th class="bg-slate-100 p-2">Depois</th><th class="bg-slate-100 p-2">Sem data</th></tr></thead><tbody>' +
+            quadro.linhas.map(r => '<tr class="border-t border-slate-100 hover:bg-slate-50 ' + (r.cd === 'TOTAL GERAL' ? 'font-bold bg-slate-50' : '') + '">' +
+                '<td class="sticky left-0 bg-white p-2 text-left">' + esc(r.cd) + '</td><td class="p-2 text-left">' + esc(r.indicador) + '</td><td class="p-2">' + fmt(r.total) + '</td><td class="p-2">' + fmt(r.antes) + '</td>' +
+                r.valores.map((v, n) => '<td class="p-2 ' + dataClass(quadro.dias[n]) + '">' + (v ? fmt(v) : '–') + '</td>').join('') +
+                '<td class="p-2">' + fmt(r.depois) + '</td><td class="p-2">' + fmt(r.semData) + '</td></tr>').join('') + '</tbody></table>';
+        const limite = 60, max = Math.max(0, Math.ceil(filtrados.length / limite) - 1);
+        pagina = Math.min(pagina, max);
+        const fatia = filtrados.slice(pagina * limite, (pagina + 1) * limite);
+        $('ecdContagem').textContent = filtrados.length.toLocaleString('pt-BR') + ' linhas · ' + filtrados.filter(i => i.backlog).length + ' em backlog';
+        const colunas = ['CD', 'Marca / Série', 'SKU / descrição', 'Gráfica', 'Tipo / Personalizado', 'Status', 'Tiragem', 'Coleta TP', 'Entrega TP', 'Aguardando', 'Falta coletar', 'Saldo', 'Coleta PCP', 'Entrega PCP + SLA', 'Coleta manual', 'Entrega manual', 'Coleta vigente', 'Entrega vigente do saldo', 'Origem / parcelas', 'Ação'];
+        $('ecdDetalhe').innerHTML = '<table class="min-w-full whitespace-nowrap border-collapse"><thead><tr>' + colunas.map(c => '<th class="p-2 text-left bg-slate-100">' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' + fatia.map((i, n) =>
+            '<tr class="border-t border-slate-100 align-top hover:bg-slate-50">' +
+            [i.cd, i.marca + ' / ' + i.serie, i.sku + ' · ' + i.descricao, i.grafica,
+                (i.tipo || 'Não informado') + ' / ' + i.personalizado,
+                i.status + (i.backlog ? ' · BACKLOG' : '') + (i.semPrevisao ? ' · SEM PREVISÃO' : ''),
+                fmt(i.total), i.eventosColeta.map(e => dataBR(e.data) + ': ' + fmt(e.volume)).join(' / ') || '—',
+                i.eventosEntrega.map(e => dataBR(e.data) + ': ' + fmt(e.volume)).join(' / ') || '—',
+                fmt(i.aguardandoEntrega), fmt(i.pendenteColeta), fmt(i.saldo),
+                dataBR(i.dtColetaPCP), dataBR(i.dtEntregaPCP), dataBR(i.dtColetaManual), dataBR(i.dtEntregaManual),
+                dataBR(i.dtColetaPrevista) + ' (' + i.origemColetaPrevisao + ')',
+                dataBR(i.dtPrevisao) + (i.previsoesEntrega.length > 1 ? ' +' + (i.previsoesEntrega.length - 1) + ' parcela(s)' : ''),
+                (i.resumoPrevisoes || i.origemPrevisao) + (i.semPrevisaoVolume ? ' · ' + fmt(i.semPrevisaoVolume) + ' sem previsão' : '')]
+                .map(v => '<td class="p-2 max-w-72 truncate" title="' + esc(v) + '">' + esc(v) + '</td>').join('') +
+            '<td class="p-2"><button type="button" class="border border-indigo-300 text-indigo-700 font-bold rounded px-2 py-1" onclick="pgECDAbrirEditor(' + n + ')" ' +
+                (i.saldo <= 0 || !i.chave ? 'disabled title="Sem saldo ou chave"' : '') + '>Prever / editar</button></td></tr>').join('') + '</tbody></table>';
+        $('ecdPaginacao').innerHTML = '<button type="button" class="border rounded px-3 py-1" onclick="pgECDPagina(-1)" ' + (pagina === 0 ? 'disabled' : '') + '>Anterior</button><span>Página ' + (pagina + 1) + ' de ' + (max + 1) + '</span><button type="button" class="border rounded px-3 py-1" onclick="pgECDPagina(1)" ' + (pagina === max ? 'disabled' : '') + '>Próxima</button>';
+    };
+    window.pgECDPagina = deslocamento => { pagina = Math.max(0, pagina + deslocamento); window.pgECDRender(); };
+    window.pgECDAbrirEditor = indice => {
+        const i = filtrados[pagina * 60 + indice];
+        if (!i || i.saldo <= 0) return;
+        // Mesmo contrato de chave do backend; dimensões incompletas não podem ser gravadas.
+        const partes = JSON.parse(i.chave);
+        if ([2, 3, 4, 5].some(n => !partes[n] || partes[n] === '-')) {
+            aviso('Faltam marca, gráfica, SKU ou CD para identificar este lote. A previsão não pode ser gravada.', true);
+            return;
+        }
+        chaveEditor = i.chave;
+        $('ecdEditorTitulo').textContent = i.cd + ' · ' + i.sku + ' · ' + i.marca + ' · saldo ' + fmt(i.saldo);
+        $('ecdManualColeta').value = i.dtColetaManual;
+        $('ecdManualEntrega').value = i.dtEntregaManual;
+        $('ecdManualObs').value = i.previsao.observacao;
+        $('ecdEditorMeta').textContent = 'PCP: ' + dataBR(i.dtColetaPCP) + ' → ' + dataBR(i.dtEntregaPCP) +
+            ' · Versão ' + (i.previsao.versao || 0) + (i.previsao.usuario ? ' · ' + i.previsao.usuario : '');
+        $('ecdEditorErro').textContent = '';
+        $('ecdEditor').classList.remove('hidden');
+    };
+    window.pgECDFecharEditor = () => { if (salvando) return; chaveEditor = ''; $('ecdEditor')?.classList.add('hidden'); };
+    window.pgECDSalvar = () => {
+        if (!chaveEditor || salvando) return;
+        if (!scriptRun()) { $('ecdEditorErro').textContent = 'Apps Script indisponível.'; return; }
+        const coleta = $('ecdManualColeta').value, entrega = $('ecdManualEntrega').value;
+        const obs = $('ecdManualObs').value.trim();
+        if (entrega && coleta && entrega < coleta) { $('ecdEditorErro').textContent = 'Entrega anterior à coleta.'; return; }
+        if ([coleta, entrega].some(d => d && d < hoje())) { $('ecdEditorErro').textContent = 'Novas previsões devem ser hoje ou futuras. Limpe a data vencida para substituir.'; return; }
+        const anterior = previsoes[chaveEditor] || {};
+        const chaveSalva = chaveEditor;
+        const payload = {chave: chaveSalva, dataColeta: coleta, dataEntrega: entrega, observacao: obs,
+            versaoEsperada: Number(anterior.versao || 0), requestId: 'ecd-' + Date.now() + '-' + Math.random().toString(36).slice(2)};
+        salvando = true;
+        $('ecdSalvar').disabled = true;
+        $('ecdSalvar').textContent = 'Salvando...';
+        google.script.run.withSuccessHandler(resp => {
+            salvando = false; $('ecdSalvar').disabled = false; $('ecdSalvar').textContent = 'Salvar previsão';
+            if (!resp?.success || !resp.previsao) { $('ecdEditorErro').textContent = 'Gravação não confirmada.'; return; }
+            previsoes[chaveSalva] = resp.previsao;
+            window.pgECDFecharEditor();
+            atualizarItens();
+            aviso('Previsão salva com histórico, versão e usuário.');
+        }).withFailureHandler(erro => {
+            salvando = false; $('ecdSalvar').disabled = false; $('ecdSalvar').textContent = 'Salvar previsão';
+            $('ecdEditorErro').textContent = (erro?.message || String(erro)) + ' Reabra a visão para reler antes de tentar novamente.';
+        }).salvarPrevisaoEntregaCDPortal(payload);
+    };
+    window.pgECDExportar = botao => {
+        if (!itens.length) { aviso('Não há linhas para exportar.', true); return; }
+        if (window.pgTPExportacaoPronta && !window.pgTPExportacaoPronta()) return;
+        if (!scriptRun()) { aviso('Apps Script indisponível para exportar.', true); return; }
+        const ini = $('ecdInicio').value, fim = $('ecdFim').value;
+        if (!ini || !fim || ini > fim || deslocar(ini, 92) < fim) { aviso('Defina um período válido de até 93 dias.', true); return; }
+        let abas;
+        try { abas = window.pgEntregasCDModelo.exportar(itens, ini, fim); }
+        catch (e) { aviso(e.message, true); return; }
+        botao.disabled = true; botao.textContent = 'Gerando Sheets...';
+        aviso('Exportando ' + itens.length.toLocaleString('pt-BR') + ' linhas, sem limitar à página da tabela...');
+        google.script.run.withSuccessHandler(resp => {
+            botao.disabled = false; botao.textContent = 'Exportar tudo ao Sheets';
+            if (!resp?.success || !/^https:\/\/docs\.google\.com\//.test(resp.url || '')) {
+                aviso('Erro na exportação: ' + (resp?.error || 'resultado inválido'), true); return;
+            }
+            $('ecdAviso').innerHTML = 'Planilha criada: <a class="font-bold underline text-indigo-700" href="' + esc(resp.url) + '" target="_blank" rel="noopener noreferrer">Abrir Quadro e Base_SKUs</a>' +
+                (resp.ownerWarning ? ' · ' + esc(resp.ownerWarning) : '');
+        }).withFailureHandler(erro => {
+            botao.disabled = false; botao.textContent = 'Exportar tudo ao Sheets';
+            aviso('Erro na exportação: ' + (erro?.message || erro), true);
+        }).gerarPlanilhaEntregasCD({nome: 'Entregas_CD', abas});
+    };
+})();
+</script>

@@ -933,7 +933,7 @@ function gerarPlanilhaReportExecutiva(payload) {
             if ((spec.colunasData || []).indexOf(coluna) >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(v))) {
               return new Date(v + 'T12:00:00-03:00');
             }
-            return typeof v === 'string' && v.charAt(0) === '=' ? "'" + v : v;
+            return typeof v === 'string' && /^[=+@-]/.test(v) ? "'" + v : v;
           });
           return linha;
         });
