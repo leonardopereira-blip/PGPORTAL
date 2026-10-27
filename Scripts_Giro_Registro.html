@@ -186,16 +186,24 @@
             p[i] && !['-','N/A','NA','SEM CD','SEM DESTINO','A DEFINIR'].includes(p[i])); }
         catch (_) { return false; }
     }))];
-    const valorDatas = chaves => {
-        const valores = [...new Set(chaves.map(k => window.PG_ECD_PREVISOES?.[k]?.dataEntrega || ''))];
+    const valorDatas = (chaves, original = '') => {
+        const valores = [...new Set(chaves.map(k => window.PG_ECD_PREVISOES?.[k]?.dataEntrega || original))];
         return valores.length === 1 ? valores[0] : '';
     };
+    const dataPlanejadaOriginal = linhas => {
+        const datas = [...new Set((linhas || []).map(l => {
+            const prazo = window.pgPrazoLinhaV35?.(l, hoje());
+            return prazo?.dtAVencer || prazo?.dtVencida || '';
+        }).filter(Boolean))];
+        return datas.length === 1 ? datas[0] : '';
+    };
     window.pgGiroCampoNovaData = (linhas, campoId) => {
-        const chaves = chavesDeLinhas(linhas), valor = valorDatas(chaves);
+        const chaves = chavesDeLinhas(linhas), original = dataPlanejadaOriginal(linhas);
+        const valor = valorDatas(chaves, original);
         if (!chaves.length) return '<span title="Destino ou identificação indisponível">—</span>';
         return '<div class="flex items-center"><input type="date" id="'+esc(campoId)+'" '+
             'aria-label="Nova data de entrega" data-pg-previsoes="'+esc(JSON.stringify(chaves))+'" '+
-            'data-pg-data-salva="'+esc(valor)+'" value="'+esc(valor)+'" min="'+esc(hoje())+'" '+
+            'data-pg-data-original="'+esc(original)+'" data-pg-data-salva="'+esc(valor)+'" value="'+esc(valor)+'" min="'+esc(hoje())+'" '+
             'title="Previsão de entrega compartilhada com Entregas no CD; limpar remove a previsão manual" '+
             'onchange="window.pgGiroSalvarNovaData(this)" '+
             'class="border border-slate-300 rounded px-2 py-1.5 text-[10px] bg-white" /></div>';
@@ -205,7 +213,7 @@
             let chaves; try { chaves = JSON.parse(input.dataset.pgPrevisoes); } catch (_) { return; }
             if (document.activeElement === input || input.dataset.pgDataPendente ||
                 input.value !== input.dataset.pgDataSalva) return;
-            input.value = valorDatas(chaves); input.dataset.pgDataSalva = input.value;
+            input.value = valorDatas(chaves, input.dataset.pgDataOriginal || ''); input.dataset.pgDataSalva = input.value;
         });
     }
     const chavesDoCampo = input => {
@@ -251,7 +259,7 @@
                 if (input.dataset.pgDataPendente !== trabalho.pedido.requestId) return;
                 input.disabled = false;
                 delete input.dataset.pgDataPendente;
-                input.dataset.pgDataSalva = valorDatas(chavesDoCampo(input));
+                input.dataset.pgDataSalva = valorDatas(chavesDoCampo(input), input.dataset.pgDataOriginal || '');
                 input.value = input.dataset.pgDataSalva;
                 status(input,'Salvo');
             });
