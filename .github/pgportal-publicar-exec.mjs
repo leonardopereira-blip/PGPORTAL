@@ -64,7 +64,7 @@ for (const f of fontesAtivas) {
   const esperado=hash(f.source);
   if(base.files[f.type+':'+f.remotePath]===esperado) continue;
   const arquivo=f.remotePath+({HTML:'.html',SERVER_JS:'.js',JSON:'.json'}[f.type]||'');
-  const commits=execFileSync('git',['log','--format=%H',pedido.commit_validado,'--',arquivo],{encoding:'utf8'}).trim().split(/\\s+/).filter(Boolean);
+  const commits=execFileSync('git',['log','--format=%H',pedido.commit_validado,'--',arquivo],{encoding:'utf8'}).trim().split(/\s+/).filter(Boolean);
   const conhecido=commits.some(c=>{
     try {return hash(execFileSync('git',['show',c+':'+arquivo],{encoding:'utf8',maxBuffer:20*1024*1024,stdio:['ignore','pipe','ignore']}).trimEnd())===hash(f.source.trimEnd());} catch {return false;}
   });
