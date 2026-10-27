@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-10-27T15:18:40.926Z",
+  "lido_em": "2026-10-27T18:58:24.800Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -58,12 +58,12 @@
     "HTML:Scripts_Acompanhamento_Mapa": "da868d37ad728d90c935d9ab3c4dc3504672a61c9478488d0d659288d44e6e34",
     "HTML:Scripts_Eficiencia_Aging_UI": "f72b957127faa413eced959412dcd77320c52bc5202944f55e6687d8aee5c42d",
     "HTML:Scripts_Eficiencia_Aging": "c751612777fa5ca3e090fc94b0a6bc68c50ec89cfc6f793d8fdc5fea39775046",
-    "HTML:Scripts_EntregasCD_Controle": "5a34d60c9f9358315279bd4f9e7b3c8baf5f2bbc59f02dfd5f4e939e48933744",
-    "HTML:Scripts_EntregasCD_Modelo": "470388e43e85562ae645e783f0ce63cea8c843ff257de17154d98c4008d0684a",
+    "HTML:Scripts_EntregasCD_Controle": "b3ea36e1e520bd7b4abe8d5a43beaea87a4ce44addf704d40bd741c6fe827c08",
+    "HTML:Scripts_EntregasCD_Modelo": "63b61fdf8a181d54621903be963db556a15d1951462d1f2f07c1b3e73771c1b8",
     "HTML:Scripts_Eventos_TP": "fcb7b126a2f7d881a78e5c0e6945982a1e3ebade0fa3cd9fc1fd3827627f33ea",
     "HTML:Scripts_Giro_Registro": "ee5496077baf4918e0171b1d92df2cec38da2584bf47e601333a642921ed7e55",
     "HTML:Scripts_Globais_1": "3b3c1ea4300c21439c38e0bdc44325ee105f916334e9754cc4809f17d528a9b3",
-    "HTML:Scripts_Globais_2": "8fc99a719189d34a75b82bf820c94d323d3ab34f4f9bc926b0663c6100a3ea60",
+    "HTML:Scripts_Globais_2": "eeb5fd35a4294648ed5da48eeed878f92829c6af747467390f410b606f065a9b",
     "HTML:Scripts_Historico_PCP2026": "c6238f34d35ffd9c1adcb4435ff737563f806c1f234ee0b58c835bdafdafb8a5",
     "HTML:Scripts_Meta_Armazem_Realizado": "ae22d29077e27b204359486acc6557a4769d2ab99ee5556d65876220f17e51f5",
     "SERVER_JS:Sem título": "0d554ca9e8b80dd09850906f18cdd0f84d35dd7bbe6abab69ab4ccbada526ef8",
