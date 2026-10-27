@@ -51,6 +51,11 @@ test('nova visão abre backlog recolhido, põe quadro detalhado antes e mantém 
   const a=interfacePortal(); const html=a.nodes.get('ecdNovaVisao').innerHTML;
   assert.match(html,/<details id="ecdPendencias" class="[^"]+">/);
   assert(html.indexOf('Quadro 1 · marca, série e CD')<html.indexOf('Quadro 2 · marca e CD'));
+  assert(!html.includes('id="ecdCDTabs"'));
+  for(const id of ['ecdFiltroMarca','ecdFiltroSerie','ecdFiltroStatus','ecdFim'])assert(!html.includes('id="'+id+'"'));
+  assert(!html.includes('max-height:440px'),'nenhuma tabela deve ter rolagem vertical própria');
+  assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/ecd-week-corner/);
+  assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/width:\d{4,}px;min-width:100%/);
   assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/Semana atual/);
   assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/SAE/);
   assert.equal(a.charts(),1);assert.equal(a.sync(),1);
@@ -59,8 +64,8 @@ test('nova visão abre backlog recolhido, põe quadro detalhado antes e mantém 
   assert(!tela.includes('class="hidden bg-white'));
 });
 
-test('filtros afetam quadros, pendências, plano, percentuais e as três abas exportadas',()=>{
-  const a=interfacePortal();a.nodes.get('ecdFiltroMarca').value='SAS';a.window.pgECDRender();
+test('filtros gerais afetam quadros, pendências, plano, percentuais e as três abas exportadas',()=>{
+  const a=interfacePortal();a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAS');a.window.processarEntregasCD();
   assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/SAS/);assert(!a.nodes.get('ecdQuadroSerie').innerHTML.includes('SAE'));
   assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-02/);assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));
   a.window.pgECDExportar(a.nodes.get('ecdExportar'));const abas=a.exportado().abas;
@@ -70,7 +75,7 @@ test('filtros afetam quadros, pendências, plano, percentuais e as três abas ex
 });
 
 test('nova data entra de imediato no calendário, salva só entrega e confirmação compartilha versão',()=>{
-  const a=interfacePortal({adiar:true});a.nodes.get('ecdFiltroMarca').value='SAE';a.window.pgECDRender();
+  const a=interfacePortal({adiar:true});a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAE');a.window.processarEntregasCD();
   assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-01/);a.window.pgECDSalvar(0,{value:'2026-10-29'});
   assert.equal(a.salvo().dataEntrega,'2026-10-29');assert.deepEqual(JSON.parse(JSON.stringify(a.salvo().campos)),['dataEntrega']);
   assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/100% ✓/);
@@ -79,7 +84,7 @@ test('nova data entra de imediato no calendário, salva só entrega e confirmaç
 });
 
 test('falha de gravação devolve parcela ao backlog e informa que não foi salva',()=>{
-  const a=interfacePortal({adiar:true});a.nodes.get('ecdFiltroMarca').value='SAE';a.window.pgECDRender();
+  const a=interfacePortal({adiar:true});a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAE');a.window.processarEntregasCD();
   a.window.pgECDSalvar(0,{value:'2026-10-29'});assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));
   a.falhar();assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-01/);assert.match(a.nodes.get('ecdAviso').textContent,/Não foi possível salvar/);
 });
@@ -88,12 +93,12 @@ test('data salva no Giro atualiza quadro aberto sem recarregar a base ou os grá
   const a=interfacePortal();const chave=a.window.pgEntregasCDModelo.chave(a.linhas[0]);
   a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chave]:{dataEntrega:'2026-10-30',versao:2}}}});
   assert.equal(a.window.PG_ECD_PREVISOES[chave].dataEntrega,'2026-10-30');
-  a.nodes.get('ecdFiltroMarca').value='SAE';a.window.pgECDRender();assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));assert.equal(a.charts(),1);
+  a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAE');a.window.processarEntregasCD();assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));
 });
 
 test('poll antigo mantém data otimista e resposta atrasada não desfaz versão nova',()=>{
   const a=interfacePortal({adiar:true}),chave=a.window.pgEntregasCDModelo.chave(a.linhas[0]);
-  a.nodes.get('ecdFiltroMarca').value='SAE';a.window.pgECDRender();a.window.pgECDSalvar(0,{value:'2026-10-29'});
+  a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAE');a.window.processarEntregasCD();a.window.pgECDSalvar(0,{value:'2026-10-29'});
   a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chave]:{dataEntrega:'',versao:0}}}});
   assert.equal(a.window.PG_ECD_PREVISOES[chave].dataEntrega,'2026-10-29');
   a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chave]:{dataEntrega:'2026-10-31',versao:2}}}});
@@ -102,9 +107,9 @@ test('poll antigo mantém data otimista e resposta atrasada não desfaz versão 
 
 test('falha após outra pessoa salvar preserva data mais recente e mantém reenviar ao trocar filtro',()=>{
   const a=interfacePortal({adiar:true}),chave=a.window.pgEntregasCDModelo.chave(a.linhas[0]);
-  a.nodes.get('ecdFiltroMarca').value='SAE';a.window.pgECDRender();a.window.pgECDSalvar(0,{value:'2026-10-29'});
+  a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAE');a.window.processarEntregasCD();a.window.pgECDSalvar(0,{value:'2026-10-29'});
   const requestId=a.salvo().requestId;
-  a.nodes.get('ecdFiltroMarca').value='SAS';a.window.pgECDRender();
+  a.window.pgBaseGeralReportExecutiva=a.linhas.filter(l=>l.MARCA_FINAL==='SAS');a.window.processarEntregasCD();
   a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chave]:{dataEntrega:'2026-10-31',versao:2}}}});
   a.falhar();assert.equal(a.window.PG_ECD_PREVISOES[chave].dataEntrega,'2026-10-31');
   assert.match(a.nodes.get('ecdFalhas').innerHTML,/SKU-01/);assert.match(a.nodes.get('ecdFalhas').innerHTML,/Reenviar/);

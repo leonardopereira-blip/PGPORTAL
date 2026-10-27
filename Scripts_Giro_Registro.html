@@ -124,6 +124,7 @@
     function enviarObs(evento) {
         evento.enviando = true;
         evento.erro = '';
+        const iniciouEnvio = Date.now();
         const notaPendente = mapa(evento.tipo)[evento.chave]?.find(e => e.id === evento.id);
         if (notaPendente) delete notaPendente.erro;
         status(evento.input,'Salvando…');
@@ -145,6 +146,7 @@
         if (typeof google === 'undefined' || !google.script?.run) { falha('sem conexão'); return; }
         google.script.run.withSuccessHandler(res => {
             if (!res?.success) { falha(res?.error); return; }
+            console.info('[PERFORMANCE] Confirmação de observação Giro:', Date.now() - iniciouEnvio, 'ms');
             pendentes.delete(evento.id);
             const lista = mapa(evento.tipo)[evento.chave] || [];
             mapa(evento.tipo)[evento.chave] = lista.filter(e => e.id !== evento.id);

@@ -835,10 +835,17 @@ window.pgAnexarDadosDashboard = function(fatia) {
         if (nome === 'RAIZES ACABADORA') return 'RAÍZES ACABADORA';
         return nome;
     };
+    const pgMemoTipoMaterialPortal = new WeakMap();
     window.pgTipoMaterialProducao = function(l) {
-        // Mesma classificação usada pela Meta Armazém: mantém todas as categorias da origem.
-        return String(l?.TIPO ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        // A normalização é idêntica à anterior. Reusar apenas enquanto o texto
+        // bruto não mudou preserva inclusive as edições na mesma linha PCP.
+        const bruto = String(l?.TIPO ?? '');
+        const anterior = l && typeof l === 'object' ? pgMemoTipoMaterialPortal.get(l) : null;
+        if (anterior && anterior.bruto === bruto) return anterior.valor;
+        const valor = bruto.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .toUpperCase().replace(/\s+/g, ' ').trim();
+        if (l && typeof l === 'object') pgMemoTipoMaterialPortal.set(l, {bruto, valor});
+        return valor;
     };
     window.pgValorFiltroProducao = function(l, categoria) {
         // Mesmo fornecedor canonico usado pelos consolidados. O cabecalho bruto
@@ -951,7 +958,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
             htmlFiltros += `
             <div class="relative filtro-container-geral ${extraClass}">
                 <button id="btn-filtro-geral-${idCat}" onclick="window.toggleFilterMenuGeral('${idCat}', event)" class="${customBtnClass} px-3 py-2 rounded-lg text-xs font-black flex items-center gap-2 uppercase tracking-wide transition-colors">
-                    ${key} <span class="text-[10px] opacity-80">▼</span>
+                    ${key === 'Tipo' ? 'Tipo de material' : key} <span class="text-[10px] opacity-80">▼</span>
                 </button>
                 <div id="menu-geral-${idCat}" class="menu-filtro-geral hidden absolute left-0 top-[calc(100%+4px)] bg-white border border-slate-300 shadow-xl rounded-xl w-60 p-2 z-[90]">
                     <div class="flex justify-between items-center mb-2 pb-2 border-b border-slate-200">

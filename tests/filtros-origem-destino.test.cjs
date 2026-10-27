@@ -6,6 +6,14 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'Scripts_Globais_2.html'), 'utf8');
 
+test('topo nomeia Tipo de material sem remover o seletor conhecido do Armazém',()=>{
+  assert.match(source, /key === 'Tipo' \? 'Tipo de material' : key/);
+  const armazem=fs.readFileSync(path.join(__dirname,'..','abaMetaArmazem.html'),'utf8');
+  assert.match(armazem, /id="maTipoMaterialLista"/);
+  assert.match(armazem, /window\.pgMATipoMaterial=function/);
+  assert.match(armazem, /\.chk-geral-Tipo/);
+});
+
 test('Tipo global usa a classificação do Armazém em todas as bases e preserva as demais categorias', () => {
   const aluno = {...pcp('aluno'), TIPO:'  aluno  '};
   const professor = {...pcp('professor'), TIPO:'Professor'};
@@ -23,6 +31,17 @@ test('Tipo global usa a classificação do Armazém em todas as bases e preserva
   assert.deepEqual(p.linhas, [vazio]);
   p.w.checkAllGeral('Tipo', true);
   assert.deepEqual(p.linhas, [aluno, professor, apoio, vazio]);
+});
+
+test('cache de Tipo conserva acentos/espaços e invalida após edição da mesma linha', () => {
+  const linha = {...pcp('mutavel'), TIPO:'  Materiál   do Professor  '};
+  const p = portal([linha]);
+  assert.equal(p.w.pgTipoMaterialProducao(linha), 'MATERIAL DO PROFESSOR');
+  assert.equal(p.w.pgTipoMaterialProducao(linha), 'MATERIAL DO PROFESSOR');
+  linha.TIPO = 'ALUNO';
+  assert.equal(p.w.pgTipoMaterialProducao(linha), 'ALUNO');
+  linha.TIPO = '';
+  assert.equal(p.w.pgTipoMaterialProducao(linha), '');
 });
 
 test('troca de fatia conserva a seleção global de Tipo sem perder aluno ou categorias adicionais', () => {
