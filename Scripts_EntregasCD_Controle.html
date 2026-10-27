@@ -5,11 +5,16 @@
     const normal = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
     const hoje = () => typeof dtHojeISO !== 'undefined' ? dtHojeISO : new Date().toLocaleDateString('en-CA');
-    const k = v => (Number(v || 0) / 1000).toLocaleString('pt-BR', {maximumFractionDigits: 1}) + 'k';
+    const k = v => {
+        const n = Number(v || 0), milhoes = Math.abs(n) >= 1000000;
+        return (n / (milhoes ? 1000000 : 1000)).toLocaleString('pt-BR', {maximumFractionDigits: milhoes ? 2 : 1}) + (milhoes ? 'M' : 'k');
+    };
     const exato = v => Math.round(Number(v || 0)).toLocaleString('pt-BR');
     const br = d => d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '—';
-    const pct = (v, t) => (t ? Math.min(100, v * 100 / t) : 0).toLocaleString('pt-BR', {maximumFractionDigits: 0}) + '%';
+    const pct = (v, t) => (t ? Math.min(100, v * 100 / t) : 0).toLocaleString('pt-BR', {maximumFractionDigits: 1}) + '%';
     const volume = ps => (ps || []).reduce((s, p) => s + p.volume, 0);
+    const chavesItem = item => [...new Set(item.chavesOrigem?.length ? item.chavesOrigem : [item.chave])];
+    const itemSalvando = item => chavesItem(item).some(chave => estado.salvando.has(chave));
     const legado = window.processarEntregasCD;
     const paletaArco = ['#418EDE', '#FA4616', '#284081', '#049FEC', '#FCB04E', '#F04E37', '#0C2340'];
     const estado = {base: [], itens: [], previsoes: {}, calendario: null, cds: [], marcas: new Map(), salvando: new Set(), falhas: new Map(), rodada: 0};
@@ -73,6 +78,11 @@
           <button id="ecdPrint" type="button" class="ecd-button" onclick="pgECDCapturar(this)" title="Captura os dois quadros completos, incluindo linhas e colunas fora da rolagem">📸 Capturar painel (PNG)</button>
           <button id="ecdExportar" type="button" class="ecd-button" onclick="pgECDExportar(this)">Exportar para Sheets</button>
         </div>
+        <div class="ecd-controls">
+          <label>Início<input id="ecdInicio" type="date" onchange="pgECDRender()"></label>
+          <label>Fim<input id="ecdFim" type="date" onchange="pgECDRender()"></label>
+          <label style="flex-direction:row;align-items:center;gap:8px"><input id="ecdOcultarConcluidos" type="checkbox" onchange="pgECDRender()">Ocultar materiais 100% entregues</label>
+        </div>
         <div id="ecdFalhas" role="alert"></div>
         <details id="ecdPendencias" class="ecd-section ecd-backlog">
           <summary><span>Backlog · pendências para registrar</span><span id="ecdBacklogTotal"></span></summary>
@@ -82,12 +92,16 @@
         <p id="ecdNotaDomingo" class="ecd-note"></p>
         <details id="ecdPorMarca" class="ecd-section" open><summary><span>Quadro 1 · marca e CD</span><span id="ecdInfoMarca"></span></summary><div id="ecdQuadroMarca" class="ecd-scroll"></div></details>
         <details id="ecdDetalhado" class="ecd-section" open><summary><span>Quadro 2 · marca, série e CD</span><span id="ecdInfoSerie"></span></summary><div id="ecdQuadroSerie" class="ecd-scroll"></div></details>
-        <p class="ecd-note">O plano inclui o backlog. Previsões em domingos e feriados aparecem no próximo dia de operação; a data informada permanece no detalhe e na exportação. Datas após o ciclo ficam nas pendências.</p>`;
+        <p class="ecd-note">O período escolhe as datas exibidas. Entregue mostra o realizado até hoje; os percentuais diários mostram o acumulado até cada data. O plano inclui o backlog. Previsões em domingos e feriados aparecem no próximo dia de operação; a data informada permanece na exportação. Datas após o período ficam nas pendências.</p>`;
+        $('ecdInicio').value = hoje();
+        const fimPadrao = window.PG_ENTREGAS_CD_CONFIG?.fimCiclo || hoje().slice(0,4) + '-12-02';
+        $('ecdFim').value = fimPadrao >= hoje() ? fimPadrao : hoje();
     }
     const filtro = id => $(id)?.value || '';
     function montarItens() {
         estado.previsoes = window.PG_ECD_PREVISOES || estado.previsoes;
-        estado.itens = window.pgEntregasCDModelo.montar(estado.base, estado.previsoes, hoje(), {volumeCanonico: true});
+        estado.itens = window.pgEntregasCDModelo.montar(estado.base, estado.previsoes, hoje(), {
+            volumeCanonico: true, conciliarRealizado: true, baseOriginal: window.dadosGlobais || estado.base});
         const marcas = [...new Set(estado.itens.map(i => i.marca))].sort();
         estado.marcas = new Map(marcas.map((m, i) => [m, paletaArco[i % paletaArco.length]]));
         window.pgECDRender();
@@ -105,19 +119,20 @@
         const left = widths.map((_, i) => widths.slice(0, i).reduce((a, b) => a + b, 0));
         const fixo = i => 'left:' + left[i] + 'px;width:' + widths[i] + 'px;min-width:' + widths[i] + 'px;max-width:' + widths[i] + 'px';
         const col = labels.length;
-        const entregueAte = c.incluiHojeEntregue ? c.hoje : new Date(Date.parse(c.hoje + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
         // A primeira faixa é exclusivamente da semana. O espaço entre semana
         // e datas atravessa também Marca, Série, CD e Entregue, como na referência.
         const cantoSemana = '<th colspan="' + col + '" class="ecd-week-corner" style="width:' + widths.reduce((a,b)=>a+b,0) + 'px"></th>';
-        const header = labels.map((label, i) => '<th class="ecd-freeze ' + (i === col - 1 ? 'ecd-frozen-end ecd-delivered' : '') + '" style="' + fixo(i) + '">' + label + (i === col - 1 ? '<span class="ecd-sub">até ' + br(entregueAte) + (c.incluiHojeEntregue ? ' · hoje' : '') + '</span>' : '') + '</th>').join('');
-        const semanas = c.semanas.map((s, n) => '<th colspan="' + s.tamanho + '">' + (n === 0 ? 'Semana atual · ' : n === 1 ? 'Próxima semana · ' : '') + br(s.inicio) + ' a ' + br(s.fim) + (n === c.semanas.length - 1 ? ' · fim' : '') + '</th>').join('');
+        const header = labels.map((label, i) => '<th class="ecd-freeze ' + (i === col - 1 ? 'ecd-frozen-end ecd-delivered' : '') + '" style="' + fixo(i) + '">' + label + (i === col - 1 ? '<span class="ecd-sub">até hoje · ' + br(c.hoje) + '</span>' : '') + '</th>').join('');
+        const atual = c.semanas.findIndex(s => s.inicio <= c.hoje && s.fim >= c.hoje);
+        const semanas = c.semanas.map((s, n) => '<th colspan="' + s.tamanho + '">' + (n === atual ? 'Semana atual · ' : atual >= 0 && n === atual + 1 ? 'Próxima semana · ' : '') + br(s.inicio) + ' a ' + br(s.fim) + (n === c.semanas.length - 1 ? ' · fim' : '') + '</th>').join('');
         const dias = c.dias.map(d => '<th class="' + (d.feriado ? 'ecd-holiday' : d.data === c.hoje ? 'ecd-today' : '') + '">' + ['dom','seg','ter','qua','qui','sex','sáb'][new Date(d.data + 'T12:00:00Z').getUTCDay()] + ' ' + br(d.data) + '<span class="ecd-sub">' + (d.feriado ? 'feriado' + (volume(c.total.dias[d.data]) ? ' · ' + k(volume(c.total.dias[d.data])) : '') : (d.data === c.hoje ? 'hoje · ' : '') + k(volume(c.total.dias[d.data]))) + '</span></th>').join('');
         const marcaPlano = new Map(); linhas.forEach(g => marcaPlano.set(g.marca, (marcaPlano.get(g.marca) || 0) + g.total));
         const linhasMarca = (idx, serie) => { let n = 1; while (idx + n < linhas.length && linhas[idx + n].marca === linhas[idx].marca && (!serie || linhas[idx + n].serie === linhas[idx].serie)) n++; return n; };
         function celulas(g, total = false) {
-            let acumulado = g.entregue;
-            const entreguePs = g.parcelas.filter(p => p.dia === 'entregue' && !p.backlog);
-            let h = '<td class="ecd-left ecd-delivered ecd-frozen-end ecd-cell" style="' + fixo(col - 1) + '" title="' + esc(tooltip(entreguePs)) + '"><b>' + k(g.entregue) + '</b><span class="ecd-sub">' + pct(g.entregue, g.total) + '</span></td>';
+            let acumulado = g.acumuladoAnterior ?? g.entregue;
+            const entreguePs = g.parcelas.filter(p => p.status === 'ENTREGUE' && !p.backlog);
+            const realizado = g.realCD ?? g.entregue;
+            let h = '<td class="ecd-left ecd-delivered ecd-frozen-end ecd-cell" style="' + fixo(col - 1) + '" title="' + esc(tooltip(entreguePs)) + '"><b>' + k(realizado) + '</b><span class="ecd-sub">' + pct(realizado, g.total) + '</span></td>';
             c.dias.forEach(d => {
                 const ps = g.dias[d.data] || [], v = volume(ps); acumulado += v;
                 const transito = volume(ps.filter(p => p.status === 'TRANSITO')), entregas = volume(ps.filter(p => p.status === 'ENTREGUE'));
@@ -151,12 +166,13 @@
         mostrarFalhas();
         let c;
         try { c = window.pgEntregasCDModelo.calendario(estado.itens, {hoje: hoje(),
-            fim: window.PG_ENTREGAS_CD_CONFIG?.fimCiclo || hoje().slice(0,4) + '-12-02',
-            feriados: window.PG_ENTREGAS_CD_CONFIG?.feriados}, {}); }
-        catch (e) { aviso(e.message, true); return; }
+            inicio: filtro('ecdInicio') || hoje(), fim: filtro('ecdFim') || hoje(),
+            feriados: window.PG_ENTREGAS_CD_CONFIG?.feriados}, {ocultarConcluidos: !!$('ecdOcultarConcluidos')?.checked}); }
+        catch (e) { estado.calendario = null; aviso('Período inválido: ' + e.message, true); return; }
         estado.calendario = c;
-        $('ecdLegendaEntregue').textContent = c.incluiHojeEntregue ? 'Entregue até hoje' : 'Entregue até ontem';
-        $('ecdNotaDomingo').textContent = c.incluiHojeEntregue ? 'A coluna Entregue inclui entregas de hoje (domingo).' : '';
+        $('ecdLegendaEntregue').textContent = 'Entregue até hoje';
+        $('ecdNotaDomingo').textContent = 'Realizado TP até hoje: ' + k(c.total.realCD ?? c.total.entregue) + ' de ' + k(c.total.total) + ' · ' + pct(c.total.realCD ?? c.total.entregue, c.total.total) +
+            ' · Origem: ' + (estado.origem === 'GRAFICA' ? 'Gráficas' : estado.origem === 'ACABADORA' ? 'Acabadoras' : 'Todas');
         $('ecdQuadroSerie').innerHTML = quadro(c.marcaSerieCD, c, true);
         $('ecdQuadroMarca').innerHTML = quadro(c.marcaCD, c, false);
         $('ecdInfoSerie').textContent = c.marcaSerieCD.length + ' linhas · ' + k(c.total.total);
@@ -171,45 +187,57 @@
             total: [...g.itens].reduce((s, i) => s + i.total, 0), coletado: [...g.itens].reduce((s, i) => s + i.coletado, 0)}));
         $('ecdBacklog').innerHTML = estado.pendencias.length ? '<table class="ecd-backlog-table"><thead><tr>' +
             ['Marca', 'Série', 'CD', 'SKU', 'Coleta prevista', 'Plano', 'Coletado', 'Falta', 'Nova previsão'].map(t => '<th>' + t + '</th>').join('') + '</tr></thead><tbody>' + estado.pendencias.map((g, n) => {
-                const i = g.item; return '<tr title="' + esc([...g.motivos].join(' · ') + ' · ' + i.descricao) + '"><td>' + esc(i.marca) + '</td><td>' + esc(i.serie) + '</td><td>' + esc(i.cd) + '</td><td>' + esc(i.sku) + '</td><td>' + br(i.dtColetaManual || i.dtColetaPCP) + '</td><td title="' + exato(g.total) + '">' + k(g.total) + '</td><td>' + k(g.coletado) + ' (' + pct(g.coletado, g.total) + ')</td><td title="' + exato(g.volume) + '">' + k(g.volume) + '</td><td><input class="ecd-input-date" type="date" aria-label="Nova previsão ' + esc(i.sku) + '" min="' + hoje() + '" value="' + esc(i.dtEntregaManual) + '" onchange="pgECDSalvar(' + n + ',this)" ' + (estado.salvando.has(i.chave) ? 'disabled' : '') + '><span class="ecd-save-state" id="ecdSalvo' + n + '"></span></td></tr>';
+                const i = g.item; return '<tr title="' + esc([...g.motivos].join(' · ') + ' · ' + i.descricao) + '"><td>' + esc(i.marca) + '</td><td>' + esc(i.serie) + '</td><td>' + esc(i.cd) + '</td><td>' + esc(i.sku) + '</td><td>' + br(i.dtColetaManual || i.dtColetaPCP) + '</td><td title="' + exato(g.total) + '">' + k(g.total) + '</td><td>' + k(g.coletado) + ' (' + pct(g.coletado, g.total) + ')</td><td title="' + exato(g.volume) + '">' + k(g.volume) + '</td><td><input class="ecd-input-date" type="date" aria-label="Nova previsão ' + esc(i.sku) + '" min="' + hoje() + '" value="' + esc(i.dtEntregaManual) + '" onchange="pgECDSalvar(' + n + ',this)" ' + (itemSalvando(i) ? 'disabled' : '') + '><span class="ecd-save-state" id="ecdSalvo' + n + '"></span></td></tr>';
             }).join('') + '</tbody></table>' : '<p class="ecd-empty">Nenhuma pendência nos filtros selecionados.</p>';
     };
     function enviarPrevisao(pedido) {
         const {item, payload} = pedido;
-        if (estado.salvando.has(item.chave)) return;
+        const entradas = payload.previsoes || [payload], chaves = entradas.map(p => p.chave);
+        if (chaves.some(chave => estado.salvando.has(chave))) return;
         mesclarPrevisoes({});
-        const anterior = estado.previsoes[item.chave] || {};
-        mesclarPrevisoes({[item.chave]: {...anterior, chave: item.chave, dataEntrega: payload.dataEntrega, _pgRequestId: payload.requestId}});
-        estado.salvando.add(item.chave); estado.falhas.delete(item.chave);
+        const anteriores = Object.fromEntries(chaves.map(chave => [chave, estado.previsoes[chave] || {}]));
+        const otimistas = entradas.filter(p => Number(anteriores[p.chave].versao || 0) <= Number(p.versaoEsperada || 0));
+        mesclarPrevisoes(Object.fromEntries(otimistas.map(p => [p.chave, {...anteriores[p.chave], chave: p.chave,
+            dataEntrega: p.dataEntrega, _pgRequestId: payload.requestId}])));
+        chaves.forEach(chave => estado.salvando.add(chave)); estado.falhas.delete(item.chave);
         montarItens(); notificarPrevisoes(); aviso('Salvando nova previsão...');
         const falhar = erro => {
-            estado.salvando.delete(item.chave); mesclarPrevisoes({});
-            if (estado.previsoes[item.chave]?._pgRequestId === payload.requestId) mesclarPrevisoes({[item.chave]: anterior}, true);
+            chaves.forEach(chave => estado.salvando.delete(chave)); mesclarPrevisoes({});
+            const reverter = Object.fromEntries(chaves.filter(chave => estado.previsoes[chave]?._pgRequestId === payload.requestId)
+                .map(chave => [chave, anteriores[chave]]));
+            mesclarPrevisoes(reverter, true);
             const texto = erro?.message || String(erro || 'Sem confirmação do servidor');
             estado.falhas.set(item.chave, {...pedido, erro: texto});
             montarItens(); notificarPrevisoes(); aviso('Não foi possível salvar: ' + texto, true);
         };
         if (typeof google === 'undefined' || !google.script?.run) { falhar('Sem conexão'); return; }
-        google.script.run.withSuccessHandler(resp => {
-            if (!resp?.success || !resp.previsao) { falhar(resp?.error); return; }
-            estado.salvando.delete(item.chave); estado.falhas.delete(item.chave);
-            mesclarPrevisoes({[item.chave]: resp.previsao}); montarItens(); notificarPrevisoes();
+        const servidor = google.script.run.withSuccessHandler(resp => {
+            const confirmadas = payload.previsoes ? resp?.previsoes : {[chaves[0]]: resp?.previsao};
+            if (!resp?.success || chaves.some(chave => !confirmadas?.[chave])) { falhar(resp?.error); return; }
+            chaves.forEach(chave => estado.salvando.delete(chave)); estado.falhas.delete(item.chave);
+            mesclarPrevisoes(confirmadas); montarItens(); notificarPrevisoes();
             aviso('Nova previsão salva e compartilhada com o Giro.');
-        }).withFailureHandler(falhar).salvarPrevisaoEntregaCDPortal(payload);
+        }).withFailureHandler(falhar);
+        if (payload.previsoes) servidor.salvarPrevisoesEntregaCDPortal(payload);
+        else servidor.salvarPrevisaoEntregaCDPortal(payload);
     }
     window.pgECDSalvar = function (indice, input) {
         const item = estado.pendencias?.[indice]?.item;
-        if (!item || !input || estado.salvando.has(item.chave)) return;
+        if (!item || !input || itemSalvando(item)) return;
         const valor = input.value;
         if (valor && valor < hoje()) { aviso('Informe uma data a partir de hoje.', true); input.value = item.dtEntregaManual; return; }
-        enviarPrevisao({item, payload: {chave: item.chave, campos: ['dataEntrega'], dataEntrega: valor,
-            versaoEsperada: Number(estado.previsoes[item.chave]?.versao || 0), requestId: 'ecd-' + Date.now() + '-' + Math.random().toString(36).slice(2)}});
+        const requestId = 'ecd-' + Date.now() + '-' + Math.random().toString(36).slice(2), chaves = chavesItem(item);
+        const entradas = chaves.map(chave => ({chave, campos: ['dataEntrega'], dataEntrega: valor,
+            versaoEsperada: Number(estado.previsoes[chave]?.versao || 0)}));
+        enviarPrevisao({item, payload: chaves.length > 1 ? {requestId, dataEntrega: valor, previsoes: entradas}
+            : {...entradas[0], requestId}});
     };
     window.pgECDReenviar = indice => { const pedido = [...estado.falhas.values()][indice]; if (pedido) enviarPrevisao(pedido); };
     // Mesmo padrão dos outros painéis: PNG desenhado do modelo completo em canvas.
     // Inclui todo o calendário, sem alterar a rolagem, os filtros ou as previsões.
     window.pgECDCapturar = async function (botao) {
         const c = estado.calendario;
+        if (!c) { aviso('Período inválido. Confira Início e Fim antes de capturar.', true); return; }
         if (!c?.parcelas.length) { aviso('Não há parcelas nos filtros selecionados.', true); return; }
         if (estado.capturando) return;
         estado.capturando = true;
@@ -238,7 +266,7 @@
                     ctx.fillStyle = '#0C2340'; ctx.fillRect(0, 0, largura, topo);
                     texto('Entregas no CD · ' + q.titulo + ' · ' + br(c.hoje), 8, 28, largura - 16, '#fff', true);
                     texto('Entregue · Coletado em trânsito · Aguardando coleta | % acumulado da linha | Plano inclui backlog', 8, 55, largura - 16, '#fff');
-                    texto('Ciclo até ' + br(c.fim) + ' · Plano ' + exato(c.total.total) + ' · Backlog ' + exato(c.total.backlog) +
+                    texto('Período ' + br(c.inicio || c.hoje) + ' a ' + br(c.fim) + ' · Plano ' + exato(c.total.total) + ' · Backlog ' + exato(c.total.backlog) +
                         (paginas > 1 ? ' · Parte ' + (pagina + 1) + '/' + paginas : ''), 8, 82, largura - 16, '#fff');
                     let x = fixas;
                     c.semanas.forEach(s => { ctx.fillStyle = '#0C2340'; ctx.fillRect(x, topo, s.tamanho * 136, 32);
@@ -247,7 +275,7 @@
                     const labels = ['Marca', ...(q.detalhado ? ['Série'] : []), 'CD', 'Entregue'];
                     labels.forEach((label, i) => { ctx.fillStyle = '#0C2340'; ctx.fillRect(x, topo, larguras[i], cab);
                         texto(label, x, topo + 53, larguras[i], '#fff', true);
-                        if (i === labels.length - 1) texto(c.incluiHojeEntregue ? 'até hoje' : 'até ontem', x, topo + 72, larguras[i], '#fff');
+                        if (i === labels.length - 1) texto('até hoje · ' + br(c.hoje), x, topo + 72, larguras[i], '#fff');
                         x += larguras[i]; });
                     c.dias.forEach(d => { ctx.fillStyle = d.feriado ? '#8595a5' : d.data === c.hoje ? '#FA4616' : '#418EDE';
                         ctx.fillRect(x, topo + 32, 136, cab - 32);
@@ -259,9 +287,9 @@
                         const valores = [total ? 'Total geral' : g.marca, ...(q.detalhado ? [total ? '' : g.serie] : []), total ? '' : g.cd];
                         x = 0; valores.forEach((v, i) => { texto(v, x, y + 29, larguras[i], total ? '#fff' : '#0C2340', total); x += larguras[i]; });
                         ctx.fillStyle = '#d9e8f8'; ctx.fillRect(x, y, larguras.at(-1), alturaLinha);
-                        texto(k(g.entregue), x, y + 23, larguras.at(-1), '#0C2340', true);
-                        texto(pct(g.entregue, g.total), x, y + 42, larguras.at(-1)); x += larguras.at(-1);
-                        let acumulado = g.entregue;
+                        texto(k(g.realCD ?? g.entregue), x, y + 23, larguras.at(-1), '#0C2340', true);
+                        texto(pct(g.realCD ?? g.entregue, g.total), x, y + 42, larguras.at(-1)); x += larguras.at(-1);
+                        let acumulado = g.acumuladoAnterior ?? g.entregue;
                         c.dias.forEach(d => {
                             const ps = g.dias[d.data] || [], v = volume(ps); acumulado += v;
                             const entregas = volume(ps.filter(p => p.status === 'ENTREGUE')), transito = volume(ps.filter(p => p.status === 'TRANSITO'));
@@ -288,6 +316,7 @@
         finally { estado.capturando = false; if (botao) { botao.disabled = false; botao.textContent = anterior; } }
     };
     window.pgECDExportar = function (botao) {
+        if (!estado.calendario) { aviso('Período inválido. Confira Início e Fim antes de exportar.', true); return; }
         if (!estado.calendario?.parcelas.length) { aviso('Não há parcelas nos filtros selecionados.', true); return; }
         if (window.pgTPExportacaoPronta && !window.pgTPExportacaoPronta()) return;
         if (typeof google === 'undefined' || !google.script?.run) { aviso('Conexão indisponível para exportar.', true); return; }
@@ -304,8 +333,17 @@
         estrutura(); if (!$('ecdQuadroSerie')) return;
         const origem = filtro('pgFiltroOrigem') || 'TODOS';
         const global = window.pgBaseGeralReportExecutiva || window.dadosDestinoCDFinal || [];
-        estado.base = typeof window.pgBaseForecastFiltrada === 'function' ? window.pgBaseForecastFiltrada(global, origem, 'CD') : global.slice();
-        estado.base = estado.base.filter(l => !window.pgSolicitacaoCancelada?.(l));
+        estado.origem = origem;
+        // Mesma base e exclusão por destino da Meta Armazém. A origem explícita
+        // recorta somente a fonte física, antes da união canônica de CD.
+        estado.base = global.filter(l => {
+            if (window.pgSolicitacaoCancelada?.(l)) return false;
+            const acabadora = typeof window.pgEhFonteAcabadora === 'function' ? window.pgEhFonteAcabadora(l)
+                : [l._SOURCE, l.BASE, l._base].some(v => normal(v).includes('ACAB'));
+            const destino = acabadora ? (l['CD DESTINO'] || l.CD_FINAL || l.CD || l.CK || '') : (l.CD_MAPA ?? '');
+            return normal(destino) !== 'WALPRINT' && (origem !== 'ACABADORA' || acabadora) && (origem !== 'GRAFICA' || !acabadora);
+        });
+        if (typeof window.pgUnirTotalSemDuplicidade === 'function') estado.base = window.pgUnirTotalSemDuplicidade(estado.base);
         montarItens();
         // Os gráficos anteriores permanecem no final, sob os novos quadros.
         if (typeof legado === 'function') legado();

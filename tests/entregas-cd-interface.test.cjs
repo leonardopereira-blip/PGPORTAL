@@ -34,8 +34,12 @@ function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false,en
     salvarPrevisaoEntregaCDPortal(p){salvo=p;const ok=success,fail=failure;
       concluir=()=>ok({success:true,previsao:{chave:p.chave,dataEntrega:p.dataEntrega,versao:1}});
       erro=()=>fail(new Error('Indisponível'));if(!adiar)concluir();},
+    salvarPrevisoesEntregaCDPortal(p){salvo=p;const ok=success,fail=failure;
+      concluir=()=>ok({success:true,previsoes:Object.fromEntries(p.previsoes.map((r,i)=>[r.chave,
+        {chave:r.chave,dataEntrega:r.dataEntrega,versao:1,requestId:p.requestId+':'+i}]))});
+      erro=()=>fail(new Error('Indisponível'));if(!adiar)concluir();},
     gerarPlanilhaEntregasCD(p){exportado=p;success({success:true,url:'https://docs.google.com/spreadsheets/d/123'});}};
-  const window={pgCampoColeta:(l,n)=>l[n],pgEhFonteAcabadora:()=>false,pgSolicitacaoCancelada:()=>false,
+  const window={pgCampoColeta:(l,n)=>l[n],pgEhFonteAcabadora:l=>l._SOURCE==='PCP_ACABADORAS',pgSolicitacaoCancelada:()=>false,
     pgLinhasUnicas:x=>x,pgBaseForecastFiltrada:x=>x,pgBaseGeralReportExecutiva:linhas,
     pgDataPlanoColetaLinha:l=>l['Coleta/Internalização de estoque final (re) plan'],
     pgDataPlanoEntregaSLA:(l,d)=>{const dt=new Date((d||l['Coleta/Internalização de estoque final (re) plan'])+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()+2);return dt.toISOString().slice(0,10);},
@@ -79,6 +83,20 @@ test('captura PNG inclui os dois quadros e todo o ciclo sem depender da rolagem'
   assert.match(a.nodes.get('ecdAviso').textContent,/Captura dos dois quadros concluída/);
 });
 
+test('milhões e percentuais usam as mesmas unidades e precisão na tela e no PNG',async()=>{
+  const a=interfacePortal();
+  a.linhas.forEach(l=>{l.TIRAGEM=12455000;l.entregas=[{data:'2026-10-25',volume:8678150}];});
+  a.window.processarEntregasCD();
+  for(const id of ['ecdQuadroMarca','ecdQuadroSerie']){
+    const html=a.nodes.get(id).innerHTML;
+    assert.match(html,/24,91M/);assert.match(html,/17,36M/);assert.match(html,/69,7%/);
+    assert(!html.includes('17.356,3k'));
+  }
+  await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));
+  for(const texto of ['17,36M','69,7%'])assert(a.desenhos.includes(texto),texto);
+  assert.match(interfacePortal({entregaOntem:true}).nodes.get('ecdQuadroMarca').innerHTML,/0,1k/,'valores menores continuam em milhares');
+});
+
 test('falha da captura é informada e libera o botão para tentar novamente',async()=>{
   const a=interfacePortal({canvasOk:false}),botao=a.nodes.get('ecdPrint');botao.textContent='Print';
   await a.window.pgECDCapturar(botao);
@@ -91,7 +109,8 @@ test('nova visão abre backlog recolhido, põe marca/CD primeiro e mantém gráf
   assert.match(html,/<details id="ecdPendencias" class="[^"]+">/);
   assert(html.indexOf('Quadro 1 · marca e CD')<html.indexOf('Quadro 2 · marca, série e CD'));
   assert(!html.includes('id="ecdCDTabs"'));
-  for(const id of ['ecdFiltroMarca','ecdFiltroSerie','ecdFiltroStatus','ecdFim'])assert(!html.includes('id="'+id+'"'));
+  for(const id of ['ecdFiltroMarca','ecdFiltroSerie','ecdFiltroStatus'])assert(!html.includes('id="'+id+'"'));
+  assert.equal(a.nodes.get('ecdInicio').value,'2026-10-26');assert.equal(a.nodes.get('ecdFim').value,'2026-12-02');
   assert(!html.includes('max-height:440px'),'nenhuma tabela deve ter rolagem vertical própria');
   assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/ecd-week-corner/);
   assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/width:\d{4,}px;min-width:100%/);
@@ -125,6 +144,23 @@ test('filtros gerais afetam quadros, pendências, plano, percentuais e as três 
   assert.deepEqual(JSON.parse(JSON.stringify(abas.map(x=>x.nome))),['Quadro_Marca_CD','Quadro_Marca_Serie_CD','Base_SKUs']);
   assert(abas[2].linhas.every(r=>r[1]==='SAS'));assert.equal(abas[2].linhas.reduce((s,r)=>s+r[15],0),100);
   assert.equal(abas[0].linhas.at(-1)[2],100);assert.match(a.nodes.get('ecdAviso').innerHTML,/Abrir os dois quadros/);
+});
+
+test('universo usa destino WALPRINT da Meta e origem física antes da união canônica',()=>{
+  const a=interfacePortal();let recebidas;
+  a.window.pgBaseForecastFiltrada=()=>{throw new Error('Não aplicar outro roteamento antes da base canônica.');};
+  a.window.pgUnirTotalSemDuplicidade=linhas=>{recebidas=linhas;return linhas;};
+  a.window.pgBaseGeralReportExecutiva=[...a.linhas,
+    {...a.linhas[0],_SOURCE:'PCP_ACABADORAS',SKU_REAL:'ATHOS',GRAFICA_FINAL:'ATHOS','CD DESTINO':'CD FOR'},
+    {...a.linhas[0],SKU_REAL:'WAL-PCP',CD_MAPA:'WALPRINT'},
+    {...a.linhas[0],_SOURCE:'PCP_ACABADORAS',SKU_REAL:'WAL-ACAB','CD DESTINO':'WALPRINT'}];
+  a.window.processarEntregasCD();assert.equal(recebidas.length,3);
+  assert(recebidas.some(l=>l.SKU_REAL==='ATHOS'),'origem Todas mantém acabadoras elegíveis na base canônica');
+  a.nodes.get('pgFiltroOrigem').value='GRAFICA';a.window.processarEntregasCD();
+  assert.equal(recebidas.length,2);assert(recebidas.every(l=>l._SOURCE==='PCP'));
+  assert.match(a.nodes.get('ecdNotaDomingo').textContent,/Origem: Gráficas/);
+  a.nodes.get('pgFiltroOrigem').value='ACABADORA';a.window.processarEntregasCD();
+  assert.equal(recebidas.length,1);assert.equal(recebidas[0].SKU_REAL,'ATHOS');
 });
 
 test('nova data entra de imediato no calendário, salva só entrega e confirmação compartilha versão',()=>{
@@ -169,12 +205,88 @@ test('falha após outra pessoa salvar preserva data mais recente e mantém reenv
   a.window.pgECDReenviar(0);assert.equal(a.salvo().requestId,requestId,'reenvio incerto é idempotente');
 });
 
-test('realizado em hoje-feriado fica azul e visível e domingo entra em Entregue com aviso',()=>{
+test('realizado de hoje, inclusive feriado e domingo, integra a coluna Entregue até hoje',()=>{
   const feriado=interfacePortal({hojeData:'2026-11-02',entregaHoje:true});
   const html=feriado.nodes.get('ecdQuadroSerie').innerHTML;
   assert.match(html,/feriado · 0,1k/);assert.match(html,/style="background:#d9e8f8"/);
   const domingo=interfacePortal({hojeData:'2026-11-01',entregaHoje:true});
   assert.equal(domingo.nodes.get('ecdLegendaEntregue').textContent,'Entregue até hoje');
-  assert.match(domingo.nodes.get('ecdNotaDomingo').textContent,/inclui entregas de hoje \(domingo\)/);
-  assert.match(domingo.nodes.get('ecdQuadroSerie').innerHTML,/até 01\/11 · hoje/);
+  assert.match(domingo.nodes.get('ecdNotaDomingo').textContent,/Realizado TP até hoje: 0,1k de 0,2k · 25%/);
+  assert.match(domingo.nodes.get('ecdQuadroSerie').innerHTML,/até hoje · 01\/11/);
+});
+
+test('Início e Fim escolhem datas passadas e futuras preservando o snapshot entregue até hoje',async()=>{
+  const a=interfacePortal({entregaOntem:true});
+  a.nodes.get('ecdInicio').value='2026-10-01';a.nodes.get('ecdFim').value='2026-10-03';a.window.pgECDRender();
+  let html=a.nodes.get('ecdQuadroMarca').innerHTML;
+  assert.match(html,/qui 01\/10/);assert.match(html,/sáb 03\/10/);assert(!html.includes('02/12'));
+  assert.match(html,/até hoje · 26\/10/);assert.match(a.nodes.get('ecdNotaDomingo').textContent,/25%/);
+  a.window.pgECDExportar(a.nodes.get('ecdExportar'));
+  assert(a.exportado().abas[0].cabecalho.includes('2026-10-01'));
+  assert(!a.exportado().abas[0].cabecalho.includes('2026-12-02'));
+  a.nodes.get('ecdInicio').value='2027-01-04';a.nodes.get('ecdFim').value='2027-01-06';a.window.pgECDRender();
+  html=a.nodes.get('ecdQuadroMarca').innerHTML;assert.match(html,/seg 04\/01/);assert.match(html,/qua 06\/01/);
+  a.nodes.get('ecdInicio').value='2027-01-07';a.window.pgECDRender();
+  assert.match(a.nodes.get('ecdAviso').textContent,/início e fim válidos/);
+  const exportacaoValida=a.exportado();a.window.pgECDExportar(a.nodes.get('ecdExportar'));
+  assert.equal(a.exportado(),exportacaoValida,'intervalo inválido não exporta calendário antigo');
+  await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));assert.equal(a.capturas.length,0);
+  assert.equal(a.charts(),1,'filtros locais não recalculam os gráficos legados');
+});
+
+test('período futuro acumula previsões vigentes anteriores ao início sem virar entregue TP',async()=>{
+  const a=interfacePortal();a.linhas.forEach(l=>l['Coleta/Internalização de estoque final (re) plan']='2026-10-27');
+  a.window.processarEntregasCD();a.nodes.get('ecdInicio').value='2026-11-10';a.nodes.get('ecdFim').value='2026-11-11';
+  a.window.pgECDRender();
+  assert.match(a.nodes.get('ecdQuadroMarca').innerHTML,/<span class="ecd-sub">100%<\/span>/);
+  assert.match(a.nodes.get('ecdNotaDomingo').textContent,/Realizado TP até hoje: 0k/);
+  await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));assert(a.desenhos.includes('100%'));
+  a.window.pgECDExportar(a.nodes.get('ecdExportar'));assert.equal(a.exportado().abas[0].linhas.at(-1).at(-1),1);
+});
+
+test('ocultar materiais concluídos recalcula ambos quadros, totais, base e captura sem alterar outras abas',async()=>{
+  const a=interfacePortal();
+  a.linhas[0].entregas=[{data:'2026-10-26',volume:100}];a.window.processarEntregasCD();
+  a.nodes.get('ecdOcultarConcluidos').checked=true;a.window.pgECDRender();
+  for(const id of ['ecdQuadroMarca','ecdQuadroSerie']){
+    const html=a.nodes.get(id).innerHTML;assert(!html.includes('SAE'));assert.match(html,/SAS/);
+  }
+  assert.match(a.nodes.get('ecdInfoMarca').textContent,/1 linhas · 0,1k/);
+  a.window.pgECDExportar(a.nodes.get('ecdExportar'));
+  const abas=a.exportado().abas;assert(abas[2].linhas.every(r=>r[1]==='SAS'));
+  assert.equal(abas[0].linhas.at(-1)[2],100);
+  await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));assert(!a.desenhos.includes('SAE'));
+  assert.equal(a.window.pgBaseGeralReportExecutiva.length,2);
+  a.nodes.get('ecdOcultarConcluidos').checked=false;a.window.pgECDRender();
+  assert.match(a.nodes.get('ecdQuadroMarca').innerHTML,/SAE/);
+});
+
+function prepararGrupo(a){
+  const chaves=a.linhas.map(l=>a.window.pgEntregasCDModelo.chave(l));
+  const montar=a.window.pgEntregasCDModelo.montar;
+  a.window.pgEntregasCDModelo.montar=(...args)=>montar(...args).map((item,n)=>n?item:{...item,chavesOrigem:chaves});
+  a.window.processarEntregasCD();return chaves;
+}
+
+test('previsão de grupo salva todas as chaves de origem em lote e compartilha com o Giro',()=>{
+  const a=interfacePortal({adiar:true}),chaves=prepararGrupo(a);
+  a.window.pgECDSalvar(0,{value:'2026-10-29'});const pedido=a.salvo();
+  assert.deepEqual(JSON.parse(JSON.stringify(pedido.previsoes.map(p=>p.chave))),chaves);
+  for(const p of pedido.previsoes){assert.deepEqual(JSON.parse(JSON.stringify(p.campos)),['dataEntrega']);
+    assert.equal(p.dataEntrega,'2026-10-29');assert.equal(a.window.PG_ECD_PREVISOES[p.chave].dataEntrega,'2026-10-29');}
+  a.confirmar();for(const chave of chaves)assert.equal(a.window.PG_ECD_PREVISOES[chave].versao,1);
+  assert.match(a.nodes.get('ecdAviso').textContent,/salva e compartilhada/);
+});
+
+test('falha de grupo preserva gravação concorrente e reenvia o mesmo lote idempotente',()=>{
+  const a=interfacePortal({adiar:true}),chaves=prepararGrupo(a);
+  a.window.pgECDSalvar(0,{value:'2026-10-29'});const pedido=a.salvo();
+  a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chaves[0]]:
+    {chave:chaves[0],dataEntrega:'2026-10-31',versao:2}}}});
+  a.falhar();assert.equal(a.window.PG_ECD_PREVISOES[chaves[0]].dataEntrega,'2026-10-31');
+  assert.equal(a.window.PG_ECD_PREVISOES[chaves[1]].dataEntrega,undefined);
+  a.window.pgECDReenviar(0);assert.equal(a.salvo().requestId,pedido.requestId);
+  assert.deepEqual(JSON.parse(JSON.stringify(a.salvo().previsoes)),JSON.parse(JSON.stringify(pedido.previsoes)));
+  a.confirmar();assert.equal(a.window.PG_ECD_PREVISOES[chaves[0]].dataEntrega,'2026-10-31');
+  assert.equal(a.window.PG_ECD_PREVISOES[chaves[1]].dataEntrega,'2026-10-29');
 });

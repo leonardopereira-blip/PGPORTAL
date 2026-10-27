@@ -73,9 +73,13 @@
         if (!hoje) throw new Error('Informe uma data válida para calcular as entregas.');
         const salvas = previsoesPorChave(previsoes), movimentosUsados = new Set();
         const candidatas = (base || []).filter(linha => linha && !window.pgSolicitacaoCancelada?.(linha));
-        const linhas = typeof window.pgLinhasUnicas === 'function'
+        let linhas = typeof window.pgLinhasUnicas === 'function'
             ? window.pgLinhasUnicas(candidatas) : Array.from(new Set(candidatas));
+        if (opcoes.conciliarRealizado && typeof window.pgMAPrepararLinhas === 'function') {
+            linhas = window.pgMAPrepararLinhas(linhas, opcoes.baseOriginal || window.dadosGlobais || candidatas, hoje);
+        }
         return linhas.map((linha, indice) => {
+            const conciliacao = linha._PG_MA;
             const origem = temFonteAcabadora(linha) ? 'ACABADORA' : 'PCP';
             const cd = normal(primeiro(linha, ['CD_FINAL', 'CD DESTINO', 'CD_DESTINO', 'CD', 'CK']));
             const grafica = normal(primeiro(linha, ['GRAFICA_FINAL', 'GRÁFICA', 'GRAFICA', 'BQ']));
@@ -85,11 +89,15 @@
             const kit = String(primeiro(linha, ['KIT', 'Kit'])).trim();
             const op = String(primeiro(linha, ['OP', 'O.P.'])).trim();
             const join = primeiro(linha, ['JOIN_KEY', 'JOIN KEY']);
-            const chave = JSON.stringify(['ECD1', origem, marca, grafica, sku, cd, envio, join, kit, op].map(normal));
+            const chavesOrigem = [...new Set((conciliacao?.linhas || [linha]).map(chaveDaLinha))];
+            const chave = chavesOrigem[0];
             const rawTotalCD = campo(linha, 'TIRAGEM A ENTREGAR (total por CD)');
             const total = Math.round(numero(!opcoes.volumeCanonico && origem === 'ACABADORA' && preenchido(rawTotalCD)
                 ? rawTotalCD : campo(linha, 'TIRAGEM')));
-            const volumes = window.pgVolumesColetaUnificadosV37?.(linha, hoje) || {};
+            // A conciliação mantém os movimentos no total operacional do grupo,
+            // evitando cortar o TP na tiragem da primeira linha que recebeu o mapa.
+            const volumes = conciliacao ? {eventosColetaTP: conciliacao.eventosColeta,
+                eventosEntregaTP: conciliacao.eventosEntrega} : window.pgVolumesColetaUnificadosV37?.(linha, hoje) || {};
             const eventosColeta = eventosReais(volumes, 'coleta', hoje, movimentosUsados);
             const eventosEntrega = eventosReais(volumes, 'entrega', hoje, movimentosUsados);
             const coletado = eventosColeta.reduce((s, e) => s + e.volume, 0);
@@ -101,13 +109,22 @@
             const datasEntrega = Array.from(new Set(eventosEntrega.map(e => e.data)));
             const dtColetaPCP = data(window.pgDataPlanoColetaLinha?.(linha));
             const dtEntregaPCP = entregaSLA(linha);
-            const registro = typeof salvas[chave] === 'string' ? {dataEntrega: salvas[chave]} : (salvas[chave] || {});
+            const previsoesOrigem = Object.fromEntries(chavesOrigem.map(k => [k,
+                typeof salvas[k] === 'string' ? {dataEntrega: salvas[k]} : (salvas[k] || {})]));
+            const registros = Object.values(previsoesOrigem), registro = {...registros[0]};
+            const coletasManuais = new Set(registros.map(r => String(r.dataColeta || '')));
+            const entregasManuais = new Set(registros.map(r => String(r.dataEntrega || r.data || r.dataPrevista || '')));
+            const conflitoColeta = coletasManuais.size > 1, conflitoEntrega = entregasManuais.size > 1;
+            // Sem KIT seguro, datas individuais diferentes não autorizam ratear
+            // uma entrega compartilhada entre as linhas de origem.
+            if (conflitoColeta) registro.dataColeta = '';
+            if (conflitoEntrega) { registro.dataEntrega = ''; registro.data = ''; registro.dataPrevista = ''; }
             const dtColetaManual = data(registro.dataColeta);
             const dtEntregaManual = data(registro.dataEntrega || registro.data || registro.dataPrevista);
-            const manualColetaPreenchida = preenchido(registro.dataColeta);
-            const manualEntregaPreenchida = preenchido(registro.dataEntrega || registro.data || registro.dataPrevista);
-            const coletaManualVencida = manualColetaPreenchida && (!dtColetaManual || dtColetaManual < hoje);
-            const entregaManualVencida = manualEntregaPreenchida && (!dtEntregaManual || dtEntregaManual < hoje);
+            const manualColetaPreenchida = conflitoColeta || preenchido(registro.dataColeta);
+            const manualEntregaPreenchida = conflitoEntrega || preenchido(registro.dataEntrega || registro.data || registro.dataPrevista);
+            const coletaManualVencida = !conflitoColeta && manualColetaPreenchida && (!dtColetaManual || dtColetaManual < hoje);
+            const entregaManualVencida = !conflitoEntrega && manualEntregaPreenchida && (!dtEntregaManual || dtEntregaManual < hoje);
             let dtColetaPrevista = '', dtPrevisao = '', origemPrevisao = 'Sem previsão';
             let origemColetaPrevisao = 'Sem previsão';
             if (pendenteColeta > 0) {
@@ -117,7 +134,8 @@
                 } else if (!manualColetaPreenchida && dtColetaPCP >= hoje) {
                     dtColetaPrevista = dtColetaPCP;
                     origemColetaPrevisao = 'PCP original';
-                } else if (coletaManualVencida) origemColetaPrevisao = 'Manual vencida';
+                } else if (conflitoColeta) origemColetaPrevisao = 'Previsões divergentes no grupo';
+                else if (coletaManualVencida) origemColetaPrevisao = 'Manual vencida';
             }
             const previsoesEntrega = [];
             const adicionarEntrega = (dataPrevista, volume, origemPrevista) => {
@@ -128,7 +146,7 @@
             if (saldo > 0) {
                 if (dtEntregaManual && dtEntregaManual >= hoje) {
                     adicionarEntrega(dtEntregaManual, saldo, 'Manual');
-                } else if (!entregaManualVencida) {
+                } else if (!conflitoEntrega && !entregaManualVencida) {
                     // Consome as coletas reais em ordem cronológica contra o entregue.
                     // Assim parcelas já coletadas e ainda pendentes mantêm suas próprias datas.
                     let entregueConsumido = entregue, restanteColetado = aguardandoEntrega;
@@ -150,7 +168,7 @@
             const semPrevisaoVolume = Math.max(0, saldo - previstoVolume);
             dtPrevisao = previsoesEntrega[0]?.data || '';
             const origensPrevistas = [...new Set(previsoesEntrega.map(p => p.origem))];
-            origemPrevisao = origensPrevistas.length === 1 ? origensPrevistas[0]
+            origemPrevisao = conflitoEntrega ? 'Previsões divergentes no grupo' : origensPrevistas.length === 1 ? origensPrevistas[0]
                 : origensPrevistas.length ? 'Múltiplas origens' : entregaManualVencida ? 'Manual vencida' : 'Sem previsão';
             const resumoPrevisoes = previsoesEntrega.map(p => `${p.data}: ${Math.round(p.volume)} (${p.origem})`).join(' / ');
             const clientePersonalizado = simNao(primeiro(linha, ['CLIENTE_PERSONALIZADO', 'Cliente personalizado']));
@@ -160,7 +178,8 @@
             const serie = typeof window.pgSerieCorrigidaFunil === 'function' ? window.pgSerieCorrigidaFunil(linha)
                 : primeiro(linha, ['serie_corrigida', 'SERIE_CORRIGIDA', 'SÉRIE', 'Série', 'SERIE']);
             return {
-                linha, chave, id: 'ecd-' + indice, cd, origem, grafica, sku, marca, serie: String(serie || ''),
+                linha, chave, chavesOrigem, previsoesOrigem, conflitoColeta, conflitoEntrega,
+                id: 'ecd-' + indice, cd, origem, grafica, sku, marca, serie: String(serie || ''),
                 descricao: String(primeiro(linha, ['DESC_REAL', 'DESCRIÇÃO', 'DESCRICAO', 'PRODUTO'])),
                 personalizado, clientePersonalizado, capaPersonalizada,
                 tipo: String(primeiro(linha, ['TIPO', 'Tipo'])), envio, kit, op,
@@ -251,7 +270,7 @@
                 baseCabecalho.indexOf('Saldo sem previsão'), baseCabecalho.indexOf('Versão da previsão')]
         }];
     }
-    function chave(linha) {
+    function chaveDaLinha(linha) {
         return JSON.stringify(['ECD1', temFonteAcabadora(linha) ? 'ACABADORA' : 'PCP',
             primeiro(linha, ['MARCA_FINAL', 'UNIDADE', 'MARCA']),
             primeiro(linha, ['GRAFICA_FINAL', 'GRÁFICA', 'GRAFICA', 'BQ']),
@@ -263,9 +282,12 @@
     // Uma parcela representa um movimento real ou o saldo que ainda aguarda coleta.
     // O plano permanece inteiro no denominador, inclusive as parcelas em backlog.
     function calendario(itens, config = {}, filtros = {}) {
-        const hoje = data(config.hoje), fim = data(config.fim || (hoje?.slice(0, 4) + '-12-02'));
-        if (!hoje || !fim || fim < hoje) throw new Error('Defina um fim de ciclo igual ou posterior a hoje.');
-        if (Date.parse(fim) - Date.parse(hoje) > 369 * 86400000) throw new Error('Selecione um ciclo de até 370 dias.');
+        const hoje = data(config.hoje), inicioExplicito = preenchido(config.inicio);
+        const inicio = inicioExplicito ? data(config.inicio) : hoje;
+        const fim = data(config.fim || (hoje?.slice(0, 4) + '-12-02'));
+        if (!hoje || !inicio || !fim || fim < inicio) throw new Error('Defina um período com início e fim válidos.');
+        if (Date.parse(fim) - Date.parse(inicio) > 369 * 86400000) throw new Error('Selecione um ciclo de até 370 dias.');
+        itens = (itens || []).filter(item => !filtros.ocultarConcluidos || !(item.total > 0 && item.entregue >= item.total));
         const feriados = new Set((config.feriados || ['11-02', '11-20']).map(d => d.length === 5 ? hoje.slice(0, 4) + '-' + d : d));
         const domingo = d => new Date(d + 'T12:00:00Z').getUTCDay() === 0;
         const ajustarDia = d => {
@@ -275,8 +297,11 @@
             return d;
         };
         const dias = [], semanas = [];
-        for (let dia = hoje, limite = 0; dia <= fim && limite++ < 370; dia = proximoDia(dia)) {
-            if (domingo(dia)) continue;
+        const datasReais = new Set(itens.flatMap(item => item.eventosEntrega.map(e => e.data)));
+        for (let dia = inicio, limite = 0; dia <= fim && limite++ < 370; dia = proximoDia(dia)) {
+            // O histórico preserva uma entrega real no domingo na sua própria data.
+            // O contrato anterior, sem início explícito, mantém a regra operacional.
+            if (domingo(dia) && !(inicioExplicito && datasReais.has(dia))) continue;
             dias.push({data: dia, feriado: feriados.has(dia)});
             const segunda = new Date(dia + 'T12:00:00Z');
             segunda.setUTCDate(segunda.getUTCDate() - ((segunda.getUTCDay() + 6) % 7));
@@ -290,7 +315,7 @@
             if (!volume) return;
             const entregue = status === 'ENTREGUE';
             const dataOriginal = dt || '';
-            const dia = entregue ? (dt < hoje || dt === hoje && domingo(hoje) ? 'entregue' : dt) : ajustarDia(dt);
+            const dia = entregue ? (dt < inicio || !inicioExplicito && dt === hoje && domingo(hoje) ? 'entregue' : dt) : ajustarDia(dt);
             const manualVigente = item.dtEntregaManual && item.dtEntregaManual >= hoje;
             const atrasoColeta = status === 'AGUARDANDO' && coletaPrevista && coletaPrevista < hoje;
             const backlog = !entregue && (!dt || dt < hoje || (atrasoColeta && !manualVigente) || dia > fim);
@@ -300,7 +325,9 @@
                 coletaReal: coletaReal || '', coletaPrevista: coletaPrevista || '', fonteColeta: coletaReal ? 'TP' : entregue
                     ? item.datasColeta.length ? 'TP (sem vínculo de parcela)' : 'Não informada' : item.dtColetaManual ? 'Manual' : 'PCP',
                 fonteEntrega: fonte || (item.dtEntregaManual ? 'Manual' : 'SLA'),
-                motivo: dia > fim ? 'Após o fim do ciclo' : !dt ? 'Sem previsão' : atrasoColeta && !manualVigente ? 'Coleta atrasada' : 'Previsão vencida'};
+                motivo: !entregue && (item.conflitoEntrega || item.conflitoColeta && !item.dtEntregaManual)
+                    ? 'Previsões divergentes no grupo'
+                    : dia > fim ? 'Após o fim do ciclo' : !dt ? 'Sem previsão' : atrasoColeta && !manualVigente ? 'Coleta atrasada' : 'Previsão vencida'};
             if (filtros.cd && p.cd !== filtros.cd || filtros.marca && p.marca !== filtros.marca ||
                 filtros.serie && p.serie !== filtros.serie || filtros.status && p.status !== filtros.status) return;
             parcelas.push(p);
@@ -318,19 +345,21 @@
             item.eventosColeta.forEach(e => {
                 const consumido = Math.min(e.volume, entregueConsumido); entregueConsumido -= consumido;
                 const aberto = Math.min(restanteColetado, Math.max(0, e.volume - consumido)); restanteColetado -= aberto;
-                adicionar(item, aberto, 'TRANSITO', item.dtEntregaManual || entregaSLA(item.linha, e.data), e.data, '', item.dtEntregaManual ? 'Manual' : 'SLA');
+                adicionar(item, aberto, 'TRANSITO', item.conflitoEntrega ? '' : item.dtEntregaManual || entregaSLA(item.linha, e.data), e.data, '', item.dtEntregaManual ? 'Manual' : 'SLA');
             });
             const coleta = item.dtColetaManual || item.dtColetaPCP;
-            adicionar(item, item.pendenteColeta, 'AGUARDANDO', item.dtEntregaManual || entregaSLA(item.linha, coleta), '', coleta,
+            adicionar(item, item.pendenteColeta, 'AGUARDANDO', item.conflitoEntrega || item.conflitoColeta && !item.dtEntregaManual ? '' : item.dtEntregaManual || entregaSLA(item.linha, coleta), '', coleta,
                 item.dtEntregaManual ? 'Manual' : 'SLA');
         });
         const agrupar = detalhado => {
             const grupos = new Map();
             parcelas.forEach(p => {
                 const k = JSON.stringify([p.marca, detalhado ? p.serie : '', p.cd]);
-                if (!grupos.has(k)) grupos.set(k, {marca: p.marca, serie: detalhado ? p.serie : '', cd: p.cd, total: 0, entregue: 0,
+                if (!grupos.has(k)) grupos.set(k, {marca: p.marca, serie: detalhado ? p.serie : '', cd: p.cd, total: 0, entregue: 0, acumuladoAnterior: 0, realCD: 0, entregueHoje: 0,
                     backlog: 0, dias: Object.create(null), parcelas: []});
                 const g = grupos.get(k); g.total += p.volume; g.parcelas.push(p);
+                if (p.status === 'ENTREGUE') { g.realCD += p.volume; if (p.dataOriginal === hoje) g.entregueHoje += p.volume; }
+                if (!p.backlog && (p.dia === 'entregue' || p.dia && p.dia < inicio)) g.acumuladoAnterior += p.volume;
                 if (p.backlog) g.backlog += p.volume;
                 else if (p.dia === 'entregue') g.entregue += p.volume;
                 else { if (!g.dias[p.dia]) g.dias[p.dia] = []; g.dias[p.dia].push(p); }
@@ -338,14 +367,16 @@
             return [...grupos.values()].sort((a, b) => (a.marca.localeCompare(b.marca, 'pt-BR', {numeric: true}) ||
                 a.serie.localeCompare(b.serie, 'pt-BR', {numeric: true}) || a.cd.localeCompare(b.cd, 'pt-BR', {numeric: true})));
         };
-        const total = {marca: 'Total geral', total: 0, entregue: 0, backlog: 0, dias: Object.create(null), parcelas};
+        const total = {marca: 'Total geral', total: 0, entregue: 0, acumuladoAnterior: 0, realCD: 0, entregueHoje: 0, backlog: 0, dias: Object.create(null), parcelas};
         parcelas.forEach(p => {
             total.total += p.volume;
+            if (p.status === 'ENTREGUE') { total.realCD += p.volume; if (p.dataOriginal === hoje) total.entregueHoje += p.volume; }
+            if (!p.backlog && (p.dia === 'entregue' || p.dia && p.dia < inicio)) total.acumuladoAnterior += p.volume;
             if (p.backlog) total.backlog += p.volume;
             else if (p.dia === 'entregue') total.entregue += p.volume;
             else { if (!total.dias[p.dia]) total.dias[p.dia] = []; total.dias[p.dia].push(p); }
         });
-        return {hoje, fim, dias, semanas, incluiHojeEntregue: domingo(hoje), parcelas, backlog: parcelas.filter(p => p.backlog),
+        return {hoje, inicio, fim, dias, semanas, incluiHojeEntregue: !inicioExplicito && domingo(hoje), parcelas, backlog: parcelas.filter(p => p.backlog),
             marcaCD: agrupar(false), marcaSerieCD: agrupar(true), total};
     }
     function exportarCalendario(c) {
@@ -353,9 +384,10 @@
             const cabecalho = ['Marca', ...(detalhado ? ['Série'] : []), 'CD', 'Plano', 'Backlog', 'Entregue', '% entregue',
                 ...c.dias.flatMap(d => [d.data + (d.feriado ? ' (feriado)' : ''), '% acumulado ' + d.data])];
             const valores = g => {
-                let acumulado = g.entregue;
-                return [g.marca, ...(detalhado ? [g.serie || ''] : []), g.cd || '', g.total, g.backlog, g.entregue,
-                    g.total ? g.entregue / g.total : 0, ...c.dias.flatMap(d => {
+                let acumulado = g.acumuladoAnterior ?? g.entregue;
+                const entregueAtual = g.realCD ?? g.entregue;
+                return [g.marca, ...(detalhado ? [g.serie || ''] : []), g.cd || '', g.total, g.backlog, entregueAtual,
+                    g.total ? entregueAtual / g.total : 0, ...c.dias.flatMap(d => {
                         const v = (g.dias[d.data] || []).reduce((s, p) => s + p.volume, 0); acumulado += v;
                         return [v, g.total ? acumulado / g.total : 0];
                     })];
@@ -372,7 +404,7 @@
             'Entrega prevista vigente', 'Origem da previsão', 'Observação', 'Cliente personalizado',
             'Capa personalizada', 'Chave da previsão', 'Origem coleta vigente', 'Parcelas de entrega previstas',
             'Saldo sem previsão', 'Versão da previsão', 'Atualizada em', 'Usuário da previsão',
-            'Entregas TP do item (auditoria)'];
+            'Entregas TP do item (auditoria)', 'Chaves de origem', 'Previsões individuais do grupo', 'Linhas de origem'];
         return [aba('Quadro_Marca_CD', c.marcaCD, false), aba('Quadro_Marca_Serie_CD', c.marcaSerieCD, true), {
             nome: 'Base_SKUs', cabecalho, linhas: c.parcelas.map(p => [p.sku, p.marca, p.serie, p.descricao,
                 p.personalizado === 'Sim' ? 'S' : p.personalizado === 'Não' ? 'N' : '', p.tipo, p.cd, p.grafica,
@@ -387,10 +419,18 @@
                 p.item.clientePersonalizado, p.item.capaPersonalizada, p.item.chave, p.item.origemColetaPrevisao,
                 p.item.resumoPrevisoes, p.item.semPrevisaoVolume, Number(p.item.previsao.versao || 0),
                 p.item.previsao.atualizadoEm || '', p.item.previsao.usuario || '',
-                p.item.eventosEntrega.map(e => e.data + ': ' + Math.round(e.volume)).join(' / ')]),
+                p.item.eventosEntrega.map(e => e.data + ': ' + Math.round(e.volume)).join(' / '),
+                p.item.chavesOrigem.join(' / '),
+                JSON.stringify(Object.entries(p.item.previsoesOrigem).map(([chave, r]) => ({chave,
+                    coleta: r.dataColeta || '', entrega: r.dataEntrega || r.data || r.dataPrevista || '',
+                    observacao: String(r.observacao || ''), versao: Number(r.versao || 0),
+                    atualizadoEm: r.atualizadoEm || ''}))),
+                JSON.stringify((p.item.linha._PG_MA?.linhas || [p.item.linha]).map(l => ({
+                    sku: primeiro(l, ['SKU_REAL', 'SKU']), kit: primeiro(l, ['KIT', 'Kit']),
+                    op: primeiro(l, ['OP', 'O.P.']), chave: chaveDaLinha(l)})))]),
             colunasData: [9, 10, 11, 13, 16, 30, 31, 32, 33, 34, 35],
             colunasNumero: [15, 23, 24, 25, 26, 27, 28, 29, 43, 44]}];
     }
-    window.pgEntregasCDModelo = {montar, quadro, exportar, chave, calendario, exportarCalendario};
+    window.pgEntregasCDModelo = {montar, quadro, exportar, chave: chaveDaLinha, calendario, exportarCalendario};
 })();
 </script>
