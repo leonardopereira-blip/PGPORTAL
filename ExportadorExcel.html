@@ -22,7 +22,7 @@
     var data = ((ano - 1980) << 9) | ((agora.getMonth() + 1) << 5) | agora.getDate();
     var hora = (agora.getHours() << 11) | (agora.getMinutes() << 5) | (agora.getSeconds() >> 1);
     arquivos.forEach(function (arquivo) {
-      var nome = encoder.encode(arquivo[0]), bytes = arquivo[1] instanceof Uint8Array ? arquivo[1] : encoder.encode(arquivo[1]), crc = crc32(bytes);
+      var nome = encoder.encode(arquivo[0]), bytes = ArrayBuffer.isView(arquivo[1]) && arquivo[1].BYTES_PER_ELEMENT === 1 ? arquivo[1] : encoder.encode(arquivo[1]), crc = crc32(bytes);
       var local = new Uint8Array(30 + nome.length), lv = new DataView(local.buffer);
       lv.setUint32(0, 0x04034B50, true); lv.setUint16(4, 20, true);
       lv.setUint16(6, 0x0800, true); lv.setUint16(10, hora, true); lv.setUint16(12, data, true);
@@ -197,7 +197,7 @@
   }
   function xmlAbaImagem(base) {
     var png = base.imagemPng;
-    if (!(png instanceof Uint8Array) || png.length < 8 ||
+    if (!(ArrayBuffer.isView(png) && png.BYTES_PER_ELEMENT === 1) || png.length < 8 ||
         ![137,80,78,71,13,10,26,10].every(function (v, i) { return png[i] === v; }) ||
         !Number.isFinite(base.larguraPx) || !Number.isFinite(base.alturaPx) ||
         base.larguraPx <= 0 || base.alturaPx <= 0) throw new Error('Imagem PNG da aba inválida.');
