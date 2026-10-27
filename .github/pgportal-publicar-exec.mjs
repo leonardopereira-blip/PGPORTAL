@@ -50,7 +50,12 @@ const candidatos=(antes.results||[]).filter(d=>
   d.deploymentConfig?.description===pedido.descricao_ativa_esperada &&
   String(d.deploymentId||'').endsWith(pedido.deployment_sufixo) &&
   (d.entryPoints||[]).some(e=>e.entryPointType==='WEB_APP'));
-if(candidatos.length!==1)throw Error('Nenhuma implantacao WEB_APP unica corresponde a versao, descricao e sufixo informados.');
+if(candidatos.length!==1) {
+  for (const d of (antes.results||[]).filter(d=>String(d.deploymentId||'').endsWith(pedido.deployment_sufixo))) {
+    resumo('Implantacao observada: '+JSON.stringify({sufixo:pedido.deployment_sufixo,versao:d.deploymentConfig?.versionNumber,descricao:d.deploymentConfig?.description,tipos:(d.entryPoints||[]).map(e=>e.entryPointType)}));
+  }
+  throw Error('Nenhuma implantacao WEB_APP unica corresponde a versao, descricao e sufixo informados.');
+}
 const existente=candidatos[0];
 const versaoAnterior=existente.deploymentConfig?.versionNumber;
 const descricao='PGPORTAL filtros por serie e planejado D-1 · commit '+pedido.commit_validado.slice(0,7);
