@@ -58,6 +58,20 @@ if(candidatos.length!==1) {
 }
 const existente=candidatos[0];
 const versaoAnterior=existente.deploymentConfig?.versionNumber;
+// Confere fontes da versão ativa antes de substituí-la: nenhuma edição externa inédita.
+const fontesAtivas=await clasp.files.fetchRemote(versaoAnterior);
+for (const f of fontesAtivas) {
+  const esperado=hash(f.source);
+  if(base.files[f.type+':'+f.remotePath]===esperado) continue;
+  const arquivo=f.remotePath+({HTML:'.html',SERVER_JS:'.js',JSON:'.json'}[f.type]||'');
+  const commits=execFileSync('git',['log','--format=%H',pedido.commit_validado,'--',arquivo],{encoding:'utf8'}).trim().split(/\\s+/).filter(Boolean);
+  const conhecido=commits.some(c=>{
+    try {return hash(execFileSync('git',['show',c+':'+arquivo],{encoding:'utf8',maxBuffer:20*1024*1024,stdio:['ignore','pipe','ignore']}))===esperado;} catch {return false;}
+  });
+  if(!conhecido) throw Error('Versão ativa contém fonte não conciliada: '+arquivo+'. Publicação interrompida.');
+}
+resumo('Fontes da versão ativa conferidas no histórico validado do GitHub.');
+
 const descricao='PGPORTAL filtros por serie e planejado D-1 · commit '+pedido.commit_validado.slice(0,7);
 const novaVersao=await clasp.project.version(descricao);
 await conferir(); // Alteracao concorrente apos criar a versao bloqueia o redeploy.
