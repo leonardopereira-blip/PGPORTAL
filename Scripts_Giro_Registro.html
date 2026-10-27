@@ -1,0 +1,311 @@
+<script>
+(function () {
+    'use strict';
+    const pendentes = new Map(), filas = new Map(), datasPendentes = new Map();
+    let revisao = null, consultando = false, timer = null;
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const id = () => window.crypto?.randomUUID?.() ||
+        'giro-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+    const hoje = () => typeof dtHojeISO !== 'undefined' ? dtHojeISO :
+        new Intl.DateTimeFormat('en-CA', {timeZone:'America/Sao_Paulo'}).format(new Date());
+    const dataAgora = () => new Intl.DateTimeFormat('pt-BR', {timeZone:'America/Sao_Paulo',
+        day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})
+        .format(new Date()).replace(',','');
+    const mapa = tipo => {
+        window.HISTORICO_OBS_GIRO ||= {master:{},sku:{}};
+        return window.HISTORICO_OBS_GIRO[tipo === 'SKU' ? 'sku' : 'master'] ||= {};
+    };
+    const ordem = evento => {
+        const m = String(evento.data || '').match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+        return evento._ordem || (m ? Date.UTC(+m[3],+m[2]-1,+m[1],+m[4],+m[5],+(m[6]||0)) : 0);
+    };
+    const atualizarHistorico = (tipo, chave, eventos) => {
+        const destino = mapa(tipo), atuais = destino[chave] || [];
+        const novos = eventos || [];
+        const ids = new Set(novos.map(e => e.id).filter(Boolean));
+        const assinatura = e => [e.data,e.user,e.obs].join('\u0001');
+        const assinaturas = new Set(novos.filter(e => !e.id).map(assinatura));
+        destino[chave] = novos.concat(atuais.filter(e => !ids.has(e.id) &&
+            (e.id || !assinaturas.has(assinatura(e)))))
+            .sort((a,b) => ordem(b)-ordem(a) || Number(b.sequencia || 0)-Number(a.sequencia || 0));
+    };
+    function status(input, texto, erro, repetir) {
+        if (!input?.parentElement) return;
+        let el = input.parentElement.querySelector('[data-pg-registro-status]');
+        if (!el) {
+            el = document.createElement('span');
+            el.dataset.pgRegistroStatus = '1';
+            el.setAttribute('role','status');
+            input.parentElement.appendChild(el);
+        }
+        el.className = 'text-[10px] ml-2 whitespace-nowrap ' + (erro ? 'text-red-700' : 'text-slate-500');
+        el.textContent = texto;
+        if (repetir) {
+            const botao = document.createElement('button');
+            botao.type = 'button'; botao.className = 'underline font-bold ml-1';
+            botao.textContent = 'Reenviar'; botao.onclick = repetir;
+            el.appendChild(botao);
+        }
+        input.setAttribute('aria-invalid', erro ? 'true' : 'false');
+    }
+    function atualizarCamposObs() {
+        document.querySelectorAll('[data-pg-obs-chave]').forEach(input => {
+            const chave = input.dataset.pgObsChave, tipo = input.dataset.pgObsTipo;
+            const ultimo = mapa(tipo)[chave]?.[0];
+            const confirmado = input.dataset.pgObsSalva ?? input.defaultValue ?? '';
+            if (document.activeElement !== input && input.value === confirmado && ultimo) {
+                input.value = ultimo.obs; input.dataset.pgObsSalva = ultimo.obs;
+            }
+        });
+    }
+    function publicarPrevisoes(novas, forcar = false) {
+        const atuais = window.PG_ECD_PREVISOES || {}, aceitas = {};
+        Object.entries(novas || {}).forEach(([chave, nova]) => {
+            const atual = atuais[chave];
+            // Deltas e respostas de rede atrasados não desfazem uma versão nova.
+            if (!forcar && Number(nova.versao || 0) < Number(atual?.versao || 0)) return;
+            if (!forcar && atual?._pgRequestId && !nova._pgRequestId &&
+                Number(nova.versao || 0) <= Number(atual.versao || 0)) return;
+            aceitas[chave] = nova;
+        });
+        window.PG_ECD_PREVISOES = {...atuais, ...aceitas};
+        window.dispatchEvent(new CustomEvent('pgportal-previsoes-atualizadas',
+            {detail:{previsoes:window.PG_ECD_PREVISOES}}));
+        atualizarCamposData();
+    }
+    function sincronizar() {
+        if (consultando || typeof google === 'undefined' || !google.script?.run) return;
+        consultando = true;
+        google.script.run.withSuccessHandler(res => {
+            consultando = false;
+            if (!res?.success) return;
+            const primeira = !window.OBS_GIRO_CARREGADO;
+            if (res.alterado !== false) {
+                if (res.parcial === false) {
+                    window.HISTORICO_OBS_GIRO = {master:{},sku:{}};
+                    pendentes.forEach(e => atualizarHistorico(e.tipo,e.chave,[{id:e.id,data:e.data,
+                        obs:e.texto,user:'Você',pendente:true,erro:!!e.erro,_ordem:e.ordem}]));
+                }
+                ['master','sku'].forEach(tipo => {
+                    Object.entries(res.historico?.[tipo] || {}).forEach(([chave,eventos]) =>
+                        atualizarHistorico(tipo === 'sku' ? 'SKU' : 'MASTER',chave,eventos));
+                });
+                publicarPrevisoes(res.previsoes);
+                atualizarCamposObs();
+            }
+            revisao = res.revisao || revisao;
+            window.OBS_GIRO_CARREGADO = true;
+            // Só a primeira leitura precisa desenhar os campos históricos.
+            if (primeira && document.activeElement?.tagName !== 'INPUT') window.reFiltrarTabelaGiro?.();
+        }).withFailureHandler(() => { consultando = false; }).buscarAtualizacoesGiroPortal(revisao);
+    }
+    function agendar() {
+        if (timer) return;
+        timer = window.setTimeout(() => {
+            timer = null;
+            const giro = document.getElementById('abaGiroSemanal');
+            const cd = document.getElementById('abaEntregasCD');
+            if (!document.hidden && [giro,cd].some(el => el && !el.classList.contains('hidden'))) sincronizar();
+            agendar();
+        },10000);
+    }
+    window.pgGiroSincronizar = () => { sincronizar(); agendar(); };
+
+    function historicoBotao(tipo,chave,input) {
+        if (!input.parentElement || input.parentElement.querySelector('[data-pg-historico-novo]') ||
+            input.parentElement.querySelector('[title="Ver Histórico Completo"]')) return;
+        const botao = document.createElement('button');
+        botao.type = 'button'; botao.dataset.pgHistoricoNovo = '1';
+        botao.className = 'text-[10px] underline ml-2'; botao.textContent = 'Histórico';
+        botao.onclick = () => window.abrirModalHistorico(tipo,chave);
+        input.parentElement.appendChild(botao);
+    }
+    function enviarObs(evento) {
+        evento.enviando = true;
+        evento.erro = '';
+        const notaPendente = mapa(evento.tipo)[evento.chave]?.find(e => e.id === evento.id);
+        if (notaPendente) delete notaPendente.erro;
+        status(evento.input,'Salvando…');
+        const concluir = () => {
+            evento.enviando = false;
+            const fila = filas.get(evento.fila) || [];
+            if (fila[0] === evento) fila.shift();
+            if (fila.length) enviarObs(fila[0]);
+        };
+        const falha = erro => {
+            evento.enviando = false;
+            evento.erro = String(erro?.message || erro || 'sem conexão');
+            const local = mapa(evento.tipo)[evento.chave]?.find(e => e.id === evento.id);
+            if (local) local.erro = true;
+            // Mantém a mesma requisição e o texto até confirmar o salvamento.
+            status(evento.input,'Falha ao salvar: ' + (erro?.message || erro || 'sem conexão'),true,
+                () => { if (!evento.enviando) enviarObs(evento); });
+        };
+        if (typeof google === 'undefined' || !google.script?.run) { falha('sem conexão'); return; }
+        google.script.run.withSuccessHandler(res => {
+            if (!res?.success) { falha(res?.error); return; }
+            pendentes.delete(evento.id);
+            const lista = mapa(evento.tipo)[evento.chave] || [];
+            mapa(evento.tipo)[evento.chave] = lista.filter(e => e.id !== evento.id);
+            atualizarHistorico(evento.tipo,res.chave || evento.chave,[{...res,pendente:false}]);
+            evento.input.dataset.pgObsSalva = evento.texto;
+            status(evento.input,'Salvo');
+            historicoBotao(evento.tipo,evento.chave,evento.input);
+            atualizarCamposObs();
+            concluir();
+        }).withFailureHandler(falha).salvarObsGiroPortal(evento.tipo,evento.chave,evento.texto,evento.contexto,evento.id);
+    }
+    window.pgGiroSalvarObs = function(tipo,chave,input) {
+        const texto = input.value.trim();
+        const anterior = mapa(tipo)[chave]?.[0]?.obs || '';
+        if (!texto || texto === anterior) return;
+        const evento = {id:id(),tipo,chave,texto,input,data:dataAgora(),ordem:Date.now(),
+            contexto:window.CONTEXTOS_TEMP?.[chave] || '{}',
+            fila:tipo+'\u0001'+chave};
+        input.dataset.pgObsTipo = tipo; input.dataset.pgObsChave = chave;
+        pendentes.set(evento.id,evento);
+        atualizarHistorico(tipo,chave,[{id:evento.id,data:evento.data,user:'Você',obs:texto,
+            pendente:true,_ordem:evento.ordem}]);
+        status(input,'Salvando…');
+        const fila = filas.get(evento.fila) || [];
+        fila.push(evento); filas.set(evento.fila,fila);
+        if (!fila[0].enviando) enviarObs(fila[0]);
+        agendar();
+    };
+    window.salvarObsFront = window.pgGiroSalvarObs;
+    window.pgGiroObsAtributos = (tipo,chave) => 'data-pg-obs-tipo="'+esc(tipo)+
+        '" data-pg-obs-chave="'+esc(chave)+'"';
+    const chavesDeLinhas = linhas => [...new Set((linhas || []).map(l => {
+        try { return window.pgEntregasCDModelo?.chave?.(l); } catch (_) { return ''; }
+    }).filter(chave => {
+        if (!chave) return false;
+        try { const p = JSON.parse(chave); return p.length === 10 && [2,3,4,5].every(i =>
+            p[i] && !['-','N/A','NA','SEM CD','SEM DESTINO','A DEFINIR'].includes(p[i])); }
+        catch (_) { return false; }
+    }))];
+    const valorDatas = chaves => {
+        const valores = [...new Set(chaves.map(k => window.PG_ECD_PREVISOES?.[k]?.dataEntrega || ''))];
+        return valores.length === 1 ? valores[0] : '';
+    };
+    window.pgGiroCampoNovaData = (linhas, campoId) => {
+        const chaves = chavesDeLinhas(linhas), valor = valorDatas(chaves);
+        if (!chaves.length) return '<span title="Destino ou identificação indisponível">—</span>';
+        return '<div class="flex items-center"><input type="date" id="'+esc(campoId)+'" '+
+            'aria-label="Nova data de entrega" data-pg-previsoes="'+esc(JSON.stringify(chaves))+'" '+
+            'data-pg-data-salva="'+esc(valor)+'" value="'+esc(valor)+'" min="'+esc(hoje())+'" '+
+            'title="Previsão de entrega compartilhada com Entregas no CD; limpar remove a previsão manual" '+
+            'onchange="window.pgGiroSalvarNovaData(this)" '+
+            'class="border border-slate-300 rounded px-2 py-1.5 text-[10px] bg-white" /></div>';
+    };
+    function atualizarCamposData() {
+        document.querySelectorAll('[data-pg-previsoes]').forEach(input => {
+            let chaves; try { chaves = JSON.parse(input.dataset.pgPrevisoes); } catch (_) { return; }
+            if (document.activeElement === input || input.dataset.pgDataPendente ||
+                input.value !== input.dataset.pgDataSalva) return;
+            input.value = valorDatas(chaves); input.dataset.pgDataSalva = input.value;
+        });
+    }
+    const chavesDoCampo = input => {
+        try { const chaves = JSON.parse(input.dataset.pgPrevisoes); return Array.isArray(chaves) ? chaves : []; }
+        catch (_) { return []; }
+    };
+    function reanexarDatas() {
+        document.querySelectorAll('[data-pg-previsoes]').forEach(input => {
+            const chaves = chavesDoCampo(input);
+            const trabalho = [...datasPendentes.values()].filter(t => chaves.some(k => t.chaves.includes(k))).at(-1);
+            if (!trabalho) return;
+            trabalho.inputs.add(input);
+            input.dataset.pgDataPendente = trabalho.pedido.requestId;
+            input.disabled = trabalho.enviando;
+            // Um campo que abrange outras chaves mantém o resumo misto do grupo.
+            if (chaves.every(k => trabalho.chaves.includes(k))) input.value = trabalho.dataEntrega;
+            status(input,trabalho.erro ? 'Data não salva: '+trabalho.erro : 'Salvando…',!!trabalho.erro,
+                trabalho.erro ? () => enviarData(trabalho) : null);
+        });
+    }
+    function enviarData(trabalho) {
+        if (trabalho.enviando || !datasPendentes.has(trabalho.pedido.requestId)) return;
+        trabalho.enviando = true; trabalho.erro = '';
+        trabalho.anterior = Object.fromEntries(trabalho.chaves.map(k => [k,window.PG_ECD_PREVISOES?.[k] || {}]));
+        reanexarDatas();
+        publicarPrevisoes(Object.fromEntries(trabalho.chaves.map(k => [k,{...trabalho.anterior[k],chave:k,
+            dataEntrega:trabalho.dataEntrega,_pgRequestId:trabalho.pedido.requestId}])));
+        const falha = err => {
+            trabalho.enviando = false;
+            trabalho.erro = String(err?.message || err || 'sem conexão');
+            const restaurar = Object.fromEntries(trabalho.chaves.filter(k =>
+                window.PG_ECD_PREVISOES?.[k]?._pgRequestId === trabalho.pedido.requestId)
+                .map(k => [k,trabalho.anterior[k]]));
+            publicarPrevisoes(restaurar,true);
+            reanexarDatas();
+        };
+        if (typeof google === 'undefined' || !google.script?.run) { falha('sem conexão'); return; }
+        google.script.run.withSuccessHandler(res => {
+            if (!res?.success) { falha(res?.error); return; }
+            publicarPrevisoes(res.previsoes);
+            datasPendentes.delete(trabalho.pedido.requestId);
+            trabalho.inputs.forEach(input => {
+                if (input.dataset.pgDataPendente !== trabalho.pedido.requestId) return;
+                input.disabled = false;
+                delete input.dataset.pgDataPendente;
+                input.dataset.pgDataSalva = valorDatas(chavesDoCampo(input));
+                input.value = input.dataset.pgDataSalva;
+                status(input,'Salvo');
+            });
+            atualizarCamposData(); reanexarDatas();
+        }).withFailureHandler(falha).salvarPrevisoesEntregaCDPortal(trabalho.pedido);
+    }
+    window.pgGiroSalvarNovaData = input => {
+        const dataEntrega = input.value;
+        if (dataEntrega && (!/^\d{4}-\d{2}-\d{2}$/.test(dataEntrega) || dataEntrega < hoje())) {
+            status(input,'Informe uma data a partir de hoje.',true); return;
+        }
+        let chaves; try { chaves = JSON.parse(input.dataset.pgPrevisoes); } catch (_) { return; }
+        // Uma nova intenção substitui a tentativa que falhou para as mesmas
+        // chaves. Um retry antigo não pode reaplicar a data que o usuário mudou.
+        [...datasPendentes.values()].filter(t => !t.enviando && t.chaves.some(k => chaves.includes(k))).forEach(t => {
+            datasPendentes.delete(t.pedido.requestId);
+            const restantes = t.chaves.filter(k => !chaves.includes(k));
+            if (restantes.length) {
+                t.chaves = restantes;
+                t.pedido = {requestId:id(),previsoes:t.pedido.previsoes.filter(p => restantes.includes(p.chave))};
+                datasPendentes.set(t.pedido.requestId,t);
+            }
+        });
+        const pedido = {requestId:id(),previsoes:chaves.map(chave =>
+            ({chave,campos:['dataEntrega'],dataEntrega}))};
+        const trabalho = {pedido,chaves,dataEntrega,inputs:new Set([input]),enviando:false,erro:''};
+        datasPendentes.set(pedido.requestId,trabalho);
+        enviarData(trabalho); agendar();
+    };
+    window.addEventListener('pgportal-previsoes-atualizadas',atualizarCamposData);
+    const renderOriginal = window.reFiltrarTabelaGiro;
+    if (typeof renderOriginal === 'function') window.reFiltrarTabelaGiro = function(...args) {
+        const resultado = renderOriginal.apply(this,args);
+        document.querySelectorAll('input[id^="inpm_"],input[id^="inps_"]').forEach(input => {
+            const partes = input.id.split('_'), tipo = partes.shift() === 'inps' ? 'SKU' : 'MASTER';
+            if (tipo === 'SKU') partes.pop();
+            try {
+                input.dataset.pgObsTipo = tipo;
+                input.dataset.pgObsChave = partes.map(p => String.fromCodePoint(parseInt(p,16))).join('');
+                input.dataset.pgObsSalva = input.value;
+            } catch (_) { /* Campos de integrações antigas continuam editáveis. */ }
+        });
+        document.querySelectorAll('[data-pg-obs-chave]').forEach(input => {
+            const locais = [...pendentes.values()].filter(e => e.tipo === input.dataset.pgObsTipo &&
+                e.chave === input.dataset.pgObsChave);
+            locais.forEach(e => { e.input = input; });
+            const local = locais[0];
+            if (local) {
+                const nota = mapa(local.tipo)[local.chave]?.find(e => e.id === local.id);
+                status(input,nota?.erro ? 'Falha ao salvar' : 'Salvando…',!!nota?.erro,
+                    nota?.erro ? () => { if (!local.enviando) enviarObs(local); } : null);
+            }
+        });
+        reanexarDatas();
+        return resultado;
+    };
+    window.pgGiroRegistroEstado = {pendentes,filas,datasPendentes};
+})();
+</script>

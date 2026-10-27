@@ -947,6 +947,9 @@ function gerarPlanilhaReportExecutiva(payload) {
           (spec.colunasNumero || []).forEach(function(c) {
             sheet.getRange(2, c + 1, normalizadas.length, 1).setNumberFormat('#,##0.##########');
           });
+          (spec.colunasPercentual || []).forEach(function(c) {
+            sheet.getRange(2, c + 1, normalizadas.length, 1).setNumberFormat('0%');
+          });
           sheet.getDataRange().createFilter();
           sheet.setFrozenColumns(Math.min(2, cabecalho.length));
         }

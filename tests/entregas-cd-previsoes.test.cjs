@@ -28,9 +28,9 @@ function portal(estado={rows:null}, opcoes={}) {
   const c={Date:Relogio,console,pgArquivoObservacoesGiro_:()=>ss,
     LockService:{getScriptLock:()=>({waitLock(){if(opcoes.failLock)throw Error('Ocupado');locks++;},releaseLock(){releases++;}})},
     Session:{getActiveUser:()=>({getEmail:()=>opcoes.email===undefined?'analista@exemplo.com':opcoes.email})},
-    Utilities:{formatDate:(d,t,p)=>{assert.equal(t,'America/Sao_Paulo');assert.equal(p,'yyyy-MM-dd');return opcoes.hoje||'2026-10-26';}},
+    Utilities:{getUuid:()=>require('node:crypto').randomUUID(),formatDate:(d,t,p)=>{assert.equal(t,'America/Sao_Paulo');assert.equal(p,'yyyy-MM-dd');return opcoes.hoje||'2026-10-26';}},
     SpreadsheetApp:{flush(){}},gerarPlanilhaReportExecutiva:p=>{exportado=p;return {success:true,url:'https://docs.google.com/spreadsheets/d/teste'};}};
-  vm.createContext(c);vm.runInContext(source,c);
+  vm.createContext(c);vm.runInContext(fs.readFileSync(path.join(__dirname,'..','RegistroGiroJSON.js'),'utf8'),c);vm.runInContext(source,c);
   return {c,estado,locks:()=>locks,releases:()=>releases,writes:()=>writes,exportado:()=>exportado};
 }
 
@@ -43,13 +43,14 @@ test('primeira leitura vazia não cria aba e primeira gravação persiste após 
   assert.equal(b.c.getPrevisoesEntregaCDPortal().previsoes[chave()].dataEntrega,'2026-10-29');
 });
 
-test('versão esperada impede sobrescrever edição de outra pessoa e preserva chaves diferentes',()=>{
+test('última intenção altera sua data mesmo com versão antiga e preserva chaves diferentes',()=>{
   const a=portal();a.c.salvarPrevisaoEntregaCDPortal(payload());
   a.c.salvarPrevisaoEntregaCDPortal(payload({chave:chave('SKU-002'),requestId:'request-002'}));
-  assert.throws(()=>a.c.salvarPrevisaoEntregaCDPortal(payload({dataEntrega:'2026-10-30',requestId:'request-003'})),/outra pessoa/);
-  assert.equal(a.estado.rows.length,3);assert.equal(a.locks(),3);assert.equal(a.releases(),3);
+  const r=a.c.salvarPrevisaoEntregaCDPortal(payload({dataEntrega:'2026-10-30',requestId:'request-003'}));
+  assert.equal(r.previsao.versao,2);
+  assert.equal(a.estado.rows.length,4);assert.equal(a.locks(),3);assert.equal(a.releases(),3);
   const resultado=a.c.getPrevisoesEntregaCDPortal().previsoes;
-  assert.equal(Object.keys(resultado).length,2);assert.equal(resultado[chave()].dataEntrega,'2026-10-29');
+  assert.equal(Object.keys(resultado).length,2);assert.equal(resultado[chave()].dataEntrega,'2026-10-30');
 });
 
 test('atualização e limpeza criam novas versões sem apagar histórico',()=>{
@@ -125,5 +126,55 @@ test('exportação mantém duas abas ordenadas e ativa datas, números e valida�
   assert.equal(a.exportado().auditoriaPortal,true);assert.equal(spec.auditoriaPortal,undefined);
   assert.equal(a.exportado().abas[0].nome,'Quadro');assert.equal(a.exportado().abas[1].nome,'Base_SKUs');
   assert.deepEqual(a.exportado().abas[1].colunasData,[1]);
-  assert.throws(()=>a.c.gerarPlanilhaEntregasCD({abas:spec.abas.slice().reverse()}),/Quadro e Base_SKUs/);
+  assert.throws(()=>a.c.gerarPlanilhaEntregasCD({abas:spec.abas.slice().reverse()}),/dois quadros/);
+});
+
+test('Nova data do Giro e Entregas compartilham registro; patch não apaga coleta nem nota',()=>{
+  const a=portal();a.c.salvarPrevisaoEntregaCDPortal(payload());
+  const giro={chave:chave(),campos:['dataEntrega'],dataEntrega:'2026-11-02',requestId:'giro-date-001',versaoEsperada:0};
+  a.c.salvarPrevisaoEntregaCDPortal(giro);
+  const entregas={chave:chave(),campos:['observacao'],observacao:'Nova nota de outra pessoa',requestId:'cd-note-001',versaoEsperada:0};
+  a.c.salvarPrevisaoEntregaCDPortal(entregas);
+  let r=a.c.getPrevisoesEntregaCDPortal().previsoes[chave()];
+  assert.equal(r.dataEntrega,'2026-11-02');assert.equal(r.dataColeta,'2026-10-27');
+  assert.equal(r.observacao,'Nova nota de outra pessoa');assert.equal(r.versao,3);
+  a.c.salvarPrevisaoEntregaCDPortal({...giro,dataEntrega:'2026-11-03',requestId:'cd-date-002'});
+  const retry=a.c.salvarPrevisaoEntregaCDPortal(giro);
+  assert.equal(retry.previsao.dataEntrega,'2026-11-03','retry antigo não desfaz intenção posterior');
+  assert.equal(a.estado.rows.length,5);
+});
+
+test('lote de grupo valida antes de gravar e usa um único lock/append',()=>{
+  const a=portal();const body={requestId:'batch-date-001',previsoes:[chave(),chave('SKU-002')].map(chave=>({
+    chave,campos:['dataEntrega'],dataEntrega:'2026-11-02'}))};
+  const salvo=a.c.salvarPrevisoesEntregaCDPortal(body);
+  assert.equal(Object.keys(salvo.previsoes).length,2);assert.equal(a.locks(),1);assert.equal(a.releases(),1);
+  assert.equal(a.estado.rows.length,3);assert.equal(a.writes(),2,'um cabeçalho e um append para todo lote');
+  a.c.salvarPrevisoesEntregaCDPortal(body);assert.equal(a.estado.rows.length,3);
+  assert.throws(()=>a.c.salvarPrevisoesEntregaCDPortal({requestId:'batch-date-002',previsoes:[
+    {...body.previsoes[0],dataEntrega:'2026-11-03'}, {...body.previsoes[1],dataEntrega:'2026-02-30'}]}),/data válida/);
+  assert.equal(a.estado.rows.length,3,'lote inválido não grava parcialmente');
+  assert.throws(()=>a.c.salvarPrevisoesEntregaCDPortal({...body,requestId:'batch-date-003',previsoes:[body.previsoes[0],body.previsoes[0]]}),/repetida/);
+});
+
+test('três abas novas de exportação seguem a ordem e mantêm números e datas',()=>{
+  const a=portal();const abas=['Quadro_Marca_CD','Quadro_Marca_Serie_CD','Base_SKUs'].map(nome=>({nome,cabecalho:['A'],linhas:[[1]]}));
+  assert(a.c.gerarPlanilhaEntregasCD({abas}).success);assert.equal(a.exportado().abas.length,3);
+});
+
+test('grupo com 201 SKUs salva em um único lock e append; limite e lote inválido são atômicos',()=>{
+  const a=portal();const corpo={requestId:'grupo-grande-001',previsoes:Array.from({length:201},(_,i)=>({
+    chave:chave('SKU-'+String(i).padStart(4,'0')),campos:['dataEntrega'],dataEntrega:'2026-11-02'}))};
+  const salvo=a.c.salvarPrevisoesEntregaCDPortal(corpo);
+  assert.equal(Object.keys(salvo.previsoes).length,201);
+  assert.equal(a.estado.rows.length,202);assert.equal(a.locks(),1);assert.equal(a.releases(),1);
+  assert.equal(a.writes(),2,'um cabeçalho e um append com todos os 201 registros');
+  a.c.salvarPrevisoesEntregaCDPortal(corpo);assert.equal(a.estado.rows.length,202,'retry não duplica');
+  const invalido=corpo.previsoes.map(p=>({...p,dataEntrega:'2026-11-03'}));
+  invalido[200].dataEntrega='2026-02-30';
+  assert.throws(()=>a.c.salvarPrevisoesEntregaCDPortal({requestId:'grupo-grande-002',previsoes:invalido}),/data válida/);
+  assert.equal(a.estado.rows.length,202,'a última entrada inválida impede toda a gravação');
+  assert.throws(()=>a.c.salvarPrevisoesEntregaCDPortal({requestId:'grupo-grande-003',
+    previsoes:Array.from({length:2001},()=>corpo.previsoes[0])}),/1 a 2000/);
+  assert.equal(a.estado.rows.length,202);
 });

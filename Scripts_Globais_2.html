@@ -812,7 +812,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
     // 1. Adicionamos a Prioridade com as opções fixas para garantir a ordem de visualização
     window.listasMultiProducao = {
     'Prioridade': new Set(['1. 🚨 Backlog (Atrasado)', '2. 🔴 0 a 7 Dias', '3. 🟡 8 a 15 Dias', '4. 🟢 +15 Dias', '5. ⚪ (Sem Data)']),
-    'Gráfica': new Set(), 'Marca': new Set(), 'Série': new Set(), 'CD Destino': new Set(),
+    'Gráfica': new Set(), 'Marca': new Set(), 'Série': new Set(), 'Tipo': new Set(), 'CD Destino': new Set(),
     'Ciclo': new Set(), 'Envio': new Set(), 'Congelado': new Set(),
     'Cliente personalizado': new Set(), 'Capa personalizada': new Set(),
      'Avaliação': new Set(['Sim', 'Não']), 'Meta Aplicada': new Set()
@@ -820,7 +820,7 @@ window.pgAnexarDadosDashboard = function(fatia) {
     
     // A Prioridade não está aqui porque ela é "calculada", não puxa do Excel puro
     window.mapCamposProducao = {
-    'Gráfica': 'GRAFICA_FINAL', 'Marca': 'UNIDADE', 'Série': '__SERIE_CORRIGIDA__', 'CD Destino': 'CD_MAPA',
+    'Gráfica': 'GRAFICA_FINAL', 'Marca': 'UNIDADE', 'Série': '__SERIE_CORRIGIDA__', 'Tipo': 'TIPO', 'CD Destino': 'CD_MAPA',
     'Ciclo': 'CICLO', 'Envio': 'ENVIO', 'Congelado': 'Congelado',
     'Cliente personalizado': 'CLIENTE_PERSONALIZADO',
     'Capa personalizada': 'CAPA_PERSONALIZADA',
@@ -835,12 +835,18 @@ window.pgAnexarDadosDashboard = function(fatia) {
         if (nome === 'RAIZES ACABADORA') return 'RAÍZES ACABADORA';
         return nome;
     };
+    window.pgTipoMaterialProducao = function(l) {
+        // Mesma classificação usada pela Meta Armazém: mantém todas as categorias da origem.
+        return String(l?.TIPO ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase().replace(/\s+/g, ' ').trim();
+    };
     window.pgValorFiltroProducao = function(l, categoria) {
         // Mesmo fornecedor canonico usado pelos consolidados. O cabecalho bruto
         // GRÁFICA pode colidir com outras colunas na importacao da planilha.
         if (categoria === 'Meta Aplicada') return typeof window.pgMAMetaAplicadaDaLinha === 'function'
             ? window.pgMAMetaAplicadaDaLinha(l) : '';
         if (categoria === 'Gráfica') return l.GRAFICA_FINAL || l['GRÁFICA'] || l.GRAFICA || '';
+        if (categoria === 'Tipo') return window.pgTipoMaterialProducao(l);
         if (categoria === 'Série') return typeof window.pgSerieCorrigidaFunil === 'function'
             ? window.pgSerieCorrigidaFunil(l) : (l.serie_corrigida || l['SÉRIE'] || l.SERIE || '');
         if (categoria !== 'CD Destino') return l[window.mapCamposProducao[categoria]];
@@ -9014,6 +9020,11 @@ window.renderizarPontosAtencaoGiro = function(dados) {
         window.construirBotoesEtapasGiro();
     }
     
+    if (typeof window.pgGiroSincronizar === 'function') {
+        window.reFiltrarTabelaGiro();
+        window.pgGiroSincronizar();
+        return;
+    }
     if (!window.OBS_GIRO_CARREGADO) {
         window.reFiltrarTabelaGiro();
         try {
@@ -9619,6 +9630,7 @@ window.reFiltrarTabelaGiro = function() {
         let superChaveSku = window.pgGiroChaveObs('SKU', `${grafica}|${marca}|${sku}|${envio}|${cd}`);
 
         grupos[chaveGrupo].skus.push({
+            linhaPrevisao: l,
             chaveUnica: superChaveSku,
             sku: sku,
             grafica: grafica,
@@ -9711,7 +9723,7 @@ let arrGrupos = Object.values(grupos);
     });
 
     if (arrGrupos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
         return;
     }
 
@@ -9814,9 +9826,10 @@ let arrGrupos = Object.values(grupos);
         ${badgeTempoMaster}
         </div>
         </td>
+        <td class="p-2">${window.pgGiroCampoNovaData?.(g.skus.map(x => x.linhaPrevisao),'girodata_'+indexGrupo) || '—'}</td>
         </tr>
         <tr id="${idSubTabela}" class="hidden subtabela-detalhes bg-indigo-50/30 border-b border-indigo-100">
-        <td colspan="9" class="p-0">
+        <td colspan="10" class="p-0">
         <div class="pl-10 pr-2 py-3">
         <table class="w-full text-[9px] text-left bg-white shadow-sm rounded border border-slate-200 overflow-hidden">
         <thead class="bg-slate-100 text-slate-500 uppercase font-bold">
@@ -9829,6 +9842,7 @@ let arrGrupos = Object.values(grupos);
         <th class="p-1.5 border-r border-slate-200">Etapa Pendente</th>
         <th class="p-1.5 text-right border-r border-slate-200">Tiragem</th>
         <th class="p-1.5 w-1/3">Observação Específica do SKU</th>
+        <th class="p-1.5">Nova data</th>
         </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 text-slate-600">
@@ -9873,6 +9887,7 @@ let arrGrupos = Object.values(grupos);
             ${primeiraObsSku ? btnHistSku : ''}
             </div>
             </td>
+            <td class="p-1.5">${window.pgGiroCampoNovaData?.([item.linhaPrevisao],'girodata_'+indexGrupo+'_'+indiceSku) || '—'}</td>
             </tr>
             `;
         });

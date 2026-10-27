@@ -138,7 +138,7 @@
         </div>
         <button type="button" class="ma-pill" id="maZerarSemPrevisao" aria-pressed="false" onclick="window.pgMAZerarSemPrevisao()" title="Simula somente as linhas sem previsão, usando a maior data entre Coleta Fim Baseline e a Meta Armazém aplicada">Zerar sem previsão</button>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 gap-3">
         <label class="text-[10px] font-black uppercase tracking-wide text-slate-600">Visão
           <select id="maVisao" class="ma-select mt-1 normal-case" onchange="window.pgMAMatrizModo(this.value)">
             <option value="marca">Apenas marcas</option>
@@ -146,18 +146,6 @@
             <option value="graficaMarca">Gráfica × Marca</option>
           </select>
         </label>
-        <div class="text-[10px] font-black uppercase tracking-wide text-slate-600">Tipo de material
-          <details id="maTiposDropdown" class="ma-tipos mt-1 normal-case">
-            <summary class="ma-select"><span id="maTipoMaterialResumo">Todos</span><span aria-hidden="true">▾</span></summary>
-            <div class="ma-tipos-menu">
-              <div class="flex gap-2">
-                <button type="button" class="ma-pill flex-1" onclick="window.pgMATipoMaterialTodos()">Marcar tudo</button>
-                <button type="button" class="ma-pill flex-1" onclick="window.pgMATipoMaterialNenhum()">Desmarcar tudo</button>
-              </div>
-              <div id="maTipoMaterialLista" class="ma-tipos-list"></div>
-            </div>
-          </details>
-        </div>
       </div>
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-t border-slate-200 pt-3">
         <div><h3 class="text-xs font-black">Base auditável</h3><p class="text-[10px] text-slate-500 mt-1">Kit, SKU, descrição, marca, série e todas as datas do cálculo. Segue os filtros e o cenário desta visão.</p></div>
@@ -1964,6 +1952,11 @@
     }).join('')||'<p class="text-xs text-slate-500 p-2">Sem tipos disponíveis.</p>';
   }
   window.pgMATipoMaterial=function(tipo,marcado) {
+    var controles=document.querySelectorAll('.chk-geral-Tipo');
+    if(controles.length&&typeof window.aplicarFiltros==='function'){
+      Array.from(controles).forEach(function(c){if(c.value===tipo)c.checked=marcado;});
+      window.aplicarFiltros();return;
+    }
     if(estado.tiposDisponiveis.indexOf(tipo)<0)return;
     if(estado.tiposMateriais===null)estado.tiposMateriais=new Set(estado.tiposDisponiveis);
     if(marcado)estado.tiposMateriais.add(tipo);else estado.tiposMateriais.delete(tipo);
@@ -1971,9 +1964,15 @@
     window.processarMetaArmazem();
   };
   window.pgMATipoMaterialTodos=function(){
+    if(document.querySelectorAll('.chk-geral-Tipo').length&&typeof window.checkAllGeral==='function'){
+      window.checkAllGeral('Tipo',true);return;
+    }
     estado.tiposMateriais=null;window.processarMetaArmazem();
   };
   window.pgMATipoMaterialNenhum=function(){
+    if(document.querySelectorAll('.chk-geral-Tipo').length&&typeof window.checkAllGeral==='function'){
+      window.checkAllGeral('Tipo',false);return;
+    }
     estado.tiposMateriais=new Set();window.processarMetaArmazem();
   };
   window.pgMAZerarSemPrevisao=function(){
@@ -2106,7 +2105,7 @@
       aviso.classList.remove('hidden');aviso.textContent='Não foi possível conciliar a visão: '+erro.message;return;
     }
     // Marca, série e gráfica seguem os filtros gerais do portal.
-    // Tipo de material é um recorte local desta visão.
+    // Tipo de material também segue o filtro geral do portal.
     document.querySelectorAll('[data-ma-cenario]').forEach(function(btn){btn.setAttribute('aria-pressed',String(btn.getAttribute('data-ma-cenario')===estado.cenario));});
     var visao=document.getElementById('maVisao');if(visao)visao.value=estado.matrizModo;
     var zerarBtn=document.getElementById('maZerarSemPrevisao');

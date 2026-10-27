@@ -344,91 +344,12 @@ function pgGiroEhMesmoEvento_(a,b) {
   return Number.isFinite(x)&&Number.isFinite(y)&&Math.abs(x-y)<=120000;
 }
 
-function salvarObsGiro(tipo, chave, obs, contextoStr) {
-  var lock = LockService.getScriptLock();
-  try {
-    if (tipo !== 'MASTER' && tipo !== 'SKU') throw new Error('Tipo de observação inválido.');
-    chave = pgGiroNormalizarChave_(tipo, chave);
-    obs = String(obs || '').trim();
-    if (!chave || !obs) throw new Error('Chave e observação são obrigatórias.');
-    lock.waitLock(30000);
-    var ss = pgArquivoObservacoesGiro_();
-    var nomeAba = tipo === 'SKU' ? 'Obs_Cockpit_sku' : 'Obs_Cockpit';
-    var sheet = ss.getSheetByName(nomeAba);
-    if (!sheet) {
-      sheet = ss.insertSheet(nomeAba);
-      sheet.appendRow(['Data e Hora', 'Usuário', 'Chave de Ligação', 'Observação', 'Contexto Físico (JSON)']);
-      sheet.getRange('A1:E1').setFontWeight('bold').setBackground('#284081').setFontColor('white');
-      sheet.setFrozenRows(1);
-    }
-    var email = 'Modo Desenvolvedor / Desconhecido';
-    try { email = Session.getActiveUser().getEmail() || 'Anônimo'; } catch (e) {}
-    var agora = new Date();
-    var dataAgora = Utilities.formatDate(agora, 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm:ss');
-    // Sob lock, impede o mesmo envio duplicado inclusive se a tiragem mudou
-    // entre abas. Conserva notas iguais lançadas em dias/horários diferentes.
-    var last=sheet.getLastRow(),qtd=Math.min(last,400);
-    if(qtd>0){
-      var recentes=sheet.getRange(last-qtd+1,1,qtd,4).getDisplayValues();
-      for(var i=recentes.length-1;i>=0;i--){
-        var row=recentes[i];
-        if(pgGiroNormalizarChave_(tipo,row[2])===chave &&
-           pgGiroTextoComparavel_(row[1])===pgGiroTextoComparavel_(email) &&
-           pgGiroTextoComparavel_(row[3])===pgGiroTextoComparavel_(obs) &&
-           pgGiroEhMesmoEvento_(row[0],dataAgora)){
-          return {success:true,duplicate:true,data:row[0],user:row[1],obs:row[3],chave:chave,tipo:tipo};
-        }
-      }
-    }
-    sheet.appendRow([agora, email, chave, obs, String(contextoStr || '{}')]);
-    SpreadsheetApp.flush();
-    return {
-      success:true,duplicate:false,
-      data:Utilities.formatDate(agora, 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm'),
-      user:email, obs:obs, chave:chave, tipo:tipo
-    };
-  } catch (e) {
-    console.error('[Giro] Falha ao salvar observação na PCPs: ' + e);
-    return {success:false, error:String(e.message || e)};
-  } finally {
-    if (lock.hasLock()) lock.releaseLock();
-  }
+function salvarObsGiro(tipo, chave, obs, contextoStr, eventoId) {
+  return pgSalvarObsGiroPortal_(tipo, chave, obs, contextoStr, eventoId);
 }
 
 function buscarHistoricoObsGiro() {
-  var ss=pgArquivoObservacoesGiro_();
-  var result={master:{},sku:{}};
-  function lerAba(nomeAba,tipo,destino) {
-    var sheet=ss.getSheetByName(nomeAba);
-    if(!sheet||sheet.getLastRow()<1)return;
-    var linhas=sheet.getRange(1,1,sheet.getLastRow(),4).getDisplayValues();
-    // O histórico SKU antigo não possui cabeçalho; preservar a primeira linha.
-    var first=linhas.length &&
-      /^data(?: e hora)?$/i.test(String(linhas[0][0]||'').trim()) &&
-      /^(obs|observação)$/i.test(String(linhas[0][3]||'').trim()) ? 1 : 0;
-    var ultimoEvento=Object.create(null);
-    // Data, não posição física da linha, determina qual nota é a mais recente.
-    // Isso protege históricos importados ou reorganizados entre abas.
-    var ordenadas=linhas.slice(first).map(function(row,i){
-      return {row:row,indice:i,data:pgGiroMomento_(row[0])};
-    }).sort(function(a,b){
-      var av=Number.isFinite(a.data)?a.data:-Infinity;
-      var bv=Number.isFinite(b.data)?b.data:-Infinity;
-      return bv-av||b.indice-a.indice;
-    });
-    for(var i=0;i<ordenadas.length;i++){
-      var row=ordenadas[i].row,chave=pgGiroNormalizarChave_(tipo,row[2]);
-      if(!chave||!String(row[3]||'').trim())continue;
-      var assinatura=chave+'\u0001'+pgGiroTextoComparavel_(row[1])+'\u0001'+pgGiroTextoComparavel_(row[3]);
-      if(ultimoEvento[assinatura] && pgGiroEhMesmoEvento_(ultimoEvento[assinatura],row[0]))continue;
-      ultimoEvento[assinatura]=row[0];
-      if(!destino[chave])destino[chave]=[];
-      destino[chave].push({data:row[0],user:row[1],obs:row[3]});
-    }
-  }
-  lerAba('Obs_Cockpit','MASTER',result.master);
-  lerAba('Obs_Cockpit_sku','SKU',result.sku);
-  return result;
+  return pgBuscarHistoricoObsGiroPortal_();
 }
 
 function getDadosCockpit() {

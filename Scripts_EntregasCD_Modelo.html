@@ -68,7 +68,7 @@
     const entregaSLA = (linha, coleta) => data(typeof window.pgDataPlanoEntregaSLA === 'function'
         ? (coleta === undefined ? window.pgDataPlanoEntregaSLA(linha) : window.pgDataPlanoEntregaSLA(linha, coleta)) : '');
 
-    function montar(base, previsoes, hoje) {
+    function montar(base, previsoes, hoje, opcoes = {}) {
         hoje = data(hoje);
         if (!hoje) throw new Error('Informe uma data válida para calcular as entregas.');
         const salvas = previsoesPorChave(previsoes), movimentosUsados = new Set();
@@ -87,7 +87,7 @@
             const join = primeiro(linha, ['JOIN_KEY', 'JOIN KEY']);
             const chave = JSON.stringify(['ECD1', origem, marca, grafica, sku, cd, envio, join, kit, op].map(normal));
             const rawTotalCD = campo(linha, 'TIRAGEM A ENTREGAR (total por CD)');
-            const total = Math.round(numero(origem === 'ACABADORA' && preenchido(rawTotalCD)
+            const total = Math.round(numero(!opcoes.volumeCanonico && origem === 'ACABADORA' && preenchido(rawTotalCD)
                 ? rawTotalCD : campo(linha, 'TIRAGEM')));
             const volumes = window.pgVolumesColetaUnificadosV37?.(linha, hoje) || {};
             const eventosColeta = eventosReais(volumes, 'coleta', hoje, movimentosUsados);
@@ -251,6 +251,130 @@
                 baseCabecalho.indexOf('Saldo sem previsão'), baseCabecalho.indexOf('Versão da previsão')]
         }];
     }
-    window.pgEntregasCDModelo = {montar, quadro, exportar};
+    function chave(linha) {
+        return JSON.stringify(['ECD1', temFonteAcabadora(linha) ? 'ACABADORA' : 'PCP',
+            primeiro(linha, ['MARCA_FINAL', 'UNIDADE', 'MARCA']),
+            primeiro(linha, ['GRAFICA_FINAL', 'GRÁFICA', 'GRAFICA', 'BQ']),
+            primeiro(linha, ['SKU_REAL', 'SKU']),
+            primeiro(linha, ['CD_FINAL', 'CD DESTINO', 'CD_DESTINO', 'CD', 'CK']),
+            primeiro(linha, ['ENVIO', 'Envio']), primeiro(linha, ['JOIN_KEY', 'JOIN KEY']),
+            primeiro(linha, ['KIT', 'Kit']), primeiro(linha, ['OP', 'O.P.'])].map(normal));
+    }
+    // Uma parcela representa um movimento real ou o saldo que ainda aguarda coleta.
+    // O plano permanece inteiro no denominador, inclusive as parcelas em backlog.
+    function calendario(itens, config = {}, filtros = {}) {
+        const hoje = data(config.hoje), fim = data(config.fim || (hoje?.slice(0, 4) + '-12-02'));
+        if (!hoje || !fim || fim < hoje) throw new Error('Defina um fim de ciclo igual ou posterior a hoje.');
+        if (Date.parse(fim) - Date.parse(hoje) > 369 * 86400000) throw new Error('Selecione um ciclo de até 370 dias.');
+        const feriados = new Set((config.feriados || ['11-02', '11-20']).map(d => d.length === 5 ? hoje.slice(0, 4) + '-' + d : d));
+        const domingo = d => new Date(d + 'T12:00:00Z').getUTCDay() === 0;
+        const ajustarDia = d => {
+            if (!d) return '';
+            let limite = 0;
+            while ((domingo(d) || feriados.has(d)) && limite++ < 370) d = proximoDia(d);
+            return d;
+        };
+        const dias = [], semanas = [];
+        for (let dia = hoje, limite = 0; dia <= fim && limite++ < 370; dia = proximoDia(dia)) {
+            if (domingo(dia)) continue;
+            dias.push({data: dia, feriado: feriados.has(dia)});
+            const segunda = new Date(dia + 'T12:00:00Z');
+            segunda.setUTCDate(segunda.getUTCDate() - ((segunda.getUTCDay() + 6) % 7));
+            const semana = segunda.toISOString().slice(0, 10);
+            if (semanas.at(-1)?.chave !== semana) semanas.push({chave: semana, inicio: dia, fim: dia, tamanho: 0});
+            semanas.at(-1).fim = dia; semanas.at(-1).tamanho++;
+        }
+        const parcelas = [];
+        const adicionar = (item, volume, status, dt, coletaReal, coletaPrevista, fonte) => {
+            volume = Math.max(0, volume);
+            if (!volume) return;
+            const entregue = status === 'ENTREGUE';
+            const dataOriginal = dt || '';
+            const dia = entregue ? (dt < hoje || dt === hoje && domingo(hoje) ? 'entregue' : dt) : ajustarDia(dt);
+            const manualVigente = item.dtEntregaManual && item.dtEntregaManual >= hoje;
+            const atrasoColeta = status === 'AGUARDANDO' && coletaPrevista && coletaPrevista < hoje;
+            const backlog = !entregue && (!dt || dt < hoje || (atrasoColeta && !manualVigente) || dia > fim);
+            const p = {item, chave: item.chave, sku: item.sku, descricao: item.descricao, marca: item.marca,
+                serie: item.serie, cd: item.cd, grafica: item.grafica, personalizado: item.personalizado,
+                tipo: item.tipo, volume, status, backlog, dia: backlog ? '' : dia, dataOriginal,
+                coletaReal: coletaReal || '', coletaPrevista: coletaPrevista || '', fonteColeta: coletaReal ? 'TP' : entregue
+                    ? item.datasColeta.length ? 'TP (sem vínculo de parcela)' : 'Não informada' : item.dtColetaManual ? 'Manual' : 'PCP',
+                fonteEntrega: fonte || (item.dtEntregaManual ? 'Manual' : 'SLA'),
+                motivo: dia > fim ? 'Após o fim do ciclo' : !dt ? 'Sem previsão' : atrasoColeta && !manualVigente ? 'Coleta atrasada' : 'Previsão vencida'};
+            if (filtros.cd && p.cd !== filtros.cd || filtros.marca && p.marca !== filtros.marca ||
+                filtros.serie && p.serie !== filtros.serie || filtros.status && p.status !== filtros.status) return;
+            parcelas.push(p);
+        };
+        (itens || []).forEach(item => {
+            let limiteEntrega = item.total;
+            item.eventosEntrega.forEach(e => {
+                const v = Math.min(limiteEntrega, e.volume); limiteEntrega -= v;
+                const correspondente = item.eventosColeta.find(c => preenchido(e.linhaMapa) && c.linhaMapa === e.linhaMapa || preenchido(e.id) && c.id === e.id);
+                const coleta = correspondente?.data || (item.datasColeta.length === 1 ? item.datasColeta[0] : '');
+                adicionar(item, v, 'ENTREGUE', e.data, coleta, '', 'TP');
+            });
+            let entregueConsumido = Math.min(item.total, item.entregue);
+            let restanteColetado = Math.min(Math.max(0, item.total - item.entregue), item.aguardandoEntrega);
+            item.eventosColeta.forEach(e => {
+                const consumido = Math.min(e.volume, entregueConsumido); entregueConsumido -= consumido;
+                const aberto = Math.min(restanteColetado, Math.max(0, e.volume - consumido)); restanteColetado -= aberto;
+                adicionar(item, aberto, 'TRANSITO', item.dtEntregaManual || entregaSLA(item.linha, e.data), e.data, '', item.dtEntregaManual ? 'Manual' : 'SLA');
+            });
+            const coleta = item.dtColetaManual || item.dtColetaPCP;
+            adicionar(item, item.pendenteColeta, 'AGUARDANDO', item.dtEntregaManual || entregaSLA(item.linha, coleta), '', coleta,
+                item.dtEntregaManual ? 'Manual' : 'SLA');
+        });
+        const agrupar = detalhado => {
+            const grupos = new Map();
+            parcelas.forEach(p => {
+                const k = JSON.stringify([p.marca, detalhado ? p.serie : '', p.cd]);
+                if (!grupos.has(k)) grupos.set(k, {marca: p.marca, serie: detalhado ? p.serie : '', cd: p.cd, total: 0, entregue: 0,
+                    backlog: 0, dias: Object.create(null), parcelas: []});
+                const g = grupos.get(k); g.total += p.volume; g.parcelas.push(p);
+                if (p.backlog) g.backlog += p.volume;
+                else if (p.dia === 'entregue') g.entregue += p.volume;
+                else { if (!g.dias[p.dia]) g.dias[p.dia] = []; g.dias[p.dia].push(p); }
+            });
+            return [...grupos.values()].sort((a, b) => (a.marca.localeCompare(b.marca, 'pt-BR', {numeric: true}) ||
+                a.serie.localeCompare(b.serie, 'pt-BR', {numeric: true}) || a.cd.localeCompare(b.cd, 'pt-BR', {numeric: true})));
+        };
+        const total = {marca: 'Total geral', total: 0, entregue: 0, backlog: 0, dias: Object.create(null), parcelas};
+        parcelas.forEach(p => {
+            total.total += p.volume;
+            if (p.backlog) total.backlog += p.volume;
+            else if (p.dia === 'entregue') total.entregue += p.volume;
+            else { if (!total.dias[p.dia]) total.dias[p.dia] = []; total.dias[p.dia].push(p); }
+        });
+        return {hoje, fim, dias, semanas, incluiHojeEntregue: domingo(hoje), parcelas, backlog: parcelas.filter(p => p.backlog),
+            marcaCD: agrupar(false), marcaSerieCD: agrupar(true), total};
+    }
+    function exportarCalendario(c) {
+        const aba = (nome, linhas, detalhado) => {
+            const cabecalho = ['Marca', ...(detalhado ? ['Série'] : []), 'CD', 'Plano', 'Backlog', 'Entregue', '% entregue',
+                ...c.dias.flatMap(d => [d.data + (d.feriado ? ' (feriado)' : ''), '% acumulado ' + d.data])];
+            const valores = g => {
+                let acumulado = g.entregue;
+                return [g.marca, ...(detalhado ? [g.serie || ''] : []), g.cd || '', g.total, g.backlog, g.entregue,
+                    g.total ? g.entregue / g.total : 0, ...c.dias.flatMap(d => {
+                        const v = (g.dias[d.data] || []).reduce((s, p) => s + p.volume, 0); acumulado += v;
+                        return [v, g.total ? acumulado / g.total : 0];
+                    })];
+            };
+            return {nome, cabecalho, linhas: [...linhas, c.total].map(valores),
+                colunasPercentual: cabecalho.map((titulo, i) => titulo.startsWith('%') ? i : -1).filter(i => i >= 0),
+                colunasNumero: cabecalho.map((_, i) => i).filter(i => i >= (detalhado ? 3 : 2))};
+        };
+        const cabecalho = ['SKU', 'Marca', 'Série', 'Descrição do SKU', 'Personalizado (S/N)', 'Aluno/Professor', 'CD', 'Gráfica',
+            'Status', 'Data coleta TP', 'Data entrega TP', 'Prev. coleta', 'Fonte coleta', 'Prev. entrega', 'Fonte entrega', 'Quantidade', 'Data no quadro', 'Pendência', 'Coletas TP do item (auditoria)'];
+        return [aba('Quadro_Marca_CD', c.marcaCD, false), aba('Quadro_Marca_Serie_CD', c.marcaSerieCD, true), {
+            nome: 'Base_SKUs', cabecalho, linhas: c.parcelas.map(p => [p.sku, p.marca, p.serie, p.descricao,
+                p.personalizado === 'Sim' ? 'S' : p.personalizado === 'Não' ? 'N' : '', p.tipo, p.cd, p.grafica,
+                p.backlog ? 'Backlog' : p.status === 'ENTREGUE' ? 'Coletado e entregue' : p.status === 'TRANSITO' ? 'Coletado aguardando entrega' : 'Pendente',
+                p.coletaReal, p.status === 'ENTREGUE' ? p.dataOriginal : '', p.coletaPrevista, p.fonteColeta,
+                p.status === 'ENTREGUE' ? '' : p.dataOriginal, p.fonteEntrega, p.volume, p.dia === 'entregue' ? '' : p.dia,
+                p.backlog ? p.motivo : '', p.item.eventosColeta.map(e => e.data + ': ' + Math.round(e.volume)).join(' / ')]),
+            colunasData: [9, 10, 11, 13, 16], colunasNumero: [15]}];
+    }
+    window.pgEntregasCDModelo = {montar, quadro, exportar, chave, calendario, exportarCalendario};
 })();
 </script>

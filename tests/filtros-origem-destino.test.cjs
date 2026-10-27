@@ -6,6 +6,38 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'Scripts_Globais_2.html'), 'utf8');
 
+test('Tipo global usa a classificação do Armazém em todas as bases e preserva as demais categorias', () => {
+  const aluno = {...pcp('aluno'), TIPO:'  aluno  '};
+  const professor = {...pcp('professor'), TIPO:'Professor'};
+  const apoio = {...pcp('apoio'), TIPO:'Material de Apoio'};
+  const vazio = pcp('sem-tipo');
+  const p = portal([aluno, professor, apoio, vazio], 'TODOS', 'CD');
+  assert.deepEqual(p.checks.get('Tipo').map(cb => cb.value).sort(),
+    ['(Vazio)', 'ALUNO', 'MATERIAL DE APOIO', 'PROFESSOR']);
+  p.w.checkOnlyGeral('Tipo', 'PROFESSOR');
+  for (const nome of ['pgBaseGeralReportExecutiva','dadosTotalCanonico','dadosBaseEntCDPortal',
+    'dadosBaseTPPortal','dadosBaseForecastColeta','dadosFasesEstaticas']) {
+    assert.deepEqual(Array.from(p.w[nome]), [professor], nome+' respeita o Tipo selecionado');
+  }
+  p.w.checkOnlyGeral('Tipo', '(Vazio)');
+  assert.deepEqual(p.linhas, [vazio]);
+  p.w.checkAllGeral('Tipo', true);
+  assert.deepEqual(p.linhas, [aluno, professor, apoio, vazio]);
+});
+
+test('troca de fatia conserva a seleção global de Tipo sem perder aluno ou categorias adicionais', () => {
+  const aluno = {...pcp('aluno'), TIPO:'ALUNO'};
+  const professor = {...pcp('professor'), TIPO:'PROFESSOR'};
+  const p = portal([aluno, professor]);
+  p.w.checkOnlyGeral('Tipo','PROFESSOR');
+  const outroAluno = {...pcp('aluno-2'), TIPO:'aluno'};
+  const outroProfessor = {...pcp('professor-2'), TIPO:' professor '};
+  p.anexar([outroAluno,outroProfessor]);
+  assert.deepEqual(p.linhas, [professor,outroProfessor]);
+  p.w.limparFiltros();
+  assert.deepEqual(p.linhas, [aluno,professor,outroAluno,outroProfessor]);
+});
+
 function trecho(inicio, fim) {
   const a = source.indexOf(inicio);
   const b = source.indexOf(fim, a);

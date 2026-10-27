@@ -1,4 +1,4 @@
-// Previsões manuais próprias da visão Entregas por CD. Nenhuma escrita no PCP.
+// Previsões compartilhadas entre Giro e Entregas por CD. Histórico append-only.
 var PG_ECD_PREVISOES_ABA = 'Previsoes_Entrega_CD';
 var PG_ECD_PREVISOES_CABECALHO = ['Chave', 'Coleta prevista', 'Entrega prevista',
   'Observação', 'Versão', 'Atualizado em', 'Usuário', 'Requisição', 'Registro JSON'];
@@ -46,19 +46,21 @@ function pgECDTextoPlanilha_(valor) {
 function pgECDPublica_(registro) {
   return {chave: registro.chave, dataColeta: registro.dataColeta, dataEntrega: registro.dataEntrega,
     observacao: registro.observacao, versao: registro.versao,
-    atualizadoEm: registro.atualizadoEm, usuario: registro.usuario};
+    atualizadoEm: registro.atualizadoEm, usuario: registro.usuario, requestId: registro.requestId};
 }
 
-function pgECDLerRegistros_(sheet) {
-  if (!sheet) return {previsoes: Object.create(null), requisicoes: Object.create(null)};
+function pgECDLerRegistros_(sheet, desde) {
+  if (!sheet) return {previsoes: Object.create(null), requisicoes: Object.create(null), ultima: 0};
   var ultima = sheet.getLastRow();
   if (ultima < 1) throw new Error('Cabeçalho das previsões de CD ausente.');
-  var dados = sheet.getRange(1, 1, ultima, PG_ECD_PREVISOES_CABECALHO.length).getValues();
-  if (PG_ECD_PREVISOES_CABECALHO.some(function(c, i) { return dados[0][i] !== c; })) {
+  var cabecalho = sheet.getRange(1, 1, 1, PG_ECD_PREVISOES_CABECALHO.length).getValues()[0];
+  if (PG_ECD_PREVISOES_CABECALHO.some(function(c, i) { return cabecalho[i] !== c; })) {
     throw new Error('Formato da aba de previsões de CD incompatível. Nenhum registro foi alterado.');
   }
+  var primeira = Math.max(2, Number(desde || 0) + 1);
+  var dados = primeira > ultima ? [] : sheet.getRange(primeira, 1, ultima - primeira + 1, PG_ECD_PREVISOES_CABECALHO.length).getValues();
   var previsoes = Object.create(null), requisicoes = Object.create(null);
-  dados.slice(1).forEach(function(row, indice) {
+  dados.forEach(function(row, indice) {
     var r;
     try {
       r = JSON.parse(String(row[8] || ''));
@@ -68,15 +70,15 @@ function pgECDLerRegistros_(sheet) {
           !Number.isInteger(r.versao) || r.versao < 1 ||
           typeof r.atualizadoEm !== 'string' || !isFinite(Date.parse(r.atualizadoEm)) ||
           typeof r.usuario !== 'string' || typeof r.requestId !== 'string' || !r.requestId ||
-          r.versao !== (previsoes[r.chave] ? previsoes[r.chave].versao : 0) + 1 ||
+          ((!desde || previsoes[r.chave]) && r.versao !== (previsoes[r.chave] ? previsoes[r.chave].versao : 0) + 1) ||
           requisicoes[r.requestId]) throw new Error('Registro inválido');
     } catch (e) {
-      throw new Error('Histórico de previsões de CD ilegível na linha ' + (indice + 2) + '. Nenhum registro foi alterado.');
+      throw new Error('Histórico de previsões de CD ilegível na linha ' + (indice + primeira) + '. Nenhum registro foi alterado.');
     }
     previsoes[r.chave] = r;
     requisicoes[r.requestId] = r;
   });
-  return {previsoes: previsoes, requisicoes: requisicoes};
+  return {previsoes: previsoes, requisicoes: requisicoes, ultima: ultima};
 }
 
 function getPrevisoesEntregaCDPortal() {
@@ -87,74 +89,122 @@ function getPrevisoesEntregaCDPortal() {
   return {success: true, previsoes: saida};
 }
 
-function salvarPrevisaoEntregaCDPortal(payload) {
-  payload = payload || {};
+function pgECDAlteracao_(payload) {
+  if (!payload || typeof payload !== 'object') throw new Error('Previsão inválida.');
   var chave = pgECDChave_(payload.chave);
-  var dataColeta = pgECDData_(payload.dataColeta), dataEntrega = pgECDData_(payload.dataEntrega);
-  if (dataColeta && dataEntrega && dataEntrega < dataColeta) {
-    throw new Error('A previsão de entrega não pode ser anterior à previsão de coleta.');
+  var campos = payload.campos == null ? ['dataColeta', 'dataEntrega', 'observacao'] : payload.campos;
+  if (!Array.isArray(campos) || !campos.length || campos.length > 3 ||
+      campos.some(function(c, i) { return ['dataColeta', 'dataEntrega', 'observacao'].indexOf(c) < 0 || campos.indexOf(c) !== i; })) {
+    throw new Error('Informe os campos alterados da previsão.');
   }
-  if (payload.observacao != null && typeof payload.observacao !== 'string') throw new Error('Observação inválida.');
-  var observacao = String(payload.observacao || '').trim();
-  if (observacao.length > 500) throw new Error('A observação deve ter no máximo 500 caracteres.');
-  var versaoEsperada = payload.versaoEsperada;
-  if (!Number.isInteger(versaoEsperada) || versaoEsperada < 0) throw new Error('Versão da previsão inválida. Atualize o quadro.');
-  var requestId = payload.requestId;
-  if (typeof requestId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/.test(requestId)) {
-    throw new Error('Identificador do salvamento inválido.');
-  }
+  var alteracao = {};
+  ['dataColeta', 'dataEntrega', 'observacao'].forEach(function(c) {
+    if (campos.indexOf(c) < 0) return;
+    if (c === 'observacao') {
+      if (payload[c] != null && typeof payload[c] !== 'string') throw new Error('Observação inválida.');
+      alteracao[c] = String(payload[c] || '').trim();
+      if (alteracao[c].length > 500) throw new Error('A observação deve ter no máximo 500 caracteres.');
+    } else alteracao[c] = pgECDData_(payload[c]);
+  });
+  return {chave: chave, alteracao: alteracao};
+}
+
+function pgECDSalvarLote_(entradas) {
   var lock = LockService.getScriptLock(), bloqueado = false;
   try {
-    lock.waitLock(20000);
-    bloqueado = true;
+    lock.waitLock(20000); bloqueado = true;
     var ss = pgArquivoObservacoesGiro_(), sheet = ss.getSheetByName(PG_ECD_PREVISOES_ABA);
-    var dados = pgECDLerRegistros_(sheet);
-    var repetida = dados.requisicoes[requestId];
-    if (repetida) {
-      if (repetida.chave !== chave || repetida.dataColeta !== dataColeta ||
-          repetida.dataEntrega !== dataEntrega || repetida.observacao !== observacao) {
-        throw new Error('Este identificador de salvamento já foi usado para outra alteração. Atualize o quadro.');
-      }
-      return {success: true, previsao: pgECDPublica_(repetida)};
-    }
-    var anterior = dados.previsoes[chave];
-    if ((anterior ? anterior.versao : 0) !== versaoEsperada) {
-      throw new Error('A previsão foi alterada por outra pessoa. Atualize o quadro antes de salvar novamente.');
-    }
-    if (!anterior && !dataColeta && !dataEntrega && !observacao) throw new Error('Preencha uma previsão ou observação.');
+    var dados = pgECDLerRegistros_(sheet), novas = [], saida = {};
     var hoje = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd');
-    if ((dataColeta && dataColeta < hoje) || (dataEntrega && dataEntrega < hoje)) {
-      throw new Error('A nova previsão deve ser hoje ou uma data futura.');
-    }
     var usuario = 'Anônimo';
     try { usuario = String(Session.getActiveUser().getEmail() || '').trim() || 'Anônimo'; } catch (e) {}
-    var registro = {chave: chave, dataColeta: dataColeta, dataEntrega: dataEntrega,
-      observacao: observacao, versao: (anterior ? anterior.versao : 0) + 1,
-      atualizadoEm: new Date().toISOString(), usuario: usuario, requestId: requestId};
-    if (!sheet) {
-      sheet = ss.insertSheet(PG_ECD_PREVISOES_ABA);
-      sheet.getRange(1, 1, 1, PG_ECD_PREVISOES_CABECALHO.length).setValues([PG_ECD_PREVISOES_CABECALHO]);
-      sheet.getRange(1, 1, 1, PG_ECD_PREVISOES_CABECALHO.length)
-        .setFontWeight('bold').setBackground('#284081').setFontColor('#ffffff');
-      sheet.setFrozenRows(1);
+    entradas.forEach(function(entrada) {
+      var chave = entrada.chave, alteracao = entrada.alteracao, requestId = entrada.requestId;
+      var repetida = dados.requisicoes[requestId];
+      if (repetida) {
+        var intencaoOriginal = repetida.alteracao || {dataColeta: repetida.dataColeta,
+          dataEntrega: repetida.dataEntrega, observacao: repetida.observacao};
+        if (repetida.chave !== chave || JSON.stringify(intencaoOriginal) !== JSON.stringify(alteracao)) {
+          throw new Error('Este identificador de salvamento já foi usado para outra alteração.');
+        }
+        // Retry devolve o valor atual, nunca reaplica uma intenção mais antiga.
+        saida[chave] = pgECDPublica_(dados.previsoes[chave]);
+        return;
+      }
+      var anterior = dados.previsoes[chave];
+      var registro = {chave: chave, dataColeta: anterior ? anterior.dataColeta : '',
+        dataEntrega: anterior ? anterior.dataEntrega : '', observacao: anterior ? anterior.observacao : '',
+        versao: (anterior ? anterior.versao : 0) + 1, atualizadoEm: new Date().toISOString(),
+        usuario: usuario, requestId: requestId, alteracao: alteracao};
+      Object.keys(alteracao).forEach(function(c) {
+        if (c !== 'observacao' && alteracao[c] && alteracao[c] < hoje) {
+          throw new Error('A nova previsão deve ser hoje ou uma data futura.');
+        }
+        registro[c] = alteracao[c];
+      });
+      if (registro.dataColeta && registro.dataEntrega && registro.dataEntrega < registro.dataColeta) {
+        throw new Error('A previsão de entrega não pode ser anterior à previsão de coleta.');
+      }
+      if (!anterior && !registro.dataColeta && !registro.dataEntrega && !registro.observacao) {
+        throw new Error('Preencha uma previsão ou observação.');
+      }
+      // A edição é um patch aplicado à última linha sob lock. A última intenção
+      // prevalece apenas nos campos editados; notas e coletas de terceiros ficam.
+      novas.push(registro);
+      dados.previsoes[chave] = registro; dados.requisicoes[requestId] = registro;
+      saida[chave] = pgECDPublica_(registro);
+    });
+    if (novas.length) {
+      if (!sheet) {
+        sheet = ss.insertSheet(PG_ECD_PREVISOES_ABA);
+        sheet.getRange(1, 1, 1, PG_ECD_PREVISOES_CABECALHO.length).setValues([PG_ECD_PREVISOES_CABECALHO]);
+        sheet.getRange(1, 1, 1, PG_ECD_PREVISOES_CABECALHO.length)
+          .setFontWeight('bold').setBackground('#284081').setFontColor('#ffffff');
+        sheet.setFrozenRows(1);
+      }
+      var linhas = novas.map(function(r) { return [r.chave, r.dataColeta, r.dataEntrega,
+        pgECDTextoPlanilha_(r.observacao), r.versao, r.atualizadoEm,
+        pgECDTextoPlanilha_(r.usuario), r.requestId, JSON.stringify(r)]; });
+      sheet.getRange(sheet.getLastRow() + 1, 1, linhas.length, PG_ECD_PREVISOES_CABECALHO.length).setValues(linhas);
+      SpreadsheetApp.flush();
+      pgGiroInvalidarRevisao_();
     }
-    // JSON é a leitura canônica; textos exibidos são escapados sem perder o original.
-    var row = [chave, dataColeta, dataEntrega, pgECDTextoPlanilha_(observacao), registro.versao,
-      registro.atualizadoEm, pgECDTextoPlanilha_(usuario), requestId, JSON.stringify(registro)];
-    sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
-    SpreadsheetApp.flush();
-    return {success: true, previsao: pgECDPublica_(registro)};
-  } finally {
-    if (bloqueado) lock.releaseLock();
+    return {success: true, previsoes: saida};
+  } finally { if (bloqueado) lock.releaseLock(); }
+}
+
+function salvarPrevisaoEntregaCDPortal(payload) {
+  var entrada = pgECDAlteracao_(payload);
+  if (!payload.requestId) throw new Error('Identificador do salvamento inválido.');
+  entrada.requestId = pgGiroEventoId_(payload.requestId);
+  var r = pgECDSalvarLote_([entrada]);
+  return {success: true, previsao: r.previsoes[entrada.chave]};
+}
+
+function salvarPrevisoesEntregaCDPortal(payload) {
+  if (!payload || !Array.isArray(payload.previsoes) || !payload.previsoes.length || payload.previsoes.length > 2000) {
+    throw new Error('Selecione de 1 a 2000 previsões para salvar por vez.');
   }
+  if (!payload.requestId) throw new Error('Identificador do salvamento inválido.');
+  var requestId = pgGiroEventoId_(payload.requestId);
+  if (requestId.length > 110) throw new Error('Identificador do lote acima do limite.');
+  var chaves = Object.create(null);
+  var entradas = payload.previsoes.map(function(p, i) {
+    var entrada = pgECDAlteracao_(p);
+    if (chaves[entrada.chave]) throw new Error('Uma previsão está repetida no lote.');
+    chaves[entrada.chave] = true;
+    entrada.requestId = requestId + ':' + i;
+    return entrada;
+  });
+  return pgECDSalvarLote_(entradas);
 }
 
 function gerarPlanilhaEntregasCD(payload) {
   payload = payload || {};
   var abas = payload.abas;
-  if (!Array.isArray(abas) || abas.length !== 2 || !abas[0] || !abas[1] ||
-      abas[0].nome !== 'Quadro' || abas[1].nome !== 'Base_SKUs') {
-    throw new Error('A extração de Entregas CD deve conter Quadro e Base_SKUs, nesta ordem.');
+  var nomes = Array.isArray(abas) ? abas.map(function(a) { return a && a.nome; }).join('|') : '';
+  if (nomes !== 'Quadro|Base_SKUs' && nomes !== 'Quadro_Marca_CD|Quadro_Marca_Serie_CD|Base_SKUs') {
+    throw new Error('A extração deve conter os dois quadros de Entregas CD e Base_SKUs, nesta ordem.');
   }
   var seguro = Object.assign({}, payload, {auditoriaPortal: true, abas: abas});
   return gerarPlanilhaReportExecutiva(seguro);

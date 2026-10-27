@@ -86,12 +86,18 @@
     }
     return l;
   }
-  window.pgMAPrepararLinhas = function(base, originais, corte) {
-    if (typeof window.pgIdentidadeOperacionalTPLinha !== 'function' || typeof window.pgVolumesColetaUnificadosV37 !== 'function') return base;
-    var porId = new Map((originais || []).map(l => [window.pgMAIdLinhaRealizado(l),l])), grupos = new Map();
-    var selecionadas = new Set(base.map(window.pgMAIdLinhaRealizado));
+  var indicePreparacao = null;
+  function indiceDasLinhas(fonte) {
+    // A leitura nativa do payload evita normalizar/classificar todas as linhas
+    // novamente e reconhece também edições feitas no mesmo objeto de origem.
+    var assinatura=JSON.stringify(fonte);
+    if (indicePreparacao && indicePreparacao.fonte === fonte &&
+        indicePreparacao.assinatura === assinatura &&
+        indicePreparacao.linhas.length === fonte.length &&
+        indicePreparacao.linhas.every(function(l,i){return l===fonte[i];})) return indicePreparacao;
+    var porId = new Map(fonte.map(l => [window.pgMAIdLinhaRealizado(l),l])), grupos = new Map();
     // O owner pode estar fora de um filtro de segmento/personalização. A conciliação precede esse recorte.
-    var universo = (originais || base).filter(function(l) {
+    var universo = fonte.filter(function(l) {
       if (window.pgSolicitacaoCancelada && window.pgSolicitacaoCancelada(l)) return false;
       var acab = window.pgEhFonteAcabadora(l), destino = acab ? l['CD DESTINO'] || l.CD_FINAL || '' : l.CD_MAPA;
       return normal(destino) !== 'WALPRINT';
@@ -109,11 +115,30 @@
       if (!grupos.has(chave)) grupos.set(chave, []);
       grupos.get(chave).push(l);
     });
+    indicePreparacao = {fonte:fonte,assinatura:assinatura,linhas:fonte.slice(),porId:porId,grupos:grupos,
+      ownersPorChave:ownersPorChave,movimentos:new Map()};
+    return indicePreparacao;
+  }
+  window.pgMAPrepararLinhas = function(base, originais, corte) {
+    if (typeof window.pgIdentidadeOperacionalTPLinha !== 'function' || typeof window.pgVolumesColetaUnificadosV37 !== 'function') return base;
+    var indice=indiceDasLinhas(originais||base),porId=indice.porId,grupos=indice.grupos;
+    var ownersPorChave=indice.ownersPorChave;
+    var selecionadas = new Set(base.map(window.pgMAIdLinhaRealizado));
+    if(indice.corte!==corte||indice.mapa!==window.MAPA_SAIDA_CACHE||
+        indice.cargaConcluida!==window.PG_MAPA_TP_CARGA_CONCLUIDA||indice.erroMapa!==window.PG_MAPA_TP_ERRO){
+      indice.movimentos.clear();indice.corte=corte;indice.mapa=window.MAPA_SAIDA_CACHE;
+      indice.cargaConcluida=window.PG_MAPA_TP_CARGA_CONCLUIDA;indice.erroMapa=window.PG_MAPA_TP_ERRO;
+    }
     var resultado = [];
     grupos.forEach(function(linhas,chave) {
       if (!linhas.some(l => selecionadas.has(window.pgMAIdLinhaRealizado(l)))) return;
       var owners = ownersPorChave.get(chave) || unicos(linhas.map(window.pgMAIdLinhaRealizado)).map(id => porId.get(id) || linhas.find(l => window.pgMAIdLinhaRealizado(l) === id));
-      var entrega = parcelas(owners,'entrega',corte), coleta = parcelas(owners,'coleta',corte);
+      var movimentos=indice.movimentos.get(chave);
+      if(!movimentos){
+        movimentos={entrega:parcelas(owners,'entrega',corte),coleta:parcelas(owners,'coleta',corte)};
+        indice.movimentos.set(chave,movimentos);
+      }
+      var entrega=movimentos.entrega,coleta=movimentos.coleta;
       var todos = entrega.eventos.concat(coleta.eventos), destinosKIT = new Map();
       linhas.forEach(function(l) {
         var kit = normal(campo(l,'KIT'));

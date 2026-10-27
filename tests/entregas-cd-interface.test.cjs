@@ -3,96 +3,120 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const root = path.join(__dirname,'..');
-const script = name => fs.readFileSync(path.join(root,name),'utf8')
-  .replace(/^<script>\s*/,'').replace(/<\/script>\s*$/,'');
+const root = path.join(__dirname, '..');
+const script = name => fs.readFileSync(path.join(root, name), 'utf8').replace(/^<script>\s*/, '').replace(/<\/script>\s*$/, '');
 
-function montarInterface() {
-  const nodes=new Map();
-  const create = id => {
-    const classes = new Set(['hidden']);
-    let html = '';
-    const element = {id,value:'',textContent:'',disabled:false,
-      classList:{add:name=>classes.add(name),remove:name=>classes.delete(name),contains:name=>classes.has(name)}};
-    Object.defineProperty(element,'innerHTML',{get:()=>html,set:value=>{
-      html=String(value);
-      if(id==='graficosEntregasCD') for(const match of html.matchAll(/id="([^"]+)"/g)) {
-        if(!nodes.has(match[1]))nodes.set(match[1],create(match[1]));
-      }
-    }});
-    return element;
+function interfacePortal({adiar=false,hojeData='2026-10-26',entregaHoje=false}={}) {
+  const nodes = new Map(), listeners = new Map();
+  const criar = id => {
+    const classes = new Set(); let html='';
+    const el={id,value:'',checked:false,disabled:false,textContent:'',style:{},
+      classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x)}};
+    Object.defineProperty(el,'innerHTML',{get:()=>html,set(v){html=String(v);for(const m of html.matchAll(/id="([^"]+)"/g)) if(!nodes.has(m[1]))nodes.set(m[1],criar(m[1]));}});
+    return el;
   };
-  nodes.set('graficosEntregasCD',create('graficosEntregasCD'));
-  nodes.set('pgFiltroOrigem',create('pgFiltroOrigem'));
+  ['ecdNovaVisao','abaEntregasCD','pgFiltroOrigem'].forEach(id=>nodes.set(id,criar(id)));
   nodes.get('pgFiltroOrigem').value='TODOS';
-  const row = sku => ({_SOURCE:'PCP',CD_FINAL:'CD JDI',GRAFICA_FINAL:'LOGPRINT',MARCA_FINAL:'SAE',
+  const linha=(sku,marca,cd)=>({_SOURCE:'PCP',CD_FINAL:cd,GRAFICA_FINAL:'LOGPRINT',MARCA_FINAL:marca,
     SKU_REAL:sku,serie_corrigida:'2ª SÉRIE',TIPO:'Aluno',TIRAGEM:100,
-    'Coleta/Internalização de estoque final (re) plan':'2026-10-27',
+    'Coleta/Internalização de estoque final (re) plan':'2026-10-20',
     coletas:[{data:'2026-10-26',volume:25}],entregas:[]});
-  const linhas=[row('SKU-01'),row('SKU-02')];
-  let ultimoSalvamento,ultimaExtracao;
-  let success;
-  const run={
-    withSuccessHandler(fn){success=fn;return this;},
-    withFailureHandler(){return this;},
+  const linhas=[linha('SKU-01','SAE','CD JDI'),linha('SKU-02','SAS','CD FOR')];
+  if(entregaHoje)linhas.forEach(l=>l.entregas=[{data:hojeData,volume:25}]);
+  let salvo, exportado, concluir, erro, charts=0, sync=0;
+  let success, failure;
+  const run={withSuccessHandler(fn){success=fn;return this;},withFailureHandler(fn){failure=fn;return this;},
     getPrevisoesEntregaCDPortal(){success({success:true,previsoes:{}});},
-    salvarPrevisaoEntregaCDPortal(payload){ultimoSalvamento=payload;success({success:true,previsao:{
-      chave:payload.chave,dataColeta:payload.dataColeta,dataEntrega:payload.dataEntrega,
-      observacao:payload.observacao,versao:payload.versaoEsperada+1,usuario:'analista@empresa',
-      atualizadoEm:'2026-10-26T16:00:00Z'}});},
-    gerarPlanilhaEntregasCD(payload){ultimaExtracao=payload;success({success:true,
-      url:'https://docs.google.com/spreadsheets/d/123'});}
-  };
-  const google={script:{run}};
-  const window={
-    pgCampoColeta:(l,k)=>l[k],pgEhFonteAcabadora:()=>false,pgSolicitacaoCancelada:()=>false,
+    salvarPrevisaoEntregaCDPortal(p){salvo=p;const ok=success,fail=failure;
+      concluir=()=>ok({success:true,previsao:{chave:p.chave,dataEntrega:p.dataEntrega,versao:1}});
+      erro=()=>fail(new Error('Indisponível'));if(!adiar)concluir();},
+    gerarPlanilhaEntregasCD(p){exportado=p;success({success:true,url:'https://docs.google.com/spreadsheets/d/123'});}};
+  const window={pgCampoColeta:(l,n)=>l[n],pgEhFonteAcabadora:()=>false,pgSolicitacaoCancelada:()=>false,
     pgLinhasUnicas:x=>x,pgBaseForecastFiltrada:x=>x,pgBaseGeralReportExecutiva:linhas,
     pgDataPlanoColetaLinha:l=>l['Coleta/Internalização de estoque final (re) plan'],
-    pgDataPlanoEntregaSLA:(l,dt)=>{
-      const d=new Date((dt||l['Coleta/Internalização de estoque final (re) plan'])+'T12:00:00Z');
-      d.setUTCDate(d.getUTCDate()+2);return d.toISOString().slice(0,10);
-    },
+    pgDataPlanoEntregaSLA:(l,d)=>{const dt=new Date((d||l['Coleta/Internalização de estoque final (re) plan'])+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()+2);return dt.toISOString().slice(0,10);},
     pgVolumesColetaUnificadosV37:l=>({eventosColetaTP:l.coletas,eventosEntregaTP:l.entregas}),
-    pgSerieCorrigidaFunil:l=>l.serie_corrigida,pgTPExportacaoPronta:()=>true
-  };
-  const ctx=vm.createContext({window,document:{getElementById:id=>nodes.get(id)||null},google,
-    dtHojeISO:'2026-10-26',Date,Intl,console});
+    pgSerieCorrigidaFunil:l=>l.serie_corrigida,pgTPExportacaoPronta:()=>true,
+    processarEntregasCD:()=>charts++,pgGiroSincronizar:()=>sync++,
+    addEventListener:(e,fn)=>listeners.set(e,fn),dispatchEvent:e=>listeners.get(e.type)?.(e)};
+  class Evento {constructor(type,opts){this.type=type;this.detail=opts.detail;}}
+  const ctx=vm.createContext({window,document:{getElementById:id=>nodes.get(id)||null},google:{script:{run}},
+    dtHojeISO:hojeData,Date,Intl,console,CustomEvent:Evento});
   vm.runInContext(script('Scripts_EntregasCD_Modelo.html'),ctx);
-  vm.runInContext(script('Scripts_EntregasCD_Controle.html'),ctx);
-  return {window,nodes,salvamento:()=>ultimoSalvamento,extracao:()=>ultimaExtracao};
+  vm.runInContext(script('Scripts_EntregasCD_Controle.html'),ctx);window.processarEntregasCD();
+  return {window,nodes,linhas,salvo:()=>salvo,exportado:()=>exportado,confirmar:()=>concluir(),falhar:()=>erro(),charts:()=>charts,sync:()=>sync};
 }
 
-test('processar Entregas CD monta os quadros, filtra e pagina sem gráfico',()=>{
-  const {window,nodes}=montarInterface();
-  window.processarEntregasCD();
-  assert.match(nodes.get('ecdQuadro').innerHTML,/Coleta PCP original/);
-  assert.match(nodes.get('ecdQuadro').innerHTML,/Entrega prevista \(saldo\)/);
-  assert.match(nodes.get('ecdDetalhe').innerHTML,/SKU-01/);
-  assert.match(nodes.get('ecdDetalhe').innerHTML,/Coleta vigente/);
-  assert.equal(nodes.get('ecdContagem').textContent.startsWith('2 linhas'),true);
-  assert(!nodes.get('graficosEntregasCD').innerHTML.includes('<canvas'));
-  nodes.get('ecdBusca').value='SKU-02';
-  window.pgECDRender();
-  assert.match(nodes.get('ecdDetalhe').innerHTML,/SKU-02/);
-  assert(!nodes.get('ecdDetalhe').innerHTML.includes('SKU-01'));
+test('nova visão abre backlog recolhido, põe quadro detalhado antes e mantém gráficos no fim',()=>{
+  const a=interfacePortal(); const html=a.nodes.get('ecdNovaVisao').innerHTML;
+  assert.match(html,/<details id="ecdPendencias" class="[^"]+">/);
+  assert(html.indexOf('Quadro 1 · marca, série e CD')<html.indexOf('Quadro 2 · marca e CD'));
+  assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/Semana atual/);
+  assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/SAE/);
+  assert.equal(a.charts(),1);assert.equal(a.sync(),1);
+  const tela=fs.readFileSync(path.join(root,'abaEntregasCD.html'),'utf8');
+  assert(tela.indexOf('ecdNovaVisao')<tela.indexOf('ecdGraficosLegados'));
+  assert(!tela.includes('class="hidden bg-white'));
 });
 
-test('salvar usa versão esperada e exportar envia todas as linhas em duas abas',()=>{
-  const {window,nodes,salvamento,extracao}=montarInterface();
-  window.processarEntregasCD();
-  nodes.get('ecdBusca').value='SKU-02';window.pgECDRender();
-  window.pgECDAbrirEditor(0);
-  assert(!nodes.get('ecdEditor').classList.contains('hidden'));
-  nodes.get('ecdManualColeta').value='2026-10-29';
-  nodes.get('ecdManualEntrega').value='2026-10-31';
-  nodes.get('ecdManualObs').value='Confirmado com transportes';
-  window.pgECDSalvar();
-  assert.equal(salvamento().versaoEsperada,0);
-  assert.equal(salvamento().dataColeta,'2026-10-29');
-  assert.equal(salvamento().dataEntrega,'2026-10-31');
-  assert(nodes.get('ecdEditor').classList.contains('hidden'));
-  window.pgECDExportar(nodes.get('ecdExportar'));
-  assert.deepEqual(JSON.parse(JSON.stringify(extracao().abas.map(x=>x.nome))),['Quadro','Base_SKUs']);
-  assert.equal(extracao().abas[1].linhas.length,2,'não exporta apenas o SKU da busca local');
-  assert.match(nodes.get('ecdAviso').innerHTML,/Abrir Quadro e Base_SKUs/);
+test('filtros afetam quadros, pendências, plano, percentuais e as três abas exportadas',()=>{
+  const a=interfacePortal();a.nodes.get('ecdFiltroMarca').value='SAS';a.window.pgECDRender();
+  assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/SAS/);assert(!a.nodes.get('ecdQuadroSerie').innerHTML.includes('SAE'));
+  assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-02/);assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));
+  a.window.pgECDExportar(a.nodes.get('ecdExportar'));const abas=a.exportado().abas;
+  assert.deepEqual(JSON.parse(JSON.stringify(abas.map(x=>x.nome))),['Quadro_Marca_CD','Quadro_Marca_Serie_CD','Base_SKUs']);
+  assert(abas[2].linhas.every(r=>r[1]==='SAS'));assert.equal(abas[2].linhas.reduce((s,r)=>s+r[15],0),100);
+  assert.equal(abas[0].linhas.at(-1)[2],100);assert.match(a.nodes.get('ecdAviso').innerHTML,/Abrir os dois quadros/);
+});
+
+test('nova data entra de imediato no calendário, salva só entrega e confirmação compartilha versão',()=>{
+  const a=interfacePortal({adiar:true});a.nodes.get('ecdFiltroMarca').value='SAE';a.window.pgECDRender();
+  assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-01/);a.window.pgECDSalvar(0,{value:'2026-10-29'});
+  assert.equal(a.salvo().dataEntrega,'2026-10-29');assert.deepEqual(JSON.parse(JSON.stringify(a.salvo().campos)),['dataEntrega']);
+  assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));assert.match(a.nodes.get('ecdQuadroSerie').innerHTML,/100% ✓/);
+  assert.match(a.nodes.get('ecdAviso').textContent,/Salvando/);a.confirmar();
+  assert.match(a.nodes.get('ecdAviso').textContent,/salva e compartilhada/);assert.equal(Object.values(a.window.PG_ECD_PREVISOES)[0].versao,1);
+});
+
+test('falha de gravação devolve parcela ao backlog e informa que não foi salva',()=>{
+  const a=interfacePortal({adiar:true});a.nodes.get('ecdFiltroMarca').value='SAE';a.window.pgECDRender();
+  a.window.pgECDSalvar(0,{value:'2026-10-29'});assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));
+  a.falhar();assert.match(a.nodes.get('ecdBacklog').innerHTML,/SKU-01/);assert.match(a.nodes.get('ecdAviso').textContent,/Não foi possível salvar/);
+});
+
+test('data salva no Giro atualiza quadro aberto sem recarregar a base ou os gráficos',()=>{
+  const a=interfacePortal();const chave=a.window.pgEntregasCDModelo.chave(a.linhas[0]);
+  a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chave]:{dataEntrega:'2026-10-30',versao:2}}}});
+  assert.equal(a.window.PG_ECD_PREVISOES[chave].dataEntrega,'2026-10-30');
+  a.nodes.get('ecdFiltroMarca').value='SAE';a.window.pgECDRender();assert(!a.nodes.get('ecdBacklog').innerHTML.includes('SKU-01'));assert.equal(a.charts(),1);
+});
+
+test('poll antigo mantém data otimista e resposta atrasada não desfaz versão nova',()=>{
+  const a=interfacePortal({adiar:true}),chave=a.window.pgEntregasCDModelo.chave(a.linhas[0]);
+  a.nodes.get('ecdFiltroMarca').value='SAE';a.window.pgECDRender();a.window.pgECDSalvar(0,{value:'2026-10-29'});
+  a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chave]:{dataEntrega:'',versao:0}}}});
+  assert.equal(a.window.PG_ECD_PREVISOES[chave].dataEntrega,'2026-10-29');
+  a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chave]:{dataEntrega:'2026-10-31',versao:2}}}});
+  a.confirmar();assert.equal(a.window.PG_ECD_PREVISOES[chave].dataEntrega,'2026-10-31');assert.equal(a.window.PG_ECD_PREVISOES[chave].versao,2);
+});
+
+test('falha após outra pessoa salvar preserva data mais recente e mantém reenviar ao trocar filtro',()=>{
+  const a=interfacePortal({adiar:true}),chave=a.window.pgEntregasCDModelo.chave(a.linhas[0]);
+  a.nodes.get('ecdFiltroMarca').value='SAE';a.window.pgECDRender();a.window.pgECDSalvar(0,{value:'2026-10-29'});
+  const requestId=a.salvo().requestId;
+  a.nodes.get('ecdFiltroMarca').value='SAS';a.window.pgECDRender();
+  a.window.dispatchEvent({type:'pgportal-previsoes-atualizadas',detail:{previsoes:{[chave]:{dataEntrega:'2026-10-31',versao:2}}}});
+  a.falhar();assert.equal(a.window.PG_ECD_PREVISOES[chave].dataEntrega,'2026-10-31');
+  assert.match(a.nodes.get('ecdFalhas').innerHTML,/SKU-01/);assert.match(a.nodes.get('ecdFalhas').innerHTML,/Reenviar/);
+  a.window.pgECDReenviar(0);assert.equal(a.salvo().requestId,requestId,'reenvio incerto é idempotente');
+});
+
+test('realizado em hoje-feriado fica azul e visível e domingo entra em Entregue com aviso',()=>{
+  const feriado=interfacePortal({hojeData:'2026-11-02',entregaHoje:true});
+  const html=feriado.nodes.get('ecdQuadroSerie').innerHTML;
+  assert.match(html,/feriado · 0,1k/);assert.match(html,/style="background:#d9e8f8"/);
+  const domingo=interfacePortal({hojeData:'2026-11-01',entregaHoje:true});
+  assert.equal(domingo.nodes.get('ecdLegendaEntregue').textContent,'Entregue até hoje');
+  assert.match(domingo.nodes.get('ecdNotaDomingo').textContent,/inclui entregas de hoje \(domingo\)/);
+  assert.match(domingo.nodes.get('ecdQuadroSerie').innerHTML,/até 01\/11 · hoje/);
 });

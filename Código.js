@@ -75,67 +75,10 @@ function atualizar_PCP_Funil_e_Atrasos() {
 // MÓDULO DE OBSERVAÇÕES - GIRO SEMANAL (COCKPIT)
 // =========================================================================
 
-function salvarObsGiro(tipo, chave, obs, contextoStr) {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    // Define a aba correta com base no tipo (MASTER ou SKU)
-    var nomeAba = tipo === 'SKU' ? 'Obs_Cockpit_sku' : 'Obs_Cockpit';
-    var sheet = ss.getSheetByName(nomeAba);
-
-    // Se a aba não existir, cria e formata o cabeçalho automaticamente
-    if (!sheet) {
-      sheet = ss.insertSheet(nomeAba);
-      sheet.appendRow(["Data e Hora", "Usuário", "Chave de Ligação", "Observação", "Contexto Físico (JSON)"]);
-      sheet.getRange("A1:E1").setFontWeight("bold").setBackground("#4f46e5").setFontColor("white");
-      sheet.setFrozenRows(1);
-    }
-
-    var email = "Modo Desenvolvedor / Desconhecido";
-    try { email = Session.getActiveUser().getEmail() || "Anônimo"; } catch(e){}
-    var agora = new Date();
-
-    // Insere a nova linha no banco de dados
-    sheet.appendRow([agora, email, chave, obs, contextoStr]);
-    
-    // Retorna os dados formatados para atualizar o front-end na hora
-    var dataFormatada = Utilities.formatDate(agora, "GMT-3", "dd/MM/yyyy HH:mm");
-    return { success: true, data: dataFormatada, user: email, obs: obs, chave: chave, tipo: tipo };
-    
-  } catch(e) {
-    return { success: false, error: e.toString() };
-  }
+function salvarObsGiro(tipo, chave, obs, contextoStr, eventoId) {
+  return pgSalvarObsGiroPortal_(tipo, chave, obs, contextoStr, eventoId);
 }
 
 function buscarHistoricoObsGiro() {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var result = { master: {}, sku: {} };
-
-    // Função interna para varrer as abas e agrupar pela chave
-    function lerAba(nomeAba, destinoMap) {
-      var sheet = ss.getSheetByName(nomeAba);
-      if (!sheet) return;
-      
-      var data = sheet.getDataRange().getDisplayValues();
-      for (var i = 1; i < data.length; i++) {
-        var dt = data[i][0];
-        var usr = data[i][1];
-        var chave = data[i][2];
-        var obs = data[i][3];
-        
-        if (!chave) continue;
-        if (!destinoMap[chave]) destinoMap[chave] = [];
-        
-        // Colocamos no início do array para o mais recente aparecer primeiro
-        destinoMap[chave].unshift({ data: dt, user: usr, obs: obs });
-      }
-    }
-
-    lerAba('Obs_Cockpit', result.master);
-    lerAba('Obs_Cockpit_sku', result.sku);
-
-    return result;
-  } catch(e) {
-    return { master: {}, sku: {} };
-  }
+  return pgBuscarHistoricoObsGiroPortal_();
 }
