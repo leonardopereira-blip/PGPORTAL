@@ -440,3 +440,21 @@ test('coletas previstas variadas são exibidas lado a lado, em ordem, separadas 
   assert.match(html,/20\/10 \| 22\/10/);
   assert(!html.includes('Datas variadas'));
 });
+
+test('plano 100% futuro da WAYS não aparece em pendências com filtro encerrado antes',()=>{
+  const a=interfacePortal();
+  a.linhas.forEach(l=>{
+    l.MARCA_FINAL='WAYS';l.GRAFICA_FINAL='FORMA CERTA';
+    l['Coleta/Internalização de estoque final (re) plan']='2026-11-30';
+    l.coletas=[];l.entregas=[];
+  });
+  a.nodes.get('ecdInicio').value='2026-10-27';
+  a.nodes.get('ecdFim').value='2026-11-07';
+  a.window.processarEntregasCD();
+  assert.match(a.nodes.get('ecdQuadroMarca').innerHTML,/WAYS/,'o plano permanece no universo do quadro');
+  assert.match(a.nodes.get('ecdBacklog').innerHTML,/Nenhuma pendência/);
+  assert.match(a.nodes.get('ecdBacklogTotal').textContent,/falta 0k/);
+  a.nodes.get('ecdTodasPendencias').checked=true;a.window.pgECDRender();
+  assert.match(a.nodes.get('ecdBacklog').innerHTML,/Nenhuma pendência/,
+    'mesmo mostrar previsões não transforma o planejado completo em pendência');
+});

@@ -193,8 +193,12 @@
             const chave = grupoParcela(p), atual = ultimaProgramacao.get(chave);
             if (!atual || p.dia > atual) ultimaProgramacao.set(chave, p.dia);
         });
+        const gruposComSaldoPendente = new Set(c.parcelas.filter(p => p.backlog).map(grupoParcela));
         const pendencias = new Map();
-        c.parcelas.filter(p => p.status !== 'ENTREGUE' && ($('ecdTodasPendencias')?.checked || p.backlog)).forEach(p => {
+        // Mesmo ao mostrar previsões, não listar séries 100% cobertas:
+        // só permitir parcelas programadas se ainda há saldo descoberto no grupo.
+        c.parcelas.filter(p => p.status !== 'ENTREGUE' &&
+            (p.backlog || ($('ecdTodasPendencias')?.checked && gruposComSaldoPendente.has(grupoParcela(p))))).forEach(p => {
             const origem = grupoParcela(p);
             const futura = p.backlog && p.motivo === 'Sem previsão' && ultimaProgramacao.has(origem);
             const situacao = futura ? 'FUTURA' : p.backlog ? 'PENDENTE' : 'PROGRAMADA';

@@ -318,7 +318,9 @@
             const dia = entregue ? (dt < inicio || !inicioExplicito && dt === hoje && domingo(hoje) ? 'entregue' : dt) : ajustarDia(dt);
             const manualVigente = item.dtEntregaManual && item.dtEntregaManual >= hoje;
             const atrasoColeta = status === 'AGUARDANDO' && coletaPrevista && coletaPrevista < hoje;
-            const backlog = !entregue && (!dt || dt < hoje || (atrasoColeta && !manualVigente) || dia > fim);
+            // O fim selecionado limita apenas o que se vê no calendário.
+            // Uma previsão futura fora da tela continua programada, não vira backlog.
+            const backlog = !entregue && (!dt || dt < hoje || (atrasoColeta && !manualVigente));
             const p = {item, chave: item.chave, sku: item.sku, descricao: item.descricao, marca: item.marca,
                 serie: item.serie, cd: item.cd, grafica: item.grafica, personalizado: item.personalizado,
                 tipo: item.tipo, volume, status, backlog, dia: backlog ? '' : dia, dataOriginal,

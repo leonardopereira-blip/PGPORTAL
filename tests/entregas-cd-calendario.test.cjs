@@ -77,10 +77,22 @@ test('todos os recortes conciliam quadro detalhado, por marca e exportação por
   }
 });
 
-test('item sem SLA e item após ciclo permanecem visíveis nas pendências e no denominador',()=>{
+test('item sem SLA vira backlog, mas plano posterior ao filtro permanece programado',()=>{
   const a=portal([linha({semSLA:true}),linha({SKU_REAL:'SKU-02',plano:'2026-12-03'})]);
-  const c=a.c();assert.equal(c.total.backlog,200);assert.equal(c.total.total,200);
-  assert(c.backlog.some(p=>p.motivo==='Sem previsão'));assert(c.backlog.some(p=>p.motivo==='Após o fim do ciclo'));
+  const c=a.c();assert.equal(c.total.backlog,100);assert.equal(c.total.total,200);
+  assert(c.backlog.some(p=>p.motivo==='Sem previsão'));
+  assert(!c.backlog.some(p=>p.motivo==='Após o fim do ciclo'));
+  assert.equal(vol(c.total.dias['2026-12-05']),100,'volume continua no plano, fora das datas visíveis');
+  assert(!c.dias.some(d=>d.data==='2026-12-05'));
+});
+
+test('WAYS previsto 100% para 30/11 não vira pendência porque filtro acaba 07/11',()=>{
+  const a=portal([linha({MARCA_FINAL:'WAYS',GRAFICA_FINAL:'FORMA CERTA',
+    plano:'2026-11-30',TIRAGEM:3500})],{},{fim:'2026-11-07'});
+  const c=a.c();assert.equal(c.total.total,3500);
+  assert.equal(c.total.backlog,0);assert.equal(c.backlog.length,0);
+  assert.equal(vol(c.total.dias['2026-12-02']),3500);
+  assert(!c.dias.some(d=>d.data==='2026-12-02'));
 });
 
 test('chave compartilhada com Giro coincide com a chave montada e distingue CD e OP',()=>{
