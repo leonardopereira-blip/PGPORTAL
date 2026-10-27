@@ -1,9 +1,9 @@
 {
-  "solicitado_em": "2026-10-27T16:03:15.455Z",
+  "solicitado_em": "2026-10-27T16:04:39.136Z",
   "autorizado": true,
   "commit_validado": "d6fda4d5e3076a539ee1cf8bcc5d5bdc7e78624c",
-  "versao_ativa_esperada": 153,
-  "descricao_ativa_esperada": "PGPORTAL filtros por serie e planejado D-1 · commit 62f7396",
+  "versao_ativa_esperada": 156,
+  "descricao_ativa_esperada": "Versão 156 - Calendario de entregas 2 (Nardo)",
   "deployment_sufixo": "UbCXgp",
   "motivo": "Pedido explícito do Leonardo nesta conversa: conferir as correções de Exportar XLSX Simples e publicar no /exec. Conferidos XLSX com quadros PNG e base, captura dos quadros, pendências futuras e restauração dos prazos originais do Giro até previsão manual. 131 de 135 testes passaram; quatro falhas reproduzidas no estado anterior e verificações específicas de prazo original/manual e abatimento único passaram. Validar igualdade GitHub/base/HEAD vivo antes de publicar. Preservar implantação e endereço existentes."
 }
