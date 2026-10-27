@@ -56,7 +56,7 @@ function interfacePortal({adiar=false,adiarSheets=false,semGoogle=false,hojeData
   const timers=new Map();let timerId=0;
   const agendar=(fn,ms)=>{const id=++timerId;if(ms===0||ms===30)fn();else timers.set(id,{fn,ms});return id;};
   const pincel={scale(){},fillRect(){},strokeRect(){},fillText:txt=>desenhos.push(txt)};
-  const canvas={getContext:()=>canvasOk?pincel:null,toBlob:fn=>fn({tipo:'image/png'})};
+  const canvas={getContext:()=>canvasOk?pincel:null,toBlob:fn=>fn({tipo:'image/png',arrayBuffer:async()=>Uint8Array.from([137,80,78,71,13,10,26,10,1]).buffer})};
   const ctx=vm.createContext({window,document:{getElementById:id=>nodes.get(id)||null,
     createElement:n=>n==='canvas'?canvas:{click(){capturas.push({nome:this.download,url:this.href,largura:canvas.width,altura:canvas.height});}}},google:semGoogle?undefined:{script:{run}},
     URL:{createObjectURL:()=> 'blob:captura',revokeObjectURL(){}},setTimeout:agendar,clearTimeout:id=>timers.delete(id),
@@ -136,10 +136,20 @@ test('XLSX baixa localmente sem Google e preserva três abas, Total Geral e entr
   const quadro=a.nodes.get('ecdQuadroMarca').innerHTML;
   await a.window.pgECDExportarXLSX(botao);const abas=a.xlsx();
   assert.deepEqual(JSON.parse(JSON.stringify(abas.map(a=>a.nome))),['Quadro_Marca_CD','Quadro_Marca_Serie_CD','Base_SKUs']);
-  assert.equal(abas[0].linhas.at(-1)[2],24910000);assert.equal(abas[0].linhas.at(-1)[4],17356300);
+  assert(abas[0].imagemPng.length>8&&abas[1].imagemPng.length>8);
+  assert(!abas[0].cabecalho&&!abas[1].cabecalho,'cada quadro é apenas uma imagem');
+  assert(a.desenhos.includes('Total geral'));
+  assert(a.desenhos.includes('17,36M'));
+  assert.equal(abas[2].semFormatacao,true);
+  assert.deepEqual(JSON.parse(JSON.stringify(abas[2].cabecalho)),[
+    'SKU','Marca','Série','Descrição do SKU','Personalizado (S/N)','Aluno/Professor',
+    'CD','Gráfica','Data coleta TP','Data entrega TP','Prev. coleta','Prev. entrega',
+    'Tiragem total','Coletado','Entregue','Saldo aguardando entrega','Status']);
+  assert.equal(abas[2].linhas.length,2,'um item por linha, sem repetir tiragem por parcela');
   assert(abas[2].linhas.some(l=>l[1]==='SAE'));assert(abas[2].linhas.some(l=>l[1]==='SAS'));
-  assert.equal(abas[0].colunasCongeladas,5);assert.equal(abas[1].colunasCongeladas,6);
-  assert(abas[0].colunasPercentual.length>0);assert.equal(a.rpcSheets(),0);
+  assert(abas[2].linhas.every(l=>l.length===17&&['','Em trânsito','Aguardando coleta'].includes(l[16])));
+  assert.equal(abas[2].linhas.reduce((s,l)=>s+l[12],0),24910000);
+  assert.equal(a.rpcSheets(),0);
   assert.equal(a.capturas.length,1);assert.match(a.capturas[0].nome,/Entregas_CD_2026-10-26\.xlsx$/);
   assert.equal(botao.disabled,false);assert.equal(botao.textContent,'Baixar XLSX');
   assert.equal(a.nodes.get('ecdQuadroMarca').innerHTML,quadro);assert.match(a.nodes.get('ecdAviso').textContent,/XLSX pronto/);
@@ -151,7 +161,8 @@ test('XLSX usa o snapshot do clique e evita baixar duas vezes durante a geraçã
   const primeira=a.window.pgECDExportarXLSX(botao),segunda=a.window.pgECDExportarXLSX(botao);
   a.nodes.get('ecdInicio').value='2027-01-04';a.nodes.get('ecdFim').value='2027-01-06';a.window.pgECDRender();
   await Promise.all([primeira,segunda]);assert.equal(a.capturas.length,1);
-  assert(a.xlsx()[0].cabecalho.includes('2026-10-01'));assert(!a.xlsx()[0].cabecalho.includes('2027-01-04'));
+  assert(a.desenhos.includes('01/10'));assert(!a.desenhos.includes('04/01'));
+  assert.equal(a.xlsx()[0].larguraPx,465 + 3*136);
 });
 
 test('erro do XLSX libera o botão e permite tentar novamente',async()=>{

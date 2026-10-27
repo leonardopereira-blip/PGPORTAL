@@ -71,3 +71,34 @@ test('congelamento explícito zero congela apenas o cabeçalho e valida estrutur
   assert.throws(()=>w.pgGerarExcelAbas([]),/Nenhuma aba/);
   assert.throws(()=>w.pgGerarExcelAbas([{nome:'Inválida',cabecalho:[],linhas:[]}]),/inválida/);
 });
+
+test('quadros em PNG ocupam uma imagem por aba e base CSV-like não tem estilos nem congelamentos',async()=>{
+  const w=exportador();
+  const png=Uint8Array.from(Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/wV8AAAAASUVORK5CYII=','base64'));
+  const files=await unzip(w.pgGerarExcelAbas([
+    {nome:'Quadro_Marca_CD',imagemPng:png,larguraPx:2000,alturaPx:1000},
+    {nome:'Quadro_Marca_Serie_CD',imagemPng:png,larguraPx:3000,alturaPx:2000},
+    {nome:'Base_SKUs',semFormatacao:true,cabecalho:['SKU','Prev. coleta','Tiragem total','Status'],
+      linhas:[['00001','2026-10-27',100,'Em trânsito'],['=A1','',0,'Aguardando coleta']]}
+  ]));
+  const types=files.get('[Content_Types].xml');
+  assert.match(types,/Extension="png" ContentType="image\/png"/);
+  assert.match(types,/drawing1\.xml/);assert.match(types,/drawing2\.xml/);
+  assert(files.has('xl/media/image1.png')&&files.has('xl/media/image2.png'));
+  for(const n of [1,2]){
+    const sheet=files.get('xl/worksheets/sheet'+n+'.xml');
+    assert.match(sheet,/<drawing r:id="rId1"\/>/);
+    assert(!sheet.includes('<pane ')&&!sheet.includes('<row '));
+    assert.match(files.get('xl/worksheets/_rels/sheet'+n+'.xml.rels'),/\/drawing"/);
+    assert.match(files.get('xl/drawings/drawing'+n+'.xml'),/<xdr:oneCellAnchor>/);
+    assert.match(files.get('xl/drawings/_rels/drawing'+n+'.xml.rels'),/\/image"/);
+  }
+  const base=files.get('xl/worksheets/sheet3.xml');
+  assert(!base.includes('<pane ')&&!base.includes('<cols>')&&!base.includes('autoFilter'));
+  assert(!base.includes('customHeight')&&!base.includes('wrapText')&&!base.includes('<f>'));
+  assert.match(base,/<c r="A2" t="inlineStr"><is><t xml:space="preserve">00001<\/t><\/is><\/c>/);
+  assert.match(base,/<c r="C2"><v>100<\/v><\/c>/);
+  assert.match(base,/<c r="A3" t="inlineStr"><is><t xml:space="preserve">=A1<\/t><\/is><\/c>/);
+  assert.match(base,/<c r="C3"><v>0<\/v><\/c>/);
+});
