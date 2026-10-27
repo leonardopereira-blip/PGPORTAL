@@ -182,26 +182,48 @@
         $('ecdQuadroMarca').innerHTML = quadro(c.marcaCD, c, false);
         $('ecdInfoSerie').textContent = c.marcaSerieCD.length + ' linhas · ' + k(c.total.total);
         $('ecdInfoMarca').textContent = c.marcaCD.length + ' linhas · ' + k(c.total.total);
-        $('ecdBacklogTotal').textContent = 'falta ' + k(c.total.backlog);
+        // Saldos ainda sem previsão, mas com outra parte da mesma
+        // gráfica/marca/série/CD já programada, são pendências futuras.
+        // Classificação visual apenas: não cria parcelas nem altera totais.
+        const grupoParcela = p => JSON.stringify([p.grafica, p.marca, p.serie, p.cd]);
+        const ultimaProgramacao = new Map();
+        c.parcelas.forEach(p => {
+            if (p.status === 'ENTREGUE' || p.backlog || !p.dia || p.dia < c.hoje) return;
+            const chave = grupoParcela(p), atual = ultimaProgramacao.get(chave);
+            if (!atual || p.dia > atual) ultimaProgramacao.set(chave, p.dia);
+        });
         const pendencias = new Map();
         c.parcelas.filter(p => p.status !== 'ENTREGUE' && ($('ecdTodasPendencias')?.checked || p.backlog)).forEach(p => {
-            const chaveGrupo = JSON.stringify([p.grafica, p.marca, p.serie, p.cd]);
-            if (!pendencias.has(chaveGrupo)) pendencias.set(chaveGrupo, {itens: new Set(), volume: 0, motivos: new Set()});
-            const grupo = pendencias.get(chaveGrupo); grupo.itens.add(p.item); grupo.volume += p.volume; if (p.backlog) grupo.motivos.add(p.motivo);
+            const origem = grupoParcela(p);
+            const futura = p.backlog && p.motivo === 'Sem previsão' && ultimaProgramacao.has(origem);
+            const situacao = futura ? 'FUTURA' : p.backlog ? 'PENDENTE' : 'PROGRAMADA';
+            const chaveGrupo = JSON.stringify([origem, situacao]);
+            if (!pendencias.has(chaveGrupo)) pendencias.set(chaveGrupo, {
+                itens: new Set(), volume: 0, motivos: new Set(), situacao,
+                aposPrevisao: futura ? ultimaProgramacao.get(origem) : ''
+            });
+            const grupo = pendencias.get(chaveGrupo);
+            grupo.itens.add(p.item); grupo.volume += p.volume;
+            if (p.backlog) grupo.motivos.add(p.motivo);
         });
         estado.pendencias = [...pendencias.values()].map(g => {
             const itens = [...g.itens], chavesOrigem = [...new Set(itens.flatMap(chavesItem))];
             const previsoesOrigem = Object.assign({}, ...itens.map(i => i.previsoesOrigem || {[i.chave]: i.previsao || {}}));
             const entregas = new Set(itens.map(i => i.dtEntregaManual || ''));
-            const coletas = new Set(itens.map(i => i.dtColetaManual || i.dtColetaPCP || ''));
+            const coletas = [...new Set(itens.map(i => i.dtColetaManual || i.dtColetaPCP || '').filter(Boolean))].sort();
             const total = itens.reduce((s, i) => s + i.total, 0), coletado = itens.reduce((s, i) => s + i.coletado, 0);
-            return {...g, total, coletado, coleta: coletas.size > 1 ? 'Datas variadas' : br([...coletas][0]),
+            return {...g, total, coletado, coleta: coletas.length ? coletas.map(br).join(' | ') : '—',
                 item: {...itens[0], chave: chavesOrigem[0], chavesOrigem, previsoesOrigem, total, coletado,
                     dtEntregaManual: entregas.size === 1 ? [...entregas][0] : ''}};
         });
+        const futuro = estado.pendencias.filter(g => g.situacao === 'FUTURA').reduce((s, g) => s + g.volume, 0);
+        $('ecdBacklogTotal').textContent = 'falta ' + k(c.total.backlog) +
+            (futuro ? ' · pendência futura ' + k(futuro) : '');
         $('ecdBacklog').innerHTML = estado.pendencias.length ? '<table class="ecd-backlog-table"><thead><tr>' +
-            ['Gráfica', 'Marca', 'Série', 'CD', 'Coleta prevista', 'Plano', 'Coletado', 'Falta', 'Nova previsão'].map(t => '<th>' + t + '</th>').join('') + '</tr></thead><tbody>' + estado.pendencias.map((g, n) => {
-                const i = g.item; return '<tr title="' + esc([...g.motivos].join(' · ')) + '"><td>' + esc(i.grafica) + '</td><td>' + esc(i.marca) + '</td><td>' + esc(i.serie) + '</td><td>' + esc(i.cd) + '</td><td>' + esc(g.coleta) + '</td><td title="' + exato(g.total) + '">' + k(g.total) + '</td><td>' + k(g.coletado) + ' (' + pct(g.coletado, g.total) + ')</td><td title="' + exato(g.volume) + '">' + k(g.volume) + '</td><td><input class="ecd-input-date" type="date" aria-label="Nova previsão ' + esc(rotuloGrupo(i)) + '" min="' + hoje() + '" value="' + esc(i.dtEntregaManual) + '" onchange="pgECDSalvar(' + n + ',this)" ' + (itemSalvando(i) ? 'disabled' : '') + '><span class="ecd-save-state" id="ecdSalvo' + n + '"></span></td></tr>';
+            ['Gráfica', 'Marca', 'Série', 'CD', 'Situação', 'Coleta prevista', 'Plano', 'Coletado', 'Falta', 'Nova previsão'].map(t => '<th>' + t + '</th>').join('') + '</tr></thead><tbody>' + estado.pendencias.map((g, n) => {
+                const i = g.item, situacao = g.situacao === 'FUTURA' ? 'Pendência futura · após ' + br(g.aposPrevisao)
+                    : g.situacao === 'PROGRAMADA' ? 'Com previsão' : 'Pendente';
+                return '<tr title="' + esc([...g.motivos].join(' · ')) + '"><td>' + esc(i.grafica) + '</td><td>' + esc(i.marca) + '</td><td>' + esc(i.serie) + '</td><td>' + esc(i.cd) + '</td><td>' + esc(situacao) + '</td><td>' + esc(g.coleta) + '</td><td title="' + exato(g.total) + '">' + k(g.total) + '</td><td>' + k(g.coletado) + ' (' + pct(g.coletado, g.total) + ')</td><td title="' + exato(g.volume) + '">' + k(g.volume) + '</td><td><input class="ecd-input-date" type="date" aria-label="Nova previsão ' + esc(rotuloGrupo(i)) + '" min="' + hoje() + '" value="' + esc(i.dtEntregaManual) + '" onchange="pgECDSalvar(' + n + ',this)" ' + (itemSalvando(i) ? 'disabled' : '') + '><span class="ecd-save-state" id="ecdSalvo' + n + '"></span></td></tr>';
             }).join('') + '</tbody></table>' : '<p class="ecd-empty">Nenhuma pendência nos filtros selecionados.</p>';
     };
     function enviarPrevisao(pedido) {

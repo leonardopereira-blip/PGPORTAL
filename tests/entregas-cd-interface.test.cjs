@@ -381,3 +381,41 @@ test('falha de grupo preserva gravação concorrente e reenvia o mesmo lote idem
   a.confirmar();assert.equal(a.window.PG_ECD_PREVISOES[chaves[0]].dataEntrega,'2026-10-31');
   assert.equal(a.window.PG_ECD_PREVISOES[chaves[1]].dataEntrega,'2026-10-29');
 });
+
+test('saldo não coberto após uma coleta agendada aparece como pendência futura sem duplicar volume',()=>{
+  const a=interfacePortal();
+  a.linhas[1].MARCA_FINAL='SAE';a.linhas[1].CD_FINAL='CD JDI';
+  a.linhas[0]['Coleta/Internalização de estoque final (re) plan']='2026-10-30';
+  a.linhas[1]['Coleta/Internalização de estoque final (re) plan']='';
+  a.window.pgDataPlanoEntregaSLA=(l,d)=>{
+    const coleta=d||l['Coleta/Internalização de estoque final (re) plan'];
+    if(!coleta)return '';
+    const dt=new Date(coleta+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()+2);
+    return dt.toISOString().slice(0,10);
+  };
+  a.window.processarEntregasCD();
+  const html=a.nodes.get('ecdBacklog').innerHTML;
+  assert.match(html,/Pendência futura · após 03\/11/);
+  assert.match(html,/title="75"/);
+  assert.match(a.nodes.get('ecdBacklogTotal').textContent,/pendência futura/);
+  assert.match(a.nodes.get('ecdInfoMarca').textContent,/0,2k/);
+  a.nodes.get('ecdTodasPendencias').checked=true;a.window.pgECDRender();
+  const comPrevisao=a.nodes.get('ecdBacklog').innerHTML;
+  assert.match(comPrevisao,/Com previsão/);
+  assert.equal([...comPrevisao.matchAll(/Pendência futura/g)].length,1);
+  a.nodes.get('ecdTodasPendencias').checked=false;a.window.pgECDRender();
+  a.window.pgECDSalvar(0,{value:'2026-11-05'});
+  assert.equal(a.salvo().chave,a.window.pgEntregasCDModelo.chave(a.linhas[1]),
+    'editar a pendência futura não altera a previsão já programada de outro item');
+});
+
+test('coletas previstas variadas são exibidas lado a lado, em ordem, separadas por pipe',()=>{
+  const a=interfacePortal();
+  a.linhas[1].MARCA_FINAL='SAE';a.linhas[1].CD_FINAL='CD JDI';
+  a.linhas[0]['Coleta/Internalização de estoque final (re) plan']='2026-10-20';
+  a.linhas[1]['Coleta/Internalização de estoque final (re) plan']='2026-10-22';
+  a.window.processarEntregasCD();
+  const html=a.nodes.get('ecdBacklog').innerHTML;
+  assert.match(html,/20\/10 \| 22\/10/);
+  assert(!html.includes('Datas variadas'));
+});
