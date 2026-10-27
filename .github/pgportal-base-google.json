@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-10-27T05:05:56.637Z",
+  "lido_em": "2026-10-27T10:20:04.925Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -58,7 +58,7 @@
     "HTML:Scripts_Acompanhamento_Mapa": "da868d37ad728d90c935d9ab3c4dc3504672a61c9478488d0d659288d44e6e34",
     "HTML:Scripts_Eficiencia_Aging_UI": "f72b957127faa413eced959412dcd77320c52bc5202944f55e6687d8aee5c42d",
     "HTML:Scripts_Eficiencia_Aging": "c751612777fa5ca3e090fc94b0a6bc68c50ec89cfc6f793d8fdc5fea39775046",
-    "HTML:Scripts_EntregasCD_Controle": "e4aa4ac329df9d2ea20c405c670dadc6c1ae6149f2eddefb7ee1d102474b64f1",
+    "HTML:Scripts_EntregasCD_Controle": "781638947ca69a113b843696bcd2d8d37dbdedcf4c2c14bbb4d2947c094a7328",
     "HTML:Scripts_EntregasCD_Modelo": "6f5b923bef956fc635f3c03dc3dfaa95061299b574f14772a9d1a8e8aed92ddf",
     "HTML:Scripts_Eventos_TP": "fcb7b126a2f7d881a78e5c0e6945982a1e3ebade0fa3cd9fc1fd3827627f33ea",
     "HTML:Scripts_Giro_Registro": "05b20c0706f9627694ebf3637df5e51ee51b3e0c19a12f761ea75f750c3f147e",
