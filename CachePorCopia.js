@@ -1,13 +1,46 @@
 var pgFonteSnapshot_ = null;
 var pgPreparacaoCache_ = null;
+// A preparação de um snapshot envolve operações lentas de Drive/Sheets.
+// Não pode manter o script lock por toda a duração: o Giro usa a mesma trava
+// para registrar observações de vários usuários com segurança.
+var PG_CACHE_COPIA_RESERVA_ = 'PG_CACHE_COPIA_EXECUCAO_V1';
+function pgReservarCachePorCopia_() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) throw new Error('Não foi possível verificar a atualização de cache em andamento. Tente novamente.');
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var atual = null;
+    try { atual = JSON.parse(props.getProperty(PG_CACHE_COPIA_RESERVA_) || 'null'); } catch (e) {}
+    if (atual && Number(atual.ate) > Date.now())
+      throw new Error('Uma geração por cópia já está em andamento.');
+    var token = Utilities.getUuid();
+    // Apps Script encerra execuções antes de 15 minutos; a reserva também
+    // expira se houver encerramento forçado e o finally não puder executá-la.
+    props.setProperty(PG_CACHE_COPIA_RESERVA_, JSON.stringify({token:token,ate:Date.now()+15*60*1000}));
+    return token;
+  } finally { lock.releaseLock(); }
+}
+function pgLiberarCachePorCopia_(token) {
+  if (!token) return;
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var atual = null;
+    try { atual = JSON.parse(props.getProperty(PG_CACHE_COPIA_RESERVA_) || 'null'); } catch (e) {}
+    // Uma execução antiga nunca libera a reserva de uma execução nova.
+    if (atual && atual.token === token) props.deleteProperty(PG_CACHE_COPIA_RESERVA_);
+  } finally { lock.releaseLock(); }
+}
 
 function atualizarTodoOCachePorCopia() {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(1000)) throw new Error('Uma geracao por copia ja esta em andamento.');
+  var token;
   var estado;
   try {
     var origem = SpreadsheetApp.getActiveSpreadsheet().getId();
     pgValidarCabecalhosDashboard_(origem);
+    // Cabeçalho inválido não cria reserva nem altera Properties/Drive.
+    token = pgReservarCachePorCopia_();
     var props = PropertiesService.getUserProperties();
     var chave = 'CACHE_SNAPSHOT_' + origem;
     var salvo = props.getProperty(chave);
@@ -85,7 +118,7 @@ function atualizarTodoOCachePorCopia() {
     pgFonteSnapshot_ = null;
     pgPreparacaoCache_ = null;
     pgMetadadosCache_ = null;
-    lock.releaseLock();
+    if (token) pgLiberarCachePorCopia_(token);
   }
 }
 

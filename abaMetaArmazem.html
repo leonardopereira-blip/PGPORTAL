@@ -2116,7 +2116,14 @@
     items=volumesVisao(items);
     var resultado={cenario:estado.cenario,itens:items,total:soma(items)};
     resultado.aging=agingMetaArmazem(resultado.itens);
-    resultado.auditoria=montarAuditoria(resultado.itens,resultado.cenario);
+    // A base analítica de 54 colunas só é necessária ao consultar/exportar.
+    // O getter mantém o contrato público (pgMAVisaoAtual.auditoria), mas
+    // evita gerar milhares de strings e movimentos a cada troca de filtro.
+    var auditoriaPronta=null;
+    Object.defineProperty(resultado,'auditoria',{enumerable:true,get:function(){
+      if(!auditoriaPronta)auditoriaPronta=montarAuditoria(resultado.itens,resultado.cenario);
+      return auditoriaPronta;
+    }});
     // Publicar o resultado completo antes de renderizar qualquer componente.
     window.pgMAVisaoAtual=resultado;
     window.pgMAUltimosItens=resultado.itens;

@@ -423,6 +423,17 @@ window.exportarSkusFiltradosSheets = function() {
             if (!meses.length) throw new Error('Indice do dashboard sem meses.');
             window.PG_DASHBOARD_INDICE = indice;
 
+            // O índice vem do servidor e identifica a geração exata do cache.
+            // Se todas as fatias daquela geração já estão completas neste
+            // navegador, reutilize-as sem transferir os mesmos meses novamente.
+            const fatiasJaSalvas = pgLerDashboardLocal(indice);
+            if (fatiasJaSalvas.length) {
+                window.PG_DASHBOARD_COMPLETO = true;
+                if (aviso) aviso('');
+                console.info('[DASHBOARD] Geração atual reaproveitada do cache local:', fatiasJaSalvas.length);
+                return fatiasJaSalvas;
+            }
+
             const validarFatiaMes = (item, json) => {
                 const fatia = JSON.parse(json);
                 if (!Array.isArray(fatia) ||

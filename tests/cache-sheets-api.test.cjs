@@ -171,13 +171,25 @@ test('atualizacao completa continua apos erro e informa falhas ao final', () => 
 
 function snapshotApp() {
   const { ctx } = app({});
-  const writes = [], updates = [], properties = new Map();
-  let copies = 0, releases = 0, ramWrites = 0;
-  ctx.LockService = { getScriptLock: () => ({ tryLock: () => true, releaseLock() { releases++; } }) };
-  ctx.PropertiesService = { getUserProperties: () => ({
-    getProperty: key => properties.get(key) || null,
-    setProperty: (key, value) => properties.set(key, value)
+  const writes = [], updates = [], properties = new Map(), scriptProperties = new Map();
+  let copies = 0, releases = 0, ramWrites = 0, lockHeld = false;
+  ctx.Utilities.getUuid = () => 'snapshot-reservation';
+  ctx.LockService = { getScriptLock: () => ({
+    tryLock: () => { assert.equal(lockHeld, false); lockHeld = true; return true; },
+    waitLock: () => { assert.equal(lockHeld, false); lockHeld = true; },
+    releaseLock() { assert.equal(lockHeld, true); lockHeld = false; releases++; }
   }) };
+  ctx.PropertiesService = {
+    getUserProperties: () => ({
+      getProperty: key => properties.get(key) || null,
+      setProperty: (key, value) => properties.set(key, value)
+    }),
+    getScriptProperties: () => ({
+      getProperty: key => scriptProperties.get(key) || null,
+      setProperty: (key, value) => scriptProperties.set(key, value),
+      deleteProperty: key => scriptProperties.delete(key)
+    })
+  };
   ctx.DriveApp = {
     getFileById(id) {
       assert.equal(id, 'test-id');
@@ -201,7 +213,8 @@ function snapshotApp() {
     return { values: [['cabecalho']] };
   };
   ctx.Sheets.Spreadsheets.batchUpdate = (body, id) => { updates.push({ body, id }); };
-  return { ctx, writes, updates, properties, copies: () => copies, releases: () => releases, ramWrites: () => ramWrites };
+  return { ctx, writes, updates, properties, scriptProperties, copies: () => copies,
+    releases: () => releases, lockHeld: () => lockHeld, ramWrites: () => ramWrites };
 }
 
 test('snapshot converte somente a copia e publica depois de preparar todos os JSONs', () => {
@@ -222,10 +235,22 @@ test('snapshot converte somente a copia e publica depois de preparar todos os JS
   assert.equal(a.ramWrites(), 1);
   assert.equal(a.updates[0].id, 'snapshot-id');
   assert.equal(a.updates[0].body.requests[1].copyPaste.pasteType, 'PASTE_VALUES');
-  assert.equal(a.releases(), 1);
+  assert.equal(a.releases(), 2);
   assert.equal(a.ctx.pgFonteSnapshot_, null);
   a.ctx.atualizarTodoOCachePorCopia();
   assert.equal(a.copies(), 2, 'Uma atualizacao concluida deve ser seguida por uma copia nova');
+});
+
+test('preparacao longa nao ocupa a trava compartilhada do Giro, mas impede outra copia', () => {
+  const a = snapshotApp();
+  a.ctx.atualizarTodoOCache = () => {
+    assert.equal(a.lockHeld(), false, 'Giro pode gravar durante leitura e preparacao do cache');
+    assert.throws(() => a.ctx.pgReservarCachePorCopia_(), /já está em andamento/);
+    assert.equal(a.lockHeld(), false, 'concorrente devolve a trava imediatamente');
+  };
+  a.ctx.atualizarTodoOCachePorCopia();
+  assert.equal(a.scriptProperties.size, 0, 'reserva temporaria liberada na conclusao');
+  assert.equal(a.lockHeld(), false);
 });
 
 test('erro de importacao impede publicacao e libera trava; nova tentativa reutiliza copia', () => {
@@ -237,7 +262,7 @@ test('erro de importacao impede publicacao e libera trava; nova tentativa reutil
   assert.throws(() => a.ctx.atualizarTodoOCachePorCopia(), /qualidade!A1001/);
   assert.equal(a.writes.length, 0);
   assert.equal(a.ramWrites(), 0);
-  assert.equal(a.releases(), 1);
+  assert.equal(a.releases(), 2);
   assert.equal(a.ctx.pgPreparacaoCache_, null);
   assert.throws(() => a.ctx.atualizarTodoOCachePorCopia(), /#REF!/);
   assert.equal(a.copies(), 1);
@@ -249,7 +274,7 @@ test('falha de permissao ao converter copia nao grava JSONs', () => {
   a.ctx.Sheets.Spreadsheets.batchUpdate = () => { throw Error('Sem permissao'); };
   assert.throws(() => a.ctx.atualizarTodoOCachePorCopia(), /Sem permissao/);
   assert.equal(a.writes.length, 0);
-  assert.equal(a.releases(), 1);
+  assert.equal(a.releases(), 2);
   assert.equal(JSON.parse([...a.properties.values()][0]).valores, false);
 });
 

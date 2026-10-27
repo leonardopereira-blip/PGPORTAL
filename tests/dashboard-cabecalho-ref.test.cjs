@@ -81,11 +81,19 @@ function portal() {
       } },
       batchUpdate: () => escritas.push('Sheets.batchUpdate')
     } },
-    LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => liberacoes++ }) },
-    PropertiesService: { getUserProperties: () => ({
-      getProperty: chave => propriedades.get(chave) || null,
-      setProperty: (chave, valor) => { escritas.push('Properties.setProperty'); propriedades.set(chave, valor); }
-    }) },
+    LockService: { getScriptLock: () => ({ tryLock: () => true, waitLock: () => true,
+      releaseLock: () => liberacoes++ }) },
+    PropertiesService: {
+      getUserProperties: () => ({
+        getProperty: chave => propriedades.get(chave) || null,
+        setProperty: (chave, valor) => { escritas.push('Properties.setProperty'); propriedades.set(chave, valor); }
+      }),
+      getScriptProperties: () => ({
+        getProperty: chave => propriedades.get('SCRIPT:'+chave) || null,
+        setProperty: (chave, valor) => { escritas.push('Properties.setProperty'); propriedades.set('SCRIPT:'+chave, valor); },
+        deleteProperty: chave => propriedades.delete('SCRIPT:'+chave)
+      })
+    },
     CacheService: { getScriptCache: () => ({
       get: chave => ram.get(chave) || null,
       getAll: chaves => Object.fromEntries(chaves.filter(chave => ram.has(chave)).map(chave => [chave, ram.get(chave)])),
@@ -101,7 +109,8 @@ function portal() {
         return { getId: () => 'snapshot-id' };
       } })
     },
-    Utilities: { newBlob: (texto, tipo, nome) => ({ texto, tipo, nome, getBytes: () => Buffer.from(texto) }) }
+    Utilities: { newBlob: (texto, tipo, nome) => ({ texto, tipo, nome, getBytes: () => Buffer.from(texto) }),
+      getUuid: () => 'cache-reserva-test' }
   });
   for (const nome of ['LeituraCacheSheets.js', 'Code.js', 'SalvaJson.js', 'CachePorCopia.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', nome), 'utf8'), ctx);
@@ -139,7 +148,7 @@ for (const entrada of entradas) {
         assert.ok(p.leituras.length > 0);
         assert.ok(p.leituras.every(leitura => leitura.primeira === 1 && leitura.ultima === 1),
           'A verificacao deve ler apenas a primeira linha, sem dados ou amostras');
-        assert.equal(p.liberacoes(), entrada === 'atualizarTodoOCachePorCopia' ? 1 : 0);
+        assert.equal(p.liberacoes(), 0, 'cabecalho invalido nao chega a reservar trava');
         const idEsperado = entrada === 'atualizarTodoOCachePorCopia' ? 'portal-id' : ARQUIVO_PCPS;
         assert.ok(p.leituras.every(leitura => leitura.id === idEsperado), 'Verifica a fonte real da rota');
       });

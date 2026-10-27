@@ -103,7 +103,7 @@ test('falha de uma nova geração mantém a cópia local completa anterior', asy
   assert.deepEqual(JSON.parse(JSON.stringify(p.local(indiceSalvo))), [{ id: 'nov-antigo' }, { id: 'out-antigo' }]);
 });
 
-test('copia local so pode recuperar uma falha quando pertence ao indice atual confirmado', async () => {
+test('copia local completa evita novo transporte depois de confirmar o indice atual', async () => {
   const servidor = mensal({ '2026-10': [{ id: 'outubro' }] });
   let falhar = false;
   const p = portal((nome, ...args) => {
@@ -111,8 +111,12 @@ test('copia local so pode recuperar uma falha quando pertence ao indice atual co
     return servidor.responder(nome, ...args);
   });
   await p.carregar();
+  const leiturasAnteriores = p.chamadas.filter(c => c.nome === 'getDadosDashboardMes').length;
   falhar = true;
-  await assert.rejects(p.carregar());
+  const reutilizado = await p.carregar();
+  assert.deepEqual(JSON.parse(JSON.stringify(reutilizado)), [{ id: 'outubro' }]);
+  assert.equal(p.chamadas.filter(c => c.nome === 'getDadosDashboardMes').length, leiturasAnteriores,
+    'mesma geracao completa nao faz novas RPCs mensais');
   assert.deepEqual(JSON.parse(JSON.stringify(p.local())), [{ id: 'outubro' }]);
 });
 
