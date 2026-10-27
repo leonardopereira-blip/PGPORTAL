@@ -75,10 +75,11 @@
           .ecd-toolbar{display:flex;justify-content:flex-end;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px}
           .ecd-toolbar #ecdAviso{flex:1;margin:0}
           .ecd-table .ecd-brand{border-bottom:2px solid var(--brand)}
+          .ecd-section>summary .ecd-info{margin-left:auto}
+          .ecd-section>summary .ecd-button{padding:5px 10px;background:#fff;color:#0C2340;border-color:#fff;font-size:11px;white-space:nowrap;flex-shrink:0}
         </style>
         <div class="ecd-toolbar">
           <p id="ecdAviso" role="status"></p>
-          <button id="ecdPrint" type="button" class="ecd-button" onclick="pgECDCapturar(this)" title="Captura os dois quadros completos, incluindo linhas e colunas fora da rolagem">📸 Capturar painel (PNG)</button>
           <button id="ecdExportarXLSX" type="button" class="ecd-button" onclick="pgECDExportarXLSX(this)">Baixar XLSX</button>
           <button id="ecdExportar" type="button" class="ecd-button" style="background:#fff;color:#0C2340" onclick="pgECDExportar(this)">Exportar para Sheets</button>
         </div>
@@ -95,8 +96,8 @@
         </details>
         <div class="ecd-legend"><span><i style="background:#b3d2f1"></i><span id="ecdLegendaEntregue">Entregue até ontem</span></span><span><i style="background:#C0DD97"></i>Coletado · em trânsito</span><span><i style="background:#FAC775"></i>Aguardando coleta</span><span>% = acumulado da linha · hachurado = feriado</span></div>
         <p id="ecdNotaDomingo" class="ecd-note"></p>
-        <details id="ecdPorMarca" class="ecd-section" open><summary><span>Quadro 1 · marca e CD</span><span id="ecdInfoMarca"></span></summary><div id="ecdQuadroMarca" class="ecd-scroll"></div></details>
-        <details id="ecdDetalhado" class="ecd-section" open><summary><span>Quadro 2 · marca, série e CD</span><span id="ecdInfoSerie"></span></summary><div id="ecdQuadroSerie" class="ecd-scroll"></div></details>
+        <details id="ecdPorMarca" class="ecd-section" open><summary><span>Quadro 1 · marca e CD</span><span id="ecdInfoMarca" class="ecd-info"></span><button id="ecdPrintMarca" type="button" class="ecd-button" onclick="pgECDCapturarQuadro('marca',this,event)" title="Capturar este quadro com todas as colunas">Capturar PNG</button></summary><div id="ecdQuadroMarca" class="ecd-scroll"></div></details>
+        <details id="ecdDetalhado" class="ecd-section" open><summary><span>Quadro 2 · marca, série e CD</span><span id="ecdInfoSerie" class="ecd-info"></span><button id="ecdPrintSerie" type="button" class="ecd-button" onclick="pgECDCapturarQuadro('serie',this,event)" title="Capturar este quadro com todas as colunas">Capturar PNG</button></summary><div id="ecdQuadroSerie" class="ecd-scroll"></div></details>
         <p class="ecd-note">Os filtros da tabela alteram apenas a exibição; o Total Geral mantém a base completa. Entregue mostra sempre o acumulado até ontem, independente do período. Os percentuais diários mostram o acumulado até cada data. O plano inclui o backlog. Previsões em domingos e feriados aparecem no próximo dia de operação; a data informada permanece na exportação. Datas após o período ficam nas pendências.</p>`;
         $('ecdInicio').value = hoje();
         const fimPadrao = window.PG_ENTREGAS_CD_CONFIG?.fimCiclo || hoje().slice(0,4) + '-12-02';
@@ -269,89 +270,117 @@
             : {...entradas[0], requestId}});
     };
     window.pgECDReenviar = indice => { const pedido = [...estado.falhas.values()][indice]; if (pedido) enviarPrevisao(pedido); };
-    // Mesmo padrão dos outros painéis: PNG desenhado do modelo completo em canvas.
-    // Inclui todo o calendário, sem alterar a rolagem, os filtros ou as previsões.
-    window.pgECDCapturar = async function (botao) {
-        const c = estado.calendario;
-        if (!c) { aviso('Período inválido. Confira Início e Fim antes de capturar.', true); return; }
-        if (!c?.parcelas.length) { aviso('Não há parcelas nos filtros selecionados.', true); return; }
+    // A captura usa o próprio DOM do quadro. Preserva etiquetas de série,
+    // células mescladas, cores, percentuais e as colunas fora da rolagem.
+    // A cópia do DOM é ajustada só para a imagem; a tabela ao vivo não muda.
+    function obterHtml2Canvas() {
+        if (typeof window.html2canvas === 'function') return Promise.resolve(window.html2canvas);
+        if (estado.html2canvasCarregando) return estado.html2canvasCarregando;
+        estado.html2canvasCarregando = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            const tempo = setTimeout(() => {
+                script.onload = script.onerror = null;
+                reject(new Error('A biblioteca de captura não carregou. Tente novamente.'));
+            }, 20000);
+            script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+            script.async = true;
+            script.onload = () => {
+                clearTimeout(tempo);
+                if (typeof window.html2canvas === 'function') resolve(window.html2canvas);
+                else reject(new Error('Biblioteca de captura indisponível.'));
+            };
+            script.onerror = () => { clearTimeout(tempo); reject(new Error('Falha ao carregar a captura PNG.')); };
+            document.head.appendChild(script);
+        }).catch(erro => { estado.html2canvasCarregando = null; throw erro; });
+        return estado.html2canvasCarregando;
+    }
+    async function canvasDoQuadro(tipo) {
+        const id = tipo === 'serie' ? 'ecdDetalhado' : 'ecdPorMarca';
+        const painel = $(id);
+        if (!painel) throw new Error('Quadro não encontrado.');
+        const capturar = await obterHtml2Canvas();
+        const aberto = painel.open;
+        try {
+            if (!aberto) {
+                painel.open = true;
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            const tabela = painel.querySelector('.ecd-table');
+            if (!tabela) throw new Error('A tabela ainda não foi montada.');
+            const largura = Math.ceil(Math.max(tabela.scrollWidth, tabela.getBoundingClientRect().width));
+            const altura = Math.ceil((painel.querySelector('summary')?.offsetHeight || 48) + tabela.scrollHeight + 4);
+            if (!(largura > 0 && altura > 0)) throw new Error('O quadro está sem dimensões para a captura.');
+            const escala = Math.min(2, 16000 / largura, 8000 / altura,
+                Math.sqrt(24000000 / (largura * altura)));
+            const canvas = await capturar(painel, {
+                backgroundColor: '#ffffff', scale: escala, useCORS: true, logging: false,
+                width: largura, height: altura, windowWidth: Math.max(window.innerWidth || 0, largura + 20),
+                windowHeight: Math.max(window.innerHeight || 0, altura + 20),
+                scrollX: 0, scrollY: 0,
+                onclone: documento => {
+                    const copia = documento.getElementById(id);
+                    if (!copia) return;
+                    copia.open = true;
+                    copia.style.setProperty('width', largura + 'px', 'important');
+                    copia.style.setProperty('max-width', 'none', 'important');
+                    copia.style.setProperty('overflow', 'visible', 'important');
+                    const scroll = copia.querySelector('.ecd-scroll');
+                    if (scroll) {
+                        scroll.style.setProperty('width', largura + 'px', 'important');
+                        scroll.style.setProperty('overflow', 'visible', 'important');
+                        scroll.style.setProperty('max-height', 'none', 'important');
+                        scroll.scrollLeft = 0; scroll.scrollTop = 0;
+                    }
+                    const grade = copia.querySelector('.ecd-table');
+                    if (grade) {
+                        grade.style.setProperty('width', largura + 'px', 'important');
+                        grade.style.setProperty('min-width', largura + 'px', 'important');
+                    }
+                    // Sticky só faz sentido na tela com rolagem. Na imagem,
+                    // as células ficam na posição de sua coluna verdadeira.
+                    copia.querySelectorAll('.ecd-left,.ecd-freeze,.ecd-week-corner,thead th,tfoot td')
+                        .forEach(el => el.style.setProperty('position', 'static', 'important'));
+                    copia.querySelectorAll('#ecdPrintMarca,#ecdPrintSerie')
+                        .forEach(el => el.style.setProperty('display', 'none', 'important'));
+                }
+            });
+            if (!canvas || !canvas.width || !canvas.height)
+                throw new Error('O quadro não foi renderizado corretamente.');
+            return canvas;
+        } finally { painel.open = aberto; }
+    }
+    window.pgECDCapturarQuadro = async function (tipo, botao, evento) {
+        evento?.preventDefault?.();
+        evento?.stopPropagation?.();
+        if (!['marca','serie'].includes(tipo)) return;
+        if (!estado.calendario) { aviso('Período inválido. Confira Início e Fim.', true); return; }
+        if (!estado.calendario.parcelas.length) { aviso('Não há itens para capturar.', true); return; }
         if (estado.capturando) return;
         estado.capturando = true;
-        const anterior = botao?.textContent;
+        const anterior = botao?.textContent || 'Capturar PNG';
         if (botao) { botao.disabled = true; botao.textContent = 'Gerando PNG…'; }
         try {
-            const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
-            if (!ctx) throw new Error('Não foi possível preparar a imagem.');
-            const quadros = [{nome: 'marca-cd', titulo: 'Quadro 1 · marca e CD', linhas: c.marcaCD, detalhado: false},
-                {nome: 'marca-serie-cd', titulo: 'Quadro 2 · marca, série e CD', linhas: c.marcaSerieCD, detalhado: true}];
-            for (const q of quadros) {
-                const larguras = q.detalhado ? [160, 145, 145, 135] : [175, 155, 135];
-                const fixas = larguras.reduce((a, b) => a + b, 0), largura = fixas + c.dias.length * 136;
-                const escala = Math.min(2, 16000 / largura), topo = 112, cab = 84, alturaLinha = 53;
-                const porPagina = Math.max(1, Math.floor((Math.min(8000, 16000000 / (largura * escala * escala)) - topo - cab - alturaLinha) / alturaLinha));
-                const paginas = Math.max(1, Math.ceil(q.linhas.length / porPagina));
-                const texto = (s, x, y, w, cor = '#0C2340', negrito = false) => {
-                    ctx.fillStyle = cor; ctx.font = (negrito ? 'bold ' : '') + '12px Poppins,Arial,sans-serif';
-                    ctx.fillText(String(s), x + 8, y, Math.max(1, w - 16));
-                };
-                for (let pagina = 0; pagina < paginas; pagina++) {
-                    const linhas = q.linhas.slice(pagina * porPagina, (pagina + 1) * porPagina);
-                    const altura = topo + cab + (linhas.length + 1) * alturaLinha;
-                    canvas.width = Math.ceil(largura * escala); canvas.height = Math.ceil(altura * escala);
-                    ctx.scale(escala, escala); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, largura, altura);
-                    ctx.fillStyle = '#0C2340'; ctx.fillRect(0, 0, largura, topo);
-                    texto('Entregas no CD · ' + q.titulo + ' · ' + br(c.hoje), 8, 28, largura - 16, '#fff', true);
-                    texto('Entregue até ontem · Coletado em trânsito · Aguardando coleta | Total Geral da base completa', 8, 55, largura - 16, '#fff');
-                    texto('Período ' + br(c.inicio || c.hoje) + ' a ' + br(c.fim) + ' · Plano ' + exato(c.total.total) + ' · Backlog ' + exato(c.total.backlog) +
-                        (paginas > 1 ? ' · Parte ' + (pagina + 1) + '/' + paginas : ''), 8, 82, largura - 16, '#fff');
-                    let x = fixas;
-                    c.semanas.forEach(s => { ctx.fillStyle = '#0C2340'; ctx.fillRect(x, topo, s.tamanho * 136, 32);
-                        texto(br(s.inicio) + ' a ' + br(s.fim), x, topo + 21, s.tamanho * 136, '#fff', true); x += s.tamanho * 136; });
-                    x = 0;
-                    const labels = ['Marca', ...(q.detalhado ? ['Série'] : []), 'CD', 'Entregue'];
-                    labels.forEach((label, i) => { ctx.fillStyle = '#0C2340'; ctx.fillRect(x, topo, larguras[i], cab);
-                        texto(label, x, topo + 53, larguras[i], '#fff', true);
-                        if (i === labels.length - 1) texto('até ontem · ' + br(ontem(c.hoje)), x, topo + 72, larguras[i], '#fff');
-                        x += larguras[i]; });
-                    c.dias.forEach(d => { ctx.fillStyle = d.feriado ? '#8595a5' : d.data === c.hoje ? '#FA4616' : '#418EDE';
-                        ctx.fillRect(x, topo + 32, 136, cab - 32);
-                        texto(br(d.data) + (d.feriado ? ' · feriado' : ''), x, topo + 54, 136, '#fff', true);
-                        texto(k(volume(c.total.dias[d.data])), x, topo + 74, 136, '#fff'); x += 136; });
-                    [...linhas, c.total].forEach((g, n) => {
-                        const total = n === linhas.length, y = topo + cab + n * alturaLinha;
-                        ctx.fillStyle = total ? '#0C2340' : '#fff'; ctx.fillRect(0, y, largura, alturaLinha);
-                        const valores = [total ? 'Total geral' : g.marca, ...(q.detalhado ? [total ? '' : g.serie] : []), total ? '' : g.cd];
-                        x = 0; valores.forEach((v, i) => { texto(v, x, y + 29, larguras[i], total ? '#fff' : '#0C2340', total); x += larguras[i]; });
-                        ctx.fillStyle = '#d9e8f8'; ctx.fillRect(x, y, larguras.at(-1), alturaLinha);
-                        texto(k(entregueAteOntem(g)), x, y + 23, larguras.at(-1), '#0C2340', true);
-                        texto(pct(entregueAteOntem(g), g.total), x, y + 42, larguras.at(-1)); x += larguras.at(-1);
-                        let acumulado = g.acumuladoAnterior ?? g.entregue;
-                        c.dias.forEach(d => {
-                            const ps = g.dias[d.data] || [], v = volume(ps); acumulado += v;
-                            const entregas = volume(ps.filter(p => p.status === 'ENTREGUE')), transito = volume(ps.filter(p => p.status === 'TRANSITO'));
-                            if (!total) {
-                                ctx.fillStyle = d.feriado && !v ? '#edf0f3' : !v ? '#fff' : entregas === v ? '#d9e8f8' : '#fdf0da';
-                                ctx.fillRect(x, y, 136, alturaLinha);
-                                if (v && entregas !== v && transito) { ctx.fillStyle = '#e6f1d9'; ctx.fillRect(x, y, 136 * transito / v, alturaLinha); }
-                            }
-                            texto(v ? k(v) : d.feriado ? '—' : '', x, y + 23, 136, total ? '#fff' : '#0C2340', true);
-                            texto(pct(acumulado, g.total), x, y + 42, 136, total ? '#fff' : '#0C2340');
-                            ctx.strokeStyle = '#d5dee7'; ctx.strokeRect(x, y, 136, alturaLinha); x += 136;
-                        });
-                        if (!total) { ctx.fillStyle = estado.marcas.get(g.marca) || '#418EDE'; ctx.fillRect(0, y, 4, alturaLinha); }
-                    });
-                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-                    if (!blob) throw new Error('Não foi possível gerar o PNG.');
-                    const url = URL.createObjectURL(blob), link = document.createElement('a');
-                    link.download = 'Entregas_CD_' + q.nome + '_' + c.hoje + (paginas > 1 ? '_parte-' + (pagina + 1) : '') + '.png';
-                    link.href = url; link.click(); setTimeout(() => URL.revokeObjectURL(url), 10000);
-                }
-            }
-            aviso('Captura dos dois quadros concluída.');
-        } catch (erro) { aviso('Não foi possível capturar o painel: ' + (erro?.message || erro), true); }
-        finally { estado.capturando = false; if (botao) { botao.disabled = false; botao.textContent = anterior; } }
+            const canvas = await canvasDoQuadro(tipo);
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error('Não foi possível gerar o PNG.');
+            const url = URL.createObjectURL(blob), link = document.createElement('a');
+            link.download = 'Entregas_CD_' + (tipo === 'serie' ? 'marca-serie-cd' : 'marca-cd') +
+                '_' + estado.calendario.hoje + '.png';
+            link.href = url; link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+            aviso('PNG do quadro ' + (tipo === 'serie' ? 'Marca/Série/CD' : 'Marca/CD') + ' pronto.');
+        } catch (erro) {
+            aviso('Não foi possível capturar o quadro: ' + (erro?.message || erro), true);
+        } finally {
+            estado.capturando = false;
+            if (botao) { botao.disabled = false; botao.textContent = anterior; }
+        }
     };
-
+    // Compatibilidade com eventuais chamadas antigas; não há mais botão único.
+    window.pgECDCapturar = async function (botao) {
+        await window.pgECDCapturarQuadro('marca', botao);
+        await window.pgECDCapturarQuadro('serie', botao);
+    };
     // O XLSX traz uma única linha por item, sem chaves técnicas ou duplicação
     // de tiragem entre as parcelas de coleta, trânsito e entrega.
     function baseXLSXSimples(c) {

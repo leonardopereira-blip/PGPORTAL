@@ -12,7 +12,9 @@ function interfacePortal({adiar=false,adiarSheets=false,semGoogle=false,hojeData
   const criar = id => {
     const classes = new Set(); let html='';
     const el={id,value:'',checked:false,disabled:false,textContent:'',style:{},
-      classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x)}};
+      classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x)},
+      open:true,querySelector:q=>q==='summary'?{offsetHeight:48}:q==='.ecd-table'?
+        {scrollWidth:6000,scrollHeight:530,getBoundingClientRect:()=>({width:6000})}:null};
     Object.defineProperty(el,'innerHTML',{get:()=>html,set(v){html=String(v);for(const m of html.matchAll(/id="([^"]+)"/g)) if(!nodes.has(m[1]))nodes.set(m[1],criar(m[1]));}});
     return el;
   };
@@ -52,18 +54,23 @@ function interfacePortal({adiar=false,adiarSheets=false,semGoogle=false,hojeData
     processarEntregasCD:()=>charts++,pgGiroSincronizar:()=>sync++,
     addEventListener:(e,fn)=>listeners.set(e,fn),dispatchEvent:e=>listeners.get(e.type)?.(e)};
   class Evento {constructor(type,opts){this.type=type;this.detail=opts.detail;}}
-  const capturas=[],desenhos=[];
+  const capturas=[],desenhos=[],domCapturas=[];
   const timers=new Map();let timerId=0;
   const agendar=(fn,ms)=>{const id=++timerId;if(ms===0||ms===30)fn();else timers.set(id,{fn,ms});return id;};
   const pincel={scale(){},fillRect(){},strokeRect(){},fillText:txt=>desenhos.push(txt)};
-  const canvas={getContext:()=>canvasOk?pincel:null,toBlob:fn=>fn({tipo:'image/png',arrayBuffer:async()=>Uint8Array.from([137,80,78,71,13,10,26,10,1]).buffer})};
+  const canvas={width:6000,height:530,getContext:()=>canvasOk?pincel:null,toBlob:fn=>fn({tipo:'image/png',arrayBuffer:async()=>Uint8Array.from([137,80,78,71,13,10,26,10,1]).buffer})};
+  window.html2canvas=async (el,opcoes)=>{
+    if(!canvasOk)throw new Error('Falha ao renderizar o quadro');
+    domCapturas.push({id:el.id,html:nodes.get(el.id==='ecdPorMarca'?'ecdQuadroMarca':'ecdQuadroSerie').innerHTML,opcoes});
+    return canvas;
+  };
   const ctx=vm.createContext({window,document:{getElementById:id=>nodes.get(id)||null,
     createElement:n=>n==='canvas'?canvas:{click(){capturas.push({nome:this.download,url:this.href,largura:canvas.width,altura:canvas.height});}}},google:semGoogle?undefined:{script:{run}},
     URL:{createObjectURL:()=> 'blob:captura',revokeObjectURL(){}},setTimeout:agendar,clearTimeout:id=>timers.delete(id),
     dtHojeISO:hojeData,Date,Intl,console,CustomEvent:Evento});
   vm.runInContext(script('Scripts_EntregasCD_Modelo.html'),ctx);
   vm.runInContext(script('Scripts_EntregasCD_Controle.html'),ctx);window.processarEntregasCD();
-  return {window,nodes,linhas,capturas,desenhos,salvo:()=>salvo,exportado:()=>exportado,xlsx:()=>xlsx,rpcSheets:()=>rpcSheets,
+  return {window,nodes,linhas,capturas,desenhos,domCapturas,salvo:()=>salvo,exportado:()=>exportado,xlsx:()=>xlsx,rpcSheets:()=>rpcSheets,
     confirmarSheets:resp=>concluirSheets(resp),falharSheets:erro=>erroSheets(erro),
     tempo:ms=>{for(const [id,t]of timers)if(t.ms===ms){timers.delete(id);t.fn();}},
     confirmar:()=>concluir(),falhar:()=>erro(),charts:()=>charts,sync:()=>sync};
@@ -79,17 +86,31 @@ test('tooltips agregam quantidades e não listam SKUs dos quadros',()=>{
   assert(a.nodes.get('ecdBacklog').innerHTML.includes(grupoSAE),'edição das pendências por gráfica, marca, série e CD permanece disponível');
 });
 
-test('captura PNG inclui os dois quadros e todo o ciclo sem depender da rolagem',async()=>{
-  const a=interfacePortal({entregaOntem:true}),botao=a.nodes.get('ecdPrint');
-  botao.textContent='Capturar painel (PNG)';
-  await a.window.pgECDCapturar(botao);
+test('cada quadro captura o DOM real, com todas as colunas, sem redesenho genérico',async()=>{
+  const a=interfacePortal();
+  const botaoMarca=a.nodes.get('ecdPrintMarca'),botaoSerie=a.nodes.get('ecdPrintSerie');
+  assert(botaoMarca&&botaoSerie);
+  const estrutura=a.nodes.get('ecdNovaVisao').innerHTML;
+  assert(!estrutura.includes('id="ecdPrint"'),'botão único removido');
+  assert(estrutura.includes("pgECDCapturarQuadro('marca',this,event)"));
+  assert(estrutura.includes("pgECDCapturarQuadro('serie',this,event)"));
+  let interrompeu=0;
+  await a.window.pgECDCapturarQuadro('marca',botaoMarca,
+    {preventDefault(){interrompeu++},stopPropagation(){interrompeu++}});
+  assert.equal(interrompeu,2,'clique não fecha o quadro');
+  assert.equal(a.capturas.length,1);
+  assert.match(a.capturas[0].nome,/Entregas_CD_marca-cd_2026-10-26\.png/);
+  assert.equal(a.domCapturas[0].id,'ecdPorMarca');
+  assert.match(a.domCapturas[0].html,/ecd-pill/,'captura usa as etiquetas de série que existem na tela');
+  assert.equal(typeof a.domCapturas[0].opcoes.onclone,'function');
+  assert(a.domCapturas[0].opcoes.width>=6000,'inclui as colunas fora da rolagem');
+  await a.window.pgECDCapturarQuadro('serie',botaoSerie);
   assert.equal(a.capturas.length,2);
-  assert.match(a.capturas[0].nome,/marca-cd/);assert.match(a.capturas[1].nome,/marca-serie-cd/);
-  assert(a.capturas.every(c=>c.url==='blob:captura'&&c.largura>5000&&c.altura>0));
-  for(const texto of ['02/12','SAE','SAS','CD FOR','CD JDI','Total geral'])assert(a.desenhos.includes(texto),texto);
-  assert(!a.desenhos.some(t=>String(t).includes('SKU-')));
-  assert.equal(botao.disabled,false);assert.equal(botao.textContent,'Capturar painel (PNG)');
-  assert.match(a.nodes.get('ecdAviso').textContent,/Captura dos dois quadros concluída/);
+  assert.match(a.capturas[1].nome,/Entregas_CD_marca-serie-cd_2026-10-26\.png/);
+  assert.equal(a.domCapturas[1].id,'ecdDetalhado');
+  assert.match(a.domCapturas[1].html,/SAE/);assert.match(a.domCapturas[1].html,/CD FOR/);
+  assert.equal(botaoMarca.disabled,false);assert.equal(botaoSerie.disabled,false);
+  assert.match(a.nodes.get('ecdAviso').textContent,/PNG do quadro/);
 });
 
 test('Total Geral de 24,91M e entregue até ontem permanecem completos ao ocultar concluídos e trocar período',async()=>{
@@ -113,17 +134,17 @@ test('Total Geral de 24,91M e entregue até ontem permanecem completos ao oculta
     assert(a.exportado().abas[2].linhas.some(r=>r[1]==='SAE'),'base preserva linhas ocultadas');
   }
   assert.match(a.nodes.get('ecdNotaDomingo').textContent,/17,36M de 24,91M · 69,7%/);
-  await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));
-  for(const texto of ['17,36M','69,7%','até ontem · 25/10'])assert(a.desenhos.includes(texto),texto);
-  assert(a.desenhos.some(t=>String(t).includes('Plano 24.910.000')));
+  await a.window.pgECDCapturarQuadro('marca',a.nodes.get('ecdPrintMarca'));
+  for(const texto of ['17,36M','69,7%','até ontem · 25/10'])
+    assert(a.domCapturas[0].html.includes(texto),texto);
   assert.match(interfacePortal({entregaOntem:true}).nodes.get('ecdQuadroMarca').innerHTML,/0,1k/,'valores menores continuam em milhares');
 });
 
 test('falha da captura é informada e libera o botão para tentar novamente',async()=>{
-  const a=interfacePortal({canvasOk:false}),botao=a.nodes.get('ecdPrint');botao.textContent='Print';
-  await a.window.pgECDCapturar(botao);
+  const a=interfacePortal({canvasOk:false}),botao=a.nodes.get('ecdPrintMarca');botao.textContent='Print';
+  await a.window.pgECDCapturarQuadro('marca',botao);
   assert.equal(a.capturas.length,0);assert.equal(botao.disabled,false);assert.equal(botao.textContent,'Print');
-  assert.match(a.nodes.get('ecdAviso').textContent,/Não foi possível capturar/);
+  assert.match(a.nodes.get('ecdAviso').textContent,/Não foi possível capturar o quadro/);
 });
 
 test('XLSX baixa localmente sem Google e preserva três abas, Total Geral e entregue até ontem',async()=>{
@@ -321,7 +342,7 @@ test('Início e Fim escolhem datas passadas e futuras preservando entregue até 
   assert.match(a.nodes.get('ecdAviso').textContent,/início e fim válidos/);
   const exportacaoValida=a.exportado();a.window.pgECDExportar(a.nodes.get('ecdExportar'));
   assert.equal(a.exportado(),exportacaoValida,'intervalo inválido não exporta calendário antigo');
-  await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));assert.equal(a.capturas.length,0);
+  await a.window.pgECDCapturarQuadro('marca',a.nodes.get('ecdPrintMarca'));assert.equal(a.capturas.length,0);
   assert.equal(a.charts(),1,'filtros locais não recalculam os gráficos legados');
 });
 
@@ -331,7 +352,7 @@ test('período futuro acumula previsões vigentes anteriores ao início sem vira
   a.window.pgECDRender();
   assert.match(a.nodes.get('ecdQuadroMarca').innerHTML,/<span class="ecd-sub">100%<\/span>/);
   assert.match(a.nodes.get('ecdNotaDomingo').textContent,/Realizado TP até ontem \(25\/10\): 0k/);
-  await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));assert(a.desenhos.includes('100%'));
+  await a.window.pgECDCapturarQuadro('serie',a.nodes.get('ecdPrintSerie'));assert(a.domCapturas[0].html.includes('100%'));
   a.window.pgECDExportar(a.nodes.get('ecdExportar'));assert.equal(a.exportado().abas[0].linhas.at(-1).at(-1),1);
 });
 
@@ -346,7 +367,7 @@ test('ocultar linhas concluídas muda apenas o corpo dos quadros e preserva tota
   a.window.pgECDExportar(a.nodes.get('ecdExportar'));
   const abas=a.exportado().abas;assert(abas[2].linhas.some(r=>r[1]==='SAE'));assert(abas[2].linhas.some(r=>r[1]==='SAS'));
   assert.equal(abas[0].linhas.at(-1)[2],200);assert.equal(abas[0].linhas.at(-1)[4],100);
-  await a.window.pgECDCapturar(a.nodes.get('ecdPrint'));assert(!a.desenhos.includes('SAE'));
+  await a.window.pgECDCapturarQuadro('marca',a.nodes.get('ecdPrintMarca'));assert(!a.domCapturas[0].html.includes('SAE'));
   assert.equal(a.window.pgBaseGeralReportExecutiva.length,2);
   a.nodes.get('ecdOcultarConcluidos').checked=false;a.window.pgECDRender();
   assert.match(a.nodes.get('ecdQuadroMarca').innerHTML,/SAE/);
