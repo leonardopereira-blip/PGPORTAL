@@ -138,18 +138,59 @@ function pgBuscarHistoricoObsGiroPortal_() {
 }
 // Recuperação independente das observações: não depende da leitura de previsões de CD.
 // O contexto físico já está preservado na planilha; a tela só precisa dos dados do histórico.
+// Unifica a planilha append-only com o cache historico existente no Drive.
+// A consulta nao altera nenhuma das fontes e nao perde notas quando uma delas falha.
 function buscarHistoricoObsGiroLeve() {
-  var completo = pgBuscarHistoricoObsGiroPortal_();
-  var resumir = function(mapa) {
-    var saida = {};
-    Object.keys(mapa || {}).forEach(function(chave) {
-      saida[chave] = mapa[chave].map(function(e) {
-        return {id:e.id, data:e.data, sequencia:e.sequencia, user:e.user, obs:e.obs, tipo:e.tipo};
+  var saida = {master:{}, sku:{}}, origens = [], avisos = [];
+  var ids = {master:Object.create(null), sku:Object.create(null)};
+  var mesclar = function(fonte) {
+    ['master','sku'].forEach(function(tipo) {
+      var grupos = fonte && fonte[tipo] || {};
+      Object.keys(grupos).forEach(function(chave) {
+        var chaveNormal = pgGiroNormalizarChave_(tipo === 'sku' ? 'SKU' : 'MASTER', chave);
+        if (!chaveNormal || !Array.isArray(grupos[chave])) return;
+        var destino = saida[tipo][chaveNormal] || (saida[tipo][chaveNormal] = []);
+        grupos[chave].forEach(function(e) {
+          if (!e || !String(e.obs || '').trim()) return;
+          var eventoId = String(e.id || '').trim();
+          var assinatura = eventoId ? 'id:' + eventoId :
+            'legado:' + [e.data, e.user, e.obs, chaveNormal].join('\u0001');
+          if (ids[tipo][assinatura]) return;
+          ids[tipo][assinatura] = true;
+          destino.push({id:eventoId, data:e.data || '', sequencia:Number(e.sequencia || 0),
+            user:e.user || '', obs:String(e.obs), tipo:tipo === 'sku' ? 'SKU' : 'MASTER'});
+        });
       });
     });
-    return saida;
   };
-  return {success:true, historico:{master:resumir(completo.master), sku:resumir(completo.sku)}};
+  try {
+    mesclar(pgBuscarHistoricoObsGiroPortal_());
+    origens.push('PCPs');
+  } catch(e) {
+    avisos.push('PCPs: ' + String(e.message || e));
+  }
+  try {
+    var cache = JSON.parse(lerJSONDoDrive('cache_observacoes.json', true));
+    if (!cache || !cache.master || !cache.sku) throw new Error('cache sem historico valido');
+    mesclar(cache);
+    origens.push('cache_observacoes.json');
+  } catch(e) {
+    avisos.push('Cache Drive: ' + String(e.message || e));
+  }
+  if (!origens.length) return {success:false,
+    error:'Nenhuma fonte de observacoes disponivel. ' + avisos.join(' | ')};
+  var totais = {master:0, sku:0};
+  ['master','sku'].forEach(function(tipo) {
+    Object.keys(saida[tipo]).forEach(function(chave) {
+      var eventos = saida[tipo][chave];
+      eventos.sort(function(a,b) {
+        return pgGiroMomento_(b.data)-pgGiroMomento_(a.data) ||
+          b.sequencia-a.sequencia;
+      });
+      totais[tipo] += eventos.length;
+    });
+  });
+  return {success:true, historico:saida, totais:totais, origens:origens, avisos:avisos};
 }
 function pgSalvarObsGiroPortal_(tipo, chave, obs, contextoStr, eventoId) {
   var lock, bloqueado = false;
