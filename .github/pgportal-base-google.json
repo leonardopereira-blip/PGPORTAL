@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-10-28T11:21:41.402Z",
+  "lido_em": "2026-10-28T11:36:54.842Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -63,7 +63,7 @@
     "HTML:Scripts_Eventos_TP": "fcb7b126a2f7d881a78e5c0e6945982a1e3ebade0fa3cd9fc1fd3827627f33ea",
     "HTML:Scripts_Giro_Registro": "ee5496077baf4918e0171b1d92df2cec38da2584bf47e601333a642921ed7e55",
     "HTML:Scripts_Globais_1": "3b3c1ea4300c21439c38e0bdc44325ee105f916334e9754cc4809f17d528a9b3",
-    "HTML:Scripts_Globais_2": "0ac4feb9bd9880a7fa77d6ca5143a2969864d637929c578ccab9e5adea84bc8a",
+    "HTML:Scripts_Globais_2": "668190cb688741f2936fe6740da8c0f656ccfdb4134311b06d8220fd77ffd6f8",
     "HTML:Scripts_Historico_PCP2026": "c6238f34d35ffd9c1adcb4435ff737563f806c1f234ee0b58c835bdafdafb8a5",
     "HTML:Scripts_Meta_Armazem_Realizado": "ae22d29077e27b204359486acc6557a4769d2ab99ee5556d65876220f17e51f5",
     "SERVER_JS:Sem título": "0d554ca9e8b80dd09850906f18cdd0f84d35dd7bbe6abab69ab4ccbada526ef8",
