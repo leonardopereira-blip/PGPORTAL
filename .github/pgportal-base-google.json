@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-10-28T19:49:22.973Z",
+  "lido_em": "2026-10-28T23:25:47.058Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -34,7 +34,7 @@
     "SERVER_JS:AlertasMapa": "d418b14431a0381e48d18516afb43a0b5417278a833a531c7655aba886ff9f2c",
     "SERVER_JS:AlertasMapaSlack": "f00d10dacf3c68da2e3464db6f0d1542d23345a8388c1c5c9a0be2e18b61cbc4",
     "JSON:appsscript": "3f0dc944d9553e8c4ad298dcc5da51d6ef43be1b7e405238b2fb0788aaf483e5",
-    "SERVER_JS:Atualizar_PCPs": "804f076c9458dcbdc48ca9b3fb14e75482cebf4a5c0fe425ccef0c87e600dd1e",
+    "SERVER_JS:Atualizar_PCPs": "40e02007215b2c73b41fb4d31cfde6bbf8e292106cd4e7115b5be70409e98dc2",
     "SERVER_JS:AuditoriaMetaArmazem": "7d32a16b41b4509f81f2913a61d63b68ec3dd1820afe9c7bd87adc559e673a8e",
     "HTML:AuditoriaPortalSheets": "270e37d229ca359aceae83f3ba7fbf6d8bada38d6dab0aabf86bce2db970e798",
     "SERVER_JS:CachePorCopia": "c094537469895360979f0a183e9a71fae119de3e86d9f8ffc8b6d320ece4c6a2",
@@ -51,7 +51,7 @@
     "SERVER_JS:HistoricoPCP2026": "444a1c0ceab3c50e257cd0193f0b01dd8e4e0d092ee005c86b1a70390abd16c3",
     "HTML:Index": "43e3e123264163a5c724cd539a33428ca0a3c00772744dc5f6b573f64259c71e",
     "SERVER_JS:LeituraCacheSheets": "459014b75f3ec02905c0712616f348cacd3596819259789154fa04046b337f72",
-    "HTML:Main": "6d836f4031dd0ec8bc9bea31718eb76a7895c790649fdc264ee12badeff2b025",
+    "HTML:Main": "d7efda57148c67247f5496048d7fd7fa219156a9b4ef03f26980496de81afa2c",
     "HTML:PreProducao": "2c40cb1fc09f838ca7d376c3734d568673d75e2169749c631aa26105388d7152",
     "SERVER_JS:RegistroGiroJSON": "def59184ff3c6d9efe2ee13853b47936c97a613de611eb4040fa9aa2d13647bf",
     "SERVER_JS:SalvaJson": "37b330574f220b8d6f85d523d98c71ee05720fc1e18eac6f79da3be884c1ad94",
