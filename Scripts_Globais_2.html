@@ -298,7 +298,7 @@ window.pgEstadoColetaMapa = function(l) {
     };
     const ay = String(primeiro([l.GIRO_STATUS_AY, l.AY, campo('STATUS COLETA')]) ?? '')
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
-    const total = Math.max(0, numero(primeiro([campo('TIRAGEM'), l.GIRO_TOTAL_BA, campo('TIRAGEM TOTAL'), campo('QUANTIDADE')])));
+    const total = Math.max(0, numero(primeiro([campo('TIRAGEM TOTAL'), l.GIRO_TOTAL_BA, campo('TIRAGEM'), campo('QUANTIDADE')])));
     const coletada = Math.max(0, numero(primeiro([l.GIRO_COLETADA_AZ, campo('TIRAGEM COLETADA'), l.VOLUME_AZ])));
     const saldo = Math.max(0, total - coletada);
     const statusPendenteAY = /PEND|NAO COLET|NAO SOLICIT|COLETADO A MENOS|PARCIAL/.test(ay);
@@ -8985,8 +8985,7 @@ const ETAPAS_MAPA = [
   { nome: 'Form. Kit (Início)', plan: ['Formação de kit/Encaixotamento início (re) plan'], real: ['Formação de kit/Encaixotamento Início Real'] },
   { nome: 'Form. Kit (Fim)', plan: ['Formação de kit/Encaixotamento Final (re) plan'], real: ['Formação de kit/Encaixotamento Final Real'] },
   { nome: 'Coleta Mapa', plan: ['DT_Vencido', 'Dt_a_vencer'], real: ['Coleta_TP'] },
-  { nome: 'Coletado a menos', plan: [], real: [] },
-  { nome: 'Coletado a mais', plan: [], real: [] }
+  { nome: 'Coletado a menos', plan: [], real: [] }
 ];
 
 function getValFromCols(row, cols) {
@@ -9097,7 +9096,7 @@ window.construirBotoesEtapasGiro = function() {
     'Pré produção': ['Env. Arquivo', 'Rec. Boneco', 'Apv. Boneco'],
     'Produção': ['Impressão (Início)', 'Impressão (Fim)', 'Acabamento (Início)', 'Acabamento (Fim)', 'Form. Kit (Início)', 'Form. Kit (Fim)'],
     'Custos': ['Val. Custos (Início)', 'Val. Custos (Fim)', 'O.C. (Início)', 'O.C. (Fim)'],
-    'Pós': ['Coleta Mapa', 'Coletado a menos', 'Coletado a mais']
+    'Pós': ['Coleta Mapa', 'Coletado a menos']
   };
 
   function renderizarFiltrosGiro() {
@@ -9291,12 +9290,8 @@ window.exportarPendenciasGiroVisiveis = function() {
 // TIRAGEM VENCIDA / A_Vencer e Coleta_TP. Sem usar Coleta Inicial/Final do PCP.
 window.pgGiroSaldoPrazosV41 = function(linha, hoje) {
     const p = window.pgPrazoLinhaV35(linha, hoje);
-    // A nova data só se aplica ao saldo NÃO coletado após o abatimento do TP.
-    // Datas originais de parcelas já coletadas permanecem intactas.
-    let chave = '';
-    try { chave = window.pgEntregasCDModelo?.chave?.(linha) || ''; } catch (_) {}
-    const dataNova = chave ? window.PG_ECD_PREVISOES?.[chave]?.dataEntrega : '';
-    const manual = /^\d{4}-\d{2}-\d{2}$/.test(dataNova || '') ? dataNova : '';
+    // A previsão manual pertence ao calendário de entrega, não ao atraso de produção.
+    // Etapa pendente e aging usam exclusivamente as datas originais do PCP.
     const n = v => Math.max(0, Number(v || 0));
     const v = n(p.vencida), a = n(p.aVencer);
     const temCampos = ['TIRAGEM VENCIDA', 'A_Vencer'].some(nome => {
@@ -9304,7 +9299,11 @@ window.pgGiroSaldoPrazosV41 = function(linha, hoje) {
         return x !== null && x !== undefined && String(x).trim() !== '';
     });
     // A coleta só abate depois de Coleta_TP efetivamente preenchida.
-    let disponivel = p.dtColeta && p.dtColeta <= hoje ? n(p.coletadaBruta) : 0;
+    const totalSku = n(window.pgCampoColeta(linha, 'TIRAGEM TOTAL'));
+    // Cada SKU abate no máximo sua própria tiragem. Excedentes não cobrem outros SKUs.
+    let disponivel = p.dtColeta && p.dtColeta <= hoje
+        ? Math.min(n(p.coletadaBruta), totalSku > 0 ? totalSku : n(p.coletadaBruta)) : 0;
+    let capacidadeSku = totalSku > 0 ? totalSku : Infinity;
     const eventos = [];
     const dias = data => data ? Math.round(
         (Date.parse(hoje + 'T00:00:00Z') - Date.parse(data + 'T00:00:00Z')) / 86400000
@@ -9322,9 +9321,11 @@ window.pgGiroSaldoPrazosV41 = function(linha, hoje) {
         ['A vencer sem data', a && !p.dtAVencer ? a : 0, null]
     ];
     parcelas.forEach(([categoria, volume, data]) => {
-        const saldo = Math.max(0, volume - disponivel);
-        disponivel = Math.max(0, disponivel - volume);
-        incluir(categoria, saldo, manual && saldo > 0 ? manual : data);
+        const volumeSku = Math.min(volume, capacidadeSku);
+        capacidadeSku -= volumeSku;
+        const saldo = Math.max(0, volumeSku - disponivel);
+        disponivel = Math.max(0, disponivel - volumeSku);
+        incluir(categoria, saldo, data);
     });
     const vencido = eventos.filter(e => e.dias !== null && e.dias >= 0)
         .reduce((s, e) => s + e.volume, 0);
@@ -9404,16 +9405,15 @@ window.reFiltrarTabelaGiro = function() {
         const prazoGiro = window.pgGiroSaldoPrazosV41(l, dtHojeISO);
         const statusColetaFonte = String(window.pgCampoColeta(l, 'STATUS COLETA') || '')
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-        const coletadoAMais = /COLETAD[OA] A MAIS|COLETA A MAIS/.test(estadoMapa.ay) ||
-            /COLETAD[OA] A MAIS|COLETA A MAIS/.test(statusColetaFonte);
-        // Usar somente o excedente medido; quando a fonte só informa o
-        // status, exibir a pendência sem inventar uma quantidade.
         const totalColeta = window.pgNumeroPrazoV35(window.pgCampoColeta(l, 'TIRAGEM TOTAL'));
         const realizadoColeta = window.pgNumeroPrazoV35(window.pgCampoColeta(l, 'TIRAGEM COLETADA'));
-        const excedenteColeta = coletadoAMais && totalColeta > 0
-            ? Math.max(0, realizadoColeta - totalColeta) : 0;
-        const pendenteMapa = estadoMapa.pendente || prazoGiro.totalPendente > 0;
-        const saldoColeta = prazoGiro.temCampos ? prazoGiro.totalPendente : estadoMapa.saldo;
+        const coletadoAMais = /COLETAD[OA] A MAIS|COLETA A MAIS/.test(estadoMapa.ay) ||
+            /COLETAD[OA] A MAIS|COLETA A MAIS/.test(statusColetaFonte) ||
+            (totalColeta > 0 && realizadoColeta > totalColeta);
+        // Coleta acima de 100% do SKU é conclusão, nunca uma etapa pendente.
+        const pendenteMapa = !coletadoAMais && (estadoMapa.pendente || prazoGiro.totalPendente > 0);
+        const saldoColeta = coletadoAMais ? 0 :
+            (prazoGiro.temCampos ? prazoGiro.totalPendente : estadoMapa.saldo);
         const coletadoAMenos = saldoColeta > 0 &&
             (estadoMapa.parcial || statusColetaFonte.includes('COLETADO A MENOS'));
         // ---> 1. TRAVA DA COLUNA EE <---
@@ -9431,15 +9431,17 @@ window.reFiltrarTabelaGiro = function() {
 
         if (ultEtapaStatus.includes("CANCEL")) {
             statusFinalStr = 'Cancelado';
+        } else if (coletadoAMais) {
+            statusFinalStr = 'Coletado a mais';
         } else if (coletadoAMenos) {
             statusFinalStr = 'Coletado a menos';
-        } else if (pendenteMapa || coletadoAMais) {
+        } else if (pendenteMapa) {
             statusFinalStr = 'Em Aberto';
         } else if (estadoMapa.concluida || ultEtapaStatus.includes("CONCLU") || ultEtapaStatus.includes("FINALIZADO") || isDateFilled(coletaReal)) {
             statusFinalStr = 'Concluído';
         }
 
-        if (statusFinalStr === 'Concluído' && !optConcluido) return;
+        if ((statusFinalStr === 'Concluído' || statusFinalStr === 'Coletado a mais') && !optConcluido) return;
         if (statusFinalStr === 'Cancelado' && !optCancelado) return;
         if (statusFinalStr === 'Em Aberto' && !optAberto) return;
         if (statusFinalStr === 'Coletado a menos' && !optPos) return;
@@ -9588,12 +9590,6 @@ window.reFiltrarTabelaGiro = function() {
                 });
             }
 
-            if (coletadoAMais && window.GIRO_ETAPAS_SELECIONADAS.has('Coletado a mais') &&
-                validaNoSlider(0)) {
-                selecionadas.push({nome:'Coletado a mais', dias:0, semPrazo:true,
-                    volume:excedenteColeta});
-            }
-
             // Se NENHUMA pendência passar nos botões + slider simultaneamente, oculta a linha inteira!
             if (selecionadas.length === 0) return; 
 
@@ -9647,10 +9643,9 @@ window.reFiltrarTabelaGiro = function() {
         const {grafica, marca, serie, envio, cd, chave: chaveGrupo} = identificarGrupo(l);
         let sku = String(l["SKU_REAL"] || l["SKU"] || "-").trim();
         let tiragemBase = window.arredondar ? window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"] || 0) : 0;
-        let ehLinhaColeta = coletadoAMenos || etapaPendente.includes('Coleta Mapa') ||
-            etapaPendente.includes('Coletado a mais');
-        let tiragemExibida = etapaPendente.includes('Coletado a mais') && !pendenteMapa
-            ? excedenteColeta : (ehLinhaColeta ? saldoColeta : tiragemBase);
+        let ehLinhaColeta = coletadoAMenos || etapaPendente.includes('Coleta Mapa');
+        let tiragemExibida = statusFinalStr === 'Coletado a mais' ? 0 :
+            (ehLinhaColeta ? saldoColeta : tiragemBase);
 
         if (!grupos[chaveGrupo]) {
             const total = totaisGrupos.get(chaveGrupo);
@@ -9667,8 +9662,8 @@ window.reFiltrarTabelaGiro = function() {
             grupoSaldo.coletadoAMenos = grupoSaldo.coletadoAMenos || coletadoAMenos;
             if (!grupoSaldo.saldosColeta) grupoSaldo.saldosColeta = new Map();
 
-            // BA/AZ repetidos na mesma JOIN_KEY contam uma única vez no total do grupo.
-            const chaveSaldo = String(l["JOIN_KEY"] || `${grafica}|${marca}|${sku}|${envio}|${cd}`);
+            // Abatimento e deduplicação são exclusivos de cada SKU/destino.
+            const chaveSaldo = window.pgGiroChaveObs('SKU', `${grafica}|${marca}|${sku}|${envio}|${cd}`);
             grupoSaldo.saldosColeta.set(chaveSaldo, Math.max(grupoSaldo.saldosColeta.get(chaveSaldo) || 0, tiragemExibida));
 
             if (Number.isFinite(l.__GIRO_DIAS_POS)) {
@@ -9680,7 +9675,7 @@ window.reFiltrarTabelaGiro = function() {
             grupos[chaveGrupo].tiragemNormal += tiragemExibida;
         }
 
-        const prioridadeStatus = { 'Concluído': 1, 'Em Aberto': 2, 'Coletado a menos': 3, 'Cancelado': 4 };
+        const prioridadeStatus = { 'Concluído': 1, 'Coletado a mais': 1.5, 'Em Aberto': 2, 'Coletado a menos': 3, 'Cancelado': 4 };
         if ((prioridadeStatus[statusFinalStr] || 0) > (prioridadeStatus[grupos[chaveGrupo].statusGrupo] || 0)) {
             grupos[chaveGrupo].statusGrupo = statusFinalStr;
         }
@@ -9708,6 +9703,7 @@ window.reFiltrarTabelaGiro = function() {
             tiragem: tiragemExibida,
             tiragemOriginal: tiragemOriginalGiro(l),
             statusLinha: statusFinalStr,
+            excedenteColeta: totalColeta > 0 ? Math.max(0, realizadoColeta - totalColeta) : 0,
             pendencia: etapaPendente,
             pendenciaHtml: pendenciasFormatadas.length > 0 ? pendenciasFormatadas.join('') : '-',
             escala: escalaSlider
@@ -9838,7 +9834,7 @@ let arrGrupos = Object.values(grupos);
 
         let prazoMasterLabel = '';
         let corStatusMaster =
-            g.statusGrupo === 'Concluído' ? 'bg-emerald-100 text-emerald-800' :
+            ['Concluído','Coletado a mais'].includes(g.statusGrupo) ? 'bg-emerald-100 text-emerald-800' :
             g.statusGrupo === 'Cancelado' ? 'bg-slate-200 text-slate-700' :
             g.statusGrupo === 'Coletado a menos' ? 'bg-rose-100 text-rose-700' :
             'bg-indigo-100 text-indigo-800';
@@ -9924,7 +9920,7 @@ let arrGrupos = Object.values(grupos);
         const skuObsRenderizados = new Set();
         g.skus.forEach((item,indiceSku) => {
         let corStatusSku =
-            item.statusLinha === 'Concluído' ? 'text-emerald-600' :
+            ['Concluído','Coletado a mais'].includes(item.statusLinha) ? 'text-emerald-600' :
             item.statusLinha === 'Cancelado' ? 'text-slate-400 line-through' :
             item.statusLinha === 'Coletado a menos' ? 'text-rose-600' :
             'text-indigo-600';
@@ -9951,7 +9947,7 @@ let arrGrupos = Object.values(grupos);
             <td class="p-1.5 font-bold border-r border-slate-100">${item.sku}</td>
             <td class="p-1.5 font-semibold border-r border-slate-100 text-indigo-700">${item.cd}</td>
             <td class="p-1.5 truncate border-r border-slate-100" title="${item.descricao}">${item.descricao}</td>
-            <td class="p-1.5 text-center font-bold border-r border-slate-100 ${corStatusSku}">${item.statusLinha}</td>
+            <td class="p-1.5 text-center font-bold border-r border-slate-100 ${corStatusSku}" title="${item.excedenteColeta > 0 ? 'Excedente de ' + item.excedenteColeta + ' un. fora do cálculo; SKU limitado a 100%' : ''}">${item.statusLinha}</td>
             <td class="p-1.5 border-r border-slate-100 font-bold text-slate-700">${item.pendenciaHtml}</td>
             <td class="p-1.5 text-right font-bold border-r border-slate-100">${window.formatarBR ? window.formatarBR(item.tiragem) : item.tiragem}</td>
             <td class="p-1.5 text-right font-bold border-r border-slate-100">${window.formatarBR ? window.formatarBR(item.tiragemOriginal) : item.tiragemOriginal}</td>

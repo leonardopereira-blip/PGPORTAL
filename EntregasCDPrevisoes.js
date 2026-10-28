@@ -137,8 +137,9 @@ function pgECDSalvarLote_(entradas) {
         versao: (anterior ? anterior.versao : 0) + 1, atualizadoEm: new Date().toISOString(),
         usuario: usuario, requestId: requestId, alteracao: alteracao};
       Object.keys(alteracao).forEach(function(c) {
-        if (c !== 'observacao' && alteracao[c] && alteracao[c] < hoje) {
-          throw new Error('A nova previsão deve ser hoje ou uma data futura.');
+        // Coleta pode ser retroativa (sem mapa); previsão manual de entrega não.
+        if (c === 'dataEntrega' && alteracao[c] && alteracao[c] < hoje) {
+          throw new Error('A previsão manual de entrega deve ser hoje ou uma data futura.');
         }
         registro[c] = alteracao[c];
       });

@@ -35,11 +35,11 @@ function interfacePortal({adiar=false,adiarSheets=false,semGoogle=false,hojeData
   const run={withSuccessHandler(fn){success=fn;return this;},withFailureHandler(fn){failure=fn;return this;},
     getPrevisoesEntregaCDPortal(){success({success:true,previsoes:{}});},
     salvarPrevisaoEntregaCDPortal(p){salvo=p;const ok=success,fail=failure;
-      concluir=()=>ok({success:true,previsao:{chave:p.chave,dataEntrega:p.dataEntrega,versao:1}});
+      concluir=()=>ok({success:true,previsao:{chave:p.chave,dataColeta:p.dataColeta,dataEntrega:p.dataEntrega,versao:1}});
       erro=()=>fail(new Error('Indisponível'));if(!adiar)concluir();},
     salvarPrevisoesEntregaCDPortal(p){salvo=p;const ok=success,fail=failure;
       concluir=()=>ok({success:true,previsoes:Object.fromEntries(p.previsoes.map((r,i)=>[r.chave,
-        {chave:r.chave,dataEntrega:r.dataEntrega,versao:1,requestId:p.requestId+':'+i}]))});
+        {chave:r.chave,dataColeta:r.dataColeta,dataEntrega:r.dataEntrega,versao:1,requestId:p.requestId+':'+i}]))});
       erro=()=>fail(new Error('Indisponível'));if(!adiar)concluir();},
     gerarPlanilhaEntregasCD(p){exportado=p;rpcSheets++;const ok=success,fail=failure;
       concluirSheets=resp=>ok(resp||{success:true,url:'https://docs.google.com/spreadsheets/d/123'});
@@ -457,4 +457,52 @@ test('plano 100% futuro da WAYS não aparece em pendências com filtro encerrado
   a.nodes.get('ecdTodasPendencias').checked=true;a.window.pgECDRender();
   assert.match(a.nodes.get('ecdBacklog').innerHTML,/Nenhuma pendência/,
     'mesmo mostrar previsões não transforma o planejado completo em pendência');
+});
+
+test('coleta informada aceita ontem e calcula entrega por SLA sem criar Coleta TP',()=>{
+  const a=interfacePortal({adiar:true,hojeData:'2026-10-28'});
+  const html=a.nodes.get('ecdBacklog').innerHTML;
+  assert.match(html,/aria-label="Nova previsão \(coleta\) /);
+  assert.doesNotMatch(html,/aria-label="Nova previsão \(coleta\) [^"]*" min=/);
+  const antes=a.linhas.map(l=>JSON.stringify(l));
+  a.window.pgECDSalvarColeta(0,{value:'2026-10-27'});
+  const pedido=a.salvo();
+  assert.equal(pedido.dataColeta,'2026-10-27');
+  assert.deepEqual(JSON.parse(JSON.stringify(pedido.campos)),['dataColeta','dataEntrega']);
+  assert.equal(pedido.dataEntrega,'','limpa apenas entrega manual anterior');
+  a.confirmar();
+  const chave=a.window.pgEntregasCDModelo.chave(a.linhas[0]);
+  const registro=a.window.PG_ECD_PREVISOES[chave];
+  assert.equal(registro.dataColeta,'2026-10-27');
+  const linha=a.window.pgEntregasCDModelo.montar(a.linhas, a.window.PG_ECD_PREVISOES,'2026-10-28')[0];
+  assert.equal(linha.dtEntregaCalculadaManual,'2026-10-29');
+  assert.equal(linha.origemColetaPrevisao,'Coleta informada (sem mapa)');
+  assert(linha.previsoesEntrega.some(p=>p.data==='2026-10-29'&&p.origem==='Coleta manual + SLA'),
+    'o saldo ainda não coletado recebe a data de SLA; o já coletado mantém a própria entrega');
+  assert.deepEqual(a.linhas.map(l=>JSON.stringify(l)),antes,'não cria Coleta TP nem regrava a base');
+});
+test('coleta acima de 100% permanece confinada ao SKU, sem cobrir o próximo',()=>{
+  const a=interfacePortal();
+  a.linhas[0].coletas=[{data:'2026-10-26',volume:160}];
+  a.linhas[1].coletas=[];
+  const itens=a.window.pgEntregasCDModelo.montar(a.linhas,{},'2026-10-26');
+  assert.equal(itens[0].coletado,100);
+  assert.equal(itens[0].pendenteColeta,0);
+  assert.equal(itens[1].coletado,0);
+  assert.equal(itens[1].pendenteColeta,100);
+  assert.equal(itens[0].excedente,60,'excesso continua disponível para consulta');
+  // O excedente permanece auditável no item, sem reaparecer como coleta pendente.
+  a.window.processarEntregasCD();
+  assert.equal(itens[0].pendenteColeta,0);
+});
+
+test('Entregas CD mantém o excedente bruto para consulta após conciliação por SKU',()=>{
+  const a=interfacePortal();
+  const l=a.linhas[0];
+  l._PG_MA={linhas:[l],eventosColeta:[{data:'2026-10-26',volume:100}],
+    eventosEntrega:[],excedenteColeta:60,excedenteEntrega:0};
+  const item=a.window.pgEntregasCDModelo.montar([l],{},'2026-10-26')[0];
+  assert.equal(item.coletado,100);
+  assert.equal(item.pendenteColeta,0);
+  assert.equal(item.excedente,60,'consulta preserva a informação bruta, sem virar pendência');
 });

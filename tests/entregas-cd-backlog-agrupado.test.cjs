@@ -34,7 +34,7 @@ test('backlog agrupa SKUs por gráfica, marca, série e CD sem duplicar plano ou
   assert.match(linhas[0], /<td title="300">0,3k<\/td>/);
   assert.match(linhas[0], /<td>0,1k \(46,7%\)<\/td>/);
   assert.match(linhas[0], /<td title="250">/);
-  assert.match(linhas[0], /aria-label="Nova previsão LOGPRINT · SAE · 2ª SÉRIE · CD JDI"/);
+  assert.match(linhas[0], /aria-label="Nova previsão \(coleta\) LOGPRINT · SAE · 2ª SÉRIE · CD JDI"/);
   assert(!html.includes('SKU'), 'nenhum SKU aparece em cabeçalho, célula, tooltip ou acessibilidade');
 });
 

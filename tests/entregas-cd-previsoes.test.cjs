@@ -194,3 +194,14 @@ test('grupo com 201 SKUs salva em um único lock e append; limite e lote inváli
     previsoes:Array.from({length:2001},()=>corpo.previsoes[0])}),/1 a 2000/);
   assert.equal(a.estado.rows.length,202);
 });
+
+test('servidor aceita coleta retroativa, conserva histórico e rejeita entrega manual vencida',()=>{
+  const a=portal();
+  const r=a.c.salvarPrevisaoEntregaCDPortal(payload({campos:['dataColeta','dataEntrega'],
+    dataColeta:'2026-10-25',dataEntrega:'',requestId:'coleta-ontem-001'}));
+  assert.equal(r.success,true);assert.equal(r.previsao.dataColeta,'2026-10-25');
+  assert.equal(r.previsao.dataEntrega,'');
+  assert.throws(()=>a.c.salvarPrevisaoEntregaCDPortal(payload({campos:['dataEntrega'],
+    dataEntrega:'2026-10-25',requestId:'entrega-ontem-001'})),/hoje ou uma data futura/);
+  assert.equal(a.estado.rows.length,2,'só a coleta válida foi persistida');
+});

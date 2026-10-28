@@ -65,11 +65,15 @@ test('Giro preserva título Série e prioriza série corrigida, inclusive maiús
   assert.doesNotMatch(html, /Série \(usando série corrigida/);
 });
 
-test('excedente AY aparece como pendência mesmo quando STATUS_EE é OK',()=>{
-  const linhas=executarGiro({ee:'OK',estado:{ay:'COLETADO A MAIS',coletada:150}});
-  assert.equal(linhas.length,1);
-  assert.equal(linhas[0].pendencia,'Coletado a mais');
-  assert.equal(linhas[0].tiragem,50);
+test('coleta a mais não cria pendência nem aparece com status EE OK',()=>{
+  const linhas=executarGiro({ee:'OK',estado:{ay:'COLETADO A MAIS',coletada:150},
+    campos:{'TIRAGEM COLETADA':150}});
+  assert.equal(linhas.length,0);
+});
+test('excedente numérico do SKU também não vira pendência se AY está desatualizada',()=>{
+  const linhas=executarGiro({campos:{'TIRAGEM COLETADA':150},
+    estado:{pendente:false,parcial:false,saldo:0,ay:''}});
+  assert.equal(linhas.length,0);
 });
 
 const estadoPos = {pendente:true,parcial:true,saldo:50};
@@ -249,4 +253,12 @@ test('observações atuais de grupo e SKU aparecem só nas linhas correspondente
   assert.equal(r.linhas[1][idx],'');
   assert.equal(r.linhas[0][3],'CD JDI');
   assert.equal(r.linhas[1][2],'2º ANO');
+});
+
+test('excedente fica fora das pendências por padrão',()=>{
+  const r=executarGiro({ee:'',estado:{ay:'COLETADO A MAIS',coletada:150},
+    campos:{'TIRAGEM COLETADA':150},retornarTela:true,
+    // Sem checkbox concluído, a situação aparece apenas no detalhe consultável.
+    });
+  assert.equal(r.linhas.length,0);
 });

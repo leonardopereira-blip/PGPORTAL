@@ -100,8 +100,12 @@
                 eventosEntregaTP: conciliacao.eventosEntrega} : window.pgVolumesColetaUnificadosV37?.(linha, hoje) || {};
             const eventosColeta = eventosReais(volumes, 'coleta', hoje, movimentosUsados);
             const eventosEntrega = eventosReais(volumes, 'entrega', hoje, movimentosUsados);
-            const coletado = eventosColeta.reduce((s, e) => s + e.volume, 0);
-            const entregue = eventosEntrega.reduce((s, e) => s + e.volume, 0);
+            // O excedente de coleta/entrega fica limitado ao próprio SKU.
+            // Nunca libera saldo nem compensa a pendência de outro item.
+            const coletadoBruto = eventosColeta.reduce((s, e) => s + e.volume, 0);
+            const entregueBruto = eventosEntrega.reduce((s, e) => s + e.volume, 0);
+            const coletado = Math.min(total, coletadoBruto);
+            const entregue = Math.min(total, entregueBruto);
             const saldo = Math.max(0, total - entregue);
             const pendenteColeta = Math.max(0, total - Math.max(coletado, entregue));
             const aguardandoEntrega = Math.min(saldo, Math.max(0, coletado - entregue));
@@ -123,14 +127,16 @@
             const dtEntregaManual = data(registro.dataEntrega || registro.data || registro.dataPrevista);
             const manualColetaPreenchida = conflitoColeta || preenchido(registro.dataColeta);
             const manualEntregaPreenchida = conflitoEntrega || preenchido(registro.dataEntrega || registro.data || registro.dataPrevista);
-            const coletaManualVencida = !conflitoColeta && manualColetaPreenchida && (!dtColetaManual || dtColetaManual < hoje);
+            const coletaManualVencida = !conflitoColeta && manualColetaPreenchida && !dtColetaManual;
+            const dtEntregaCalculadaManual = dtColetaManual && !conflitoColeta
+                ? entregaSLA(linha, dtColetaManual) : '';
             const entregaManualVencida = !conflitoEntrega && manualEntregaPreenchida && (!dtEntregaManual || dtEntregaManual < hoje);
             let dtColetaPrevista = '', dtPrevisao = '', origemPrevisao = 'Sem previsão';
             let origemColetaPrevisao = 'Sem previsão';
             if (pendenteColeta > 0) {
-                if (dtColetaManual && dtColetaManual >= hoje) {
+                if (dtColetaManual) {
                     dtColetaPrevista = dtColetaManual;
-                    origemColetaPrevisao = 'Manual';
+                    origemColetaPrevisao = dtColetaManual < hoje ? 'Coleta informada (sem mapa)' : 'Manual';
                 } else if (!manualColetaPreenchida && dtColetaPCP >= hoje) {
                     dtColetaPrevista = dtColetaPCP;
                     origemColetaPrevisao = 'PCP original';
@@ -158,7 +164,8 @@
                     adicionarEntrega(dtEntregaManual, pendenteColeta, 'Manual');
                 } else if (pendenteColeta > 0 && !conflitoEntrega && !entregaManualVencida && dtColetaPrevista) {
                     adicionarEntrega(entregaSLA(linha, dtColetaPrevista), pendenteColeta,
-                        origemColetaPrevisao === 'Manual' ? 'Coleta manual + SLA' : 'PCP original + SLA');
+                        origemColetaPrevisao === 'Manual' || origemColetaPrevisao === 'Coleta informada (sem mapa)'
+                            ? 'Coleta manual + SLA' : 'PCP original + SLA');
                 }
             }
             previsoesEntrega.sort((a, b) => a.data.localeCompare(b.data));
@@ -182,9 +189,10 @@
                 personalizado, clientePersonalizado, capaPersonalizada,
                 tipo: String(primeiro(linha, ['TIPO', 'Tipo'])), envio, kit, op,
                 total, coletado, entregue, saldo, aguardandoEntrega, pendenteColeta,
-                excedente: Math.max(0, entregue - total),
+                excedente: Math.max(0, coletadoBruto - total, entregueBruto - total,
+                    Number(conciliacao?.excedenteColeta || 0), Number(conciliacao?.excedenteEntrega || 0)),
                 dtPlanoOriginal: dtEntregaPCP, dtColetaPCP, dtEntregaPCP,
-                dtColetaManual, dtEntregaManual, dtColetaPrevista, origemColetaPrevisao,
+                dtColetaManual, dtEntregaManual, dtEntregaCalculadaManual, dtColetaPrevista, origemColetaPrevisao,
                 dtPrevisao, origemPrevisao, previsoesEntrega, resumoPrevisoes, semPrevisaoVolume,
                 backlog: saldo > 0 && ((!!dtEntregaPCP && dtEntregaPCP < hoje) || (!!dtColetaPCP && dtColetaPCP < hoje)),
                 semPrevisao: semPrevisaoVolume > 0,

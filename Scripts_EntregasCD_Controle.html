@@ -323,20 +323,36 @@
             const itens = [...g.itens], chavesOrigem = [...new Set(itens.flatMap(chavesItem))];
             const previsoesOrigem = Object.assign({}, ...itens.map(i => i.previsoesOrigem || {[i.chave]: i.previsao || {}}));
             const entregas = new Set(itens.map(i => i.dtEntregaManual || ''));
+            const coletasManuais = new Set(itens.map(i => i.dtColetaManual || ''));
+            const entregasSLA = new Set(itens.map(i => i.dtEntregaCalculadaManual || ''));
             const coletas = [...new Set(itens.map(i => i.dtColetaManual || i.dtColetaPCP || '').filter(Boolean))].sort();
             const total = itens.reduce((s, i) => s + i.total, 0), coletado = itens.reduce((s, i) => s + i.coletado, 0);
-            return {...g, total, coletado, coleta: coletas.length ? coletas.map(br).join(' | ') : '—',
+            const excedente = itens.reduce((s, i) => s + i.excedente, 0);
+            return {...g, total, coletado, excedente, coleta: coletas.length ? coletas.map(br).join(' | ') : '—',
                 item: {...itens[0], chave: chavesOrigem[0], chavesOrigem, previsoesOrigem, total, coletado,
-                    dtEntregaManual: entregas.size === 1 ? [...entregas][0] : ''}};
+                    dtColetaManual: coletasManuais.size === 1 ? [...coletasManuais][0] : '',
+                    dtEntregaManual: entregas.size === 1 ? [...entregas][0] : '',
+                    dtEntregaCalculadaManual: entregasSLA.size === 1 ? [...entregasSLA][0] : ''}};
         });
         const futuro = estado.pendencias.filter(g => g.situacao === 'FUTURA').reduce((s, g) => s + g.volume, 0);
         $('ecdBacklogTotal').textContent = 'falta ' + k(c.total.backlog) +
             (futuro ? ' · pendência futura ' + k(futuro) : '');
         $('ecdBacklog').innerHTML = estado.pendencias.length ? '<table class="ecd-backlog-table"><thead><tr>' +
-            ['Gráfica', 'Marca', 'Série', 'CD', 'Situação', 'Coleta prevista', 'Plano', 'Coletado', 'Falta', 'Nova previsão'].map(t => '<th>' + t + '</th>').join('') + '</tr></thead><tbody>' + estado.pendencias.map((g, n) => {
+            ['Gráfica', 'Marca', 'Série', 'CD', 'Situação', 'Coleta prevista', 'Plano', 'Coletado', 'Falta', 'Nova previsão (coleta)', 'Entrega manual'].map(t => '<th>' + t + '</th>').join('') + '</tr></thead><tbody>' + estado.pendencias.map((g, n) => {
                 const i = g.item, situacao = g.situacao === 'FUTURA' ? 'Pendência futura · após ' + br(g.aposPrevisao)
                     : g.situacao === 'PROGRAMADA' ? 'Com previsão' : 'Pendente';
-                return '<tr class="' + (g.motivos.has('Coleta atrasada') ? 'ecd-sla-risk' : '') + '" title="' + esc([...g.motivos].join(' · ')) + '"><td>' + esc(i.grafica) + '</td><td>' + esc(i.marca) + '</td><td>' + esc(i.serie) + '</td><td>' + esc(i.cd) + '</td><td>' + esc(situacao) + '</td><td>' + esc(g.coleta) + '</td><td title="' + exato(g.total) + '">' + k(g.total) + '</td><td>' + k(g.coletado) + ' (' + pct(g.coletado, g.total) + ')</td><td title="' + exato(g.volume) + '">' + k(g.volume) + '</td><td><input class="ecd-input-date" type="date" aria-label="Nova previsão ' + esc(rotuloGrupo(i)) + '" min="' + hoje() + '" value="' + esc(i.dtEntregaManual) + '" onchange="pgECDSalvar(' + n + ',this)" ' + (itemSalvando(i) ? 'disabled' : '') + '><span class="ecd-save-state" id="ecdSalvo' + n + '"></span></td></tr>';
+                return '<tr class="' + (g.motivos.has('Coleta atrasada') ? 'ecd-sla-risk' : '') + '" title="' + esc([...g.motivos].join(' · ')) + '"><td>' + esc(i.grafica) + '</td><td>' + esc(i.marca) + '</td><td>' + esc(i.serie) + '</td><td>' + esc(i.cd) + '</td><td>' + esc(situacao) + (g.excedente > 0 ?
+                    ' <span title="Excedente registrado para consulta, fora da tiragem pendente">Coletado a mais: ' +
+                    k(g.excedente) + '</span>' : '') + '</td><td>' + esc(g.coleta) + '</td><td title="' + exato(g.total) + '">' + k(g.total) + '</td><td>' + k(g.coletado) + ' (' + pct(g.coletado, g.total) + ')</td><td title="' + exato(g.volume) + '">' + k(g.volume) + '</td><td><input class="ecd-input-date" type="date" aria-label="Nova previsão (coleta) ' + esc(rotuloGrupo(i)) +
+                '" title="Aceita datas passadas. Calcula entrega pela Matriz SLA, sem registrar Coleta TP." value="' +
+                esc(i.dtColetaManual) + '" onchange="pgECDSalvarColeta(' + n + ',this)" ' +
+                (itemSalvando(i) ? 'disabled' : '') + '></td><td><input class="ecd-input-date" type="date" aria-label="Entrega manual ' +
+                esc(rotuloGrupo(i)) + '" min="' + hoje() + '" value="' + esc(i.dtEntregaManual) +
+                '" onchange="pgECDSalvar(' + n + ',this)" ' + (itemSalvando(i) ? 'disabled' : '') +
+                '><span class="ecd-save-state" id="ecdSalvo' + n + '"></span>' +
+                (i.dtEntregaCalculadaManual ? '<small title="Entrega calculada pela Matriz SLA a partir da coleta informada">SLA: ' +
+                    br(i.dtEntregaCalculadaManual) + '</small>' : (i.dtColetaManual ?
+                    '<small title="Rota sem prazo na Matriz SLA">Sem SLA</small>' : '')) + '</td></tr>';
             }).join('') + '</tbody></table>' : '<p class="ecd-empty">Nenhuma pendência nos filtros selecionados.</p>';
     };
     function enviarPrevisao(pedido) {
@@ -347,7 +363,8 @@
         const anteriores = Object.fromEntries(chaves.map(chave => [chave, estado.previsoes[chave] || {}]));
         const otimistas = entradas.filter(p => Number(anteriores[p.chave].versao || 0) <= Number(p.versaoEsperada || 0));
         mesclarPrevisoes(Object.fromEntries(otimistas.map(p => [p.chave, {...anteriores[p.chave], chave: p.chave,
-            dataEntrega: p.dataEntrega, _pgRequestId: payload.requestId}])));
+            ...Object.fromEntries((p.campos || ['dataEntrega']).map(campo => [campo, p[campo]])),
+            _pgRequestId: payload.requestId}])));
         chaves.forEach(chave => estado.salvando.add(chave)); estado.falhas.delete(item.chave);
         montarItens(); notificarPrevisoes(); aviso('Salvando nova previsão...');
         const falhar = erro => {
@@ -370,6 +387,23 @@
         if (payload.previsoes) servidor.salvarPrevisoesEntregaCDPortal(payload);
         else servidor.salvarPrevisaoEntregaCDPortal(payload);
     }
+    // Coleta informada pode ser retroativa: entrega = coleta + Matriz SLA.
+    // Limpa só a entrega manual correspondente, sem registrar nem alterar Coleta TP.
+    window.pgECDSalvarColeta = function (indice, input) {
+        const item = estado.pendencias?.[indice]?.item;
+        if (!item || !input || itemSalvando(item)) return;
+        const valor = input.value;
+        if (valor && !/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+            aviso('Informe uma data de coleta válida.', true); input.value = item.dtColetaManual; return;
+        }
+        const requestId = 'ecd-coleta-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+        const chaves = chavesItem(item);
+        const entradas = chaves.map(chave => ({chave,
+            campos:['dataColeta','dataEntrega'],dataColeta:valor,dataEntrega:'',
+            versaoEsperada:Number(estado.previsoes[chave]?.versao || 0)}));
+        enviarPrevisao({item, payload:chaves.length > 1
+            ? {requestId,previsoes:entradas} : {...entradas[0],requestId}});
+    };
     window.pgECDSalvar = function (indice, input) {
         const item = estado.pendencias?.[indice]?.item;
         if (!item || !input || itemSalvando(item)) return;
