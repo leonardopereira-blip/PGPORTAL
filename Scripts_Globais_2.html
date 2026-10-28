@@ -9362,17 +9362,13 @@ window.reFiltrarTabelaGiro = function() {
     // O total previsto usa todo o grupo nos filtros gerais, antes de filtrar
     // status, etapas ou prazos das pendências, com a mesma contagem de itens
     // da coluna de SKUs restantes e a soma das tiragens originais.
-    // PCP usa a tiragem da linha. Na PCP_ACABADORAS, a base por destino CD
-    // vem de um campo proprio: TIRAGEM pode representar outra quantidade.
-    // O mesmo total alimenta tanto o grupo quanto o detalhe de cada SKU.
+    // No PCP e no PCP_ACABADORAS, o total esperado e SEMPRE a soma da
+    // coluna TIRAGEM TOTAL, nao TIRAGEM nem TIRAGEM A ENTREGAR por CD.
+    // O mesmo denominador aparece na linha do grupo e no detalhe do SKU.
     const tiragemOriginalGiro = l => {
-        if (window.pgEhFonteAcabadora?.(l)) {
-            const totalCD = window.pgCampoColeta(l, 'TIRAGEM A ENTREGAR (total por CD)');
-            const numeroCD = window.pgNumeroPrazoV35(totalCD);
-            return window.arredondar ? window.arredondar(numeroCD) : numeroCD;
-        }
-        const original = l["TIRAGEM"] ?? l["QUANTIDADE"] ?? 0;
-        return window.arredondar ? window.arredondar(original) : (Number(original) || 0);
+        const total = window.pgCampoColeta(l, 'TIRAGEM TOTAL');
+        const numero = window.pgNumeroPrazoV35(total);
+        return window.arredondar ? window.arredondar(numero) : numero;
     };
     const totaisGrupos = new Map();
     window.GIRO_DADOS_RAW.forEach(l => {
