@@ -6,6 +6,23 @@ const CACHE_DASHBOARD_TMP = "cache_dashboard.json";
 var PG_LIMITE_SET_CONTENT = 9 * 1024 * 1024;
 
 function pgGravarArquivoDrive_(pasta, nomeArquivo, conteudoJSON) {
+  if (nomeArquivo !== 'cache_observacoes.json') {
+    return pgGravarArquivoDriveDireto_(pasta,nomeArquivo,conteudoJSON);
+  }
+  // A publicação de um snapshot pode ocorrer depois da preparação. Releia as
+  // fontes na gravação real, sob a mesma trava usada ao salvar notas no Giro.
+  var lock = LockService.getScriptLock(), bloqueado = false;
+  try {
+    lock.waitLock(20000); bloqueado = true;
+    var recebido = pgGiroValidarHistoricoObs_(JSON.parse(conteudoJSON));
+    var cache = pgGiroLerCacheObsSeguro_(pasta);
+    var completo = pgGiroMesclarHistoricosObs_([
+      pgBuscarHistoricoObsGiroPortal_(),cache.historico,recebido]);
+    return pgGravarArquivoDriveDireto_(pasta,nomeArquivo,JSON.stringify(completo));
+  } finally { if (bloqueado) lock.releaseLock(); }
+}
+
+function pgGravarArquivoDriveDireto_(pasta, nomeArquivo, conteudoJSON) {
   var blob = Utilities.newBlob(conteudoJSON, 'application/json', nomeArquivo);
   var bytes = blob.getBytes().length;
   var arquivos = pasta.getFilesByName(nomeArquivo);
@@ -476,7 +493,7 @@ function atualizarTodoOCache() {
     ['cache_chamados.json', getDadosChamados],
     ['cache_caixas.json', getDadosCaixas],
     ['cache_mapa.json', getDadosMapaSaida],
-    ['cache_observacoes.json', buscarHistoricoObsGiro]
+    ['cache_observacoes.json', pgBuscarHistoricoObsGiroCacheSeguro_]
   ];
   etapas.forEach(function(etapa) {
     try { pgAtualizarArquivoCache_(etapa[0], etapa[1]); } catch (e) {
@@ -487,6 +504,11 @@ function atualizarTodoOCache() {
   if (falhas.length) throw new Error('Caches com falha: ' + falhas.join(' | '));
   if (typeof atualizarAcompanhamentoMapa === 'function') atualizarAcompanhamentoMapa();
   console.log('[cache] Todos os caches atualizados');
+}
+
+function atualizarCacheObservacoes() {
+  pgAtualizarArquivoCache_('cache_observacoes.json',pgBuscarHistoricoObsGiroCacheSeguro_);
+  return {success:true};
 }
 
 function getDadosAlocacao_Cache() { return JSON.parse(lerJSONDoDrive("cache_alocacao.json")); }

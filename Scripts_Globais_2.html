@@ -9202,7 +9202,8 @@ window.abrirModalHistorico = function(tipo, chave) {
     }
 
     let dict = (tipo === 'SKU') ? window.HISTORICO_OBS_GIRO.sku : window.HISTORICO_OBS_GIRO.master;
-    let hist = window.pgGiroHistoricoParaChave?.(tipo,chave) || dict[chave] || [];
+    let hist = window.pgGiroHistoricoCompletoParaChave?.(tipo,chave) ||
+        window.pgGiroHistoricoParaChave?.(tipo,chave) || dict[chave] || [];
     
     let labelChave = chave.replace(/\|/g, " ➔ ");
     document.getElementById('modalHistoricoSub').innerText = (tipo === 'SKU' ? "Referência do SKU: " : "Referência da Linha: ") + labelChave;

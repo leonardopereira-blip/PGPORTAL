@@ -136,61 +136,129 @@ function pgBuscarHistoricoObsGiroPortal_() {
   return {master: pgGiroLerAba_(ss.getSheetByName('Obs_Cockpit'), 'MASTER', 0).historico,
     sku: pgGiroLerAba_(ss.getSheetByName('Obs_Cockpit_sku'), 'SKU', 0).historico};
 }
-// Recuperação independente das observações: não depende da leitura de previsões de CD.
-// O contexto físico já está preservado na planilha; a tela só precisa dos dados do histórico.
-// Unifica a planilha append-only com o cache historico existente no Drive.
-// A consulta nao altera nenhuma das fontes e nao perde notas quando uma delas falha.
-function buscarHistoricoObsGiroLeve() {
-  var saida = {master:{}, sku:{}}, origens = [], avisos = [];
-  var ids = {master:Object.create(null), sku:Object.create(null)};
-  var mesclar = function(fonte) {
-    ['master','sku'].forEach(function(tipo) {
-      var grupos = fonte && fonte[tipo] || {};
-      Object.keys(grupos).forEach(function(chave) {
-        var chaveNormal = pgGiroNormalizarChave_(tipo === 'sku' ? 'SKU' : 'MASTER', chave);
-        if (!chaveNormal || !Array.isArray(grupos[chave])) return;
-        var destino = saida[tipo][chaveNormal] || (saida[tipo][chaveNormal] = []);
-        grupos[chave].forEach(function(e) {
-          if (!e || !String(e.obs || '').trim()) return;
-          var eventoId = String(e.id || '').trim();
-          var assinatura = eventoId ? 'id:' + eventoId :
-            'legado:' + [e.data, e.user, e.obs, chaveNormal].join('\u0001');
-          if (ids[tipo][assinatura]) return;
-          ids[tipo][assinatura] = true;
-          destino.push({id:eventoId, data:e.data || '', sequencia:Number(e.sequencia || 0),
-            user:e.user || '', obs:String(e.obs), tipo:tipo === 'sku' ? 'SKU' : 'MASTER'});
+function pgGiroValidarHistoricoObs_(fonte) {
+  if (!fonte || typeof fonte !== 'object' || Array.isArray(fonte)) {
+    throw new Error('Histórico de observações inválido.');
+  }
+  ['master','sku'].forEach(function(tipo) {
+    var grupos = fonte[tipo];
+    if (!grupos || typeof grupos !== 'object' || Array.isArray(grupos)) {
+      throw new Error('Histórico de observações sem mapa ' + tipo + '.');
+    }
+    Object.keys(grupos).forEach(function(chave) {
+      if (!chave.trim() || !Array.isArray(grupos[chave]) || grupos[chave].some(function(e) {
+        return !e || typeof e !== 'object' || Array.isArray(e) ||
+          (typeof e.obs !== 'string' && typeof e.obs !== 'number');
+      })) throw new Error('Histórico de observações inválido na chave ' + chave + '.');
+    });
+  });
+  return fonte;
+}
+
+// A primeira fonte prevalece em um mesmo evento. Campos adicionais do cache
+// continuam preservados; IDs distintos não apagam repetições legítimas.
+function pgGiroMesclarHistoricosObs_(fontes) {
+  fontes.forEach(pgGiroValidarHistoricoObs_);
+  var saida = {master:{}, sku:{}};
+  ['master','sku'].forEach(function(tipo) {
+    var ids = Object.create(null), assinaturas = Object.create(null);
+    fontes.forEach(function(fonte) {
+      Object.keys(fonte[tipo]).forEach(function(chave) {
+        var normal = pgGiroNormalizarChave_(tipo === 'sku' ? 'SKU' : 'MASTER', chave);
+        var destino = saida[tipo][normal] || (saida[tipo][normal] = []);
+        fonte[tipo][chave].forEach(function(e) {
+          var id = String(e.id || '').trim(), chaveId = normal + '\u0001' + id;
+          var assinatura = [normal,e.data || '',e.user || '',e.obs].join('\u0001');
+          var mesmo = id ? ids[chaveId] : null;
+          if (!mesmo) {
+            var candidatos = assinaturas[assinatura] || [];
+            mesmo = candidatos.filter(function(x) { return !id || !x.id; })[0];
+          }
+          if (mesmo) {
+            Object.keys(e).forEach(function(campo) {
+              if (mesmo[campo] == null || mesmo[campo] === '') {
+                mesmo[campo] = e[campo] && typeof e[campo] === 'object'
+                  ? JSON.parse(JSON.stringify(e[campo])) : e[campo];
+              }
+              else if (campo === 'contexto' && e.contexto && typeof e.contexto === 'object' &&
+                mesmo.contexto && typeof mesmo.contexto === 'object') {
+                Object.keys(e.contexto).forEach(function(k) {
+                  if (!Object.prototype.hasOwnProperty.call(mesmo.contexto,k)) mesmo.contexto[k] = e.contexto[k];
+                });
+              }
+            });
+          } else {
+            mesmo = {};
+            Object.keys(e).forEach(function(campo) { mesmo[campo] = e[campo]; });
+            if (e.contexto && typeof e.contexto === 'object') {
+              mesmo.contexto = JSON.parse(JSON.stringify(e.contexto));
+            }
+            destino.push(mesmo);
+            (assinaturas[assinatura] || (assinaturas[assinatura] = [])).push(mesmo);
+          }
+          if (id) ids[chaveId] = mesmo;
         });
       });
     });
-  };
+    Object.keys(saida[tipo]).forEach(function(chave) {
+      saida[tipo][chave].sort(function(a,b) {
+        var av = pgGiroMomento_(a.data), bv = pgGiroMomento_(b.data);
+        return (isFinite(bv) ? bv : -Infinity) - (isFinite(av) ? av : -Infinity) ||
+          Number(b.sequencia || 0)-Number(a.sequencia || 0);
+      });
+    });
+  });
+  return saida;
+}
+
+// Arquivo inexistente permite iniciar o cache. Um arquivo existente vazio,
+// corrompido ou com formato inesperado nunca autoriza apagar o histórico.
+function pgGiroLerCacheObsSeguro_(pasta) {
+  pasta = pasta || DriveApp.getFolderById(PASTA_CACHE_ID);
+  var arquivos = pasta.getFilesByName('cache_observacoes.json'), fontes = [];
+  while (arquivos.hasNext()) {
+    var fonte;
+    try { fonte = JSON.parse(arquivos.next().getBlob().getDataAsString('UTF-8')); }
+    catch(e) { throw new Error('Cache de observações ilegível: ' + String(e.message || e)); }
+    fontes.push(pgGiroValidarHistoricoObs_(fonte));
+  }
+  return {existe:fontes.length > 0, historico:pgGiroMesclarHistoricosObs_(fontes)};
+}
+
+function pgBuscarHistoricoObsGiroCacheSeguro_() {
+  var cache = pgGiroLerCacheObsSeguro_();
+  return pgGiroMesclarHistoricosObs_([pgBuscarHistoricoObsGiroPortal_(),cache.historico]);
+}
+
+// A consulta leve pode usar a outra fonte quando uma falha. As gravações de
+// cache usam a leitura estrita acima e preservam todos os campos do histórico.
+function buscarHistoricoObsGiroLeve() {
+  var fontes = [], origens = [], avisos = [];
   try {
-    mesclar(pgBuscarHistoricoObsGiroPortal_());
+    fontes.push(pgGiroValidarHistoricoObs_(pgBuscarHistoricoObsGiroPortal_()));
     origens.push('PCPs');
-  } catch(e) {
-    avisos.push('PCPs: ' + String(e.message || e));
-  }
+  } catch(e) { avisos.push('PCPs: ' + String(e.message || e)); }
   try {
-    var cache = JSON.parse(lerJSONDoDrive('cache_observacoes.json', true));
-    if (!cache || !cache.master || !cache.sku) throw new Error('cache sem historico valido');
-    mesclar(cache);
-    origens.push('cache_observacoes.json');
-  } catch(e) {
-    avisos.push('Cache Drive: ' + String(e.message || e));
-  }
+    var cache = pgGiroLerCacheObsSeguro_();
+    if (cache.existe) {
+      fontes.push(cache.historico);
+      origens.push('cache_observacoes.json');
+    }
+  } catch(e) { avisos.push('Cache Drive: ' + String(e.message || e)); }
   if (!origens.length) return {success:false,
     error:'Nenhuma fonte de observacoes disponivel. ' + avisos.join(' | ')};
-  var totais = {master:0, sku:0};
+  var completo = pgGiroMesclarHistoricosObs_(fontes), saida = {master:{},sku:{}}, totais = {master:0,sku:0};
   ['master','sku'].forEach(function(tipo) {
-    Object.keys(saida[tipo]).forEach(function(chave) {
-      var eventos = saida[tipo][chave];
-      eventos.sort(function(a,b) {
-        return pgGiroMomento_(b.data)-pgGiroMomento_(a.data) ||
-          b.sequencia-a.sequencia;
+    Object.keys(completo[tipo]).forEach(function(chave) {
+      var eventos = completo[tipo][chave].filter(function(e) { return String(e.obs).trim(); });
+      saida[tipo][chave] = eventos.map(function(e) {
+        return {id:String(e.id || ''),data:e.data || '',sequencia:Number(e.sequencia || 0),
+          user:e.user || '',obs:String(e.obs),tipo:tipo === 'sku' ? 'SKU' : 'MASTER'};
       });
       totais[tipo] += eventos.length;
     });
   });
-  return {success:true, historico:saida, totais:totais, origens:origens, avisos:avisos};
+  return {success:true,historico:saida,totais:totais,origens:origens,avisos:avisos};
 }
 function pgSalvarObsGiroPortal_(tipo, chave, obs, contextoStr, eventoId) {
   var lock, bloqueado = false;

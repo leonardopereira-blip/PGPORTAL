@@ -117,14 +117,38 @@ test('nova intenção substitui retry de data antiga para a mesma chave',()=>{
   assert.equal(a.chamadas[1].args[0].previsoes[0].dataEntrega,'2026-11-02');
   assert.notEqual(a.chamadas[0].args[0].requestId,a.chamadas[1].args[0].requestId);
 });
-test('snapshot completo remove notas excluídas na origem e preserva as ainda não confirmadas',()=>{
+test('snapshot completo parcial de origem conserva histórico carregado e notas ainda não confirmadas',()=>{
   const a=app(),i=a.input('Pendente');
   a.window.HISTORICO_OBS_GIRO.sku.EXCLUIDA=[{id:'antigo',obs:'Excluída na origem'}];
   a.window.salvarObsFront('SKU','K',i);a.window.pgGiroSincronizar();
   a.chamadas[1].ok({success:true,alterado:true,parcial:false,historico:{master:{},sku:{}},previsoes:{},revisao:{id:'r'}});
-  assert.equal(a.window.HISTORICO_OBS_GIRO.sku.EXCLUIDA,undefined);
+  assert.equal(a.window.HISTORICO_OBS_GIRO.sku.EXCLUIDA[0].obs,'Excluída na origem');
   assert.equal(a.window.HISTORICO_OBS_GIRO.sku.K[0].obs,'Pendente');
   assert.equal(a.window.HISTORICO_OBS_GIRO.sku.K[0].pendente,true);
+});
+
+test('recuperação histórica durante digitação preserva foco, rascunho e nota atual até sair do campo',()=>{
+  const a=app(),k='GRAFICA|MARCA|6 ANO|V1|RAIZES',i=a.input('Rascunho ainda digitando');
+  let aoSair;
+  i.tagName='INPUT';
+  i.addEventListener=(nome,fn)=>{if(nome==='blur')aoSair=fn;};
+  i.dataset={pgObsTipo:'MASTER',pgObsChave:k,pgObsSalva:'Nota de hoje'};
+  a.document.activeElement=i;
+  a.document.getElementById=id=>id==='abaGiroSemanal'?{classList:{contains:()=>false}}:null;
+  a.window.HISTORICO_OBS_GIRO.master[k]=[
+    {id:'hoje',data:'28/10/2026 15:21:31',obs:'Nota de hoje',user:'ana'}];
+  a.window.pgGiroSincronizar();
+  a.chamadas.find(c=>c.nome==='buscarHistoricoObsGiroLeve').ok({success:true,historico:{master:{[k]:[
+    {id:'recuperada',data:'26/10/2026 09:24:12',obs:'Observação recuperada',user:'bia'}]},sku:{}}});
+  assert.equal(i.value,'Rascunho ainda digitando');
+  assert.equal(i.dataset.pgObsSalva,'Nota de hoje');
+  assert.equal(a.document.activeElement,i);
+  assert.equal(a.renders(),0,'recuperação aguarda blur antes de redesenhar a linha');
+  assert.deepEqual(Array.from(a.window.HISTORICO_OBS_GIRO.master[k],e=>e.id),['hoje','recuperada']);
+  assert.equal(a.window.pgGiroHistoricoParaChave('MASTER',k)[0].obs,'Nota de hoje');
+  assert.equal(typeof aoSair,'function');
+  aoSair();
+  assert.equal(a.renders(),1);
 });
 test('campo compartilhado calcula data comum e não aceita chave sem destino',()=>{
   const a=app(),k=chave('SKU1');a.window.PG_ECD_PREVISOES[k]={dataEntrega:'2026-10-30'};
@@ -206,9 +230,9 @@ test('histórico reaparece mesmo quando a sincronização combinada de previsõe
   a.document.getElementById=id=>id==='abaGiroSemanal'?{classList:{contains:()=>false}}:null;
   i.dataset={pgObsTipo:'MASTER',pgObsChave:k,pgObsSalva:''};
   a.window.pgGiroSincronizar();
-  assert.deepEqual(a.chamadas.map(c=>c.nome),['buscarAtualizacoesGiroPortal','buscarHistoricoObsGiroLeve']);
-  a.chamadas[0].fail({message:'Falha na previsão de CD'});
-  a.chamadas[1].ok({success:true,historico:{master:{[k]:[
+  assert.deepEqual(a.chamadas.map(c=>c.nome).sort(),['buscarAtualizacoesGiroPortal','buscarHistoricoObsGiroLeve']);
+  a.chamadas.find(c=>c.nome==='buscarAtualizacoesGiroPortal').fail({message:'Falha na previsão de CD'});
+  a.chamadas.find(c=>c.nome==='buscarHistoricoObsGiroLeve').ok({success:true,historico:{master:{[k]:[
     {id:'hist-1',data:'27/10/2026 10:00:00',obs:'Obs recuperada',user:'ana'}]},sku:{}}});
   assert.equal(a.window.HISTORICO_OBS_GIRO.master[k][0].obs,'Obs recuperada');
   assert.equal(i.value,'Obs recuperada');
@@ -219,9 +243,9 @@ test('snapshot combinado vazio não apaga observação recuperada e retry não d
   const a=app(),k='GRAFICA|MARCA|SERIE|V1|CD';
   a.document.getElementById=id=>id==='abaGiroSemanal'?{classList:{contains:()=>false}}:null;
   a.window.pgGiroSincronizar();
-  a.chamadas[1].ok({success:true,historico:{master:{[k]:[
+  a.chamadas.find(c=>c.nome==='buscarHistoricoObsGiroLeve').ok({success:true,historico:{master:{[k]:[
     {id:'hist-1',data:'27/10/2026 10:00:00',obs:'Preservada'}]},sku:{}}});
-  a.chamadas[0].ok({success:true,alterado:true,parcial:false,
+  a.chamadas.find(c=>c.nome==='buscarAtualizacoesGiroPortal').ok({success:true,alterado:true,parcial:false,
     historico:{master:{},sku:{}},previsoes:{},revisao:{id:'r1'}});
   assert.equal(a.window.HISTORICO_OBS_GIRO.master[k][0].obs,'Preservada');
   a.window.pgGiroSincronizar();
@@ -236,10 +260,10 @@ test('recuperação atualiza filtros por observação mesmo após primeira sincr
   const a=app(),k='GRAFICA|MARCA|SERIE|V1|CD';
   a.document.getElementById=id=>id==='abaGiroSemanal'?{classList:{contains:()=>false}}:null;
   a.window.pgGiroSincronizar();
-  a.chamadas[0].ok({success:true,alterado:true,parcial:false,
+  a.chamadas.find(c=>c.nome==='buscarAtualizacoesGiroPortal').ok({success:true,alterado:true,parcial:false,
     historico:{master:{},sku:{}},previsoes:{},revisao:{id:'r1'}});
   assert.equal(a.renders(),1);
-  a.chamadas[1].ok({success:true,historico:{master:{[k]:[
+  a.chamadas.find(c=>c.nome==='buscarHistoricoObsGiroLeve').ok({success:true,historico:{master:{[k]:[
     {id:'hist-1',data:'27/10/2026 10:00:00',obs:'Voltou'}]},sku:{}}});
   assert.equal(a.renders(),2,'o filtro da tabela deve refletir as observações recuperadas');
   assert.equal(a.window.HISTORICO_OBS_GIRO.master[k][0].obs,'Voltou');

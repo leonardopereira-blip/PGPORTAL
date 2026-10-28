@@ -36,16 +36,37 @@ test('chaves atuais e antigas de série têm a mesma identidade no servidor e no
   }
 });
 
-test('observação master anterior ao envio/CD aparece nas linhas compatíveis sem misturar notas específicas de outro CD',()=>{
+test('campo prioriza chave específica e histórico completo conserva a legada sem misturar outro CD ou envio',()=>{
   const {window}=ambiente({
     'REPROSET|COC|9O ANO':[evento('antiga','01/10/2026 10:00:00')],
     'REPROSET|COC|9º ANO|V1|CD JDI':[evento('jdi','02/10/2026 10:00:00')],
-    'REPROSET|COC|9º ANO|V1|CD FOR':[evento('for','03/10/2026 10:00:00')]
+    'REPROSET|COC|9º ANO|V1|CD FOR':[evento('for','03/10/2026 10:00:00')],
+    'REPROSET|COC|9º ANO|V2|CD FOR':[evento('outro-envio','04/10/2026 10:00:00')]
   });
   const ids = cd => Array.from(window.pgGiroHistoricoParaChave('MASTER',`REPROSET|COC|9º ANO|V1|${cd}`),e=>e.id).sort();
-  assert.deepEqual(ids('CD JDI'),['antiga','jdi']);
-  assert.deepEqual(ids('CD FOR'),['antiga','for']);
+  assert.deepEqual(ids('CD JDI'),['jdi']);
+  assert.deepEqual(ids('CD FOR'),['for']);
+  const completos = cd => Array.from(window.pgGiroHistoricoCompletoParaChave('MASTER',`REPROSET|COC|9º ANO|V1|${cd}`),e=>e.id);
+  assert.deepEqual(completos('CD JDI'),['jdi','antiga']);
+  assert.deepEqual(completos('CD FOR'),['for','antiga']);
+  assert.deepEqual(ids('CD RP'),['antiga'],'sem chave específica, campo recupera a legada');
   assert.equal(window.pgGiroHistoricoParaChave('MASTER','OUTRA|COC|9º ANO|V1|CD FOR').length,0);
+});
+
+test('histórico de recuperação mantém datas e nota atual no campo mesmo com legado recente',()=>{
+  const {window}=ambiente({
+    'GRAFICA|MARCA|6O ANO':[evento('recuperada-sem-cd','26/10/2026 18:00:00')],
+    'GRAFICA|MARCA|6º ANO|V1|RAIZES':[
+      evento('hoje','28/10/2026 15:21:31'),
+      evento('recuperada-com-cd','22/10/2026 10:00:00')]
+  });
+  const chave='GRAFICA|MARCA|6º ANO|V1|RAIZES';
+  const campo=window.pgGiroHistoricoParaChave('MASTER',chave);
+  assert.deepEqual(Array.from(campo,e=>e.id),['hoje','recuperada-com-cd']);
+  const historico=window.pgGiroHistoricoCompletoParaChave('MASTER',chave);
+  assert.deepEqual(Array.from(historico,e=>e.id),['hoje','recuperada-sem-cd','recuperada-com-cd']);
+  assert.equal(historico[1].data,'26/10/2026 18:00:00');
+  assert.equal(campo[0].data,'28/10/2026 15:21:31');
 });
 
 test('série composta com barras conserva a observação legada no grupo correto',()=>{

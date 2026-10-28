@@ -47,13 +47,37 @@
         });
         return indiceHistorico[nome] = {dados,versao:versaoHistorico,exatos,antigos};
     }
+    window.pgGiroHistoricoCompletoParaChave = (tipo,chave) => {
+        const indice = indiceObservacoes(tipo);
+        const nova = chaveObsNormalizada(tipo,chave);
+        const partes = nova.split('|');
+        const antiga = partes.length >= 5 ? partes.slice(0,-2).join('|') : nova;
+        const eventos = (indice.exatos.get(nova) || []).concat(tipo === 'SKU' ? [] :
+            (indice.antigos.get(antiga) || []));
+        const ids = new Set();
+        return eventos.filter(e => {
+            const id = e.id ? 'id:' + e.id : 'sem-id:' + [e.data,e.user,e.obs].join('\u0001');
+            if (ids.has(id)) return false;
+            ids.add(id);
+            return true;
+        }).sort((a,b) => ordem(b)-ordem(a) ||
+            Number(b.sequencia || 0)-Number(a.sequencia || 0));
+    };
     window.pgGiroHistoricoParaChave = (tipo,chave) => {
         const indice = indiceObservacoes(tipo);
         const nova = chaveObsNormalizada(tipo,chave);
         const eventosNovos = indice.exatos.get(nova) || [];
         // Na linha nova, jamais substituir a observação por uma nota antiga.
-        if (eventosNovos.length) return eventosNovos.slice().sort((a,b) =>
-            ordem(b)-ordem(a) || Number(b.sequencia || 0)-Number(a.sequencia || 0));
+        if (eventosNovos.length) {
+            const ids = new Set();
+            return eventosNovos.filter(e => {
+                const id = e.id ? 'id:' + e.id : 'sem-id:' + [e.data,e.user,e.obs].join('\u0001');
+                if (ids.has(id)) return false;
+                ids.add(id);
+                return true;
+            }).sort((a,b) => ordem(b)-ordem(a) ||
+                Number(b.sequencia || 0)-Number(a.sequencia || 0));
+        }
         if (tipo === 'SKU') return [];
         const partes = nova.split('|');
         const antiga = partes.length >= 5 ? partes.slice(0,-2).join('|') : nova;
