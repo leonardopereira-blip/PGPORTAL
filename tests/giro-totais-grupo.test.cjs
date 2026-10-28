@@ -9,6 +9,7 @@ const origem = fs.readFileSync(path.join(__dirname, 'giro-filtros-excedente-expo
 const harness = origem.slice(0, origem.indexOf('\ntest('))
   .replace('pos=false,temCampos=true', 'pos=false,aberto=true,concluido=false,temCampos=true')
   .replace('pgEstadoColetaMapa:()=>({', 'pgEstadoColetaMapa:r=>({')
+  .replace("pgCampoColeta:(r,n)=>r[n]||'',", "pgCampoColeta:(r,n)=>r[n]||'',pgEhFonteAcabadora:r=>Boolean(r._acabadora),")
   .replace('concluida:false,...estado', 'concluida:false,...estado,...(r._estado||{})')
   .replace('pgGiroSaldoPrazosV41:()=>({', 'pgGiroSaldoPrazosV41:r=>({')
   .replace('totalPendente:eventos.reduce((s,e)=>s+e.volume,0),eventos',
@@ -87,6 +88,38 @@ test('Zerado altera apenas rótulo geral e mantém os filtros e o estado interno
   assert.equal(concluido.linhas.length,1);
   assert.equal(concluido.linhas[0].status,'Concluído');
   assert.deepEqual(valores(concluido),['1','2','200','300']);
+});
+
+test('acabadora soma total por CD e nao confunde TIRAGEM de outra base com saldo', () => {
+  const r = tela([
+    pendente('ACAB-PARCIAL',{
+      _acabadora:true,TIRAGEM:50,'TIRAGEM A ENTREGAR (total por CD)':25000,
+      _estado:{pendente:true,parcial:true,saldo:20000,coletada:5000},
+      _eventos:[{categoria:'Vencida',volume:20000,dias:0}]
+    }),
+    finalizado('ACAB-CONCLUIDO',{
+      _acabadora:true,TIRAGEM:75,'TIRAGEM A ENTREGAR (total por CD)':10000
+    })
+  ],{pos:true});
+  assert.deepEqual(valores(r),['1','2','20000','35000'],
+    'Saldo e total usam o mesmo destino CD, incluindo os SKUs ja concluidos');
+  assert.equal(detalheSku(r,'ACAB-PARCIAL')[6],'20000');
+  assert.equal(detalheSku(r,'ACAB-PARCIAL')[7],'25000');
+  assert.equal(r.linhas[0].tiragem,20000,'Saldo pendente nao deve mudar');
+});
+
+test('acabadora preserva zero explicito no total por CD sem recorrer a TIRAGEM', () => {
+  const r = tela([
+    pendente('ACAB-PARCIAL',{
+      _acabadora:true,TIRAGEM:50,'TIRAGEM A ENTREGAR (total por CD)':25000,
+      _estado:{pendente:true,saldo:20000},
+      _eventos:[{categoria:'Vencida',volume:20000,dias:0}]
+    }),
+    finalizado('ACAB-ZERO',{
+      _acabadora:true,TIRAGEM:900,'TIRAGEM A ENTREGAR (total por CD)':0
+    })
+  ],{pos:true});
+  assert.deepEqual(valores(r),['1','2','20000','25000']);
 });
 
 const detalheSku = (resultado, sku) => {
