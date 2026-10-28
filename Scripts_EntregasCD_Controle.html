@@ -19,7 +19,7 @@
     const itemSalvando = item => chavesItem(item).some(chave => estado.salvando.has(chave));
     const legado = window.processarEntregasCD;
     const paletaArco = ['#418EDE', '#FA4616', '#284081', '#049FEC', '#FCB04E', '#F04E37', '#0C2340'];
-    const estado = {base: [], itens: [], previsoes: {}, calendario: null, cds: [], marcas: new Map(), salvando: new Set(), falhas: new Map(), rodada: 0};
+    const estado = {base: [], itens: [], previsoes: {}, calendario: null, cds: [], marcas: new Map(), salvando: new Set(), falhas: new Map(), rodada: 0, detalhes: []};
     const aviso = (texto, erro = false) => {
         if (!$('ecdAviso')) return;
         $('ecdAviso').textContent = texto;
@@ -126,7 +126,11 @@
           .ecd-table .ecd-brand{border-bottom:2px solid var(--brand)}
           .ecd-section>summary .ecd-info{margin-left:auto}
           .ecd-section>summary .ecd-button{padding:5px 10px;background:#fff;color:#0C2340;border-color:#fff;font-size:11px;white-space:nowrap;flex-shrink:0}
+          #ecdTooltip{position:fixed;z-index:10050;width:660px;max-width:calc(100vw - 24px);max-height:60vh;overflow:auto;box-sizing:border-box;padding:14px;background:#fff;color:#0C2340;border:1px solid #418EDE;border-radius:8px;box-shadow:0 6px 24px #0c234026;font-size:11px}
+          #ecdTooltip[hidden]{display:none}#ecdTooltip p{margin:0 0 8px;white-space:pre-line}#ecdTooltip strong{display:block;margin-bottom:6px;font-size:12px}
+          .ecd-tooltip-table{width:100%;border-collapse:collapse;text-align:left}.ecd-tooltip-table th,.ecd-tooltip-table td{padding:6px 8px;border-bottom:1px solid #e2e8f0;vertical-align:top}.ecd-tooltip-table th{position:sticky;top:-14px;background:#0C2340;color:#fff;font-weight:600}.ecd-tooltip-table th:last-child,.ecd-tooltip-table td:last-child{text-align:right;white-space:nowrap}
         </style>
+        <div id="ecdTooltip" role="tooltip" hidden tabindex="0" onmouseenter="pgECDManterDetalhe()" onmouseleave="pgECDAgendarOcultarDetalhe()" onfocusin="pgECDManterDetalhe()" onfocusout="pgECDAgendarOcultarDetalhe()" onkeydown="if(event.key==='Escape')pgECDOcultarDetalhe()"></div>
         <div class="ecd-toolbar">
           <p id="ecdAviso" role="status"></p>
           <button id="ecdExportarXLSX" type="button" class="ecd-button" onclick="pgECDExportarXLSX(this)">Baixar XLSX</button>
@@ -169,10 +173,54 @@
         (ps || []).forEach(p => totais.set(statusTexto(p), (totais.get(statusTexto(p)) || 0) + p.volume));
         return ['Total: ' + exato(volume(ps)), ...[...totais].map(([status, v]) => status + ': ' + exato(v))].join('\n');
     }
+    function detalhe(ps, titulo, quantidade, resumo) {
+        const indice = estado.detalhes.push({ps, titulo, quantidade, resumo}) - 1;
+        return ' data-ecd-tooltip="' + indice + '" tabindex="0" aria-describedby="ecdTooltip" aria-label="' + esc(titulo + '\n' + resumo) +
+            '" onmouseenter="pgECDMostrarDetalhe(' + indice + ',this)" onmouseleave="pgECDAgendarOcultarDetalhe()" onfocus="pgECDMostrarDetalhe(' + indice + ',this)" onblur="pgECDAgendarOcultarDetalhe()" onkeydown="if(event.key===\'Escape\')pgECDOcultarDetalhe()"';
+    }
+    window.pgECDManterDetalhe = () => clearTimeout(estado.ocultarDetalhe);
+    window.pgECDOcultarDetalhe = () => {
+        window.pgECDManterDetalhe();
+        const painel = $('ecdTooltip'); if (painel) painel.hidden = true;
+    };
+    window.pgECDAgendarOcultarDetalhe = () => {
+        window.pgECDManterDetalhe();
+        estado.ocultarDetalhe = setTimeout(window.pgECDOcultarDetalhe, 180);
+    };
+    window.pgECDMostrarDetalhe = function (indice, celula) {
+        window.pgECDManterDetalhe();
+        const painel = $('ecdTooltip'), entrada = estado.detalhes[indice];
+        if (!painel || !entrada) return;
+        const grupos = new Map();
+        entrada.ps.forEach(p => {
+            const campos = [p.grafica || 'Sem gráfica', p.marca || 'Sem marca', p.serie || 'Sem série'];
+            const chave = JSON.stringify(campos);
+            if (!grupos.has(chave)) grupos.set(chave, {campos, volume: 0});
+            grupos.get(chave).volume += p.volume;
+        });
+        const linhas = [...grupos.values()].sort((a,b) => a.campos.join('\0').localeCompare(b.campos.join('\0'), 'pt-BR', {numeric:true}));
+        painel.innerHTML = '<strong>' + esc(entrada.titulo) + '</strong><p>' + esc(entrada.resumo) + '</p>' + (linhas.length
+            ? '<table class="ecd-tooltip-table"><thead><tr><th>Gráfica</th><th>Marca</th><th>Série</th><th>' + esc(entrada.quantidade) + '</th></tr></thead><tbody>' +
+                linhas.map(g => '<tr>' + g.campos.map(campo => '<td>' + esc(campo) + '</td>').join('') + '<td>' + exato(g.volume) + '</td></tr>').join('') +
+                '</tbody></table>'
+            : '<p>Nenhuma ' + (entrada.quantidade === 'Tiragem pendente' ? 'pendência sem data no quadro.' : 'entrega nesta data.') + '</p>');
+        painel.hidden = false;
+        const r = celula?.getBoundingClientRect?.() || {left:12,top:12,bottom:12};
+        const largura = window.innerWidth || document.documentElement?.clientWidth || 1024;
+        const altura = window.innerHeight || document.documentElement?.clientHeight || 768;
+        const tamanho = painel.getBoundingClientRect?.() || {width:660,height:260};
+        painel.style.left = Math.max(12, Math.min(r.left, largura - tamanho.width - 12)) + 'px';
+        painel.style.top = Math.max(12, r.bottom + tamanho.height <= altura - 12 ? r.bottom : r.top - tamanho.height) + 'px';
+    };
+    window.addEventListener?.('scroll', evento => {
+        const painel = $('ecdTooltip');
+        if (evento.target !== painel && !painel?.contains?.(evento.target)) window.pgECDOcultarDetalhe();
+    }, true);
+    window.addEventListener?.('resize', window.pgECDOcultarDetalhe);
     function quadro(linhas, c, detalhado) {
-        const widths = detalhado ? [160, 145, 145, 135] : [175, 155, 190, 135];
+        const widths = detalhado ? [160, 145, 145, 135] : [175, 155, 135];
         const larguraDia = 136;
-        const labels = detalhado ? ['Marca', 'Série', 'CD', 'Entregue'] : ['Marca', 'CD', 'Gráfica', 'Entregue'];
+        const labels = detalhado ? ['Marca', 'Série', 'CD', 'Entregue'] : ['Marca', 'CD', 'Entregue'];
         const left = widths.map((_, i) => widths.slice(0, i).reduce((a, b) => a + b, 0));
         const fixo = i => 'left:' + left[i] + 'px;width:' + widths[i] + 'px;min-width:' + widths[i] + 'px;max-width:' + widths[i] + 'px';
         const col = labels.length;
@@ -187,9 +235,11 @@
         const linhasMarca = (idx, serie) => { let n = 1; while (idx + n < linhas.length && linhas[idx + n].marca === linhas[idx].marca && (!serie || linhas[idx + n].serie === linhas[idx].serie)) n++; return n; };
         function celulas(g, total = false) {
             let acumulado = g.acumuladoAnterior ?? g.entregue;
-            const entreguePs = g.parcelas.filter(p => p.status === 'ENTREGUE' && p.dataOriginal < c.hoje && !p.backlog);
+            const semData = g.parcelas.filter(p => p.status !== 'ENTREGUE' && p.backlog);
             const realizado = entregueAteOntem(g);
-            let h = '<td class="ecd-left ecd-delivered ecd-frozen-end ecd-cell" style="' + fixo(col - 1) + '" title="' + esc(tooltip(entreguePs)) + '"><b>' + k(realizado) + '</b><span class="ecd-sub">' + pct(realizado, g.total) + '</span></td>';
+            const contexto = [g.marca, g.serie, g.cd].filter(Boolean).join(' · ');
+            const resumoEntregue = 'Entregue até ontem: ' + exato(realizado) + '\nPendente sem data no quadro: ' + exato(volume(semData));
+            let h = '<td class="ecd-left ecd-delivered ecd-frozen-end ecd-cell" style="' + fixo(col - 1) + '"' + detalhe(semData, contexto + ' · Pendências sem data de entrega', 'Tiragem pendente', resumoEntregue) + '><b>' + k(realizado) + '</b><span class="ecd-sub">' + pct(realizado, g.total) + '</span></td>';
             c.dias.forEach(d => {
                 const ps = g.dias[d.data] || [], v = volume(ps);
                 const risco = !total ? volume(g.riscos?.[d.data]) : 0;
@@ -205,7 +255,7 @@
                     return '<i class="ecd-pill" style="background:' + cor + '">' + esc(serie || 'Sem série') + '</i>';
                 }).join('') : '';
                 const alerta = risco ? '<div class="ecd-sla-warning">Risco · ' + k(risco) + '</div>' : '';
-                h += '<td class="ecd-cell ' + (d.feriado ? 'ecd-holiday' : '') + '"' + (fundo ? ' style="background:' + fundo + '"' : '') + ' title="' + esc(g.marca + ' · ' + (g.serie ? g.serie + ' · ' : '') + (g.cd || '') + ' · ' + br(d.data) + '\n' + tooltip(ps) + (risco ? '\nRisco - Coleta não realizada dentro do SLA: ' + exato(risco) : '')) + '">' +
+                h += '<td class="ecd-cell ' + (d.feriado ? 'ecd-holiday' : '') + '"' + (fundo ? ' style="background:' + fundo + '"' : '') + detalhe(ps, contexto + ' · ' + br(d.data), 'Tiragem', tooltip(ps) + (risco ? '\nRisco - Coleta não realizada dentro do SLA: ' + exato(risco) : '')) + '>' +
                     (d.feriado && !v && !risco ? '—' : v ? pills + alerta + '<span><b>' + k(v) + '</b><em style="font-style:normal">' + pct(acumulado, g.total) + (acumulado >= g.total && g.total ? ' ✓' : '') + '</em></span>' + (!detalhado && !total ? '<div class="ecd-progress"><i style="width:' + (g.total ? acumulado * 100 / g.total : 0) + '%"></i></div>' : '') : alerta + '<span class="ecd-sub">' + (acumulado ? pct(acumulado, g.total) : '—') + '</span>') + '</td>';
             }); return h;
         }
@@ -216,11 +266,7 @@
             let h = '<tr class="' + (fimMarca ? 'ecd-group-end' : '') + '" style="--brand:' + (estado.marcas.get(g.marca) || '#418EDE') + '">';
             if (inicioMarca) h += '<td rowspan="' + linhasMarca(n, false) + '" class="ecd-left ecd-brand ecd-label" style="' + fixo(0) + '">' + esc(g.marca) + '<span class="ecd-sub">' + k(marcaPlano.get(g.marca)) + ' no ciclo</span></td>';
             if (detalhado && inicioSerie) h += '<td rowspan="' + linhasMarca(n, true) + '" class="ecd-left ecd-label" style="' + fixo(1) + '">' + esc(g.serie || 'Sem série') + '</td>';
-            h += '<td class="ecd-left ecd-label" style="' + fixo(detalhado ? col - 2 : col - 3) + '">' + esc(g.cd) + '</td>';
-            if (!detalhado) {
-                const graficas = [...new Set(g.parcelas.map(p => p.grafica).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
-                h += '<td class="ecd-left ecd-label" style="' + fixo(col - 2) + '">' + esc(graficas.join(' | ') || '—') + '</td>';
-            }
+            h += '<td class="ecd-left ecd-label" style="' + fixo(col - 2) + '">' + esc(g.cd) + '</td>';
             h += celulas(g) + '</tr>'; return h;
         }).join('');
         const footerLabels = labels.slice(0, -1).map((_, i) => '<td class="ecd-left" style="' + fixo(i) + '">' + (i ? '' : 'Total geral<span class="ecd-sub">' + k(c.total.total) + ' no ciclo</span>') + '</td>').join('');
@@ -229,6 +275,7 @@
     }
     window.pgECDRender = function () {
         if (!$('ecdQuadroSerie')) return;
+        window.pgECDOcultarDetalhe(); estado.detalhes = [];
         mostrarFalhas();
         let c;
         try { c = window.pgEntregasCDModelo.calendario(estado.itens, {hoje: hoje(),
