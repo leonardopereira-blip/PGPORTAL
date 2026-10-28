@@ -377,12 +377,12 @@ test('CSV auditável preserva quantidades negativas e neutraliza fórmulas em ca
   assert.match(athosCsv, /"ATHOS-1"/);
   assert.match(athosCsv, /"170"/);
   assert.match(athosCsv, /"15\/10\/2026"/);
-  assert.match(athosCsv, /"Finalizado"/);
+  assert.match(athosCsv, /"Finalizado no PCP"/);
   h.context.window.pgExportarTempSasAdapt('expedicoesAthos');
   assert.equal(h.downloads.length, 3);
   const expCsv = h.blobs[2].parts.join('');
   assert.match(expCsv, /COLETADO ATHOS/);
-  assert.match(expCsv, /"CD JDI"/);
+  assert.match(expCsv, /"JUNDIAI - SP"/);
 });
 
 
@@ -415,4 +415,42 @@ test('quando PCP_ACABADORAS não informa CD, expedição tem CD real do mapa e s
   assert.equal(result.expedicoesAthos.reduce((sum,x)=>sum+x.total,0),100,'não duplica o programa entre os CDs');
   assert.deepEqual(Array.from(result.expedicoesAthos, e=>[e.destino,e.total,e.coletado]),
     [['CD NÃO INFORMADO',60,0],['CD JDI',25,25],['CD FOR',15,15]]);
+});
+
+test('entregas por janela aparece na mesma visão e exporta o resumo com a fonte', () => {
+  const { pcp, athos } = exemplo();
+  const data = resumo(pcp, athos);
+  data.entregasPorJanela = [{id:'676724057',titulo:'Janela_1 - 29-09',total:100,
+    entregue:40,saldo:60,aConferir:20,pedidos:2}];
+  const h = frontHarness(data);
+  h.context.window.pgCarregarTempSasAdapt(true);
+  const table = h.elements.get('pgTempTabelaJanelas').innerHTML;
+  assert.match(table, /Janela 1 - 29\/09/);
+  assert.match(table, /40%/);
+  assert.match(table, /pg-sas-review/);
+  assert.doesNotMatch(h.html, /role="tab(?:list)?"|pgSelecionarJanelaTempSasAdapt/);
+  assert.match(h.elements.get('pgTempTabelaGraficas').innerHTML, /LOGPRINT/);
+  h.context.window.pgExportarTempSasAdapt('janelas');
+  assert.match(h.downloads[0].download, /ENTREGAS_POR_JANELA/);
+  const csv = h.blobs[0].parts.join('');
+  assert.match(csv, /"PROGRAMADO \(KITS\)"/);
+  assert.match(csv, /"A CONFERIR \(INCLUÍDO NO SALDO\)"/);
+  assert.match(csv, /gid=676724057/);
+});
+
+test('falha na referência de janelas mantém os indicadores, busca e exportações atuais', () => {
+  const { pcp, athos } = exemplo();
+  const data = resumo(pcp, athos);
+  data.erroEntregasPorJanela = 'referência indisponível';
+  data.entregasPorJanela = [];
+  const h = frontHarness(data);
+  h.context.window.pgCarregarTempSasAdapt(true);
+  assert.match(h.elements.get('pgTempTabelaJanelas').innerHTML, /Não foi possível carregar/);
+  assert.equal(h.elements.get('pgTempExportarJanelas').disabled, true);
+  assert.match(h.elements.get('pgTempSaiuVolume').textContent, /120 de 250/);
+  h.elements.get('pgTempFiltroSku').value = 'SKU-2';
+  h.context.window.pgFiltrarTempSasAdapt();
+  assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-2/);
+  h.context.window.pgExportarTempSasAdapt('athos');
+  assert.equal(h.downloads.length, 1);
 });

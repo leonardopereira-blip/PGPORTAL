@@ -1,77 +1,149 @@
+<style>
+  #abaTempSasAdapt { --sas-navy:#0C2340; --sas-blue:#418EDE; --sas-orange:#FA4616; --sas-ink:#263C54; --sas-muted:#607287; --sas-line:#E2E9F0; min-height:0; color:var(--sas-ink); font-family:Poppins,Arial,sans-serif; font-weight:400; background:#F4F7FA; }
+  #abaTempSasAdapt * { box-sizing:border-box; }
+  #abaTempSasAdapt button, #abaTempSasAdapt input { font:inherit; }
+  #abaTempSasAdapt button { cursor:pointer; }
+  #abaTempSasAdapt button:focus-visible, #abaTempSasAdapt input:focus-visible { outline:3px solid var(--sas-blue); outline-offset:3px; }
+  #abaTempSasAdapt .pg-sas-header { flex-shrink:0; padding:28px 32px; color:#FFF; background:var(--sas-navy); border-top:4px solid var(--sas-orange); }
+  #abaTempSasAdapt .pg-sas-header-inner { width:100%; max-width:1480px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+  #abaTempSasAdapt .pg-sas-eyebrow { margin:0 0 8px; color:#A8CFF2; font-size:10px; font-weight:600; letter-spacing:.15em; text-transform:uppercase; }
+  #abaTempSasAdapt .pg-sas-title { margin:0; color:#FFF; font-size:28px; line-height:1.25; font-weight:700; letter-spacing:-.04em; }
+  #abaTempSasAdapt .pg-sas-title span { color:#A8CFF2; font-size:13px; font-weight:400; letter-spacing:0; vertical-align:middle; margin-right:10px; }
+  #abaTempSasAdapt .pg-sas-subtitle { margin:9px 0 0; color:#CCDAE7; font-size:12px; line-height:1.7; }
+  #abaTempSasAdapt .pg-sas-refresh { display:inline-flex; align-items:center; justify-content:center; gap:9px; min-height:43px; padding:12px 18px; border:0; border-radius:8px; background:var(--sas-orange); color:#071A30; font-size:12px; font-weight:600; white-space:nowrap; transition:background .15s,transform .15s; }
+  #abaTempSasAdapt .pg-sas-refresh:hover { background:#D9370D; color:#FFF; transform:translateY(-1px); }
+  #abaTempSasAdapt .pg-sas-refresh:disabled { cursor:wait; opacity:.65; transform:none; }
+  #abaTempSasAdapt .pg-sas-body { flex:1; min-height:0; overflow-y:auto; padding:24px 32px 36px; }
+  #abaTempSasAdapt .pg-sas-content { max-width:1480px; width:100%; margin:0 auto; }
+  #abaTempSasAdapt .pg-sas-status { min-height:20px; display:flex; align-items:center; gap:8px; margin:0 0 20px; color:var(--sas-muted); font-size:11px; line-height:1.6; }
+  #abaTempSasAdapt .pg-sas-status::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--sas-blue); flex-shrink:0; }
+  #abaTempSasAdapt .pg-sas-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-bottom:24px; }
+  #abaTempSasAdapt .pg-sas-kpi { position:relative; overflow:hidden; min-width:0; padding:22px 24px 20px; border:1px solid var(--sas-line); border-radius:12px; background:#FFF; box-shadow:0 3px 14px rgba(12,35,64,.025); }
+  #abaTempSasAdapt .pg-sas-kpi::before { content:''; position:absolute; inset:0 auto 0 0; width:4px; background:var(--sas-blue); }
+  #abaTempSasAdapt .pg-sas-kpi--navy::before { background:var(--sas-navy); }
+  #abaTempSasAdapt .pg-sas-kpi--orange::before { background:var(--sas-orange); }
+  #abaTempSasAdapt .pg-sas-kpi-label { margin:0; color:var(--sas-muted); font-size:11px; line-height:1.6; font-weight:600; }
+  #abaTempSasAdapt .pg-sas-kpi-value { margin:12px 0 3px; color:#2468AC; font-size:34px; line-height:1.25; font-weight:700; letter-spacing:-.045em; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  #abaTempSasAdapt .pg-sas-kpi--navy .pg-sas-kpi-value { color:var(--sas-navy); }
+  #abaTempSasAdapt .pg-sas-kpi--orange .pg-sas-kpi-value { color:#CF360B; }
+  #abaTempSasAdapt .pg-sas-kpi-detail { margin:5px 0 0; min-height:18px; color:var(--sas-muted); font-size:11px; line-height:1.65; }
+  #abaTempSasAdapt .pg-sas-panels { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:22px; }
+  #abaTempSasAdapt .pg-sas-panel { min-width:0; overflow:hidden; border:1px solid var(--sas-line); border-radius:12px; background:#FFF; box-shadow:0 3px 14px rgba(12,35,64,.025); }
+  #abaTempSasAdapt .pg-sas-panel--wide { grid-column:1/-1; }
+  #abaTempSasAdapt .pg-sas-janelas { margin-bottom:24px; }
+  #abaTempSasAdapt .pg-sas-review { color:#A82F0C; font-weight:600; }
+  #abaTempSasAdapt .pg-sas-panel-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; padding:20px 22px; }
+  #abaTempSasAdapt .pg-sas-panel h3 { margin:0; color:var(--sas-navy); font-size:14px; font-weight:600; line-height:1.6; letter-spacing:-.015em; }
+  #abaTempSasAdapt .pg-sas-panel-caption { margin:3px 0 0; color:var(--sas-muted); font-size:10px; line-height:1.7; }
+  #abaTempSasAdapt .pg-sas-export { display:inline-flex; align-items:center; gap:7px; padding:8px 11px; min-height:35px; border:1px solid #D4E0ED; border-radius:7px; background:#FFF; color:var(--sas-navy); font-size:10px; font-weight:600; white-space:nowrap; transition:background .15s,border-color .15s; }
+  #abaTempSasAdapt .pg-sas-export:hover { background:#F0F6FC; border-color:var(--sas-blue); }
+  #abaTempSasAdapt .pg-sas-export:disabled { cursor:default; opacity:.45; background:#FFF; border-color:#D4E0ED; }
+  #abaTempSasAdapt .pg-sas-table-wrap { overflow-x:auto; }
+  #abaTempSasAdapt .pg-sas-table-wrap--sku { max-height:460px; overflow:auto; }
+  #abaTempSasAdapt table { width:100%; border-collapse:collapse; white-space:nowrap; font-size:11px; }
+  #abaTempSasAdapt thead { background:#EEF4FA; color:#49627C; }
+  #abaTempSasAdapt th { padding:12px 16px; text-align:right; font-size:10px; font-weight:600; border-top:1px solid var(--sas-line); border-bottom:1px solid var(--sas-line); }
+  #abaTempSasAdapt td { padding:13px 16px; border-top:1px solid #EDF1F6; color:var(--sas-ink); text-align:right; font-variant-numeric:tabular-nums; }
+  #abaTempSasAdapt th:first-child, #abaTempSasAdapt td:first-child { padding-left:22px; text-align:left; }
+  #abaTempSasAdapt td:first-child { color:var(--sas-navy); font-weight:600; }
+  #abaTempSasAdapt th:last-child, #abaTempSasAdapt td:last-child { padding-right:22px; }
+  #abaTempSasAdapt tbody tr:nth-child(even) { background:#FAFCFE; }
+  #abaTempSasAdapt tbody tr:hover { background:#F0F6FC; }
+  #abaTempSasAdapt td[colspan] { padding:28px 22px; text-align:center; font-weight:400; color:var(--sas-muted); }
+  #abaTempSasAdapt .pg-sas-table-wrap--sku thead { position:sticky; top:0; z-index:1; }
+  #abaTempSasAdapt .pg-sas-filterbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:0 22px 18px; }
+  #abaTempSasAdapt .pg-sas-search { width:min(100%,320px); min-height:39px; padding:10px 13px; border:1px solid #D4E0ED; border-radius:7px; color:var(--sas-navy); background:#FFF; font-size:11px; }
+  #abaTempSasAdapt .pg-sas-search::placeholder { color:var(--sas-muted); }
+  #abaTempSasAdapt .pg-sas-count { margin:0; color:var(--sas-muted); font-size:10px; }
+  #abaTempSasAdapt svg { flex-shrink:0; }
+  @media (min-width:1600px) { #abaTempSasAdapt .pg-sas-header { padding-top:34px; padding-bottom:34px; } #abaTempSasAdapt .pg-sas-body { padding-top:28px; } }
+  @media (max-width:1100px) { #abaTempSasAdapt .pg-sas-header, #abaTempSasAdapt .pg-sas-body { padding-left:22px; padding-right:22px; } #abaTempSasAdapt .pg-sas-panels { grid-template-columns:1fr; } #abaTempSasAdapt .pg-sas-kpi { padding:20px; } #abaTempSasAdapt .pg-sas-kpi-value { font-size:30px; } }
+  @media (max-width:720px) { #abaTempSasAdapt .pg-sas-header { padding:22px 18px; } #abaTempSasAdapt .pg-sas-header-inner { align-items:flex-start; flex-direction:column; gap:18px; } #abaTempSasAdapt .pg-sas-title { font-size:25px; } #abaTempSasAdapt .pg-sas-body { padding:20px 16px 28px; } #abaTempSasAdapt .pg-sas-kpis { grid-template-columns:1fr; gap:12px; margin-bottom:20px; } #abaTempSasAdapt .pg-sas-kpi { padding:18px 20px; } #abaTempSasAdapt .pg-sas-kpi-value { margin-top:8px; } #abaTempSasAdapt .pg-sas-panel-header { padding:18px; } #abaTempSasAdapt .pg-sas-filterbar { padding:0 18px 18px; } #abaTempSasAdapt .pg-sas-search { width:100%; } }
+  @media (prefers-reduced-motion:reduce) { #abaTempSasAdapt button { transition:none!important; } }
+</style>
 <div id="abaTempSasAdapt" class="aba-conteudo hidden h-full flex flex-col">
-  <div class="bg-white border-b border-slate-200 p-4 flex-shrink-0">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <h2 class="text-xl font-black text-slate-800">TEMP SAS ADAPT</h2>
-      <button type="button" onclick="window.pgCarregarTempSasAdapt(true)"
-        class="bg-slate-800 text-white hover:bg-slate-700 rounded-lg px-4 py-2 text-xs font-bold">Atualizar visão</button>
+  <header class="pg-sas-header">
+    <div class="pg-sas-header-inner">
+      <div>
+        <p class="pg-sas-eyebrow">Acompanhamento da operação</p>
+        <h2 class="pg-sas-title"><span>Temp</span>SAS ADAPT</h2>
+        <p class="pg-sas-subtitle">Expedições das gráficas e acompanhamento Athos.</p>
+      </div>
+      <button id="pgTempAtualizar" type="button" onclick="window.pgCarregarTempSasAdapt(true)" class="pg-sas-refresh">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 6.1A8.3 8.3 0 0 1 20 12M4 12a8.3 8.3 0 0 0 13.9 5.9"/></svg>
+        Atualizar visão
+      </button>
     </div>
-  </div>
-  <div class="flex-1 overflow-y-auto scroller bg-neutral-100 p-4 space-y-4">
-    <p id="statusTempSasAdapt" role="status" class="text-xs text-slate-600">Aguardando atualização.</p>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <p class="text-[11px] font-bold uppercase text-slate-500">Saiu das gráficas</p>
-        <p id="pgTempSaiuPct" class="text-2xl font-black text-blue-700 mt-2">—</p>
-        <p id="pgTempSaiuVolume" class="text-xs text-slate-500 mt-1"></p>
+  </header>
+  <div class="pg-sas-body scroller">
+    <div class="pg-sas-content">
+      <p id="statusTempSasAdapt" role="status" aria-live="polite" class="pg-sas-status">Aguardando atualização.</p>
+      <div class="pg-sas-kpis" aria-label="Indicadores da operação">
+        <section class="pg-sas-kpi" aria-labelledby="pgTempLabelGraficas">
+          <h3 id="pgTempLabelGraficas" class="pg-sas-kpi-label">Saiu das gráficas</h3>
+          <p id="pgTempSaiuPct" class="pg-sas-kpi-value">—</p>
+          <p id="pgTempSaiuVolume" class="pg-sas-kpi-detail"></p>
+        </section>
+        <section class="pg-sas-kpi pg-sas-kpi--navy" aria-labelledby="pgTempLabelAthos">
+          <h3 id="pgTempLabelAthos" class="pg-sas-kpi-label">PCP Athos · Programado</h3>
+          <p id="pgTempAthosProgramado" class="pg-sas-kpi-value">—</p>
+          <p id="pgTempAthosRecebido" class="pg-sas-kpi-detail"></p>
+        </section>
+        <section class="pg-sas-kpi pg-sas-kpi--orange" aria-labelledby="pgTempLabelColetado">
+          <h3 id="pgTempLabelColetado" class="pg-sas-kpi-label">Coletado Athos</h3>
+          <p id="pgTempColetadoPct" class="pg-sas-kpi-value">—</p>
+          <p id="pgTempColetadoVolume" class="pg-sas-kpi-detail"></p>
+        </section>
       </div>
-      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <p class="text-[11px] font-bold uppercase text-slate-500">PCP Athos · Programado</p>
-        <p id="pgTempAthosProgramado" class="text-2xl font-black text-slate-800 mt-2">—</p>
-        <p id="pgTempAthosRecebido" class="text-xs text-slate-500 mt-1"></p>
-      </div>
-      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <p class="text-[11px] font-bold uppercase text-slate-500">Coletado Athos</p>
-        <p id="pgTempColetadoPct" class="text-2xl font-black text-emerald-700 mt-2">—</p>
-        <p id="pgTempColetadoVolume" class="text-xs text-slate-500 mt-1"></p>
-      </div>
-    </div>
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <div class="flex flex-wrap justify-between items-center gap-2">
-          <h3 class="text-sm font-black text-slate-800">Expedições das gráficas</h3>
-          <button type="button" onclick="window.pgExportarTempSasAdapt('graficas')"
-            class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Baixar CSV</button>
+      <section class="pg-sas-panel pg-sas-janelas" aria-labelledby="pgTempTituloJanelas">
+        <div class="pg-sas-panel-header">
+          <div><h3 id="pgTempTituloJanelas">Entregas por janela</h3><p class="pg-sas-panel-caption">Kits · Coletas sem janela definida ficam em A conferir, dentro do saldo.</p></div>
+          <button id="pgTempExportarJanelas" type="button" onclick="window.pgExportarTempSasAdapt('janelas')" class="pg-sas-export" aria-label="Baixar CSV das entregas por janela"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
         </div>
-        <div class="overflow-x-auto mt-3">
-          <table class="w-full text-xs whitespace-nowrap"><thead class="text-slate-500 bg-slate-50"><tr>
-            <th class="p-2 text-left">Gráfica</th><th class="p-2 text-right">Total</th>
-            <th class="p-2 text-right">Saiu</th><th class="p-2 text-right">%</th>
-          </tr></thead><tbody id="pgTempTabelaGraficas"></tbody></table>
+        <div class="pg-sas-table-wrap">
+          <table aria-label="Entregas por janela"><thead><tr>
+            <th scope="col">Janela</th><th scope="col">Programado</th><th scope="col">Entregue confirmado</th><th scope="col">A conferir</th><th scope="col">Saldo</th><th scope="col">% confirmado</th>
+          </tr></thead><tbody id="pgTempTabelaJanelas"><tr><td colspan="6">Atualize a visão para acompanhar as entregas por janela.</td></tr></tbody></table>
         </div>
-      </div>
-      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-        <div class="flex flex-wrap justify-between items-center gap-2">
-          <h3 class="text-sm font-black text-slate-800">Expedições Athos · CD</h3>
-          <button type="button" onclick="window.pgExportarTempSasAdapt('expedicoesAthos')"
-            class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Baixar CSV</button>
-        </div>
-        <div class="overflow-x-auto mt-3">
-          <table class="w-full text-xs whitespace-nowrap"><thead class="text-slate-500 bg-slate-50"><tr>
-            <th class="p-2 text-left">CD destino</th><th class="p-2 text-right">Total</th>
-            <th class="p-2 text-right">Coletado</th><th class="p-2 text-right">%</th>
-          </tr></thead><tbody id="pgTempTabelaExpedicoesAthos"></tbody></table>
-        </div>
-      </div>
-      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 xl:col-span-2">
-        <div class="flex flex-wrap justify-between items-center gap-2">
-          <h3 class="text-sm font-black text-slate-800">Athos · SKUs</h3>
-          <button type="button" onclick="window.pgExportarTempSasAdapt('athos')"
-            class="rounded border border-slate-300 px-3 py-2 text-xs font-bold hover:bg-slate-50">Baixar CSV</button>
-        </div>
-        <div class="flex flex-wrap items-center justify-between gap-2 mt-3 mb-2">
-          <input id="pgTempFiltroSku" type="search" aria-label="Filtrar SKU" placeholder="Filtrar SKU"
-            oninput="window.pgFiltrarTempSasAdapt()" class="rounded border border-slate-300 px-3 py-2 text-xs">
-          <p id="pgTempQtdSku" class="text-[11px] text-slate-500"></p>
-        </div>
-        <div class="overflow-auto max-h-[460px]">
-          <table class="w-full text-xs whitespace-nowrap">
-            <thead class="sticky top-0 bg-slate-100 text-slate-600"><tr>
-              <th class="p-2 text-left">SKU</th><th class="p-2 text-right">Programado</th>
-              <th class="p-2 text-right">Recebido</th><th class="p-2 text-right">Coletado</th>
-              <th class="p-2 text-right">% coletado</th>
-            </tr></thead><tbody id="pgTempTabelaAthos"></tbody>
-          </table>
-        </div>
+      </section>
+      <div class="pg-sas-panels">
+        <section class="pg-sas-panel" aria-labelledby="pgTempTituloGraficas">
+          <div class="pg-sas-panel-header">
+            <div><h3 id="pgTempTituloGraficas">Expedições das gráficas</h3><p class="pg-sas-panel-caption">Volume expedido por gráfica</p></div>
+            <button type="button" onclick="window.pgExportarTempSasAdapt('graficas')" class="pg-sas-export" aria-label="Baixar CSV das expedições das gráficas"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
+          </div>
+          <div class="pg-sas-table-wrap">
+            <table aria-label="Expedições das gráficas"><thead><tr>
+              <th scope="col">Gráfica</th><th scope="col">Total</th><th scope="col">Saiu</th><th scope="col">%</th>
+            </tr></thead><tbody id="pgTempTabelaGraficas"></tbody></table>
+          </div>
+        </section>
+        <section class="pg-sas-panel" aria-labelledby="pgTempTituloExpedicoes">
+          <div class="pg-sas-panel-header">
+            <div><h3 id="pgTempTituloExpedicoes">Expedições Athos · CD</h3><p class="pg-sas-panel-caption">Coletas por centro de distribuição</p></div>
+            <button type="button" onclick="window.pgExportarTempSasAdapt('expedicoesAthos')" class="pg-sas-export" aria-label="Baixar CSV das expedições Athos"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
+          </div>
+          <div class="pg-sas-table-wrap">
+            <table aria-label="Expedições Athos por CD"><thead><tr>
+              <th scope="col">CD destino</th><th scope="col">Total</th><th scope="col">Coletado</th><th scope="col">%</th>
+            </tr></thead><tbody id="pgTempTabelaExpedicoesAthos"></tbody></table>
+          </div>
+        </section>
+        <section class="pg-sas-panel pg-sas-panel--wide" aria-labelledby="pgTempTituloSku">
+          <div class="pg-sas-panel-header">
+            <div><h3 id="pgTempTituloSku">Athos · SKUs</h3><p class="pg-sas-panel-caption">Programação, recebimento e coleta por SKU</p></div>
+            <button type="button" onclick="window.pgExportarTempSasAdapt('athos')" class="pg-sas-export" aria-label="Baixar CSV dos SKUs Athos"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
+          </div>
+          <div class="pg-sas-filterbar">
+            <input id="pgTempFiltroSku" type="search" aria-label="Filtrar SKU" placeholder="Buscar por SKU…" oninput="window.pgFiltrarTempSasAdapt()" class="pg-sas-search">
+            <p id="pgTempQtdSku" class="pg-sas-count" aria-live="polite"></p>
+          </div>
+          <div class="pg-sas-table-wrap pg-sas-table-wrap--sku">
+            <table aria-label="Acompanhamento dos SKUs Athos"><thead><tr>
+              <th scope="col">SKU</th><th scope="col">Programado</th><th scope="col">Recebido</th><th scope="col">Coletado</th><th scope="col">% coletado</th>
+            </tr></thead><tbody id="pgTempTabelaAthos"></tbody></table>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -80,9 +152,32 @@
 (function () {
   var ultimo = null, carregando = false;
   function el(id) { return document.getElementById(id); }
+  function estadoCarregando(valor) {
+    var botao = el('pgTempAtualizar');
+    if (botao) botao.disabled = valor;
+    var raiz = el('abaTempSasAdapt');
+    if (raiz && raiz.setAttribute) raiz.setAttribute('aria-busy', valor ? 'true' : 'false');
+  }
   function fmt(v) { return Math.round(Number(v) || 0).toLocaleString('pt-BR'); }
   function pct(v, t) { return t > 0 ? ((Number(v) || 0) * 100 / t).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%' : '—'; }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function tituloJanela(valor) {
+    return String(valor == null ? '' : valor).trim().replace(/^Janela[_-](\d)/i, 'Janela $1').replace(/(\d{2})-(\d{2})$/, '$1/$2');
+  }
+  function entregasPorJanela(d) {
+    var linhas = Array.isArray(d.entregasPorJanela) ? d.entregasPorJanela : [];
+    var botao = el('pgTempExportarJanelas');
+    if (botao) botao.disabled = Boolean(d.erroEntregasPorJanela) || !linhas.length;
+    if (d.erroEntregasPorJanela) {
+      el('pgTempTabelaJanelas').innerHTML = '<tr><td colspan="6" role="status">Não foi possível carregar as entregas por janela. Tente atualizar a visão.</td></tr>';
+      return;
+    }
+    el('pgTempTabelaJanelas').innerHTML = linhas.map(function(l) {
+      return '<tr><td>' + esc(tituloJanela(l.titulo)) + '</td><td>' + fmt(l.total) +
+        '</td><td>' + fmt(l.entregue) + '</td><td><span' + (Number(l.aConferir) > 0 ? ' class="pg-sas-review"' : '') + '>' +
+        fmt(l.aConferir) + '</span></td><td>' + fmt(l.saldo) + '</td><td>' + pct(l.entregue, l.total) + '</td></tr>';
+    }).join('') || '<tr><td colspan="6">Nenhuma entrega por janela disponível.</td></tr>';
+  }
   function graficas(linhas) {
     el('pgTempTabelaGraficas').innerHTML = linhas.map(function(l) {
       return '<tr class="border-t border-slate-100"><td class="p-2 text-slate-700">' + esc(l.nome) +
@@ -125,14 +220,19 @@
     var definicoes = {
       graficas: {nome:'SAS_ADAPT_GRAFICAS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','tiragemRaw','saiuBruto','saiuReconhecido','operacao','totalOperacao','saiuBrutoOperacao','excedenteOperacao','linhasAgrupadas','dataColeta','dataColetaRaw','entregaTP','entregaTPRaw'], linhas:ultimo.linhasGraficas},
       athos: {nome:'SAS_ADAPT_ATHOS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','recebidoRaw','recebido','recebidoReconhecido','linhasAgrupadas','recebimentoDivergente','dataAcabamento','dataAcabamentoRaw','dataFinalizacao','dataFinalizacaoRaw','statusFinalizacao','produzido','producaoApontada','saidaMapa','codigosMapa'], linhas:ultimo.linhasAthos},
-      expedicoesAthos: {nome:'SAS_ADAPT_EXPEDICOES_ATHOS', colunas:['fonte','linha','sku','destino','total','saidaMapa','codigosMapa'], linhas:ultimo.linhasAthos}
+      expedicoesAthos: {nome:'SAS_ADAPT_EXPEDICOES_ATHOS', colunas:['fonte','linha','sku','destino','total','saidaMapa','codigosMapa'], linhas:ultimo.linhasAthos},
+      janelas: {nome:'SAS_ADAPT_ENTREGAS_POR_JANELA', colunas:['titulo','total','entregue','aConferir','saldo','pedidos','fonte','id','fonteUrl'], linhas:ultimo.erroEntregasPorJanela ? [] : (ultimo.entregasPorJanela || []).map(function(r) {
+        return {titulo:r.titulo,total:r.total,entregue:r.entregue,aConferir:r.aConferir,saldo:r.saldo,pedidos:r.pedidos,
+          fonte:'Janelas_SAS ADAPT',id:r.id,fonteUrl:'https://docs.google.com/spreadsheets/d/1vBqSFyKqv8Ttco5LkfQm4SBLOU2EX7FWkOw3maBndIQ/edit#gid=' + encodeURIComponent(r.id)};
+      })}
     };
     var spec = definicoes[tipo];
     if (!spec || !spec.linhas) return;
     var cabecalho = {
       fonte:'FONTE',linha:'LINHA NA FONTE',id:'ID',sku:'SKU',grafica:'GRÁFICA',destino:'CD DESTINO',
       rawUnit:'UNIDADE ORIGINAL',envio:'ENVIO',caracteristica:'CARACTERÍSTICA DA SOLICITAÇÃO',
-      total:tipo === 'graficas' ? 'TIRAGEM TOTAL' : 'TIRAGEM A ENTREGAR (total por CD)',
+      total:tipo === 'janelas' ? 'PROGRAMADO (KITS)' : tipo === 'graficas' ? 'TIRAGEM TOTAL' : 'TIRAGEM A ENTREGAR (total por CD)',
+      titulo:'JANELA',entregue:'ENTREGUE CONFIRMADO (KITS)',aConferir:'A CONFERIR (INCLUÍDO NO SALDO)',saldo:'SALDO (KITS)',pedidos:'PEDIDOS',fonteUrl:'LINK NA FONTE',
       tiragemRaw:'TIRAGEM ORIGINAL',saiuBruto:'COLETADO INFORMADO',saiuReconhecido:'COLETADO RECONHECIDO (uma vez por operação)',
       operacao:'OPERAÇÃO',totalOperacao:'TOTAL DA OPERAÇÃO',saiuBrutoOperacao:'COLETADO DA OPERAÇÃO',
       excedenteOperacao:'EXCEDENTE DA OPERAÇÃO',linhasAgrupadas:'LINHAS AGRUPADAS NA FONTE',
@@ -143,6 +243,7 @@
       dataFinalizacao:'FINALIZAÇÃO ATHOS',dataFinalizacaoRaw:'FINALIZAÇÃO ATHOS ORIGINAL',statusFinalizacao:'STATUS FINALIZAÇÃO',
       produzido:'PRODUZIDO COMPROVADO',producaoApontada:'FINALIZAÇÃO COMPROVADA',saidaMapa:'COLETADO ATHOS → CD NO MAPA',codigosMapa:'CÓDIGOS DOS MAPAS'
     };
+    if (tipo === 'janelas') cabecalho.id = 'ABA NA FONTE (GID)';
     var linhas = [spec.colunas.map(function(k) { return csvValor(cabecalho[k] || k); }).join(';')];
     spec.linhas.forEach(function(r) {
       linhas.push(spec.colunas.map(function(k) { return csvValor(r[k]); }).join(';'));
@@ -158,6 +259,7 @@
   };
   function mostrar(d) {
     ultimo = d;
+    entregasPorJanela(d);
     el('pgTempSaiuPct').textContent = pct(d.saiuGraficas, d.pcpTotal);
     el('pgTempSaiuVolume').textContent = fmt(d.saiuGraficas) + ' de ' + fmt(d.pcpTotal);
     el('pgTempAthosProgramado').textContent = fmt(d.totalAthos);
@@ -174,9 +276,11 @@
     if (carregando) return;
     if (ultimo && !forcar) { mostrar(ultimo); return; }
     carregando = true;
+    estadoCarregando(true);
     el('statusTempSasAdapt').textContent = 'Carregando…';
     google.script.run.withSuccessHandler(function(d) {
       carregando = false;
+      estadoCarregando(false);
       if (!d || typeof d.pcpTotal !== 'number' || typeof d.totalAthos !== 'number' ||
           !Array.isArray(d.graficas) || !Array.isArray(d.expedicoesAthos) ||
           typeof d.coletadoAthos !== 'number' || !Array.isArray(d.athosPorSku)) {
@@ -186,6 +290,7 @@
       mostrar(d);
     }).withFailureHandler(function(e) {
       carregando = false;
+      estadoCarregando(false);
       el('statusTempSasAdapt').textContent = 'Erro ao atualizar: ' + (e && e.message ? e.message : String(e));
     }).getTempSasAdapt();
   };

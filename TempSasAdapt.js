@@ -400,6 +400,112 @@ function pgTempSasAdaptResumo_(pcp, athos, hojeISO, saidasMapa) {
     qtdLinhasGraficas: linhasGraficas.length, qtdLinhasAthos: linhasAthos.length, diagnosticos: diagnosticos
   };
 }
+// Referencia de pedidos/componentes das janelas. Ela nao filtra nem modifica
+// os PCPs e o Mapa usados pelos indicadores existentes.
+function pgTempSasAdaptLerJanelas_() {
+  var id = '1vBqSFyKqv8Ttco5LkfQm4SBLOU2EX7FWkOw3maBndIQ';
+  var meta = Sheets.Spreadsheets.get(id, {
+    fields: 'sheets(properties(sheetId,title,gridProperties(rowCount)))'
+  });
+  var abas = (meta.sheets || []).map(function(s) { return s.properties; })
+    .filter(function(s) { return /^JANELA[\s_-]*\d/.test(pgTempSasAdaptNormalizar_(s.title)); });
+  if (!abas.length) throw new Error('Nenhuma janela encontrada na planilha de referência.');
+  var retorno = Sheets.Spreadsheets.Values.batchGet(id, {
+    ranges: abas.map(function(s) {
+      return "'" + s.title.replace(/'/g, "''") + "'!A1:Y" + s.gridProperties.rowCount;
+    }),
+    valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER'
+  }).valueRanges || [];
+  if (retorno.length !== abas.length) throw new Error('Leitura incompleta das janelas.');
+  return abas.map(function(s, i) {
+    return {id: String(s.sheetId), titulo: s.title, valores: retorno[i].values || []};
+  });
+}
+
+function pgTempSasAdaptEntregasJanelas_(janelas, saidasMapa) {
+  var vinculos = Object.create(null), pedidos = [], resultados = [];
+  function chave(kit, sku, destino) {
+    return JSON.stringify([pgTempSasAdaptNormalizar_(kit), pgTempSasAdaptNormalizar_(sku),
+      pgTempSasAdaptDestino_(destino)]);
+  }
+  (janelas || []).forEach(function(janela) {
+    var valores = janela.valores || [], cab = (valores[0] || []).map(pgTempSasAdaptNormalizar_);
+    function coluna(nome) {
+      var i = cab.indexOf(pgTempSasAdaptNormalizar_(nome));
+      if (i < 0) throw new Error('Coluna ' + nome + ' ausente em ' + janela.titulo + '.');
+      return i;
+    }
+    var c = {pedido:coluna('Pedido'), kit:coluna('Cod Kit'), sku:coluna('Componente'),
+      quantidade:coluna('Qtde'), destino:coluna('CD')};
+    var res = {id:String(janela.id), titulo:janela.titulo, total:0, entregue:0,
+      saldo:0, aConferir:0, pedidos:0, aConferirPedidos:0};
+    resultados.push(res);
+    var porPedido = Object.create(null);
+    for (var i = 1; i < valores.length; i++) {
+      var linha = valores[i] || [], pedido = pgTempSasAdaptNormalizar_(linha[c.pedido]);
+      if (!pedido) continue;
+      var kit = pgTempSasAdaptNormalizar_(linha[c.kit]);
+      var sku = pgTempSasAdaptNormalizar_(linha[c.sku]);
+      var cd = pgTempSasAdaptDestino_(linha[c.destino]);
+      var qtdRaw = linha[c.quantidade], qtd = pgTempSasAdaptNumero_(qtdRaw);
+      if (!kit || !sku || !cd || qtdRaw == null || qtdRaw === '' || qtd < 0 ||
+          !isFinite(typeof qtdRaw === 'number' ? qtdRaw : Number(String(qtdRaw).replace(/\./g, '').replace(',', '.')))) {
+        throw new Error('Pedido incompleto em ' + janela.titulo + ', linha ' + (i + 1) + '.');
+      }
+      var item = porPedido[pedido];
+      if (!item) {
+        item = porPedido[pedido] = {kit:kit, destino:cd, total:qtd, componentes:Object.create(null), resumo:res};
+        pedidos.push(item);
+        res.total += qtd;
+        res.pedidos++;
+      } else if (item.kit !== kit || item.destino !== cd || item.total !== qtd) {
+        throw new Error('Dados divergentes do pedido em ' + janela.titulo + ', linha ' + (i + 1) + '.');
+      }
+      var k = chave(kit, sku, cd);
+      if (!item.componentes[k]) {
+        item.componentes[k] = true;
+        if (!vinculos[k]) vinculos[k] = [];
+        vinculos[k].push(item);
+      }
+    }
+  });
+  // A mesma parcela fisica do Mapa e considerada uma vez, usando a mesma
+  // identidade mapa/kit/SKU/CD da leitura atual, sem rateio entre janelas.
+  var parcelas = Object.create(null), volumes = Object.create(null);
+  (saidasMapa || []).forEach(function(m) {
+    var k = chave(m.kit, m.sku, m.destino);
+    if (!vinculos[k]) return;
+    var codigo = pgTempSasAdaptNormalizar_(m.codigoMapa);
+    var id = JSON.stringify([k, codigo || 'LINHA ' + m.linhaMapa]);
+    var volume = Math.max(0, pgTempSasAdaptNumero_(m.coletado));
+    if (!parcelas[id] || parcelas[id].volume < volume) parcelas[id] = {chave:k, volume:volume};
+  });
+  Object.keys(parcelas).forEach(function(id) {
+    var p = parcelas[id];
+    volumes[p.chave] = (volumes[p.chave] || 0) + p.volume;
+  });
+  pedidos.forEach(function(item) {
+    var entregue = item.total, ambiguo = false;
+    Object.keys(item.componentes).forEach(function(k) {
+      var volume = volumes[k] || 0;
+      if (vinculos[k].length > 1) {
+        if (volume > 0) ambiguo = true;
+        volume = 0;
+      }
+      // Um kit exige todos os seus componentes, nao a soma dos impressos.
+      entregue = Math.min(entregue, volume);
+    });
+    var saldo = Math.max(0, item.total - entregue);
+    item.resumo.entregue += entregue;
+    item.resumo.saldo += saldo;
+    if (ambiguo && saldo > 0) {
+      item.resumo.aConferir += saldo;
+      item.resumo.aConferirPedidos++;
+    }
+  });
+  return resultados;
+}
+
 function getTempSasAdapt() {
   var pCampos = ['ID','GRÁFICA','UNIDADE','ENVIO','CARACTERÍSTICA DA SOLICITAÇÃO','SKU',
     'CD DESTINO','TIRAGEM','TIRAGEM TOTAL','TIRAGEM COLETADA','Data_Coleta_Mapa','Entrega_TP'];
@@ -410,6 +516,13 @@ function getTempSasAdapt() {
   var athos = pgTempSasAdaptLerColunas_('PCP_ACABADORAS', aCampos);
   var saidasMapa = pgTempSasAdaptLerSaidasMapa_();
   var resumo = pgTempSasAdaptResumo_(pcp, athos, null, saidasMapa);
+  // Falha da nova referencia nao interrompe a visao nem muda seus totais.
+  try {
+    resumo.entregasPorJanela = pgTempSasAdaptEntregasJanelas_(pgTempSasAdaptLerJanelas_(), saidasMapa);
+  } catch (e) {
+    resumo.entregasPorJanela = [];
+    resumo.erroEntregasPorJanela = 'Não foi possível atualizar as entregas por janela. Tente atualizar a visão.';
+  }
   resumo.atualizadoEm = new Date().toISOString();
   return resumo;
 }
