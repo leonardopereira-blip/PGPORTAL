@@ -323,7 +323,10 @@ function pgArquivoObservacoesGiro_() {
 function pgGiroNormalizarChave_(tipo, chave) {
   var partes = String(chave == null ? '' : chave).split('|').map(function(v) {
     return String(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ').trim().toUpperCase();
+      .replace(/\s+/g, ' ').trim().toUpperCase()
+      // As séries antigas usavam "9O ANO" / "2A SERIE"; hoje vêm como 9º / 2ª.
+      .replace(/\b(\d+)[º°O](?=\s+ANOS?\b)/g, '$1')
+      .replace(/\b(\d+)[ªA](?=\s+SERIES?\b)/g, '$1');
   });
   if(tipo === 'SKU' && partes.length === 6 && /^\d[\d.,]*$/.test(partes[3])) {
     partes.splice(3, 1);

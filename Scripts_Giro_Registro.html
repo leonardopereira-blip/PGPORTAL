@@ -17,6 +17,52 @@
         window.HISTORICO_OBS_GIRO ||= {master:{},sku:{}};
         return window.HISTORICO_OBS_GIRO[tipo === 'SKU' ? 'sku' : 'master'] ||= {};
     };
+
+    // Índice de compatibilidade: preserva observações com chaves antigas, sem
+    // duplicar na planilha nem espalhar notas de um CD para outro.
+    let versaoHistorico = 0, indiceHistorico = {};
+    const chaveObsNormalizada = (tipo, chave) => typeof window.pgGiroChaveObs === 'function'
+        ? window.pgGiroChaveObs(tipo, chave) : String(chave || '').trim().toUpperCase();
+    function indiceObservacoes(tipo) {
+        const dados = mapa(tipo), nome = tipo === 'SKU' ? 'sku' : 'master';
+        const anterior = indiceHistorico[nome];
+        if (anterior?.dados === dados && anterior.versao === versaoHistorico) return anterior;
+        const exatos = new Map(), legados = new Map();
+        const adicionar = (destino, chave, lista, legado) => {
+            if (!chave || !Array.isArray(lista)) return;
+            if (!destino.has(chave)) destino.set(chave, []);
+            lista.forEach(e => destino.get(chave).push(legado ? {...e, pgObsLegada:true} : e));
+        };
+        Object.entries(dados).forEach(([chave, eventos]) => {
+            const atual = chaveObsNormalizada(tipo, chave);
+            if (tipo === 'SKU') { adicionar(exatos, atual, eventos, false); return; }
+            const partes = atual.split('|');
+            // A série pode conter "|" (por exemplo "9 ANO | 1 SERIE").
+            // Só existe escopo de envio/CD quando o penúltimo campo é um envio.
+            const temEnvioCD = partes.length >= 5 && /^V\s*\d+\b/.test(partes[partes.length - 2]);
+            if (temEnvioCD) adicionar(exatos, atual, eventos, false);
+            else adicionar(legados, atual, eventos, true);
+        });
+        const indice = {dados, versao:versaoHistorico, exatos, legados};
+        indiceHistorico[nome] = indice;
+        return indice;
+    }
+    window.pgGiroHistoricoParaChave = (tipo, chave) => {
+        const indice = indiceObservacoes(tipo);
+        const atual = chaveObsNormalizada(tipo, chave);
+        const exatos = indice.exatos.get(atual) || [];
+        const partes = atual.split('|');
+        const prefixo = partes.length >= 5 ? partes.slice(0,-2).join('|') : atual;
+        const antigos = tipo === 'SKU' ? [] : (indice.legados.get(prefixo) || []);
+        const ids = new Set();
+        return exatos.concat(antigos).filter(e => {
+            const idEvento = String(e.id || [e.data,e.user,e.obs].join('\u0001'));
+            if (ids.has(idEvento)) return false;
+            ids.add(idEvento);
+            return true;
+        }).sort((a,b) => ordem(b)-ordem(a) ||
+            Number(b.sequencia || 0)-Number(a.sequencia || 0));
+    };
     const ordem = evento => {
         const m = String(evento.data || '').match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
         return evento._ordem || (m ? Date.UTC(+m[3],+m[2]-1,+m[1],+m[4],+m[5],+(m[6]||0)) : 0);
@@ -30,6 +76,7 @@
         destino[chave] = novos.concat(atuais.filter(e => !ids.has(e.id) &&
             (e.id || !assinaturas.has(assinatura(e)))))
             .sort((a,b) => ordem(b)-ordem(a) || Number(b.sequencia || 0)-Number(a.sequencia || 0));
+        versaoHistorico++;
     };
     function status(input, texto, erro, repetir) {
         if (!input?.parentElement) return;
@@ -53,7 +100,7 @@
     function atualizarCamposObs() {
         document.querySelectorAll('[data-pg-obs-chave]').forEach(input => {
             const chave = input.dataset.pgObsChave, tipo = input.dataset.pgObsTipo;
-            const ultimo = mapa(tipo)[chave]?.[0];
+            const ultimo = window.pgGiroHistoricoParaChave(tipo,chave)[0];
             const confirmado = input.dataset.pgObsSalva ?? input.defaultValue ?? '';
             if (document.activeElement !== input && input.value === confirmado && ultimo) {
                 input.value = ultimo.obs; input.dataset.pgObsSalva = ultimo.obs;
@@ -192,7 +239,7 @@
     }
     window.pgGiroSalvarObs = function(tipo,chave,input) {
         const texto = input.value.trim();
-        const anterior = mapa(tipo)[chave]?.[0]?.obs || '';
+        const anterior = window.pgGiroHistoricoParaChave(tipo,chave)[0]?.obs || '';
         if (!texto || texto === anterior) return;
         const evento = {id:id(),tipo,chave,texto,input,data:dataAgora(),ordem:Date.now(),
             contexto:window.CONTEXTOS_TEMP?.[chave] || '{}',

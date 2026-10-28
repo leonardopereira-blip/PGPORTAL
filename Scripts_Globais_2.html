@@ -9013,7 +9013,10 @@ function parseValidDate(val) {
 window.pgGiroChaveObs = function(tipo, chave) {
     const partes=String(chave == null ? '' : chave).split('|').map(v =>
         String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-            .replace(/\s+/g,' ').trim().toUpperCase());
+            .replace(/\s+/g,' ').trim().toUpperCase()
+            // Unifica as grafias históricas 9O/9º ANO e 2A/2ª SÉRIE.
+            .replace(/\b(\d+)[º°O](?=\s+ANOS?\b)/g,'$1')
+            .replace(/\b(\d+)[ªA](?=\s+SERIES?\b)/g,'$1'));
     // Migração da chave anterior: gráfica|marca|SKU|tiragem|envio|CD.
     if (tipo==='SKU' && partes.length===6 && /^\d[\d.,]*$/.test(partes[3])) partes.splice(3,1);
     return partes.join('|');
@@ -9199,7 +9202,7 @@ window.abrirModalHistorico = function(tipo, chave) {
     }
 
     let dict = (tipo === 'SKU') ? window.HISTORICO_OBS_GIRO.sku : window.HISTORICO_OBS_GIRO.master;
-    let hist = dict[chave] || [];
+    let hist = window.pgGiroHistoricoParaChave?.(tipo,chave) || dict[chave] || [];
     
     let labelChave = chave.replace(/\|/g, " ➔ ");
     document.getElementById('modalHistoricoSub').innerText = (tipo === 'SKU' ? "Referência do SKU: " : "Referência da Linha: ") + labelChave;
@@ -9224,6 +9227,7 @@ window.abrirModalHistorico = function(tipo, chave) {
                             ${h.data || "S/ Data"}
                         </span>
                     </div>
+                    ${h.pgObsLegada ? '<p class="text-[10px] font-bold text-amber-700 mb-2">Histórico antigo: esta observação não tinha envio ou CD na chave original.</p>' : ''}
                     <p class="text-sm text-slate-700 whitespace-pre-wrap font-medium leading-relaxed">${h.obs}</p>
                 </div>
             `;
@@ -9757,7 +9761,7 @@ let arrGrupos = Object.values(grupos);
 
     arrGrupos = arrGrupos.filter(g => {
         let chaveMaster = window.pgGiroChaveObs('MASTER', `${g.grafica}|${g.marca}|${g.serie}|${g.envio}|${g.cd}`);
-        let histMaster = (window.HISTORICO_OBS_GIRO && window.HISTORICO_OBS_GIRO.master && window.HISTORICO_OBS_GIRO.master[chaveMaster]) ? window.HISTORICO_OBS_GIRO.master[chaveMaster] : [];
+        let histMaster = window.pgGiroHistoricoParaChave?.('MASTER',chaveMaster) || window.HISTORICO_OBS_GIRO?.master?.[chaveMaster] || [];
         let ultimaObsObj = histMaster.length > 0 ? histMaster[0] : null;
         let tempoObs = window.calcularTempoObs(ultimaObsObj ? ultimaObsObj.data : null);
 
@@ -9857,7 +9861,7 @@ let arrGrupos = Object.values(grupos);
 
         window.CONTEXTOS_TEMP[chaveMaster] = JSON.stringify({grafica: g.grafica, marca: g.marca, serie: g.serie, envio: g.envio, cd: g.cd, status: g.statusGrupo, tiragem: g.tiragemTotal, pendencias: Array.from(g.pendencias), skus: g.skus.map(x => ({sku:x.sku, grafica:x.grafica, cd:x.cd, tiragem:x.tiragem, pendencia:x.pendencia}))});
 
-        let histMaster = (window.HISTORICO_OBS_GIRO && window.HISTORICO_OBS_GIRO.master && window.HISTORICO_OBS_GIRO.master[chaveMaster]) ? window.HISTORICO_OBS_GIRO.master[chaveMaster] : [];
+        let histMaster = window.pgGiroHistoricoParaChave?.('MASTER',chaveMaster) || window.HISTORICO_OBS_GIRO?.master?.[chaveMaster] || [];
         let ultimaObsObjMaster = histMaster.length > 0 ? histMaster[0] : null;
         let ultimaObsMaster = ultimaObsObjMaster ? ultimaObsObjMaster.obs.replace(/"/g, '&quot;') : "";
         let tempoObsMaster = window.calcularTempoObs(ultimaObsObjMaster ? ultimaObsObjMaster.data : null);
@@ -9933,7 +9937,7 @@ let arrGrupos = Object.values(grupos);
 
             window.CONTEXTOS_TEMP[chaveSku] = JSON.stringify({grafica: item.grafica, marca: g.marca, serie: g.serie, envio: g.envio, cd: item.cd, sku: item.sku, desc: item.descricao, status: item.statusLinha, pendencia: item.pendencia, tiragem: item.tiragem});
 
-            let histSku = (window.HISTORICO_OBS_GIRO && window.HISTORICO_OBS_GIRO.sku && window.HISTORICO_OBS_GIRO.sku[chaveSku]) ? window.HISTORICO_OBS_GIRO.sku[chaveSku] : [];
+            let histSku = window.pgGiroHistoricoParaChave?.('SKU',chaveSku) || window.HISTORICO_OBS_GIRO?.sku?.[chaveSku] || [];
             let ultimaObsSku = histSku.length > 0 ? histSku[0].obs.replace(/"/g, '&quot;') : "";
             let btnHistSku = '';
 
