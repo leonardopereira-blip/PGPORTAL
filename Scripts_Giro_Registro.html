@@ -18,8 +18,9 @@
         return window.HISTORICO_OBS_GIRO[tipo === 'SKU' ? 'sku' : 'master'] ||= {};
     };
 
-    // Índice de compatibilidade: preserva observações com chaves antigas, sem
-    // duplicar na planilha nem espalhar notas de um CD para outro.
+    // Uma anotação gravada na chave atual tem prioridade. A chave antiga
+    // (gráfica|marca|série) só entra quando a linha ainda não tem histórico novo.
+    // As notas antigas não são migradas, apagadas nem copiadas entre CDs.
     let versaoHistorico = 0, indiceHistorico = {};
     const chaveObsNormalizada = (tipo, chave) => typeof window.pgGiroChaveObs === 'function'
         ? window.pgGiroChaveObs(tipo, chave) : String(chave || '').trim().toUpperCase();
@@ -27,38 +28,41 @@
         const dados = mapa(tipo), nome = tipo === 'SKU' ? 'sku' : 'master';
         const anterior = indiceHistorico[nome];
         if (anterior?.dados === dados && anterior.versao === versaoHistorico) return anterior;
-        const exatos = new Map(), legados = new Map();
-        const adicionar = (destino, chave, lista, legado) => {
-            if (!chave || !Array.isArray(lista)) return;
-            if (!destino.has(chave)) destino.set(chave, []);
-            lista.forEach(e => destino.get(chave).push(legado ? {...e, pgObsLegada:true} : e));
+        const exatos = new Map(), antigos = new Map();
+        const incluir = (destino,chave,eventos,legado) => {
+            if (!chave || !Array.isArray(eventos)) return;
+            const atual = destino.get(chave) || [];
+            destino.set(chave, atual.concat(eventos.map(e =>
+                legado ? {...e,pgObsLegada:true} : e)));
         };
-        Object.entries(dados).forEach(([chave, eventos]) => {
-            const atual = chaveObsNormalizada(tipo, chave);
-            if (tipo === 'SKU') { adicionar(exatos, atual, eventos, false); return; }
-            const partes = atual.split('|');
-            // A série pode conter "|" (por exemplo "9 ANO | 1 SERIE").
-            // Só existe escopo de envio/CD quando o penúltimo campo é um envio.
-            const temEnvioCD = partes.length >= 5 && /^V\s*\d+\b/.test(partes[partes.length - 2]);
-            if (temEnvioCD) adicionar(exatos, atual, eventos, false);
-            else adicionar(legados, atual, eventos, true);
+        Object.entries(dados).forEach(([chave,eventos]) => {
+            const normal = chaveObsNormalizada(tipo,chave);
+            if (tipo === 'SKU') { incluir(exatos,normal,eventos,false); return; }
+            const partes = normal.split('|');
+            // Séries combinadas podem conter "|" na própria série.
+            const envio = partes[partes.length-2] || '';
+            const temEnvioCD = partes.length >= 5 && /^V\s*\d+\b/.test(envio);
+            if (temEnvioCD) incluir(exatos,normal,eventos,false);
+            else incluir(antigos,normal,eventos,true);
         });
-        const indice = {dados, versao:versaoHistorico, exatos, legados};
-        indiceHistorico[nome] = indice;
-        return indice;
+        return indiceHistorico[nome] = {dados,versao:versaoHistorico,exatos,antigos};
     }
-    window.pgGiroHistoricoParaChave = (tipo, chave) => {
+    window.pgGiroHistoricoParaChave = (tipo,chave) => {
         const indice = indiceObservacoes(tipo);
-        const atual = chaveObsNormalizada(tipo, chave);
-        const exatos = indice.exatos.get(atual) || [];
-        const partes = atual.split('|');
-        const prefixo = partes.length >= 5 ? partes.slice(0,-2).join('|') : atual;
-        const antigos = tipo === 'SKU' ? [] : (indice.legados.get(prefixo) || []);
+        const nova = chaveObsNormalizada(tipo,chave);
+        const eventosNovos = indice.exatos.get(nova) || [];
+        // Na linha nova, jamais substituir a observação por uma nota antiga.
+        if (eventosNovos.length) return eventosNovos.slice().sort((a,b) =>
+            ordem(b)-ordem(a) || Number(b.sequencia || 0)-Number(a.sequencia || 0));
+        if (tipo === 'SKU') return [];
+        const partes = nova.split('|');
+        const antiga = partes.length >= 5 ? partes.slice(0,-2).join('|') : nova;
+        const eventosAntigos = indice.antigos.get(antiga) || [];
         const ids = new Set();
-        return exatos.concat(antigos).filter(e => {
-            const idEvento = String(e.id || [e.data,e.user,e.obs].join('\u0001'));
-            if (ids.has(idEvento)) return false;
-            ids.add(idEvento);
+        return eventosAntigos.filter(e => {
+            const id = String(e.id || [e.data,e.user,e.obs].join('\u0001'));
+            if (ids.has(id)) return false;
+            ids.add(id);
             return true;
         }).sort((a,b) => ordem(b)-ordem(a) ||
             Number(b.sequencia || 0)-Number(a.sequencia || 0));
@@ -110,129 +114,16 @@
     // Carrega o histórico por uma rota somente de leitura, independente de previsões de CD.
     // Assim, uma falha na sincronização combinada não esconde observações já registradas.
 
-    // Histórico completo, inclusive notas de grupos não presentes no Giro filtrado.
-    let pgHistoricoPagina = 1, pgHistoricoBusca = '';
-    const pgHistoricoPorPagina = 40;
-    function pgHistoricoTodos() {
-        const todos = [], ids = new Set();
-        ['master','sku'].forEach(tipo => Object.entries(mapa(tipo === 'sku' ? 'SKU' : 'MASTER'))
-            .forEach(([chave,eventos]) => (eventos || []).forEach(e => {
-                const key = tipo + ':' + (e.id || [chave,e.data,e.user,e.obs].join('|'));
-                if (ids.has(key)) return;
-                ids.add(key);
-                todos.push({tipo,chave,e});
-            })));
-        return todos.sort((a,b) => ordem(b.e)-ordem(a.e) ||
-            Number(b.e.sequencia || 0)-Number(a.e.sequencia || 0));
-    }
-    function pgHistoricoFechar() {
-        const modal = document.getElementById('pgGiroHistoricoArquivo');
-        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
-    }
-    function pgHistoricoCriar() {
-        let modal = document.getElementById('pgGiroHistoricoArquivo');
-        if (modal) return modal;
-        modal = document.createElement('div');
-        modal.id = 'pgGiroHistoricoArquivo';
-        modal.className = 'fixed inset-0 z-[99999] bg-slate-950/70 hidden items-center justify-center p-4';
-        modal.setAttribute('role','dialog');
-        modal.setAttribute('aria-modal','true');
-        modal.innerHTML = [
-            '<section class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">',
-            '<header class="px-5 py-4 border-b flex justify-between items-center gap-3">',
-            '<div><h2 class="font-black text-lg text-indigo-900">📚 Histórico completo das observações</h2>',
-            '<p class="text-xs text-slate-500">Inclui notas antigas mesmo que a linha não esteja no Giro atual.</p></div>',
-            '<button type="button" data-pg-fechar class="font-bold bg-slate-100 hover:bg-rose-100 rounded px-4 py-2">Fechar ✕</button></header>',
-            '<div class="px-5 py-3 flex gap-2 flex-wrap border-b">',
-            '<input type="search" data-pg-busca class="border rounded-lg px-3 py-2 flex-1 min-w-48 text-sm" placeholder="Buscar gráfica, marca, série, SKU, texto ou usuário">',
-            '<button type="button" data-pg-recarregar class="text-xs font-bold text-indigo-700 bg-indigo-50 rounded px-3 py-2">↻ Atualizar</button></div>',
-            '<p id="pgGiroHistoricoStatus" role="status" class="px-5 py-2 text-xs text-slate-600"></p>',
-            '<div id="pgGiroHistoricoItens" class="flex-1 min-h-0 overflow-y-auto px-5 pb-4 space-y-2"></div>',
-            '<footer class="border-t px-5 py-3 flex justify-between items-center gap-2">',
-            '<span id="pgGiroHistoricoPaginacao" class="text-xs text-slate-600"></span>',
-            '<div class="flex gap-2"><button type="button" data-pg-anterior class="text-xs font-bold border rounded p-2">← Anterior</button>',
-            '<button type="button" data-pg-proxima class="text-xs font-bold border rounded p-2">Próxima →</button></div></footer>',
-            '</section>'
-        ].join('');
-        document.body.appendChild(modal);
-        modal.querySelector('[data-pg-fechar]').onclick = pgHistoricoFechar;
-        modal.addEventListener('click',e => { if (e.target === modal) pgHistoricoFechar(); });
-        modal.querySelector('[data-pg-busca]').oninput = e => {
-            pgHistoricoBusca = e.target.value; pgHistoricoPagina = 1; pgHistoricoRender();
-        };
-        modal.querySelector('[data-pg-recarregar]').onclick = () => carregarObservacoes(true);
-        modal.querySelector('[data-pg-anterior]').onclick = () => {
-            pgHistoricoPagina = Math.max(1,pgHistoricoPagina-1); pgHistoricoRender();
-        };
-        modal.querySelector('[data-pg-proxima]').onclick = () => {
-            pgHistoricoPagina++; pgHistoricoRender();
-        };
-        document.addEventListener('keydown',e => {
-            if (e.key === 'Escape' && !modal.classList.contains('hidden')) pgHistoricoFechar();
-        });
-        return modal;
-    }
-    function pgHistoricoRender() {
-        const modal = document.getElementById('pgGiroHistoricoArquivo');
-        if (!modal) return;
-        const norm = v => String(v || '').normalize('NFD')
-            .replace(/[\u0300-\u036f]/g,'').toLowerCase();
-        const todos = pgHistoricoTodos(), busca = norm(pgHistoricoBusca);
-        const filtrados = busca ? todos.filter(x =>
-            norm([x.chave,x.e.obs,x.e.user,x.e.data].join(' ')).includes(busca)) : todos;
-        const totalPaginas = Math.max(1,Math.ceil(filtrados.length/pgHistoricoPorPagina));
-        pgHistoricoPagina = Math.min(pgHistoricoPagina,totalPaginas);
-        const fatia = filtrados.slice((pgHistoricoPagina-1)*pgHistoricoPorPagina,
-            pgHistoricoPagina*pgHistoricoPorPagina);
-        modal.querySelector('#pgGiroHistoricoItens').innerHTML = fatia.map(x =>
-            '<article class="bg-slate-50 rounded-lg border p-3">' +
-            '<div class="flex flex-wrap justify-between gap-2 mb-1 text-xs">' +
-            '<b class="text-indigo-800 break-all">' + (x.tipo === 'sku' ? 'SKU · ' : 'Grupo · ') +
-            esc(x.chave.replace(/\|/g,' › ')) + '</b>' +
-            '<span class="text-slate-500">' + esc(x.e.data) + ' · ' +
-            esc(String(x.e.user || 'Usuário').split('@')[0]) + '</span></div>' +
-            '<p class="text-sm text-slate-800 whitespace-pre-wrap break-words">' +
-            esc(x.e.obs) + '</p></article>'
-        ).join('') || '<p class="p-8 text-center text-slate-500">Nenhuma observação encontrada.</p>';
-        modal.querySelector('#pgGiroHistoricoPaginacao').textContent =
-            filtrados.length.toLocaleString('pt-BR') + ' de ' +
-            todos.length.toLocaleString('pt-BR') + ' observações · página ' +
-            pgHistoricoPagina + ' de ' + totalPaginas;
-        modal.querySelector('[data-pg-anterior]').disabled = pgHistoricoPagina <= 1;
-        modal.querySelector('[data-pg-proxima]').disabled = pgHistoricoPagina >= totalPaginas;
-    }
-    function pgHistoricoAviso(mensagem,erro) {
-        const botao = document.getElementById('pgGiroHistoricoResumo');
-        if (botao) { botao.textContent = erro ? '⚠️ Falha' : mensagem.replace(' observações recuperadas',' notas').split(' · ')[0]; botao.title = mensagem; }
-        const status = document.getElementById('pgGiroHistoricoStatus');
-        if (status) {
-            status.textContent = mensagem;
-            status.className = 'px-5 py-2 text-xs ' +
-                (erro ? 'text-red-700 font-semibold' : 'text-slate-600');
-        }
-    }
-    window.pgGiroAbrirHistoricoGeral = () => {
-        const modal = pgHistoricoCriar();
-        modal.classList.remove('hidden'); modal.classList.add('flex');
-        pgHistoricoRender();
-        if (!obsLeituraConcluida) carregarObservacoes();
-        modal.querySelector('[data-pg-busca]').focus();
-    };
-    window.pgGiroFecharHistoricoGeral = pgHistoricoFechar;
-    window.pgGiroAtualizarHistoricoGeral = () => carregarObservacoes(true);
-
-    // Recuperação independente de previsões, com retry e status visível.
+    // Recuperação das notas no campo original da própria tabela do Giro.
     function carregarObservacoes(forcar = false) {
         if ((!forcar && obsLeituraConcluida) || obsLeituraEmCurso ||
             !document.getElementById('abaGiroSemanal') ||
             typeof google === 'undefined' || !google.script?.run) return;
         obsLeituraEmCurso = true;
-        pgHistoricoAviso('Carregando observações antigas…',false);
         google.script.run.withSuccessHandler(res => {
             obsLeituraEmCurso = false;
             if (!res?.success || !res.historico) {
-                pgHistoricoAviso('Falha ao recuperar histórico: ' +
-                    (res?.error || 'resposta inválida'),true);
+                console.warn('PGPORTAL: histórico do Giro indisponível.',res?.error);
                 return;
             }
             ['master','sku'].forEach(tipo => {
@@ -241,20 +132,16 @@
             });
             obsLeituraConcluida = true;
             window.OBS_GIRO_CARREGADO = true;
-            const qtd = (res.totais?.master ?? Object.values(res.historico.master || {})
-                .reduce((n,lista) => n + lista.length,0)) +
-                (res.totais?.sku ?? Object.values(res.historico.sku || {})
-                .reduce((n,lista) => n + lista.length,0));
-            const resumo = qtd.toLocaleString('pt-BR') + ' observações recuperadas';
-            pgHistoricoAviso(res.avisos?.length ? resumo + ' · ' + res.avisos.join(' | ') : resumo,
-                Boolean(res.avisos?.length));
             atualizarCamposObs();
-            pgHistoricoRender();
-            if (document.activeElement?.tagName !== 'INPUT') window.reFiltrarTabelaGiro?.();
+            // Atualiza as células quando a consulta terminar; se alguém estiver
+            // digitando, espera sair do campo para não interromper a edição.
+            const ativo = document.activeElement;
+            if (ativo?.tagName === 'INPUT' || ativo?.tagName === 'TEXTAREA') {
+                ativo.addEventListener('blur',() => window.reFiltrarTabelaGiro?.(),{once:true});
+            } else window.reFiltrarTabelaGiro?.();
         }).withFailureHandler(err => {
             obsLeituraEmCurso = false;
-            pgHistoricoAviso('Falha ao carregar observações: ' +
-                String(err?.message || err || 'sem conexão') + '. Clique em Atualizar.',true);
+            console.warn('PGPORTAL: histórico não carregou; nova tentativa agendada.',err);
         }).buscarHistoricoObsGiroLeve();
     }
     function publicarPrevisoes(novas, forcar = false) {
@@ -307,7 +194,7 @@
             agendar();
         },10000);
     }
-    window.pgGiroSincronizar = () => { sincronizar(); carregarObservacoes(); agendar(); };
+    window.pgGiroSincronizar = () => { carregarObservacoes(); sincronizar(); agendar(); };
 
     function historicoBotao(tipo,chave,input) {
         if (!input.parentElement || input.parentElement.querySelector('[data-pg-historico-novo]') ||
