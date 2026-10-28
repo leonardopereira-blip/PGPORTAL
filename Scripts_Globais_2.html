@@ -9350,6 +9350,27 @@ window.reFiltrarTabelaGiro = function() {
     const maxRange = Math.max(minDias, maxDias);
 
     const grupos = {};
+    const identificarGrupo = l => {
+        const grafica = String(l["GRAFICA_FINAL"] || l["GRÁFICA"] || "N/A").trim();
+        const marca = String(l["UNIDADE"] || l["MARCA_FINAL"] || "N/A").trim();
+        const serie = window.pgSerieCorrigidaFunil(l);
+        const envio = String(l["ENVIO"] || l["Envio"] || "-").trim();
+        const cd = String(l["CD DESTINO"] || l["CD_FINAL"] || l["CD"] || "-").trim();
+        return {grafica, marca, serie, envio, cd,
+            chave: window.pgGiroChaveObs('MASTER', `${grafica}|${marca}|${serie}|${envio}|${cd}`)};
+    };
+    // O total previsto usa todo o grupo nos filtros gerais, antes de filtrar
+    // status, etapas ou prazos das pendências, com a mesma contagem de itens
+    // da coluna de SKUs restantes e a soma das tiragens originais.
+    const totaisGrupos = new Map();
+    window.GIRO_DADOS_RAW.forEach(l => {
+        const {chave} = identificarGrupo(l);
+        if (!totaisGrupos.has(chave)) totaisGrupos.set(chave, {skus: 0, tiragem: 0});
+        const total = totaisGrupos.get(chave);
+        total.skus++;
+        const original = l["TIRAGEM"] ?? l["QUANTIDADE"] ?? 0;
+        total.tiragem += window.arredondar ? window.arredondar(original) : (Number(original) || 0);
+    });
     const planosFinais = new Map();
     (window.pgObterResumoColeta().registros || []).forEach(r => {
         if (r.pcp && r.dtPlan && (!planosFinais.has(r.pcp) || planosFinais.get(r.pcp) < r.dtPlan)) planosFinais.set(r.pcp, r.dtPlan);
@@ -9599,11 +9620,7 @@ window.reFiltrarTabelaGiro = function() {
             if (escalaSlider < minRange || escalaSlider > maxRange) return;
         }
 
-        let grafica = String(l["GRAFICA_FINAL"] || l["GRÁFICA"] || "N/A").trim();
-        let marca = String(l["UNIDADE"] || l["MARCA_FINAL"] || "N/A").trim();
-        let serie = window.pgSerieCorrigidaFunil(l);
-        let envio = String(l["ENVIO"] || l["Envio"] || "-").trim();
-        let cd = String(l["CD DESTINO"] || l["CD_FINAL"] || l["CD"] || "-").trim();
+        const {grafica, marca, serie, envio, cd, chave: chaveGrupo} = identificarGrupo(l);
         let sku = String(l["SKU_REAL"] || l["SKU"] || "-").trim();
         let tiragemBase = window.arredondar ? window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"] || 0) : 0;
         let ehLinhaColeta = coletadoAMenos || etapaPendente.includes('Coleta Mapa') ||
@@ -9611,13 +9628,12 @@ window.reFiltrarTabelaGiro = function() {
         let tiragemExibida = etapaPendente.includes('Coletado a mais') && !pendenteMapa
             ? excedenteColeta : (ehLinhaColeta ? saldoColeta : tiragemBase);
 
-        // CHAVE DE AGRUPAMENTO 100% BLINDADA (Identidade Absoluta)
-        let chaveGrupo = window.pgGiroChaveObs('MASTER', `${grafica}|${marca}|${serie}|${envio}|${cd}`);
-
         if (!grupos[chaveGrupo]) {
+            const total = totaisGrupos.get(chaveGrupo);
             grupos[chaveGrupo] = { 
                 grafica: grafica, marca: marca, serie: serie, envio: envio, cd: cd,
                 skus: [], tiragemTotal: 0, tiragemNormal: 0, piorEscala: 999, diasPos: null,
+                qtdSkusTotal: total.skus, tiragemPrevistaTotal: total.tiragem,
                 statusGrupo: statusFinalStr, pendencias: new Set() 
             };
         }
@@ -9750,7 +9766,7 @@ let arrGrupos = Object.values(grupos);
     });
 
     if (arrGrupos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
         return;
     }
 
@@ -9764,6 +9780,8 @@ let arrGrupos = Object.values(grupos);
             else if (rule.col === 'marca') { valA = a.marca; valB = b.marca; }
             else if (rule.col === 'serie') { valA = a.serie; valB = b.serie; }
             else if (rule.col === 'qtd') { valA = a.skus.length; valB = b.skus.length; }
+            else if (rule.col === 'qtdSkusTotal') { valA = a.qtdSkusTotal; valB = b.qtdSkusTotal; }
+            else if (rule.col === 'tiragemPrevistaTotal') { valA = a.tiragemPrevistaTotal; valB = b.tiragemPrevistaTotal; }
             else if (rule.col === 'status') { valA = a.statusGrupo; valB = b.statusGrupo; }
             else if (rule.col === 'pendencia') { valA = a.piorEscala; valB = b.piorEscala; }
             else { valA = a.tiragemTotal; valB = b.tiragemTotal; }
@@ -9774,7 +9792,7 @@ let arrGrupos = Object.values(grupos);
         return 0;
     });
 
-    ['grafica', 'marca', 'serie', 'status', 'pendencia', 'qtd', 'tiragemTotal'].forEach(k => {
+    ['grafica', 'marca', 'serie', 'status', 'pendencia', 'qtd', 'qtdSkusTotal', 'tiragemTotal', 'tiragemPrevistaTotal'].forEach(k => {
         let el = document.getElementById(`sort_${k}`);
         if (el) {
             let ruleIndex = window.GIRO_SORT_RULES.findIndex(r => r.col === k);
@@ -9842,10 +9860,12 @@ let arrGrupos = Object.values(grupos);
         <td class="p-2 font-extrabold text-indigo-800 border-r border-slate-200">${g.grafica}</td>
         <td class="p-2 font-extrabold text-slate-800 border-r border-slate-200">${g.marca}</td>
         <td class="p-2 text-slate-600 font-medium border-r border-slate-200" style="width:8ch;max-width:calc(8ch + 1rem)"><span style="display:block;width:8ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(g.serie ?? '-').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}">${String(g.serie ?? '-').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></td>
-        <td class="p-2 border-r border-slate-200 text-center"><span class="px-2 py-1 rounded text-[10px] font-bold uppercase ${corStatusMaster}">${g.statusGrupo}</span></td>
+        <td class="p-2 border-r border-slate-200 text-center"><span class="px-2 py-1 rounded text-[10px] font-bold uppercase ${corStatusMaster}">${g.statusGrupo === 'Em Aberto' ? 'Zerado' : g.statusGrupo}</span></td>
         <td class="p-2 border-r border-slate-200 font-bold text-slate-700" style="width:30ch;max-width:calc(30ch + 1rem)"><span style="display:block;width:30ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(pendenciasStr).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}">${String(pendenciasStr).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span><span style="display:block;width:30ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(prazoMasterLabel).replace(/<[^>]*>/g, '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">${prazoMasterLabel}</span></td>
         <td class="p-2 text-center font-bold text-slate-600 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.skus.length) : g.skus.length}</td>
+        <td class="p-2 text-center font-bold text-slate-600 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.qtdSkusTotal) : g.qtdSkusTotal}</td>
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemTotal) : g.tiragemTotal}</td>
+        <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemPrevistaTotal) : g.tiragemPrevistaTotal}</td>
         <td class="p-2">
         <div class="flex items-center w-full">
         <input type="text" id="${idInputMaster}" name="${idInputMaster}" autocomplete="off" value="${ultimaObsMaster}" placeholder="Ação / Motivo (Aperte Enter)..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('MASTER', '${safeChaveMaster}', this)" class="w-full text-[11px] p-2 border border-slate-300 hover:border-indigo-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg bg-white outline-none transition-all text-slate-700 font-semibold shadow-inner" />
@@ -9856,7 +9876,7 @@ let arrGrupos = Object.values(grupos);
         <td class="p-2">${window.pgGiroCampoNovaData?.(g.skus.map(x => x.linhaPrevisao),'girodata_'+indexGrupo) || '—'}</td>
         </tr>
         <tr id="${idSubTabela}" class="hidden subtabela-detalhes bg-indigo-50/30 border-b border-indigo-100">
-        <td colspan="10" class="p-0">
+        <td colspan="12" class="p-0">
         <div class="pl-10 pr-2 py-3">
         <table class="w-full text-[9px] text-left bg-white shadow-sm rounded border border-slate-200 overflow-hidden">
         <thead class="bg-slate-100 text-slate-500 uppercase font-bold">
