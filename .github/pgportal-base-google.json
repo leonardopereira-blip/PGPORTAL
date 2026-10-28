@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-10-28T10:35:59.344Z",
+  "lido_em": "2026-10-28T10:36:40.266Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -9,7 +9,7 @@
     "HTML:abaFalhasPlan": "6bdfd2092e5a7c233a52de5bda39050435b446d0babea228fd07cdcb6a436bd6",
     "HTML:abaFunil": "29b62f0b4a195373738a7c29f1e4cfb0132aea5e3111d016431eabef9b0f6cbb",
     "HTML:abaGeral": "1597a7f868729d9c03bdb9e8131e2f61ab984be90ce7b861f6d1b960f5c6eecb",
-    "HTML:abaGiroSemanal_1": "8c1dd08b4bb478d82ed2207ac5b27401ba07cec52ae103f3b22a71a861ee8d34",
+    "HTML:abaGiroSemanal_1": "e6d63d5c06188cff54483af14c69b3b0e2078ced241cc80980fd7b5d7e6a6853",
     "HTML:abaGiroSemanal": "73fe70461ab8683885c24e9ebd44a250ba43d9f2bd3c91559e21631b10a7375f",
     "HTML:abaHome": "15ac73957a2363657c54cd40ddc9cab533e44a27baf989b20b65cf3c00c577fa",
     "HTML:abaInspecaoCDs": "fc452db368c7857f97b091c5b8f7649bb6873bfe8e9b5bf65570b61ceaa44d45",
@@ -63,7 +63,7 @@
     "HTML:Scripts_Eventos_TP": "fcb7b126a2f7d881a78e5c0e6945982a1e3ebade0fa3cd9fc1fd3827627f33ea",
     "HTML:Scripts_Giro_Registro": "ee5496077baf4918e0171b1d92df2cec38da2584bf47e601333a642921ed7e55",
     "HTML:Scripts_Globais_1": "3b3c1ea4300c21439c38e0bdc44325ee105f916334e9754cc4809f17d528a9b3",
-    "HTML:Scripts_Globais_2": "eeb5fd35a4294648ed5da48eeed878f92829c6af747467390f410b606f065a9b",
+    "HTML:Scripts_Globais_2": "d97709805b2fa8b181bb370e4bb601636147d9842600a9746184a9906ab68070",
     "HTML:Scripts_Historico_PCP2026": "c6238f34d35ffd9c1adcb4435ff737563f806c1f234ee0b58c835bdafdafb8a5",
     "HTML:Scripts_Meta_Armazem_Realizado": "ae22d29077e27b204359486acc6557a4769d2ab99ee5556d65876220f17e51f5",
     "SERVER_JS:Sem título": "0d554ca9e8b80dd09850906f18cdd0f84d35dd7bbe6abab69ab4ccbada526ef8",
