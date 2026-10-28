@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-10-28T16:29:00.482Z",
+  "lido_em": "2026-10-28T17:34:45.317Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -39,7 +39,7 @@
     "HTML:AuditoriaPortalSheets": "270e37d229ca359aceae83f3ba7fbf6d8bada38d6dab0aabf86bce2db970e798",
     "SERVER_JS:CachePorCopia": "c094537469895360979f0a183e9a71fae119de3e86d9f8ffc8b6d320ece4c6a2",
     "HTML:Cockpit": "c5b213863fd0f600de42e17ecf0d2c1c17633ed99ff5fbfa4164ab0d451add61",
-    "SERVER_JS:Code": "0d5fcac3e2e22a368aca8ecda978d2a0b0c5de02db67055b30c0635a3b84f469",
+    "SERVER_JS:Code": "eb5e00d323b072c2a00a0d4de7063443508ec5e6473a75874bc61f43dc44c32e",
     "SERVER_JS:Código": "74cbcdb7ae26466a909fa5fa6deba2d3c41a24bb9a5972f71d5f46afa67fb0f8",
     "HTML:Eficiencia_Aging_Extras": "809573fd0d9ba2a42c595ef556b35c039e8945af5229ca9ac117bd69c7a69ceb",
     "HTML:Eficiencia_Aging_UI": "15a7d134d00a8dc6b962aea853762763f7a0bfe9678a7da025e8b75010a358cf",
@@ -61,9 +61,9 @@
     "HTML:Scripts_EntregasCD_Controle": "7b6e028522bfa43a874dcd2b5b5a3fbca3e8d0f4a6f9744ff5e2d7d5022cd3d1",
     "HTML:Scripts_EntregasCD_Modelo": "6af7811b9a34bfd4fb7dfde821815b7a80cd93b35efcbc3da97da0958c4d5de2",
     "HTML:Scripts_Eventos_TP": "fcb7b126a2f7d881a78e5c0e6945982a1e3ebade0fa3cd9fc1fd3827627f33ea",
-    "HTML:Scripts_Giro_Registro": "d2ac02a7df64506a61eeb89709416563d637b11438da45e6419ab4b2b1d487df",
+    "HTML:Scripts_Giro_Registro": "67482a8fb995fed869cac330c0d5d545a2d55a9ccae16e9ac3ecf3c049ce414b",
     "HTML:Scripts_Globais_1": "3b3c1ea4300c21439c38e0bdc44325ee105f916334e9754cc4809f17d528a9b3",
-    "HTML:Scripts_Globais_2": "474f55d6daed052c7e4698741d2fff80fbc4257515d7ebd491ee96f3f7d1239a",
+    "HTML:Scripts_Globais_2": "75c66c131a336c99931f00f8f1fb176a4192f0adc9f3f7b46c6af6b395578eea",
     "HTML:Scripts_Historico_PCP2026": "c6238f34d35ffd9c1adcb4435ff737563f806c1f234ee0b58c835bdafdafb8a5",
     "HTML:Scripts_Meta_Armazem_Realizado": "ae22d29077e27b204359486acc6557a4769d2ab99ee5556d65876220f17e51f5",
     "SERVER_JS:Sem título": "0d554ca9e8b80dd09850906f18cdd0f84d35dd7bbe6abab69ab4ccbada526ef8",
