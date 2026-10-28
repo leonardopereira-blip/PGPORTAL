@@ -9390,14 +9390,32 @@ window.reFiltrarTabelaGiro = function() {
     const parcelaJaConsolidadaGiro = l => tiragemOriginalGiro(l) === 0 &&
         skusComTotalConsolidado.has(chaveSkuConsolidadoGiro(l));
 
+    // O percentual usa somente coleta real (Coleta_TP) e é limitado a 100% por SKU.
+    // O denominador e o escopo são os mesmos da coluna Tiragem total.
+    const coletadoPorLinha = new WeakMap();
+    const tiragemColetadaGiro = l => {
+        if (coletadoPorLinha.has(l)) return coletadoPorLinha.get(l);
+        const total = tiragemOriginalGiro(l);
+        const volume = typeof window.pgTiragemColetadaReal === 'function'
+            ? window.pgNumeroPrazoV35(window.pgTiragemColetadaReal(l)) : 0;
+        const coletado = Math.min(total, Math.max(0, volume));
+        coletadoPorLinha.set(l, coletado);
+        return coletado;
+    };
+    const pctColetadoGiro = (coletado, total) => total > 0
+        ? Math.min(100, Math.round(1000 * coletado / total) / 10) : null;
+    const fmtPctColetadoGiro = percentual => percentual === null
+        ? '—' : percentual.toFixed(1).replace('.', ',') + '%';
+
     const totaisGrupos = new Map();
     window.GIRO_DADOS_RAW.forEach(l => {
         if (parcelaJaConsolidadaGiro(l)) return;
         const {chave} = identificarGrupo(l);
-        if (!totaisGrupos.has(chave)) totaisGrupos.set(chave, {skus: 0, tiragem: 0});
+        if (!totaisGrupos.has(chave)) totaisGrupos.set(chave, {skus: 0, tiragem: 0, coletado: 0});
         const total = totaisGrupos.get(chave);
         total.skus++;
         total.tiragem += tiragemOriginalGiro(l);
+        total.coletado += tiragemColetadaGiro(l);
     });
     const planosFinais = new Map();
     (window.pgObterResumoColeta().registros || []).forEach(r => {
@@ -9657,6 +9675,8 @@ window.reFiltrarTabelaGiro = function() {
                 grafica: grafica, marca: marca, serie: serie, envio: envio, cd: cd,
                 skus: [], tiragemTotal: 0, tiragemNormal: 0, piorEscala: 999, diasPos: null,
                 qtdSkusTotal: total.skus, tiragemPrevistaTotal: total.tiragem,
+                tiragemColetadaTotal: total.coletado,
+                percentualColetado: pctColetadoGiro(total.coletado, total.tiragem),
                 statusGrupo: statusFinalStr, pendencias: new Set() 
             };
         }
@@ -9706,6 +9726,8 @@ window.reFiltrarTabelaGiro = function() {
             descricao: l["DESC_REAL"] || l["DESCRIÇÃO"] || l["PRODUTO"] || "-",
             tiragem: tiragemExibida,
             tiragemOriginal: tiragemOriginalGiro(l),
+            tiragemColetada: tiragemColetadaGiro(l),
+            percentualColetado: pctColetadoGiro(tiragemColetadaGiro(l), tiragemOriginalGiro(l)),
             statusLinha: statusFinalStr,
             excedenteColeta: totalColeta > 0 ? Math.max(0, realizadoColeta - totalColeta) : 0,
             pendencia: etapaPendente,
@@ -9791,7 +9813,7 @@ let arrGrupos = Object.values(grupos);
     });
 
     if (arrGrupos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="12" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="13" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
         return;
     }
 
@@ -9807,6 +9829,7 @@ let arrGrupos = Object.values(grupos);
             else if (rule.col === 'qtd') { valA = a.skus.length; valB = b.skus.length; }
             else if (rule.col === 'qtdSkusTotal') { valA = a.qtdSkusTotal; valB = b.qtdSkusTotal; }
             else if (rule.col === 'tiragemPrevistaTotal') { valA = a.tiragemPrevistaTotal; valB = b.tiragemPrevistaTotal; }
+            else if (rule.col === 'percentualColetado') { valA = a.percentualColetado ?? -1; valB = b.percentualColetado ?? -1; }
             else if (rule.col === 'status') { valA = a.statusGrupo; valB = b.statusGrupo; }
             else if (rule.col === 'pendencia') { valA = a.piorEscala; valB = b.piorEscala; }
             else { valA = a.tiragemTotal; valB = b.tiragemTotal; }
@@ -9817,7 +9840,7 @@ let arrGrupos = Object.values(grupos);
         return 0;
     });
 
-    ['grafica', 'marca', 'serie', 'status', 'pendencia', 'qtd', 'qtdSkusTotal', 'tiragemTotal', 'tiragemPrevistaTotal'].forEach(k => {
+    ['grafica', 'marca', 'serie', 'status', 'pendencia', 'qtd', 'qtdSkusTotal', 'tiragemTotal', 'tiragemPrevistaTotal', 'percentualColetado'].forEach(k => {
         let el = document.getElementById(`sort_${k}`);
         if (el) {
             let ruleIndex = window.GIRO_SORT_RULES.findIndex(r => r.col === k);
@@ -9891,6 +9914,7 @@ let arrGrupos = Object.values(grupos);
         <td class="p-2 text-center font-bold text-slate-600 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.qtdSkusTotal) : g.qtdSkusTotal}</td>
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemTotal) : g.tiragemTotal}</td>
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemPrevistaTotal) : g.tiragemPrevistaTotal}</td>
+        <td class="p-2 text-right font-extrabold text-emerald-700 border-r border-slate-200 text-sm" title="${window.formatarBR ? window.formatarBR(g.tiragemColetadaTotal) : g.tiragemColetadaTotal} coletadas de ${window.formatarBR ? window.formatarBR(g.tiragemPrevistaTotal) : g.tiragemPrevistaTotal} previstas; máximo 100% por SKU">${fmtPctColetadoGiro(g.percentualColetado)}</td>
         <td class="p-2">
         <div class="flex items-center w-full">
         <input type="text" id="${idInputMaster}" name="${idInputMaster}" autocomplete="off" value="${ultimaObsMaster}" placeholder="Ação / Motivo (Aperte Enter)..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('MASTER', '${safeChaveMaster}', this)" class="w-full text-[11px] p-2 border border-slate-300 hover:border-indigo-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg bg-white outline-none transition-all text-slate-700 font-semibold shadow-inner" />
@@ -9901,7 +9925,7 @@ let arrGrupos = Object.values(grupos);
         <td class="p-2">${window.pgGiroCampoNovaData?.(g.skus.map(x => x.linhaPrevisao),'girodata_'+indexGrupo) || '—'}</td>
         </tr>
         <tr id="${idSubTabela}" class="hidden subtabela-detalhes bg-indigo-50/30 border-b border-indigo-100">
-        <td colspan="12" class="p-0">
+        <td colspan="13" class="p-0">
         <div class="pl-10 pr-2 py-3">
         <table class="w-full text-[9px] text-left bg-white shadow-sm rounded border border-slate-200 overflow-hidden">
         <thead class="bg-slate-100 text-slate-500 uppercase font-bold">
@@ -9914,6 +9938,7 @@ let arrGrupos = Object.values(grupos);
         <th class="p-1.5 border-r border-slate-200">Etapa Pendente</th>
         <th class="p-1.5 text-right border-r border-slate-200">Tiragem pendente</th>
         <th class="p-1.5 text-right border-r border-slate-200">Tiragem total</th>
+        <th class="p-1.5 text-right border-r border-slate-200">% coletado</th>
         <th class="p-1.5 w-1/3">Observação Específica do SKU</th>
         <th class="p-1.5">Nova data</th>
         </tr>
@@ -9955,6 +9980,7 @@ let arrGrupos = Object.values(grupos);
             <td class="p-1.5 border-r border-slate-100 font-bold text-slate-700">${item.pendenciaHtml}</td>
             <td class="p-1.5 text-right font-bold border-r border-slate-100">${window.formatarBR ? window.formatarBR(item.tiragem) : item.tiragem}</td>
             <td class="p-1.5 text-right font-bold border-r border-slate-100">${window.formatarBR ? window.formatarBR(item.tiragemOriginal) : item.tiragemOriginal}</td>
+            <td class="p-1.5 text-right font-extrabold text-emerald-700 border-r border-slate-100" title="${window.formatarBR ? window.formatarBR(item.tiragemColetada) : item.tiragemColetada} coletadas de ${window.formatarBR ? window.formatarBR(item.tiragemOriginal) : item.tiragemOriginal} previstas; excedente fora do percentual">${fmtPctColetadoGiro(item.percentualColetado)}</td>
             <td class="p-1.5">
             <div class="flex items-center w-full">
             ${primeiraObsSku ? `<input type="text" id="${idInputSku}" name="${idInputSku}" autocomplete="off" value="${ultimaObsSku}" class="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1.5 outline-none focus:border-indigo-400 focus:bg-white text-[10px] transition-all text-slate-700 font-semibold shadow-inner" placeholder="Nova observação (Enter)..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('SKU', '${safeChaveSku}', this)" />` : '<span class="text-[9px] text-slate-500" title="Observação compartilhada pelo mesmo SKU e destino">Observação unificada com o mesmo SKU/CD</span>'}

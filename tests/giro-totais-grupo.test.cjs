@@ -15,7 +15,9 @@ const harness = origem.slice(0, origem.indexOf('\ntest('))
   .replace('totalPendente:eventos.reduce((s,e)=>s+e.volume,0),eventos',
     'totalPendente:(r._eventos||eventos).reduce((s,e)=>s+e.volume,0),eventos:r._eventos||eventos')
   .replace("checked:id==='chkGiroAberto'||(id==='chkGiroPos'&&pos)",
-    "checked:(id==='chkGiroAberto'&&aberto)||(id==='chkGiroConcluido'&&concluido)||(id==='chkGiroPos'&&pos)");
+    "checked:(id==='chkGiroAberto'&&aberto)||(id==='chkGiroConcluido'&&concluido)||(id==='chkGiroPos'&&pos)")
+  .replace('pgGiroChaveObs:(_,x)=>x,',
+    "pgTiragemColetadaReal:r=>r.Coleta_TP && String(r.Coleta_TP).slice(0,10) <= '2026-10-15' ? Number(r['TIRAGEM COLETADA']||0) : 0,pgGiroChaveObs:(_,x)=>x,");
 const {executarGiro} = vm.runInNewContext(harness + '\n({executarGiro});', {require, __dirname});
 
 const pendente = (sku='PENDENTE', extra={}) => ({SKU:sku,TIRAGEM:100,'TIRAGEM TOTAL':100,
@@ -38,14 +40,14 @@ test('Giro distingue pendências do total do grupo incluindo SKU concluído', ()
   assert.deepEqual(valores(r),['1','2','50','300']);
   assert.equal(r.linhas[0].tiragem,50,'Exportação continua com o saldo filtrado');
   const html = fs.readFileSync(path.join(__dirname,'..','abaGiroSemanal_1.html'),'utf8');
-  const headers = ['Skus pendentes','SKUs totais','Tiragem pendente','Tiragem total'];
+  const headers = ['Skus pendentes','SKUs totais','Tiragem pendente','Tiragem total','% coletado'];
   let anterior = -1;
   for (const header of headers) {
     const indice = html.indexOf('>' + header + ' ');
     assert(indice > anterior, 'Coluna presente e na ordem solicitada: ' + header);
     anterior = indice;
   }
-  assert.match(r.html, /colspan="12"/, 'Linha expandida acompanha as duas novas colunas');
+  assert.match(r.html, /colspan="13"/, 'Linha expandida acompanha a coluna de percentual');
 });
 
 test('total inclui SKU fora do slider e separa grupos por marca', () => {
@@ -178,28 +180,81 @@ test('detalhe do SKU parcial distingue tiragem pendente e original sem alterar s
     _estado:{pendente:true,parcial:true,saldo:100,coletada:900},
     _eventos:[{categoria:'Vencida',volume:100,dias:0}]})],{pos:true});
   const detalhe = detalheSku(r,'PARCIAL');
-  assert.equal(detalhe.length,10,'Detalhe possui total, pendente, observação e nova data em colunas próprias');
+  assert.equal(detalhe.length,11,'Detalhe possui total, pendente, observação e nova data em colunas próprias');
   assert.equal(detalhe[6],'100');
   assert.equal(detalhe[7],'1000');
-  assert.equal(detalhe[9],'—','Nova data permanece na última coluna');
+  assert.equal(detalhe[8],'0,0%','Sem Coleta TP não há coletado real');
+  assert.equal(detalhe[10],'—','Nova data permanece na última coluna');
   assert.deepEqual(valores(r),['1','1','100','1000'],
     'Coleta parcial mantém um SKU pendente, com somente o saldo na tiragem pendente');
   assert.equal(r.linhas[0].tiragem,100,'Saldo da exportação preservado');
   assert.equal(r.linhas[0].status,'Coletado a menos');
   const header = r.html.match(/<thead\b[^>]*>([\s\S]*?)<\/thead>/)?.[1] || '';
   const colunas = [...header.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map(m => texto(m[1]));
-  assert.equal(colunas.length,10);
+  assert.equal(colunas.length,11);
   assert.equal(colunas[6],'Tiragem pendente');
   assert.equal(colunas[7],'Tiragem total');
-  assert.equal(colunas[8],'Observação Específica do SKU');
-  assert.equal(colunas[9],'Nova data');
+  assert.equal(colunas[8],'% coletado');
+  assert.equal(colunas[9],'Observação Específica do SKU');
+  assert.equal(colunas[10],'Nova data');
 });
 
 test('detalhe do SKU preserva TIRAGEM TOTAL zero sem trocar por QUANTIDADE', () => {
   const r = tela([pendente('ZERO-EXPLICITO',{TIRAGEM:0,'TIRAGEM TOTAL':0,QUANTIDADE:999})]);
   const detalhe = detalheSku(r,'ZERO-EXPLICITO');
-  assert.equal(detalhe.length,10);
+  assert.equal(detalhe.length,11);
   assert.equal(detalhe[6],'50','Saldo vigente permanece na coluna pendente');
   assert.equal(detalhe[7],'0','Total original respeita zero explícito');
   assert.equal(r.linhas[0].tiragem,50);
+});
+
+test('% coletado do grupo usa todos os SKUs da Tiragem total, mesmo concluídos ou filtrados', () => {
+  const parcial = pendente('PARCIAL', {
+    TIRAGEM:1000,'TIRAGEM TOTAL':1000,'TIRAGEM COLETADA':900,Coleta_TP:'2026-10-10',
+    _estado:{pendente:true,parcial:true,saldo:100},
+    _eventos:[{categoria:'Vencida',volume:100,dias:0}]
+  });
+  const completo = finalizado('CONCLUIDO', {
+    TIRAGEM:1000,'TIRAGEM TOTAL':1000,'TIRAGEM COLETADA':1000,Coleta_TP:'2026-10-10'
+  });
+  const naoConfirmado = finalizado('SEM-TP', {
+    TIRAGEM:1000,'TIRAGEM TOTAL':1000,'TIRAGEM COLETADA':500,Coleta_TP:''
+  });
+  const r=tela([parcial,completo,naoConfirmado],{pos:true});
+  assert.equal(linhasMaster(r.html)[0][10],'63,3%',
+    '1900 unidades realmente coletadas de 3000 previstas, incluindo os concluídos filtrados');
+  const detalhe=detalheSku(r,'PARCIAL');
+  assert.equal(detalhe[6],'100','Pendente continua representando só o saldo');
+  assert.equal(detalhe[7],'1000','Total permanece inalterado');
+  assert.equal(detalhe[8],'90,0%','Coleta TP parcial de 900 / 1000');
+});
+
+test('excesso é limitado a 100% do próprio SKU, nunca compensa outra tiragem', () => {
+  const r=tela([
+    pendente('EXCESSO',{'TIRAGEM TOTAL':100,'TIRAGEM COLETADA':150,Coleta_TP:'2026-10-10',
+      _estado:{pendente:false,parcial:false,saldo:0}}),
+    pendente('SEM-COLETA',{'TIRAGEM TOTAL':100,'TIRAGEM COLETADA':0,
+      _estado:{pendente:true,saldo:100},_eventos:[{categoria:'Vencida',volume:100,dias:0}]})
+  ],{concluido:true});
+  assert.equal(linhasMaster(r.html)[0][10],'50,0%','100 / 200, e não 150 / 200');
+  assert.equal(detalheSku(r,'EXCESSO')[8],'100,0%');
+  assert.equal(detalheSku(r,'SEM-COLETA')[8],'0,0%');
+});
+
+test('percentual de acabadora usa TIRAGEM TOTAL, não a tiragem por CD', () => {
+  const r=tela([pendente('ACABADORA',{
+    _acabadora:true,TIRAGEM:50,'TIRAGEM A ENTREGAR (total por CD)':50,
+    'TIRAGEM TOTAL':25000,'TIRAGEM COLETADA':5000,Coleta_TP:'2026-10-10',
+    _estado:{pendente:true,parcial:true,saldo:20000},
+    _eventos:[{categoria:'Vencida',volume:20000,dias:0}]
+  })],{pos:true});
+  assert.equal(linhasMaster(r.html)[0][10],'20,0%');
+  assert.equal(detalheSku(r,'ACABADORA')[8],'20,0%');
+});
+
+test('tiragem total zero exibe percentual indefinido, sem inventar coleta', () => {
+  const r=tela([pendente('ZERO',{'TIRAGEM TOTAL':0,TIRAGEM:1000,
+    'TIRAGEM COLETADA':500,Coleta_TP:'2026-10-10'})]);
+  assert.equal(linhasMaster(r.html)[0][10],'—');
+  assert.equal(detalheSku(r,'ZERO')[8],'—');
 });
