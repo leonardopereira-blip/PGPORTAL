@@ -71,13 +71,26 @@ function value(audit, index, column) {
 
 function checkAuditAlignment(app) {
   const audits = [app.w.pgMAObterAuditoria(), app.w.pgMAObterAuditoriaRealizado(), app.w.pgMAObterAuditoriaColetas()];
-  const ids = audits.map(audit => {
-    assert.equal(audit.linhas.length, app.items.length, 'Uma linha por item em cada quadro');
-    assert.equal(audit.linhas.reduce((sum, _, index) => sum+value(audit,index,'Tiragem total'), 0), app.total.total);
-    return audit.linhas.map((_, index) => String(value(audit,index,'ID da linha')));
-  });
+  for (const audit of audits)
+    assert.equal(audit.linhas.reduce((sum, _, index) => sum+value(audit,index,'Tiragem total'), 0),
+      app.total.total, 'As três auditorias usam o total da matriz');
+  for (const audit of audits.slice(0,2))
+    assert.equal(audit.linhas.length, app.items.length, 'Planejado e realizado preservam as linhas de origem');
+  const ids = audits.map(audit => audit.linhas.map((_, index) => String(value(audit,index,'ID da linha'))));
   assert.deepEqual(ids[1], ids[0], 'Previsão e entregas mantêm a mesma linha');
-  assert.deepEqual(ids[2], ids[0], 'Previsão e coletas mantêm a mesma linha');
+  for (const id of ids[0])
+    assert(ids[2].some(group => group.includes(id)), 'Coletas preserva o ID '+id+' no agrupamento');
+  const collected = audits[2];
+  assert.equal(collected.linhas.reduce((sum, _, index) => sum+value(collected,index,'Coletado TP'),0),
+    app.total.coletadoTP, 'Coletas auditável confere com TP coletada da matriz');
+  assert.equal(collected.linhas.reduce((sum, _, index) => sum+value(collected,index,'Saldo a coletar'),0),
+    app.total.total-app.total.coletadoTP, 'Saldo de coletas confere com a matriz sem transferir entre SKUs');
+  for (let i=0;i<collected.linhas.length;i++) {
+    assert.equal(value(collected,i,'Tiragem coletada'),value(collected,i,'Coletado TP'),
+      'Coletas não mostra tiragem bruta do PCP como coletada');
+    assert.equal(value(collected,i,'Tiragem total'),
+      value(collected,i,'Coletado TP')+value(collected,i,'Saldo a coletar'));
+  }
   return audits;
 }
 
@@ -302,6 +315,48 @@ function unzip(bytes) {
   }
   return entries;
 }
+
+
+test('auditoria Coletas consolida KITs do mesmo SKU sem inventar pendência da tiragem PCP', () => {
+  const rows=[row(701,{KIT:'KIT-A',GIRO_TOTAL_BA:200,'TIRAGEM COLETADA':200}),
+    row(702,{KIT:'KIT-B',GIRO_TOTAL_BA:0,'TIRAGEM COLETADA':0})];
+  const app=portal(rows,{cache:{key:[movement(71,100,{kit:'KIT-A'}),
+    movement(72,100,{kit:'KIT-B'})]}});
+  assert.equal(app.items.length,2,'A origem permanece separada por KIT');
+  assert.equal(app.total.coletadoTP,200,'Matriz apura a coleta de todos os KITs');
+  const audit=app.w.pgMAObterAuditoriaColetas();
+  assert.equal(audit.linhas.length,1,'Mesma identidade operacional vira uma linha da auditoria');
+  assert.equal(value(audit,0,'Tiragem total'),200);
+  assert.equal(value(audit,0,'Tiragem coletada'),200);
+  assert.equal(value(audit,0,'Coletado TP'),200);
+  assert.equal(value(audit,0,'Saldo a coletar'),0);
+  assert.equal(value(audit,0,'% coletado TP / tiragem total'),1);
+  assert.equal(value(audit,0,'Situação'),'Coleta concluída');
+  assert.equal(value(audit,0,'Tiragem coletada PCP (informativa)'),200);
+  assert.match(value(audit,0,'Kit'),/KIT-A/);
+  assert.match(value(audit,0,'Kit'),/KIT-B/);
+  checkAuditAlignment(app);
+});
+
+test('Coletas mantém datas do planejado somente dos KITs com saldo', () => {
+  const rows=[row(711,{KIT:'KIT-COLETADO',GIRO_TOTAL_BA:300,'TIRAGEM COLETADA':200,[fimPlan]:'2026-10-14'}),
+    row(712,{KIT:'KIT-ABERTO',GIRO_TOTAL_BA:0,TIRAGEM:200,'TIRAGEM COLETADA':0,
+      [fimPlan]:'2026-10-20'})];
+  const app=portal(rows,{cache:{key:[movement(73,100,{kit:'KIT-COLETADO'}),
+    movement(74,100,{kit:'KIT-ABERTO'})]}});
+  assert.equal(app.items.length,2);
+  const audit=app.w.pgMAObterAuditoriaColetas();
+  assert.equal(audit.linhas.length,1);
+  assert.equal(value(audit,0,'Tiragem total'),300);
+  assert.equal(value(audit,0,'Coletado TP'),200);
+  assert.equal(value(audit,0,'Saldo a coletar'),100);
+  assert.equal(value(audit,0,'Situação'),'Coleta parcial');
+  assert.equal(value(audit,0,'Coleta fim (re)plan'),'2026-10-20');
+  assert.equal(value(audit,0,'Entrega fim prevista'),'2026-10-20');
+  assert.match(value(audit,0,'Datas planejadas dos itens com saldo'),/KIT-ABERTO/);
+  assert.doesNotMatch(value(audit,0,'Datas planejadas dos itens com saldo'),/KIT-COLETADO/);
+  checkAuditAlignment(app);
+});
 
 test('CSV e Excel de Coletas exportam a mesma linha completa com percentuais verificáveis', async () => {
   const app = portal([row(101,{'TIRAGEM COLETADA':40})]);

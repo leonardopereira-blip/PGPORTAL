@@ -1293,14 +1293,108 @@
   };
   window.pgMAObterAuditoriaColetas=function(){
     var base=window.pgMAObterAuditoria(),atual=window.pgMAVisaoAtual;
-    var items=atual?atual.itens:[];
+    var itens=atual?atual.itens:[];
     var corte=typeof dtHojeISO!=='undefined'?dtHojeISO:new Date().toLocaleDateString('en-CA');
+    var cabecalho=base.cabecalho.concat(['Corte','% coletado TP / tiragem total','Saldo a coletar',
+      'Tiragem coletada PCP (informativa)','Datas planejadas dos itens com saldo']);
+    var grupos=new Map();
+    var normalizar=function(v){return String(v==null?'':v).normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toUpperCase();};
+    // A chave de coleta nunca contém KIT: ele não identifica parcelas confiáveis
+    // em PCP, congelados ou acabadoras. Não conciliar campos desconhecidos.
+    base.linhas.forEach(function(linha,index){
+      var item=itens[index]||{},origem=item.linha||{};
+      var id=typeof window.pgIdentidadeOperacionalTPLinha==='function'?
+        window.pgIdentidadeOperacionalTPLinha(origem):null;
+      var partes=id&&Array.isArray(id.partes)?id.partes.map(normalizar):[];
+      var envio=normalizar(id&&id.envio);
+      var segura=partes.length===4&&partes.every(function(v){return v&&v!=='N/A'&&v!=='-';})&&
+        (envio||id&&id.acabadora);
+      // Marca, gráfica de origem, SKU, CD destino e envio. Fonte e KIT não repartem o saldo.
+      var chave=segura?JSON.stringify(partes.concat([envio])):JSON.stringify(['LINHA',index]);
+      if(!grupos.has(chave))grupos.set(chave,[]);
+      grupos.get(chave).push({linha:linha,item:item});
+    });
+    var indices=function(nome){return base.cabecalho.indexOf(nome);};
+    var pegar=function(linha,nome){var p=indices(nome);return p>=0?linha[p]:'';};
+    var unico=function(partes,nome){
+      var vistos=new Set(),valores=[];
+      partes.forEach(function(p){
+        var valor=pegar(p.linha,nome);
+        if(valor===null||valor===undefined||String(valor).trim()==='')return;
+        var texto=String(valor);
+        if(!vistos.has(texto)){vistos.add(texto);valores.push(texto);}
+      });
+      return valores.join(' | ');
+    };
+    var somar=function(partes,nome){
+      return partes.reduce(function(s,p){return s+volume(pegar(p.linha,nome));},0);
+    };
+    var linhas=Array.from(grupos.values(),function(partes){
+      var primeira=partes[0].linha,linha=primeira.slice();
+      var total=partes.reduce(function(s,p){return s+volume(p.item.total);},0);
+      var coletado=partes.reduce(function(s,p){
+        return s+Math.min(volume(p.item.total),volume(p.item.coletadoTP));},0);
+      var saldo=Math.max(0,total-coletado);
+      var abertos=partes.filter(function(p){
+        return volume(p.item.total)>volume(p.item.coletadoTP);
+      });
+      var fonteDatas=abertos.length?abertos:partes;
+      // As datas do (re)planejado continuam exatamente das linhas ainda abertas;
+      // a coleta confirmada não vira nova data planejada.
+      ['Coleta início (re)plan','Coleta fim (re)plan','Coleta fim usada',
+       'Entrega início prevista','Entrega fim prevista'].forEach(function(nome){
+        linha[indices(nome)]=unico(fonteDatas,nome);
+      });
+      ['Kit','Descrição','Série','Entrega TP real','Origem do cálculo',
+       'SLA (dias corridos)','Meta original','Prazo combinado Posi','Meta aplicada',
+       'DU totais','DU dentro da meta','DU fora da meta','Tiragem por DU',
+       'Regra aplicada','Fonte','ID da linha','Chave','Tipo','Personalização',
+       'Parcelas de Entrega TP (data: quantidade)','Parcelas de Coleta TP (data: quantidade)',
+       'Linhas de origem','Regra de conciliação','Composição do agrupamento',
+       'Movimentos de Entrega TP','Movimentos de Coleta TP',
+       'Diagnósticos de conciliação'].forEach(function(nome){
+        linha[indices(nome)]=unico(partes,nome);
+      });
+      ['Dentro da meta','Fora da meta','Sem previsão','Entregue Geral',
+       'Entregue armazém','Entregue dentro da meta','Entregue fora da meta',
+       'Excedente de entrega','Coletado TP bruto','Excedente de coleta'].forEach(function(nome){
+        linha[indices(nome)]=somar(partes,nome);
+      });
+      linha[indices('Tiragem total')]=total;
+      // A coluna principal da auditoria de COLETAS mostra Coleta TP confirmada,
+      // nunca "TIRAGEM COLETADA" bruta do PCP que pode estar zerada por KIT.
+      linha[indices('Tiragem coletada')]=coletado;
+      linha[indices('Coletado TP')]=coletado;
+      linha[indices('% dentro da meta')]=total?
+        linha[indices('Dentro da meta')]/total:0;
+      linha[indices('Situação')]=saldo===0?'Coleta concluída':
+        coletado>0?'Coleta parcial':'Pendente de coleta';
+      if(partes.length>1){
+        var descricao='Agrupamento da auditoria de Coletas por marca, gráfica de origem, SKU, CD e envio ('+
+          partes.length+' linhas; KITs preservados para rastreio).';
+        var obs=indices('Motivo / observação');
+        linha[obs]=descricao+(unico(partes,'Motivo / observação')?
+          ' '+unico(partes,'Motivo / observação'):'');
+        var comp=indices('Composição do agrupamento');
+        linha[comp]+=' | '+partes.map(function(p){
+          return 'KIT '+(pegar(p.linha,'Kit')||'—')+' / ID '+(pegar(p.linha,'ID da linha')||'—')+
+            ': tiragem '+volume(p.item.total)+', Coleta TP '+
+            Math.min(volume(p.item.total),volume(p.item.coletadoTP));
+        }).join(' | ');
+      }
+      var datas=abertos.map(function(p){
+        return 'KIT '+(pegar(p.linha,'Kit')||'—')+
+          ': '+(pegar(p.linha,'Entrega início prevista')||pegar(p.linha,'Entrega fim prevista')||'Sem previsão')+
+          (pegar(p.linha,'Entrega fim prevista')&&
+           pegar(p.linha,'Entrega fim prevista')!==pegar(p.linha,'Entrega início prevista')?
+            ' até '+pegar(p.linha,'Entrega fim prevista'):'');
+      }).join(' | ');
+      return linha.concat([corte,total?coletado/total:null,saldo,
+        somar(partes,'Tiragem coletada'),datas]);
+    });
     return {nome:'Meta_Armazem_Coletas_Auditavel',cenario:base.cenario,
-      cabecalho:base.cabecalho.concat(['Corte','% coletado TP / tiragem total','Saldo a coletar']),
-      linhas:base.linhas.map(function(linha,index){
-        var item=items[index]||{},total=volume(item.total),coletado=volume(item.coletadoTP);
-        return linha.concat([corte,total?coletado/total:null,Math.max(0,total-coletado)]);
-      })};
+      cabecalho:cabecalho,linhas:linhas};
   };
   window.pgMABaixarAuditoriaColetasCSV=function(){
     var base=window.pgMAObterAuditoriaColetas();
