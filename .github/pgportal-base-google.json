@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-10-28T11:36:54.842Z",
+  "lido_em": "2026-10-28T13:45:48.375Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -53,7 +53,7 @@
     "SERVER_JS:LeituraCacheSheets": "459014b75f3ec02905c0712616f348cacd3596819259789154fa04046b337f72",
     "HTML:Main": "6d836f4031dd0ec8bc9bea31718eb76a7895c790649fdc264ee12badeff2b025",
     "HTML:PreProducao": "2c40cb1fc09f838ca7d376c3734d568673d75e2169749c631aa26105388d7152",
-    "SERVER_JS:RegistroGiroJSON": "b0b13833d0c46f2f9cd1317462df88ad3dcbfa42e38c369560cb75951494526b",
+    "SERVER_JS:RegistroGiroJSON": "8ad203686cc389b6c2b9f523891a5bab4b83dcad58a5825d8b12f5343621585d",
     "SERVER_JS:SalvaJson": "a690d0c446989aa978a45ca821661bb5749cd7b16f31397590e0a857a1c06afc",
     "HTML:Scripts_Acompanhamento_Mapa": "da868d37ad728d90c935d9ab3c4dc3504672a61c9478488d0d659288d44e6e34",
     "HTML:Scripts_Eficiencia_Aging_UI": "f72b957127faa413eced959412dcd77320c52bc5202944f55e6687d8aee5c42d",
@@ -61,7 +61,7 @@
     "HTML:Scripts_EntregasCD_Controle": "d47ab72a3b1b3d69b5a9b18c4eb143e47388de764f1b39235cb77593c8912800",
     "HTML:Scripts_EntregasCD_Modelo": "63b61fdf8a181d54621903be963db556a15d1951462d1f2f07c1b3e73771c1b8",
     "HTML:Scripts_Eventos_TP": "fcb7b126a2f7d881a78e5c0e6945982a1e3ebade0fa3cd9fc1fd3827627f33ea",
-    "HTML:Scripts_Giro_Registro": "ee5496077baf4918e0171b1d92df2cec38da2584bf47e601333a642921ed7e55",
+    "HTML:Scripts_Giro_Registro": "d2ac02a7df64506a61eeb89709416563d637b11438da45e6419ab4b2b1d487df",
     "HTML:Scripts_Globais_1": "3b3c1ea4300c21439c38e0bdc44325ee105f916334e9754cc4809f17d528a9b3",
     "HTML:Scripts_Globais_2": "668190cb688741f2936fe6740da8c0f656ccfdb4134311b06d8220fd77ffd6f8",
     "HTML:Scripts_Historico_PCP2026": "c6238f34d35ffd9c1adcb4435ff737563f806c1f234ee0b58c835bdafdafb8a5",
