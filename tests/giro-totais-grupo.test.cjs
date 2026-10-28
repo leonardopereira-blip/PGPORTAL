@@ -135,6 +135,36 @@ test('grupo misto soma TIRAGEM TOTAL de PCP e PCP_ACABADORAS', () => {
   assert.deepEqual(valores(r),['1','2','9000','30000']);
 });
 
+test('parcela zero ja consolidada no SKU e CD nao duplica pendencia nem contagem', () => {
+  const principal = pendente('SAS27LAAMT42101BRPDR00',{
+    'CD DESTINO':'CD JDI',_acabadora:true,'TIRAGEM TOTAL':25159,
+    _estado:{pendente:true,parcial:true,saldo:20667,coletada:4492},
+    _eventos:[{categoria:'Vencida',volume:20667,dias:0}]
+  });
+  const parcela = pendente('SAS27LAAMT42101BRPDR00',{
+    'CD DESTINO':'CD JDI',_acabadora:true,'TIRAGEM TOTAL':0,
+    'TIRAGEM A ENTREGAR (total por CD)':22948,
+    _estado:{pendente:true,saldo:22948},
+    _eventos:[{categoria:'Vencida',volume:22948,dias:0}]
+  });
+  for (const ordem of [[principal,parcela],[parcela,principal]]) {
+    const r = tela(ordem,{pos:true});
+    assert.deepEqual(valores(r),['1','1','20667','25159'],
+      'A parcela 22948 ja esta dentro dos 25159 e nao se soma como outro SKU');
+    assert.equal(r.linhas.length,1,'A exportacao tambem mantem apenas a linha consolidada');
+    assert.equal((r.html.match(/<tr class="hover:bg-slate-50">/g)||[]).length,1,
+      'Somente um detalhe por SKU consolidado');
+  }
+});
+
+test('zero nao e ocultado se nao existe linha consolidada no mesmo SKU e CD', () => {
+  const solitario = pendente('SKU-ZERO',{'TIRAGEM TOTAL':0,
+    _estado:{pendente:true,saldo:100},_eventos:[{categoria:'Vencida',volume:100,dias:0}]});
+  assert.deepEqual(valores(tela([solitario])),['1','1','100','0']);
+  const r = tela([pendente('SKU-POSITIVO',{'TIRAGEM TOTAL':200,'CD DESTINO':'CD FOR'}),solitario]);
+  assert.equal(linhasMaster(r.html).length,2,'Destinos diferentes nunca se consolidam');
+});
+
 const detalheSku = (resultado, sku) => {
   const linha = [...resultado.html.matchAll(/<tr class="hover:bg-slate-50">([\s\S]*?)<\/tr>/g)]
     .map(m => [...m[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map(c => texto(c[1])))

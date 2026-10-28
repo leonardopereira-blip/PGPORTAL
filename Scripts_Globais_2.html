@@ -9370,8 +9370,24 @@ window.reFiltrarTabelaGiro = function() {
         const numero = window.pgNumeroPrazoV35(total);
         return window.arredondar ? window.arredondar(numero) : numero;
     };
+    // A fonte pode ter varias parcelas do mesmo SKU/destino: a TIRAGEM TOTAL
+    // fica so na linha consolidada; as demais parcelas nascem com total zero.
+    // Nao exibir nem contar novamente essas parcelas no Giro.
+    const chaveSkuConsolidadoGiro = l => {
+        const {chave} = identificarGrupo(l);
+        const sku = String(l["SKU_REAL"] || l["SKU"] || "-").trim();
+        return JSON.stringify([chave, sku]);
+    };
+    const skusComTotalConsolidado = new Set();
+    window.GIRO_DADOS_RAW.forEach(l => {
+        if (tiragemOriginalGiro(l) > 0) skusComTotalConsolidado.add(chaveSkuConsolidadoGiro(l));
+    });
+    const parcelaJaConsolidadaGiro = l => tiragemOriginalGiro(l) === 0 &&
+        skusComTotalConsolidado.has(chaveSkuConsolidadoGiro(l));
+
     const totaisGrupos = new Map();
     window.GIRO_DADOS_RAW.forEach(l => {
+        if (parcelaJaConsolidadaGiro(l)) return;
         const {chave} = identificarGrupo(l);
         if (!totaisGrupos.has(chave)) totaisGrupos.set(chave, {skus: 0, tiragem: 0});
         const total = totaisGrupos.get(chave);
@@ -9383,6 +9399,7 @@ window.reFiltrarTabelaGiro = function() {
         if (r.pcp && r.dtPlan && (!planosFinais.has(r.pcp) || planosFinais.get(r.pcp) < r.dtPlan)) planosFinais.set(r.pcp, r.dtPlan);
     });
     window.GIRO_DADOS_RAW.forEach(l => {
+        if (parcelaJaConsolidadaGiro(l)) return;
         const estadoMapa = window.pgEstadoColetaMapa(l);
         const prazoGiro = window.pgGiroSaldoPrazosV41(l, dtHojeISO);
         const statusColetaFonte = String(window.pgCampoColeta(l, 'STATUS COLETA') || '')
