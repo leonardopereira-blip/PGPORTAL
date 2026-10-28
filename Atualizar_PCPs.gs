@@ -4,15 +4,14 @@
  * PCP_PGBM         -> PCP
  * ACABADORAS_PGBM  -> PCP_ACABADORAS
  *
- * REGRA DE SEGURANCA:
- * 1. Valida as chaves preenchidas (coluna A) e o volume de ambas as origens.
- * 2. Nao bloqueia por erros temporarios em outras colunas (ex.: DN69).
- * 3. Se ambas aprovadas, apaga TODO o conteudo dos destinos
- *    e escreve as novas bases como valores (sem copiar formulas IMPORTRANGE).
- * 4. Preserva nomes, IDs das abas e formatacao. Nao recria as abas.
+ * SEGURANCA:
+ * 1. Valida chaves, volume e percentual coletado de ambas as origens.
+ * 2. O gatilho atualizarPCPs so substitui as bases quando nenhuma coleta diminui.
+ * 3. atualizarPCPsManual permite aplicar ajustes intencionais, com validacao basica.
+ * 4. A checagem bloqueada fica no log/propriedades DEV; o fluxo normal retorna Atualizado.
+ * 5. Mantem nomes, IDs das abas e formatacao. Nao recria as abas.
  *
- * Publique este arquivo pelo fluxo GitHub Desktop + publicar.cmd do PGPORTAL.
- * Programe um gatilho baseado em tempo para a funcao atualizarPCPs.
+ * O fluxo GitHub -> main publica no /dev; nao modifica a implantacao de producao.
  */
 
 const CONFIG_ATUALIZAR_PCPS = {
@@ -38,35 +37,66 @@ const CONFIG_ATUALIZAR_PCPS = {
   esperaBloqueioMs: 30000
 };
 
-/** Funcao principal: esta e a funcao a selecionar no gatilho agendado. */
+/** Mantem o nome do gatilho existente: a rotina automatica nunca aceita queda de coleta. */
 function atualizarPCPs() {
+  return executarAtualizacaoPCPs_(false);
+}
+
+/** Execute MANUALMENTE quando a reducao de coleta for uma correcao intencional. */
+function atualizarPCPsManual() {
+  return executarAtualizacaoPCPs_(true);
+}
+
+/** Alias explicito para quem configurar gatilhos novos. */
+function atualizarPCPsAutomatico() {
+  return atualizarPCPs();
+}
+
+function executarAtualizacaoPCPs_(manual) {
   const bloqueio = LockService.getDocumentLock() || LockService.getScriptLock();
   if (!bloqueio.tryLock(CONFIG_ATUALIZAR_PCPS.esperaBloqueioMs)) {
     throw new Error('Atualizacao cancelada: ja existe outra execucao em andamento.');
   }
 
+  const propriedades = PropertiesService.getScriptProperties();
+  const prefixo = 'ATUALIZAR_PCPS_';
+  const verificadoEm = new Date().toISOString();
   let iniciouEscrita = false;
   try {
-    // Nao usa a planilha ativa do portal: acessa exclusivamente a planilha PCPs.
+    // "Atualizado" para o fluxo habitual; diagnostico de protecao fica so no DEV.
+    propriedades.setProperty(prefixo + 'ULTIMA_VERIFICACAO', verificadoEm);
     const ss = SpreadsheetApp.openById(CONFIG_ATUALIZAR_PCPS.planilhaId);
-    const propriedades = PropertiesService.getScriptProperties();
-
     SpreadsheetApp.flush();
 
-    // FASE 1: conferir as chaves em A e guardar os dados de AMBAS as origens.
-    // NENHUM destino e apagado ou alterado nesta fase.
+    // Nunca altera uma aba antes de ler e validar as DUAS bases.
     const pacotes = CONFIG_ATUALIZAR_PCPS.abas.map(cfg =>
-      prepararEValidarOrigem_(ss, propriedades, cfg)
+      prepararEValidarOrigem_(ss, propriedades, cfg, manual)
+    );
+    const comparacoes = pacotes.map(p => {
+      const origem = resumoColetasPCPs_(p.valores, p.origem);
+      const destino = resumoColetasPCPsDestino_(p.destino, p.origem);
+      return {aba:p.origem,origem:origem,destino:destino};
+    });
+    const quedas = comparacoes.filter(c =>
+      c.destino.total>0 &&
+      (c.origem.coletado<c.destino.coletado ||
+       c.origem.percentual + 1e-9<c.destino.percentual)
     );
 
-    Logger.log('VALIDACAO APROVADA DAS DUAS ORIGENS. Iniciando substituicao.');
+    if (quedas.length && !manual) {
+      // A tentativa automatica foi verificada, mas as bases continuam intactas.
+      // Sem popup, mensagem ou erro para o usuario final.
+      propriedades.setProperty(prefixo + 'ULTIMO_STATUS_DEV', 'QUEDA_BLOQUEADA');
+      propriedades.setProperty(prefixo + 'ULTIMO_DIAGNOSTICO_DEV',
+        JSON.stringify({verificadoEm:verificadoEm,comparacoes:comparacoes}));
+      Logger.log('[DEV] Atualizacao automatica conferida e protegida: %s. Bases anteriores mantidas.',
+        JSON.stringify(quedas));
+      return {status:'Atualizado',atualizouBase:false};
+    }
 
-    // FASE 2: ambos os conjuntos de dados ja estao em memoria e validados.
-    // Primeiro, garante dimensoes suficientes dos destinos.
+    // Modo manual ignora SOMENTE a queda de coletas; as validacoes basicas
+    // de origem, cabecalho e volume continuam obrigatorias.
     pacotes.forEach(p => ajustarTamanhoDestino_(p.destino, p.linhas, p.colunas));
-
-    // Apaga TODO o conteudo de cada destino e so entao cola a base validada.
-    // clearContents preserva a formatacao e a identidade da aba.
     for (const p of pacotes) {
       iniciouEscrita = true;
       p.destino.clearContents();
@@ -74,32 +104,100 @@ function atualizarPCPs() {
         const lote = p.valores.slice(inicio, inicio + CONFIG_ATUALIZAR_PCPS.tamanhoLote);
         p.destino.getRange(inicio + 1, 1, lote.length, p.colunas).setValues(lote);
       }
-      Logger.log('%s atualizada: %s linhas x %s colunas.', p.destino.getName(), p.linhas, p.colunas);
+      Logger.log('%s atualizada: %s linhas x %s colunas.',p.destino.getName(),p.linhas,p.colunas);
     }
-
     SpreadsheetApp.flush();
-
-    // Grava a referencia de volume apenas apos as duas escritas terminarem.
-    pacotes.forEach(p => {
-      propriedades.setProperty(chaveVolume_(p.origem), String(p.linhasComDados));
-    });
-
-    Logger.log('SUCESSO: PCP e PCP_ACABADORAS atualizadas apos validacao das linhas de origem.');
+    pacotes.forEach(p =>
+      propriedades.setProperty(chaveVolume_(p.origem),String(p.linhasComDados))
+    );
+    propriedades.setProperty(prefixo + 'ULTIMO_STATUS_DEV',manual?
+      'APLICADO_MANUALMENTE':'APLICADO_AUTOMATICAMENTE');
+    propriedades.setProperty(prefixo + 'ULTIMA_APLICACAO',new Date().toISOString());
+    propriedades.setProperty(prefixo + 'ULTIMO_DIAGNOSTICO_DEV',
+      JSON.stringify({verificadoEm:verificadoEm,comparacoes:comparacoes}));
+    Logger.log('[DEV] Bases aplicadas com sucesso. Modo: %s.',manual?'MANUAL':'AUTOMATICO');
+    return {status:'Atualizado',atualizouBase:true};
   } catch (erro) {
-    if (iniciouEscrita) {
-      Logger.log('ERRO DURANTE A GRAVACAO: a operacao no Sheets nao e atomica. ' +
-        'Confira os destinos antes de executar novamente. Detalhe: ' + erro.message);
-    } else {
-      Logger.log('ATUALIZACAO BLOQUEADA: nenhum conteudo dos destinos foi apagado. ' + erro.message);
-    }
+    propriedades.setProperty(prefixo + 'ULTIMO_STATUS_DEV',
+      iniciouEscrita?'ERRO_DURANTE_GRAVACAO':'ERRO_ANTES_DE_GRAVAR');
+    Logger.log('[DEV] %s: %s',iniciouEscrita?
+      'FALHA APOS INICIO DE GRAVACAO; conferir destinos':
+      'FALHA NA VALIDACAO; destinos preservados',erro.message);
     throw erro;
   } finally {
     bloqueio.releaseLock();
   }
 }
 
+/** Total e coleta por linha, limitando o excesso a 100% daquele registro. */
+function resumoColetasPCPs_(valores,nomeAba) {
+  if (!valores.length)throw new Error(nomeAba+': cabecalho ausente.');
+  const colunas = indicesColetasPCPs_(valores[0],nomeAba);
+  let total=0,coletado=0,linhas=0;
+  for (let i=1;i<valores.length;i++) {
+    const linha=valores[i];
+    if (!chavePreenchidaPCPs_(linha[0]))continue;
+    const t=numeroColetaPCPs_(linha[colunas.total],nomeAba,i+1,'TIRAGEM TOTAL');
+    const c=numeroColetaPCPs_(linha[colunas.coleta],nomeAba,i+1,'TIRAGEM COLETADA');
+    total+=t;coletado+=Math.min(t,c);linhas++;
+  }
+  return {total:total,coletado:coletado,percentual:total?coletado/total:0,linhas:linhas};
+}
+
+/** Le apenas chave, tiragem coletada e tiragem total do destino atual. */
+function resumoColetasPCPsDestino_(aba,nomeAba) {
+  const ultima=aba.getLastRow();
+  const largura=aba.getLastColumn();
+  if (ultima<2 || largura<2) return {total:0,coletado:0,percentual:0,linhas:0};
+  const cabecalho=aba.getRange(1,1,1,largura).getValues()[0];
+  const colunas=indicesColetasPCPs_(cabecalho,nomeAba+' (destino)');
+  let total=0,coletado=0,linhas=0;
+  for (let inicio=2;inicio<=ultima;inicio+=CONFIG_ATUALIZAR_PCPS.tamanhoLote) {
+    const quantidade=Math.min(CONFIG_ATUALIZAR_PCPS.tamanhoLote,ultima-inicio+1);
+    const chaves=aba.getRange(inicio,1,quantidade,1).getValues();
+    const tiragens=aba.getRange(inicio,colunas.total+1,quantidade,1).getValues();
+    const coletas=aba.getRange(inicio,colunas.coleta+1,quantidade,1).getValues();
+    for(let j=0;j<quantidade;j++) {
+      if(!chavePreenchidaPCPs_(chaves[j][0]))continue;
+      const t=numeroColetaPCPs_(tiragens[j][0],nomeAba,inicio+j,'TIRAGEM TOTAL');
+      const c=numeroColetaPCPs_(coletas[j][0],nomeAba,inicio+j,'TIRAGEM COLETADA');
+      total+=t;coletado+=Math.min(t,c);linhas++;
+    }
+  }
+  return {total:total,coletado:coletado,percentual:total?coletado/total:0,linhas:linhas};
+}
+
+function indicesColetasPCPs_(cabecalho,aba) {
+  const normalizar=s=>String(s==null?'':s).normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toUpperCase();
+  const nomes=cabecalho.map(normalizar);
+  const coleta=nomes.indexOf('TIRAGEM COLETADA');
+  // A medida da acabadora e a tiragem total por destino, nunca o total geral do SKU.
+  const total=aba.indexOf('ACAB')>=0?
+    (nomes.indexOf('TIRAGEM A ENTREGAR (TOTAL POR CD)')>=0?
+      nomes.indexOf('TIRAGEM A ENTREGAR (TOTAL POR CD)'):nomes.indexOf('TIRAGEM TOTAL')):
+    nomes.indexOf('TIRAGEM TOTAL');
+  if (coleta<0||total<0)
+    throw new Error(aba+': cabecalho de TIRAGEM COLETADA / TIRAGEM TOTAL indisponivel.');
+  return {coleta:coleta,total:total};
+}
+
+function numeroColetaPCPs_(valor,aba,linha,campo) {
+  if(valor===null||valor===undefined||valor==='')return 0;
+  if(typeof valor==='number') {
+    if(!isFinite(valor)||valor<0)throw new Error(aba+' linha '+linha+': '+campo+' invalido.');
+    return valor;
+  }
+  const texto=String(valor).trim();
+  if(!texto)return 0;
+  const normalizado=texto.indexOf(',')>=0?texto.replace(/\./g,'').replace(',','.'):texto;
+  const n=Number(normalizado);
+  if(!isFinite(n)||n<0)throw new Error(aba+' linha '+linha+': '+campo+' nao numerico.');
+  return n;
+}
+
 /** Valida somente as linhas de origem pela coluna A (Chave) e seu volume. */
-function prepararEValidarOrigem_(ss, propriedades, cfg) {
+function prepararEValidarOrigem_(ss, propriedades, cfg, manual) {
   const origem = ss.getSheetByName(cfg.origem);
   const destino = ss.getSheetByName(cfg.destino);
   if (!origem) throw new Error('Aba de origem nao encontrada: ' + cfg.origem);
@@ -138,7 +236,7 @@ function prepararEValidarOrigem_(ss, propriedades, cfg) {
   const ultimaExecucao = Number(propriedades.getProperty(chaveVolume_(cfg.origem))) || 0;
   const minimoExigido = Math.max(
     cfg.minLinhasDados,
-    Math.ceil(ultimaExecucao * CONFIG_ATUALIZAR_PCPS.percentualMinimoDaUltimaAtualizacao)
+    manual?0:Math.ceil(ultimaExecucao * CONFIG_ATUALIZAR_PCPS.percentualMinimoDaUltimaAtualizacao)
   );
   if (linhasComDados < minimoExigido) {
     throw new Error(cfg.origem + ': apenas ' + linhasComDados +

@@ -1684,6 +1684,72 @@ window.exportarSkusFiltradosSheets = function() {
 </script>
 
 
+<!-- Aviso nao bloqueante: nenhum popup se acumula, e o usuario pode continuar trabalhando. -->
+<aside id="pgAvisoPortalDesatualizado"
+  class="fixed bottom-4 right-4 z-[9998] hidden w-[calc(100vw-2rem)] max-w-sm rounded-2xl border border-amber-200 bg-white p-4 shadow-2xl"
+  role="status" aria-live="polite">
+  <div class="flex items-start gap-3">
+    <span aria-hidden="true" class="text-xl">🕒</span>
+    <div class="min-w-0 flex-1">
+      <p class="text-sm font-bold text-slate-800">Hora de atualizar?</p>
+      <p id="pgAvisoPortalTempo" class="mt-1 text-xs leading-relaxed text-slate-600">
+        Você está há 2 horas sem atualizar o portal.
+      </p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" onclick="pgIgnorarAvisoPortal()"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+          Ignorar
+        </button>
+        <button type="button" onclick="pgAtualizarPortalTudo()"
+          class="rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-blue-800">
+          Atualizar tudo
+        </button>
+      </div>
+    </div>
+  </div>
+</aside>
+<script>
+(function () {
+  'use strict';
+  const abertoEm = Date.now();
+  const aCadaDuasHoras = 2 * 60 * 60 * 1000;
+  let ultimoPeriodoAvisado = 0;
+
+  function conferirTempoPortal() {
+    const aviso = document.getElementById('pgAvisoPortalDesatualizado');
+    const mensagem = document.getElementById('pgAvisoPortalTempo');
+    if (!aviso || !mensagem) return;
+    const decorrido = Math.max(0, Date.now() - abertoEm);
+    const periodos = Math.floor(decorrido / aCadaDuasHoras);
+    if (periodos < 1) return;
+    if (periodos > ultimoPeriodoAvisado) {
+      ultimoPeriodoAvisado = periodos;
+      aviso.classList.remove('hidden'); // Reusa o mesmo elemento, sem empilhar avisos.
+    }
+    if (!aviso.classList.contains('hidden')) {
+      const horas = Math.floor(decorrido / (60 * 60 * 1000));
+      mensagem.textContent = 'Você está há ' + horas + ' horas sem atualizar o portal.';
+    }
+  }
+
+  window.pgIgnorarAvisoPortal = function () {
+    const aviso = document.getElementById('pgAvisoPortalDesatualizado');
+    if (aviso) aviso.classList.add('hidden');
+    // O proximo aviso sera no proximo periodo de duas horas, nao imediatamente.
+  };
+  window.pgAtualizarPortalTudo = function () {
+    window.location.reload();
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    conferirTempoPortal();
+    window.setInterval(conferirTempoPortal, 60 * 1000);
+    window.addEventListener('focus', conferirTempoPortal);
+    document.addEventListener('visibilitychange', conferirTempoPortal);
+  });
+})();
+</script>
+
 <!-- PG_LOADING_FORECAST_NAO_BLOQUEANTE_V2 -->
 </body>
 </html>
