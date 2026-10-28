@@ -200,3 +200,47 @@ test('resposta atrasada da nota A não substitui nota B posterior salva no mesmo
   assert.equal(a.window.HISTORICO_OBS_GIRO.sku.K[0].obs,'Nota B');
   assert.equal(i.value,'Nota B','campo livre acompanha o registro confirmado mais recente');
 });
+
+test('histórico reaparece mesmo quando a sincronização combinada de previsões falha',()=>{
+  const a=app(),k='GRAFICA|MARCA|SERIE|V1|CD',i=a.input('');
+  a.document.getElementById=id=>id==='abaGiroSemanal'?{classList:{contains:()=>false}}:null;
+  i.dataset={pgObsTipo:'MASTER',pgObsChave:k,pgObsSalva:''};
+  a.window.pgGiroSincronizar();
+  assert.deepEqual(a.chamadas.map(c=>c.nome),['buscarAtualizacoesGiroPortal','buscarHistoricoObsGiroLeve']);
+  a.chamadas[0].fail({message:'Falha na previsão de CD'});
+  a.chamadas[1].ok({success:true,historico:{master:{[k]:[
+    {id:'hist-1',data:'27/10/2026 10:00:00',obs:'Obs recuperada',user:'ana'}]},sku:{}}});
+  assert.equal(a.window.HISTORICO_OBS_GIRO.master[k][0].obs,'Obs recuperada');
+  assert.equal(i.value,'Obs recuperada');
+  assert.equal(a.window.OBS_GIRO_CARREGADO,true);
+  assert.equal(a.renders(),1);
+});
+test('snapshot combinado vazio não apaga observação recuperada e retry não duplica histórico',()=>{
+  const a=app(),k='GRAFICA|MARCA|SERIE|V1|CD';
+  a.document.getElementById=id=>id==='abaGiroSemanal'?{classList:{contains:()=>false}}:null;
+  a.window.pgGiroSincronizar();
+  a.chamadas[1].ok({success:true,historico:{master:{[k]:[
+    {id:'hist-1',data:'27/10/2026 10:00:00',obs:'Preservada'}]},sku:{}}});
+  a.chamadas[0].ok({success:true,alterado:true,parcial:false,
+    historico:{master:{},sku:{}},previsoes:{},revisao:{id:'r1'}});
+  assert.equal(a.window.HISTORICO_OBS_GIRO.master[k][0].obs,'Preservada');
+  a.window.pgGiroSincronizar();
+  assert.equal(a.chamadas.length,3,'leitura de recuperação roda uma vez após sucesso');
+  a.chamadas[2].ok({success:true,alterado:true,parcial:true,
+    historico:{master:{[k]:[{id:'hist-1',data:'27/10/2026 10:00:00',obs:'Preservada'}]}},
+    previsoes:{},revisao:{id:'r2'}});
+  assert.equal(a.window.HISTORICO_OBS_GIRO.master[k].length,1);
+});
+
+test('recuperação atualiza filtros por observação mesmo após primeira sincronização vazia',()=>{
+  const a=app(),k='GRAFICA|MARCA|SERIE|V1|CD';
+  a.document.getElementById=id=>id==='abaGiroSemanal'?{classList:{contains:()=>false}}:null;
+  a.window.pgGiroSincronizar();
+  a.chamadas[0].ok({success:true,alterado:true,parcial:false,
+    historico:{master:{},sku:{}},previsoes:{},revisao:{id:'r1'}});
+  assert.equal(a.renders(),1);
+  a.chamadas[1].ok({success:true,historico:{master:{[k]:[
+    {id:'hist-1',data:'27/10/2026 10:00:00',obs:'Voltou'}]},sku:{}}});
+  assert.equal(a.renders(),2,'o filtro da tabela deve refletir as observações recuperadas');
+  assert.equal(a.window.HISTORICO_OBS_GIRO.master[k][0].obs,'Voltou');
+});

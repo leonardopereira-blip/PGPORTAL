@@ -3,6 +3,7 @@
     'use strict';
     const pendentes = new Map(), filas = new Map(), datasPendentes = new Map();
     let revisao = null, consultando = false, timer = null;
+    let obsLeituraEmCurso = false, obsLeituraConcluida = false;
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const id = () => window.crypto?.randomUUID?.() ||
@@ -59,6 +60,34 @@
             }
         });
     }
+    // Carrega o histórico por uma rota somente de leitura, independente de previsões de CD.
+    // Assim, uma falha na sincronização combinada não esconde observações já registradas.
+    function carregarObservacoes() {
+        if (obsLeituraConcluida || obsLeituraEmCurso ||
+            !document.getElementById('abaGiroSemanal') ||
+            typeof google === 'undefined' || !google.script?.run) return;
+        obsLeituraEmCurso = true;
+        google.script.run.withSuccessHandler(res => {
+            obsLeituraEmCurso = false;
+            if (!res?.success || !res.historico) {
+                console.warn('PGPORTAL: não foi possível recuperar o histórico do Giro Diário.');
+                return; // O agendamento tentará novamente; nenhuma nota é apagada.
+            }
+            ['master','sku'].forEach(tipo => {
+                Object.entries(res.historico[tipo] || {}).forEach(([chave,eventos]) =>
+                    atualizarHistorico(tipo === 'sku' ? 'SKU' : 'MASTER',chave,eventos));
+            });
+            obsLeituraConcluida = true;
+            window.OBS_GIRO_CARREGADO = true;
+            atualizarCamposObs();
+            // Refaz também os filtros por observação, sem interromper quem está digitando.
+            if (document.activeElement?.tagName !== 'INPUT')
+                window.reFiltrarTabelaGiro?.();
+        }).withFailureHandler(err => {
+            obsLeituraEmCurso = false;
+            console.warn('PGPORTAL: falha ao recuperar observações; haverá nova tentativa.',err);
+        }).buscarHistoricoObsGiroLeve();
+    }
     function publicarPrevisoes(novas, forcar = false) {
         const atuais = window.PG_ECD_PREVISOES || {}, aceitas = {};
         Object.entries(novas || {}).forEach(([chave, nova]) => {
@@ -82,7 +111,7 @@
             if (!res?.success) return;
             const primeira = !window.OBS_GIRO_CARREGADO;
             if (res.alterado !== false) {
-                if (res.parcial === false) {
+                if (res.parcial === false && !obsLeituraConcluida) {
                     window.HISTORICO_OBS_GIRO = {master:{},sku:{}};
                     pendentes.forEach(e => atualizarHistorico(e.tipo,e.chave,[{id:e.id,data:e.data,
                         obs:e.texto,user:'Você',pendente:true,erro:!!e.erro,_ordem:e.ordem}]));
@@ -106,11 +135,14 @@
             timer = null;
             const giro = document.getElementById('abaGiroSemanal');
             const cd = document.getElementById('abaEntregasCD');
-            if (!document.hidden && [giro,cd].some(el => el && !el.classList.contains('hidden'))) sincronizar();
+            if (!document.hidden && [giro,cd].some(el => el && !el.classList.contains('hidden'))) {
+                sincronizar();
+                carregarObservacoes();
+            }
             agendar();
         },10000);
     }
-    window.pgGiroSincronizar = () => { sincronizar(); agendar(); };
+    window.pgGiroSincronizar = () => { sincronizar(); carregarObservacoes(); agendar(); };
 
     function historicoBotao(tipo,chave,input) {
         if (!input.parentElement || input.parentElement.querySelector('[data-pg-historico-novo]') ||

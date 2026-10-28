@@ -136,6 +136,21 @@ function pgBuscarHistoricoObsGiroPortal_() {
   return {master: pgGiroLerAba_(ss.getSheetByName('Obs_Cockpit'), 'MASTER', 0).historico,
     sku: pgGiroLerAba_(ss.getSheetByName('Obs_Cockpit_sku'), 'SKU', 0).historico};
 }
+// Recuperação independente das observações: não depende da leitura de previsões de CD.
+// O contexto físico já está preservado na planilha; a tela só precisa dos dados do histórico.
+function buscarHistoricoObsGiroLeve() {
+  var completo = pgBuscarHistoricoObsGiroPortal_();
+  var resumir = function(mapa) {
+    var saida = {};
+    Object.keys(mapa || {}).forEach(function(chave) {
+      saida[chave] = mapa[chave].map(function(e) {
+        return {id:e.id, data:e.data, sequencia:e.sequencia, user:e.user, obs:e.obs, tipo:e.tipo};
+      });
+    });
+    return saida;
+  };
+  return {success:true, historico:{master:resumir(completo.master), sku:resumir(completo.sku)}};
+}
 function pgSalvarObsGiroPortal_(tipo, chave, obs, contextoStr, eventoId) {
   var lock, bloqueado = false;
   try {

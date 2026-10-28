@@ -140,3 +140,18 @@ test('histórico legado sem cabeçalho e chaves antigas conserva primeira linha 
   const hist=a.c.buscarHistoricoObsGiro().sku['GRAFICA|MARCA|SKU|V1|CD FOR'];
   assert.equal(hist.length,2);assert.equal(hist[0].obs,'Nota nova');assert.equal(hist[1].contexto.origem,'legado');
 });
+
+test('recuperação leve independe de previsões e preserva todas as observações sem regravar a fonte',()=>{
+  const a=portal();
+  const m=save(a,'Observação geral','evento-m001','MASTER','GRAFICA|MARCA|SERIE|V1|CD');
+  const s=save(a,'Observação do SKU','evento-s001','SKU','GRAFICA|MARCA|SKU|V1|CD');
+  assert(m.success && s.success);
+  a.sheet('Previsoes_Entrega_CD',[['registro inválido propositalmente']]);
+  const quantidades=[a.abas.get('Obs_Cockpit').rows.length,a.abas.get('Obs_Cockpit_sku').rows.length];
+  const retorno=a.c.buscarHistoricoObsGiroLeve();
+  assert.equal(retorno.success,true);
+  assert.equal(retorno.historico.master[m.chave][0].obs,'Observação geral');
+  assert.equal(retorno.historico.sku[s.chave][0].obs,'Observação do SKU');
+  assert.equal(retorno.historico.sku[s.chave][0].contexto,undefined);
+  assert.deepEqual([a.abas.get('Obs_Cockpit').rows.length,a.abas.get('Obs_Cockpit_sku').rows.length],quantidades);
+});
