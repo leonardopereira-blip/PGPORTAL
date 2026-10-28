@@ -31,13 +31,13 @@ const valores = (resultado, marca='COC') => {
   return linha.slice(6,10);
 };
 
-test('Giro distingue restante do total do grupo incluindo SKU concluído', () => {
+test('Giro distingue pendências do total do grupo incluindo SKU concluído', () => {
   const r = tela([pendente(),finalizado()]);
   assert.equal(r.linhas.length,1,'Concluído não reaparece entre as pendências');
   assert.deepEqual(valores(r),['1','2','50','300']);
   assert.equal(r.linhas[0].tiragem,50,'Exportação continua com o saldo filtrado');
   const html = fs.readFileSync(path.join(__dirname,'..','abaGiroSemanal_1.html'),'utf8');
-  const headers = ['SKUs restantes','SKUs totais','Tiragem restante','Tiragem total'];
+  const headers = ['Skus pendentes','SKUs totais','Tiragem pendente','Tiragem total'];
   let anterior = -1;
   for (const header of headers) {
     const indice = html.indexOf('>' + header + ' ');
@@ -87,4 +87,43 @@ test('Zerado altera apenas rótulo geral e mantém os filtros e o estado interno
   assert.equal(concluido.linhas.length,1);
   assert.equal(concluido.linhas[0].status,'Concluído');
   assert.deepEqual(valores(concluido),['1','2','200','300']);
+});
+
+const detalheSku = (resultado, sku) => {
+  const linha = [...resultado.html.matchAll(/<tr class="hover:bg-slate-50">([\s\S]*?)<\/tr>/g)]
+    .map(m => [...m[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map(c => texto(c[1])))
+    .find(c => c[1] === sku);
+  assert(linha, 'Detalhe do SKU ' + sku + ' está presente');
+  return linha;
+};
+
+test('detalhe do SKU parcial distingue tiragem pendente e original sem alterar saldo ou status', () => {
+  const r = tela([pendente('PARCIAL',{TIRAGEM:1000,Coleta_TP:'2026-10-10',
+    _estado:{pendente:true,parcial:true,saldo:100,coletada:900},
+    _eventos:[{categoria:'Vencida',volume:100,dias:0}]})],{pos:true});
+  const detalhe = detalheSku(r,'PARCIAL');
+  assert.equal(detalhe.length,10,'Detalhe possui total, pendente, observação e nova data em colunas próprias');
+  assert.equal(detalhe[6],'100');
+  assert.equal(detalhe[7],'1000');
+  assert.equal(detalhe[9],'—','Nova data permanece na última coluna');
+  assert.deepEqual(valores(r),['1','1','100','1000'],
+    'Coleta parcial mantém um SKU pendente, com somente o saldo na tiragem pendente');
+  assert.equal(r.linhas[0].tiragem,100,'Saldo da exportação preservado');
+  assert.equal(r.linhas[0].status,'Coletado a menos');
+  const header = r.html.match(/<thead\b[^>]*>([\s\S]*?)<\/thead>/)?.[1] || '';
+  const colunas = [...header.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map(m => texto(m[1]));
+  assert.equal(colunas.length,10);
+  assert.equal(colunas[6],'Tiragem pendente');
+  assert.equal(colunas[7],'Tiragem total');
+  assert.equal(colunas[8],'Observação Específica do SKU');
+  assert.equal(colunas[9],'Nova data');
+});
+
+test('detalhe do SKU preserva tiragem original zero sem trocar por QUANTIDADE', () => {
+  const r = tela([pendente('ZERO-EXPLICITO',{TIRAGEM:0,QUANTIDADE:999})]);
+  const detalhe = detalheSku(r,'ZERO-EXPLICITO');
+  assert.equal(detalhe.length,10);
+  assert.equal(detalhe[6],'50','Saldo vigente permanece na coluna pendente');
+  assert.equal(detalhe[7],'0','Total original respeita zero explícito');
+  assert.equal(r.linhas[0].tiragem,50);
 });
