@@ -1,0 +1,114 @@
+<script>
+// Prova de conclusão por coleta integral. Não altera volumes, datas ou linhas das fontes.
+(function() {
+  'use strict';
+  var cache = null;
+  var fases = new Set(['env','rec','apv','imp','cus','oc','tra','rec_acab','acab','kit','col']);
+  var normal = v => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+  var numero = v => typeof window.pgNumeroPrazoV35 === 'function' ? window.pgNumeroPrazoV35(v) : Number(v);
+  function iso(v) {
+    var m = /^(\d{4}-\d{2}-\d{2})(?:$|T|\s)/.exec(String(v == null ? '' : v).trim());
+    if (!m) return '';
+    var d = new Date(m[1]+'T00:00:00Z');
+    return Number.isFinite(d.getTime()) && d.toISOString().slice(0,10) === m[1] ? m[1] : '';
+  }
+  function identidade(l) {
+    if (!l || typeof window.pgIdentidadeOperacionalTPLinha !== 'function') return null;
+    var id = window.pgIdentidadeOperacionalTPLinha(l);
+    return id && id.completa && id.chave ? id : null;
+  }
+  function fisica(l,id) {
+    if (Number.isInteger(Number(l._PG_TP_LINHA)) && Number(l._PG_TP_LINHA) >= 2)
+      return id.fonte+':LINHA:'+Number(l._PG_TP_LINHA);
+    return l._ROW_ID ? id.fonte+':ROW:'+String(l._ROW_ID).replace(/:total-todas$/,'') : '';
+  }
+  function vazio(motivo) {
+    return {concluido:false,total:0,coletado:0,dataConfirmacaoColeta:'',motivo:motivo};
+  }
+  window.pgInvalidarConclusaoSKUColeta = function() { cache = null; };
+  function indice(corte) {
+    var base = window.dadosGlobais || [], mapa = window.MAPA_SAIDA_CACHE;
+    var versao = window.pgVersaoFiltros || 0;
+    if (cache && cache.base === base && cache.tamanho === base.length && cache.mapa === mapa &&
+        cache.versao === versao && cache.corte === corte) return cache.grupos;
+    var grupos = new Map(), linhas = new Map();
+    base.forEach(function(l) {
+      if (window.pgSolicitacaoCancelada && window.pgSolicitacaoCancelada(l)) return;
+      var id = identidade(l);
+      if (!id) return;
+      if (!grupos.has(id.chave)) grupos.set(id.chave,{total:0,eventos:new Map(),inseguro:''});
+      var g = grupos.get(id.chave), linha = fisica(l,id), tiragem = numero(l.TIRAGEM);
+      if (!linha || !Number.isFinite(tiragem) || tiragem < 0) {
+        g.inseguro = 'linha-ou-tiragem-sem-identidade-segura';return;
+      }
+      if (linhas.has(linha)) {
+        var anterior = linhas.get(linha);
+        var campo = n => typeof window.pgCampoPrazoV35 === 'function' ? window.pgCampoPrazoV35(l,n) : l[n];
+        if (anterior.chave !== id.chave || anterior.tiragem !== tiragem ||
+            anterior.coletada !== numero(campo('TIRAGEM COLETADA')) || anterior.dataColeta !== iso(campo('Coleta_TP'))) {
+          g.inseguro = 'linha-fisica-divergente';
+          grupos.get(anterior.chave).inseguro = g.inseguro;
+        }
+        return;
+      }
+      var campo = n => typeof window.pgCampoPrazoV35 === 'function' ? window.pgCampoPrazoV35(l,n) : l[n];
+      linhas.set(linha,{chave:id.chave,tiragem:tiragem,coletada:numero(campo('TIRAGEM COLETADA')),
+        dataColeta:iso(campo('Coleta_TP'))});
+      g.total += tiragem;
+      if (typeof window.pgVolumesColetaUnificadosV37 !== 'function') {
+        g.inseguro = 'motor-de-coleta-indisponivel';return;
+      }
+      var volume = window.pgVolumesColetaUnificadosV37(l,corte), eventos = volume && volume.eventosColetaTP;
+      if (!Array.isArray(eventos)) { g.inseguro = 'parcelas-de-coleta-indisponiveis';return; }
+      var motivo = eventos.conciliacao && eventos.conciliacao.motivo || '';
+      if (/indisponivel|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta/.test(motivo)) {
+        g.inseguro = motivo;return;
+      }
+      eventos.forEach(function(e,i) {
+        var data = iso(e.data), quantidade = numero(e.volume);
+        if (!data || !Number.isFinite(quantidade) || quantidade < 0) {
+          g.inseguro = 'parcela-de-coleta-invalida';return;
+        }
+        if (!quantidade || data > corte) return;
+        var chave = Number.isInteger(e.linhaMapa) && e.linhaMapa >= 2 ? 'MAPA:'+e.linhaMapa : linha+':LEGADO:'+i;
+        var anterior = g.eventos.get(chave);
+        if (anterior && (anterior.data !== data || anterior.volume !== quantidade)) {
+          g.inseguro = 'parcela-fisica-divergente';return;
+        }
+        if (!anterior) g.eventos.set(chave,{data:data,volume:quantidade});
+      });
+    });
+    grupos.forEach(function(g,chave) {
+      var eventos = Array.from(g.eventos.values()).sort((a,b) => a.data.localeCompare(b.data));
+      var total = Math.round(g.total), coletado = 0, confirmacao = '';
+      eventos.forEach(function(e) {
+        coletado += e.volume;
+        if (!confirmacao && total > 0 && coletado+1e-7 >= total) confirmacao = e.data;
+      });
+      var concluido = !g.inseguro && total > 0 && !!confirmacao;
+      grupos.set(chave,{concluido:concluido,total:total,coletado:coletado,
+        dataConfirmacaoColeta:concluido ? confirmacao : '',
+        motivo:g.inseguro || (concluido ? 'coleta-integral-do-grupo' : 'coleta-parcial-ou-ausente')});
+    });
+    cache = {base:base,tamanho:base.length,mapa:mapa,versao:versao,corte:corte,grupos:grupos};
+    return grupos;
+  }
+  window.pgConclusaoSKUColeta = function(linha,corte) {
+    corte = iso(corte || (typeof dtHojeISO !== 'undefined' ? dtHojeISO : ''));
+    var id = identidade(linha);
+    if (!id) return vazio('identidade-operacional-incompleta');
+    if (!corte) return vazio('corte-invalido');
+    return indice(corte).get(id.chave) || vazio('grupo-ausente-na-base');
+  };
+  window.pgConclusaoFasePorColeta = function(linha,faseId,corte) {
+    var fase = typeof faseId === 'object' && faseId ? faseId.id : faseId;
+    if (!fases.has(fase)) return null;
+    var acabadora = typeof window.pgEhFonteAcabadora === 'function'
+      ? window.pgEhFonteAcabadora(linha) : normal(linha && linha._SOURCE).includes('ACAB');
+    if (!acabadora && ['rec_acab','acab','kit'].includes(fase) &&
+        typeof window.pgEhDestinoAcabadora === 'function' && window.pgEhDestinoAcabadora(linha)) return null;
+    var estado = window.pgConclusaoSKUColeta(linha,corte);
+    return estado.concluido ? estado : null;
+  };
+})();
+</script>

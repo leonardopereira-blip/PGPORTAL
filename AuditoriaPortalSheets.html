@@ -7,7 +7,9 @@
         'Replan formação de kit', 'Data realizada formação de kit', 'Planejado formação de kit',
         'Realizado formação de kit', 'Data mapa agendado', 'Mapa agendado',
         'Data planejada usada no portal', 'Data planejada kit usada no portal', 'Origem', 'Linha PCP',
-        'Data de fechamento de setembro', 'Tiragem no fechamento de setembro'];
+        'Data de fechamento de setembro', 'Tiragem no fechamento de setembro',
+        'Origem da conclusão das etapas', 'Data de confirmação pela coleta do SKU',
+        'Tiragem total do SKU na rota', 'Coleta comprovada do SKU na rota'];
     const campo = (l, n) => window.pgCampoPrazoV35(l, n);
     const texto = v => {
         const s = String(v ?? '').trim();
@@ -78,6 +80,7 @@
             const replanKit = dataReplan(l, 'Formação de kit/Encaixotamento Final (re) plan');
             const faseKit = FASES.find(f => f.id === 'kit');
             const realKit = k?.dtReal || (faseKit && window.pgDataRealFaseFunil(l, faseKit)) || '';
+            const conclusao = window.pgConclusaoSKUColeta?.(l, hoje);
             const parcelas = new Map();
             function adicionar(tipo, eventos) {
                 eventos.forEach((e, i) => {
@@ -123,7 +126,11 @@
                     kitPlan, primeiraParcela && k ? numero(k.real) : 0,
                     p.dtAgenda, p.agenda, r?.dtPlan || '', k?.dtPlan || '',
                     window.pgEhFonteAcabadora(l) ? 'PCP Acabadora' : 'PCP', texto(l._PG_TP_LINHA),
-                    p.dtFechamento || '', p.fechamento || 0]);
+                    p.dtFechamento || '', p.fechamento || 0,
+                    conclusao?.concluido ? 'Coleta integral do SKU na rota; datas próprias preservadas' : '',
+                    conclusao?.concluido ? conclusao.dataConfirmacaoColeta : '',
+                    primeiraParcela && conclusao ? numero(conclusao.total) : 0,
+                    primeiraParcela && conclusao ? numero(conclusao.coletado) : 0]);
                 somarDia(r?.dtPlan, 'plan', plan);
                 somarDia(p.dtColeta, 'real', p.coleta);
                 somarDia(p.dtAgenda, 'agenda', p.agenda);
@@ -163,8 +170,8 @@
             planejado: soma(7), realizado: soma(8), tiragemTotal: soma(9), mapaSolicitado: soma(10),
             entregueTP: soma(13), mapaAgendado: soma(19), realizadoKit: soma(17) });
         return [{ nome: 'Auditoria Portal PG', cabecalho, linhas,
-            colunasData: [5, 6, 11, 12, 14, 15, 18, 20, 21, 24],
-            colunasNumero: [7, 8, 9, 10, 13, 16, 17, 19, 25] }];
+            colunasData: [5, 6, 11, 12, 14, 15, 18, 20, 21, 24, 27],
+            colunasNumero: [7, 8, 9, 10, 13, 16, 17, 19, 25, 28, 29] }];
     };
     window.pgBaixarAuditoriaPortalXlsx = async function (botao) {
         if (window.pgCarregamentoInicial || !window.dadosGlobais?.length) {

@@ -593,7 +593,7 @@ window.getVolFase = function(linha, fObj, tBase) {
         return extrairDataISO(valor);
     };
 
-    window.pgDataRealFaseFunil = function(l, f) {
+    window.pgDataRealFaseFunil = function(l, f, corte = dtHojeISO) {
         const campo = n => window.pgCampoColeta(l, n);
 
         if (f.id === 'col_mapa') {
@@ -620,14 +620,19 @@ window.getVolFase = function(linha, fObj, tBase) {
         const tRef = document.getElementById('filtroReferencia')?.value || 'replan';
         const cols = getCols(f, tRef);
 
-        return extrairDataISO(campo(cols.real)) ||
+        const registrada = extrairDataISO(campo(cols.real)) ||
             (cols.realAlt ? extrairDataISO(campo(cols.realAlt)) : null);
+        const prova = window.pgConclusaoFasePorColeta?.(l, f.id, corte);
+        // Data de confirmação pela coleta, sem preencher a data própria da etapa.
+        return prova?.concluido && (!registrada || prova.dataConfirmacaoColeta < registrada)
+            ? prova.dataConfirmacaoColeta : registrada;
     };
 
-    function dataFoiPreenchida(linha, fObj) {
+    function dataFoiPreenchida(linha, fObj, corte = dtHojeISO) {
         if (fObj.id === 'col_mapa') return window.getVolFase(linha, fObj, 0) > 0;
         if (fObj.id === 'col_tp') return window.pgTiragemColetadaReal(linha) > 0;
         if (fObj.id === 'ent_tp') return window.pgTiragemEntregueTPReal(linha) > 0;
+        if (window.pgConclusaoFasePorColeta?.(linha, fObj.id, corte)?.concluido) return true;
         let temData = extrairDataISO(linha[fObj.colReal]) !== null || (fObj.colRealAlt ? extrairDataISO(linha[fObj.colRealAlt]) !== null : false);
         if (!temData && fObj.colVol) {
             if (window.getVolFase(linha, fObj, 0) > 0) return true;
@@ -655,11 +660,10 @@ window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar, cortePlano
         if (!porGrupo[grupo]) porGrupo[grupo] = novo();
         const fonte = window.pgEhFonteAcabadora(l) ? 'acab' : 'pcp';
         const permitido = belongsToPhase(l, 'acab');
-        // Real = registro explícito da própria etapa, com data até hoje.
-        // Nunca se infere acabamento a partir de kit, coleta ou outra fase.
-        const dataReal = extrairDataISO(l[fase.colReal]);
+        // O SKU integralmente coletado comprova as etapas anteriores da própria rota.
+        const dataReal = window.pgDataRealFaseFunil(l, fase, hojeIso);
         const real = permitido && dataReal && dataReal <= hojeIso &&
-            dataFoiPreenchida(l, fase) ? volume : 0;
+            dataFoiPreenchida(l, fase, hojeIso) ? volume : 0;
         const dataPlan = permitido ? window.pgDataPlanoFaseFunil(l, fase, tRef) : null;
         const dias = dataPlan ? calcDiffDiasISO(dataPlan, cortePlanoIso || hojeIso) : null;
         const plan = dataPlan && dias !== null && dias >= 3 ? volume : 0;
@@ -1081,6 +1085,7 @@ function aplicarFiltros() {
     }
 
     injetarDatasMapa(); // 🎯 INJETA AS DATAS DO MAPA DE SAÍDA ANTES DOS GRÁFICOS LEREM
+    window.pgInvalidarConclusaoSKUColeta?.();
 
     window.pgSincronizarOrigemDestino();
     const origem = document.getElementById('pgFiltroOrigem')?.value || 'TODOS';
@@ -3652,7 +3657,7 @@ let tRef = document.getElementById('filtroReferencia').value;
         fasesAtivas.forEach(f => {
             if (!linhaPermitidaNaFase(l, f.id)) return;
 
-            // Nenhuma etapa é concluída por consequência de outra etapa.
+            // A coleta integral do SKU comprova as etapas anteriores elegíveis.
             let passaFase = belongsToPhase(l, f.id);
             if (f.id === 'col_mapa') passaFase = true;
 
@@ -11169,9 +11174,9 @@ window.processarReportExecutiva = function() {
         const tiragemLinha = Math.max(0,
             Number(window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0)) || 0);
         if (!(tiragemLinha > 0)) return;
-        const dataAcab = extrairDataISO(l[faseAcabReportV50.colReal]);
+        const dataAcab = window.pgDataRealFaseFunil(l, faseAcabReportV50, hojeIso);
         const acabadoRegistrado = dataAcab && dataAcab <= hojeIso &&
-            dataFoiPreenchida(l, faseAcabReportV50) ? tiragemLinha : 0;
+            dataFoiPreenchida(l, faseAcabReportV50, hojeIso) ? tiragemLinha : 0;
 
         const tp = window.pgVolumesColetaUnificadosV37(l, hojeIso);
         // tp.coleta e o NUMERO da coluna TIRAGEM COLETADA, mas somente
@@ -11203,7 +11208,7 @@ window.processarReportExecutiva = function() {
             (auditoriaAcabReportV50.porMarca[marca] || 0) + ajuste;
     });
     window.pgAuditoriaAcabamentoReportV50 = auditoriaAcabReportV50;
-    if (thAcab) thAcab.title = 'Somente nesta tabela: para nao-SAS, contabiliza o maior volume entre acabamento real registrado e Coleta TP real e datada, limitado a tiragem da linha. Coleta parcial nao reduz acabamento registrado. SAS e Funil sem alteracoes.';
+    if (thAcab) thAcab.title = 'Acabamento registrado ou comprovado pela coleta integral do SKU. Para não-SAS, preserva o complemento parcial datado desta tabela, sem somar novamente os SKUs já concluídos.';
 
     // V58 - Formação de Kit na Report.
     // Mantém a regra operacional do portal: PCP direto ao CD + PCP_ACABADORAS
@@ -11235,8 +11240,8 @@ window.processarReportExecutiva = function() {
             add(kitPorMarca, grupo, 'den', volume);
             kitTotal.den += volume;
 
-            const dtReal = window.pgDataRealFaseFunil(l, faseKitReportV58);
-            if (dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, faseKitReportV58)) {
+            const dtReal = window.pgDataRealFaseFunil(l, faseKitReportV58, hojeIso);
+            if (dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, faseKitReportV58, hojeIso)) {
                 add(kitPorMarca, grupo, 'real', volume);
                 kitTotal.real += volume;
             }
@@ -11245,7 +11250,7 @@ window.processarReportExecutiva = function() {
             const dias = dtPlan ? calcDiffDiasISO(dtPlan, cortePlanejadoRE) : null;
             linhasKitReportAuditoriaPortal.push({ linha: l, volume, dtPlan, dtReal,
                 plan: dtPlan && dias !== null && dias >= 3 ? volume : 0,
-                real: dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, faseKitReportV58) ? volume : 0 });
+                real: dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, faseKitReportV58, hojeIso) ? volume : 0 });
             if (dtPlan && dias !== null && dias >= 3) {
                 add(kitPorMarca, grupo, 'plan', volume);
                 kitTotal.plan += volume;
@@ -12409,9 +12414,9 @@ window.rePendenciasAcabamento = function(marca) {
         const dtPlan = window.pgDataPlanoFaseFunil(l, f, tRef);
         const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
         if (!(dtPlan && dias !== null && dias >= 3)) return;
-        const dtAcabRealV57 = extrairDataISO(l[f.colReal]);
+        const dtAcabRealV57 = window.pgDataRealFaseFunil(l, f, hojeIso);
         if (dtAcabRealV57 && dtAcabRealV57 <= hojeIso &&
-            dataFoiPreenchida(l, f)) return;
+            dataFoiPreenchida(l, f, hojeIso)) return;
 
         saida.push(window.reLinhaExportacao(l, {
             grupo: 'Gap',
@@ -12462,8 +12467,8 @@ window.rePendenciasKit = function(marca) {
         const dias = dtPlan ? calcDiffDiasISO(dtPlan, hojeIso) : null;
         if (!(dtPlan && dias !== null && dias >= 3)) return;
 
-        const dtReal = window.pgDataRealFaseFunil(l, f);
-        const volumeReal = dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, f)
+        const dtReal = window.pgDataRealFaseFunil(l, f, hojeIso);
+        const volumeReal = dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, f, hojeIso)
             ? volume : 0;
         const gap = Math.max(0, volume - volumeReal);
         if (!(gap > 0)) return;

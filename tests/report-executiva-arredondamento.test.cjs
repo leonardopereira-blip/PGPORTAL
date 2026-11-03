@@ -60,7 +60,8 @@ test('acabamento preserva realizado de hoje, mas calcula plano pelo corte opcion
     dadosAcabamentoOrigem: rows,
     arredondar: v => v,
     pgEhFonteAcabadora: () => false,
-    pgDataPlanoFaseFunil: l => l.PLAN
+    pgDataPlanoFaseFunil: l => l.PLAN,
+    pgDataRealFaseFunil: l => l.ACAB_REAL
   }, FASES: [{id: 'acab', colReal: 'ACAB_REAL'}],
     getKey: () => 'A', belongsToPhase: () => true,
     extrairDataISO: v => v, dataFoiPreenchida: () => true,
