@@ -7,7 +7,9 @@
   var fasesAntesDaAcabadora = new Set(['env','rec','apv','imp','cus','oc','tra','col']);
   var normal = v => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toUpperCase();
   var ausentes = new Set(['','-','N/A','NA','NULL','UNDEFINED','#N/A']);
-  var serie = l => normal(l.serie_corrigida || l['SÉRIE'] || l['Série'] || l.SERIE || l['SÉRIES']);
+  var serie = l => normal(typeof window.pgSerieCorrigidaFunil === 'function'
+    ? window.pgSerieCorrigidaFunil(l)
+    : (l.serie_corrigida || l['SÉRIE'] || l['Série'] || l.SERIE || l['SÉRIES']));
   var numero = v => typeof window.pgNumeroPrazoV35 === 'function' ? window.pgNumeroPrazoV35(v) : Number(v);
   function iso(v) {
     var m = /^(\d{4}-\d{2}-\d{2})(?:$|T|\s)/.exec(String(v == null ? '' : v).trim());
@@ -123,9 +125,10 @@
     rotas.forEach(function({pcp,acabadora}) {
       if (pcp.length !== 1 || acabadora.length !== 1) return;
       var origem = grupos.get(pcp[0]), final = grupos.get(acabadora[0]);
-      if (origem.inseguro || origem.rotas.size !== 1 || final.rotas.size !== 1 ||
-          origem.total !== final.total || !final.estado.concluido) return;
-      transferencias.set(pcp[0],{...final.estado,motivo:'coleta-integral-na-acabadora-da-mesma-rota'});
+      if (origem.inseguro || final.inseguro || origem.rotas.size !== 1 || final.rotas.size !== 1 ||
+          origem.total !== final.total) return;
+      transferencias.set(pcp[0],{...final.estado,motivo:final.estado.concluido
+        ? 'coleta-integral-na-acabadora-da-mesma-rota' : 'coleta-parcial-na-acabadora-da-mesma-rota'});
     });
     cache = {base:base,tamanho:base.length,mapa:mapa,versao:versao,corte:corte,
       grupos:grupos,linhas:linhas,transferencias:transferencias};
@@ -155,7 +158,25 @@
         typeof window.pgEhDestinoAcabadora === 'function' && window.pgEhDestinoAcabadora(linha)) return null;
     var {estado,transferencia} = buscar(linha,corte);
     if (estado.concluido) return estado;
-    return fasesAntesDaAcabadora.has(fase) ? transferencia || null : null;
+    return fasesAntesDaAcabadora.has(fase) && transferencia?.concluido ? transferencia : null;
+  };
+  // Volume provado pela coleta para fases operacionais; a conclusão com data
+  // continua exigindo 100%. O volume parcial será conciliado por grupo na visão.
+  window.pgVolumeSKUComprovadoParaFase = function(linha,faseId,corte) {
+    var fase = typeof faseId === 'object' && faseId ? faseId.id : faseId;
+    if (!fases.has(fase)) return null;
+    var id = identidade(linha);
+    if (!id) return null;
+    var {estado,transferencia} = buscar(linha,corte);
+    var seguro = s => s && !s.motivo?.includes('inseguro') &&
+      ['coleta-parcial-ou-ausente','coleta-integral-do-grupo',
+        'coleta-integral-na-acabadora-da-mesma-rota',
+        'coleta-parcial-na-acabadora-da-mesma-rota'].includes(s.motivo);
+    if (!seguro(estado)) return null;
+    var coletado = Math.min(estado.total,Math.max(0,estado.coletado));
+    if (fasesAntesDaAcabadora.has(fase) && seguro(transferencia))
+      coletado = Math.max(coletado,Math.min(transferencia.total,Math.max(0,transferencia.coletado)));
+    return {chave:id.chave,total:estado.total,coletado:coletado};
   };
 })();
 </script>

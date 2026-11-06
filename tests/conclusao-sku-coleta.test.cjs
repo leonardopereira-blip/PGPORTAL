@@ -213,3 +213,81 @@ test('integração central reconhece fases sem gravar datas e alimenta acabament
   assert.equal(metric.total.den,100);assert.equal(metric.total.real,100);
   assert.equal(r['Acbto Final Real'],'');
 });
+
+const complemento = (w,linhas,id='env',filtradas=linhas) => {
+  const fase=vm.runInContext(`FASES.find(f=>f.id==='${id}')`,w);
+  return w.pgComplementosParciaisSKUFunil(filtradas,fase,hoje,()=>true);
+};
+
+test('98,1% coletado comprova 98,1% de todas as etapas anteriores, sem criar data integral',()=>{
+  const r=row(2,{TIRAGEM:1000,'TIRAGEM COLETADA':981});
+  const w=portal([r],[event(2,981)]);
+  assert.equal(state(w,r).concluido,false);
+  assert.equal(state(w,r).coletado,981);
+  for(const fase of ['env','rec','apv','imp','cus','oc','acab','kit']) {
+    assert.equal(complemento(w,[r],fase).get(r),981,fase);
+    assert.equal(w.pgConclusaoFasePorColeta(r,fase,hoje),null,fase);
+  }
+  for(const fase of ['col_tp','ent_tp','ent_cd'])assert.equal(complemento(w,[r],fase).size,0,fase);
+  w.dadosAcabamentoOrigem=[r];
+  const original=w.pgMetricasAcabamentoRealV46('replan',hoje,()=> 'COC');
+  const funil=w.pgMetricasAcabamentoRealV46('replan',hoje,()=> 'COC',undefined,true);
+  assert.equal(original.total.real,0,'Report preserva sua regra anterior');
+  assert.equal(funil.total.real,981,'Funil recebe complemento parcial de acabamento');
+});
+
+test('parcelas concentradas em uma linha comprovam só a coleta do SKU completo',()=>{
+  const a=row(2,{TIRAGEM:544,'TIRAGEM COLETADA':981});
+  const b=row(3,{TIRAGEM:456,Coleta_TP:''});
+  const w=portal([a,b],[event(2,981)]);
+  const c=complemento(w,[a,b]);
+  assert.equal(c.size,2);
+  assert.ok(Math.abs(c.get(a)+c.get(b)-981)<1e-7);
+  assert.ok(c.get(a)<=544 && c.get(b)<=456);
+  assert.equal(complemento(w,[a,b],'env',[a]).size,0,'filtro parcial não herda o saldo do grupo');
+});
+
+test('fase registrada e coleta parcial não são somadas duas vezes',()=>{
+  const a=row(2,{TIRAGEM:100,'ENV ARQUIVO REAL':'2026-10-30','TIRAGEM COLETADA':100});
+  const b=row(3,{TIRAGEM:100,Coleta_TP:''});
+  const w=portal([a,b],[event(2,100)]);
+  assert.equal(complemento(w,[a,b]).size,0,'registrado 100 e coletado 100 significam 100, não 200');
+  assert.equal(complemento(w,[a,b],'rec').get(a),50);
+  assert.equal(complemento(w,[a,b],'rec').get(b),50);
+});
+
+test('excedente do SKU A não compensa pendência do SKU B mesmo na mesma marca e CD',()=>{
+  const a=row(2,{'TIRAGEM COLETADA':150});
+  const b=row(3,{SKU:'SKU-B',SKU_REAL:'SKU-B','TIRAGEM COLETADA':50});
+  const w=portal([a,b],[event(2,150),event(3,50,{sku:'SKU-B'})]);
+  assert.equal(state(w,a).concluido,true);
+  assert.equal(state(w,b).coletado,50);
+  const c=complemento(w,[a,b]);
+  assert.equal(c.get(a),undefined);
+  assert.equal(c.get(b),50);
+});
+
+test('coleta parcial da acabadora comprova somente o mesmo SKU na rota anterior',()=>{
+  const pcp=transferencia(),acab=acabadora(3,{'TIRAGEM COLETADA':90});
+  const w=portal([pcp,acab],[event(4,90,{grafica:'HR'})]);
+  assert.equal(w.pgConclusaoFasePorColeta(pcp,'env',hoje),null);
+  assert.equal(complemento(w,[pcp,acab]).get(pcp),90);
+  const outra=acabadora(3,{'TIRAGEM COLETADA':90,'GRÁFICA DE ORIGEM':'OUTRA'});
+  const wOutra=portal([pcp,outra],[event(4,90,{grafica:'HR'})]);
+  assert.equal(complemento(wOutra,[pcp,outra]).get(pcp),undefined);
+});
+
+test('coleta futura não comprova progresso hoje e série divergente impede compensação',()=>{
+  const a=row(2,{TIRAGEM:100,'TIRAGEM COLETADA':100,Coleta_TP:'2026-11-05'});
+  const w=portal([a],[event(2,100,{coletaTP:'2026-11-05'})]);
+  assert.equal(complemento(w,[a]).size,0);
+  const b=row(3,{'SÉRIE':'2 ANO'});
+  const ambigua=portal([row(2,{'SÉRIE':'1 ANO','TIRAGEM COLETADA':100}),b],[event(2,100)]);
+  assert.equal(complemento(ambigua,ambigua.dadosGlobais).size,0);
+  const corrigida=portal([
+    row(2,{'SÉRIE':'1 ANO',Serie_corrigida:'2 ANO','TIRAGEM COLETADA':100}),
+    row(3,{'SÉRIE':'1 ANO',Serie_corrigida:'3 ANO'})
+  ],[event(2,100)]);
+  assert.equal(state(corrigida,corrigida.dadosGlobais[0]).motivo,'sku-com-envio-ou-serie-ambiguos');
+  assert.equal(complemento(corrigida,corrigida.dadosGlobais).size,0);
+});

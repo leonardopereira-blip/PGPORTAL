@@ -634,9 +634,52 @@ window.getVolFase = function(linha, fObj, tBase) {
         }
         return temData;
     }
+
+// Complementa volumes parciais apenas dentro da identidade operacional do SKU.
+// Por grupo/fase, o realizado é max(etapa registrada, coleta comprovada), nunca
+// a soma dos dois. Não distribui saldo entre SKUs, CDs, séries ou fontes.
+window.pgComplementosParciaisSKUFunil = function(linhas, fase, corte, elegivel) {
+    const complemento = new Map(), grupos = new Map();
+    if (!['env','rec','apv','imp','cus','oc','tra','rec_acab','acab','kit','col'].includes(fase?.id) ||
+        typeof window.pgVolumeSKUComprovadoParaFase !== 'function') return complemento;
+    (linhas || []).forEach(l => {
+        if (elegivel && !elegivel(l)) return;
+        const volume = Math.max(0, Number(window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0)) || 0);
+        if (!volume) return;
+        const prova = window.pgVolumeSKUComprovadoParaFase(l, fase.id, corte);
+        if (!prova || !prova.total || !prova.coletado || prova.coletado >= prova.total) return;
+        const serie = window.pgSerieCorrigidaFunil?.(l) || '';
+        const tipo = String(l.TIPO || l.Tipo || '').trim().toUpperCase();
+        if (!grupos.has(prova.chave)) grupos.set(prova.chave, {
+            total:0, registrado:0, linhas:[], prova, series:new Set(), tipos:new Set()
+        });
+        const grupo = grupos.get(prova.chave);
+        grupo.total += volume;
+        if (serie) grupo.series.add(String(serie).trim().toUpperCase());
+        if (tipo) grupo.tipos.add(tipo);
+        if (dataFoiPreenchida(l, fase, corte)) grupo.registrado += volume;
+        else grupo.linhas.push({linha:l,volume});
+    });
+    grupos.forEach(g => {
+        // Se o filtro cortou parte do SKU ou há subdivisões incompatíveis, não
+        // se pode atribuir a coleta a uma linha arbitrária desse subconjunto.
+        if (g.total !== g.prova.total || g.series.size > 1 || g.tipos.size > 1) return;
+        const acrescimo = Math.max(0,Math.min(g.prova.coletado,g.total)-g.registrado);
+        const aberto = g.linhas.reduce((s,l) => s+l.volume,0);
+        if (!acrescimo || !aberto) return;
+        let restante = Math.min(acrescimo,aberto);
+        g.linhas.forEach((l,i) => {
+            const valor = i === g.linhas.length-1 ? restante :
+                Math.min(restante,acrescimo*l.volume/aberto);
+            complemento.set(l.linha,valor);
+            restante -= valor;
+        });
+    });
+    return complemento;
+};
     
 // V46 — única fonte de realizado/planejado de Acabamento para Funil e Report.
-window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar, cortePlanoIso) {
+window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar, cortePlanoIso, incluirParcialFunil = false) {
     const fase = FASES.find(f => f.id === 'acab');
     const novo = () => ({ den: 0, real: 0, plan: 0,
         pcp: {den: 0, real: 0, plan: 0}, acab: {den: 0, real: 0, plan: 0} });
@@ -645,6 +688,8 @@ window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar, cortePlano
     const vistos = new Set();
     const linhas = window.dadosAcabamentoOrigem || [];
     if (!fase) throw new Error('Fase Acabamento não encontrada.');
+    const complemento = incluirParcialFunil ? window.pgComplementosParciaisSKUFunil(
+        linhas,fase,hojeIso,l => belongsToPhase(l,'acab')) : new Map();
     linhas.forEach(l => {
         const chave = getKey(l);
         if (vistos.has(chave)) return;
@@ -657,8 +702,9 @@ window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar, cortePlano
         const permitido = belongsToPhase(l, 'acab');
         // O SKU integralmente coletado comprova as etapas anteriores da própria rota.
         const dataReal = window.pgDataRealFaseFunil(l, fase, hojeIso);
-        const real = permitido && dataReal && dataReal <= hojeIso &&
-            dataFoiPreenchida(l, fase, hojeIso) ? volume : 0;
+        const registrado = permitido && dataReal && dataReal <= hojeIso &&
+            dataFoiPreenchida(l, fase, hojeIso);
+        const real = registrado ? volume : (permitido ? (complemento.get(l) || 0) : 0);
         const dataPlan = permitido ? window.pgDataPlanoFaseFunil(l, fase, tRef) : null;
         const dias = dataPlan ? calcDiffDiasISO(dataPlan, cortePlanoIso || hojeIso) : null;
         const plan = dataPlan && dias !== null && dias >= 3 ? volume : 0;
@@ -3084,15 +3130,17 @@ window.pgPendenciasCaixaFunil = function(contexto) {
     const tRef = document.getElementById('filtroReferencia').value;
     const basePendencias = ['col_tp', 'ent_tp'].includes(f.id) ? (window.dadosBaseTPPortal || [])
         : f.id === 'ent_cd' ? (window.dadosBaseEntCDPortal || dadosFiltrados)
-        : ['imp', 'cus', 'oc'].includes(f.id) ? (window.dadosFasesEstaticas || [])
+        : ['env', 'rec', 'apv', 'imp', 'cus', 'oc'].includes(f.id) ? (window.dadosFasesEstaticas || [])
         : f.id === 'acab' ? (window.dadosAcabamentoOrigem || []) : dadosFiltrados;
+    const complementos = window.pgComplementosParciaisSKUFunil(basePendencias,f,dtHojeISO,
+        l => belongsToPhase(l,f.id));
     return basePendencias.flatMap(l => {
         const g = l.GRAFICA_FINAL || l['GRÁFICA'], m = l.MARCA_FINAL || l.UNIDADE;
         if (!casa(g, m) || (f.id !== 'col_mapa' && !belongsToPhase(l, f.id))) return [];
         const base = window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0);
         const volume = window.getVolFase(l, f, base);
         const real = dataFoiPreenchida(l, f) || (volume > 0 && ['col_mapa', 'ent_cd'].includes(f.id));
-        const saldo = Math.max(0, base - (real ? volume : 0));
+        const saldo = Math.max(0, base - (real ? volume : (complementos.get(l) || 0)));
         const dtPlan = window.pgDataPlanoFaseFunil(l, f, tRef);
         const dias = dtPlan ? -calcDiffDiasISO(dtPlan, dtHojeISO) : null;
         const serie = String(l['SÉRIE'] || l['Série'] || l.SERIE || '-');
@@ -3154,6 +3202,8 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
     const setSeries = new Set();
     // dadosFiltrados é a variável lexical do motor, não window.dadosFiltrados.
     const arrayBase = dadosFiltrados || window.dadosGlobais || [];
+    const complementos = window.pgComplementosParciaisSKUFunil(arrayBase,faseObj,dtHojeISO,
+        l => (typeof belongsToPhase !== 'function' || belongsToPhase(l,faseId)));
 
     arrayBase.forEach(l => {
         let tBase = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"]);
@@ -3192,7 +3242,8 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         };
         // Cada linha tem seu próprio limite. Excesso de uma tiragem não quita outra.
         const bruto = (isReal || (faseId === 'col_mapa' && tFaseReal > 0))
-            ? Math.max(0, Number(window.arredondar(tFaseReal)) || 0) : 0;
+            ? Math.max(0, Number(window.arredondar(tFaseReal)) || 0)
+            : (complementos.get(l) || 0);
         const considerado = Math.min(tBase, bruto);
         const excedente = Math.max(0, bruto - tBase);
         for (const celula of [matriz[marca].totalGeral, matriz[marca].tipos[tipo], matriz[marca].series[serie][tipo]]) {
@@ -3538,6 +3589,10 @@ let tRef = document.getElementById('filtroReferencia').value;
         ? Array.from(new Set([...dadosInicio, ...dadosFinalTotal, ...dadosFinalOrigem, ...dadosAcabamentoOrigem, ...dadosFasesEstaticas, ...dadosPadrao]))
         : Array.from(new Set([...dadosPadrao, ...dadosAcabamentoOrigem, ...dadosFasesEstaticas]));
 
+    const complementosPorFase = new Map(fasesAtivas.map(f => [f.id,
+        window.pgComplementosParciaisSKUFunil(dadosProcessamento,f,dtHojeISO,
+            l => linhaPermitidaNaFase(l,f.id) && belongsToPhase(l,f.id))]));
+
     // Tooltip compartilhado: somente volumes com planejamento vencido e saldo aberto.
     // Cada tiragem é calculada separadamente; excedentes não compensam atrasos.
     const pgItensAtrasadosPorFase = new Map();
@@ -3559,7 +3614,8 @@ let tRef = document.getElementById('filtroReferencia').value;
             const vol = window.getVolFase(l, fase, base);
             const confirmado = dataFoiPreenchida(l, fase) ||
                 (vol > 0 && (id === 'col_mapa' || id === 'ent_cd'));
-            const saldo = Math.max(0, base - (confirmado ? Math.min(base, Math.max(0, vol)) : 0));
+            const parcial = complementosPorFase.get(id)?.get(l) || 0;
+            const saldo = Math.max(0, base - (confirmado ? Math.min(base, Math.max(0, vol)) : parcial));
             if (saldo <= 0) return;
             itens.push({
                 marca:pgNomeFunil(l,'marca'), grafica:pgNomeFunil(l,'grafica'),
@@ -3672,6 +3728,12 @@ let tRef = document.getElementById('filtroReferencia').value;
                 }
                 let isReal = dataFoiPreenchida(l, f) ||
                     (tFaseReal > 0 && (f.id === 'col_mapa' || f.id === 'ent_cd'));
+                // Coleta parcial prova somente o volume que falta na fase,
+                // sem alterar datas reais nem efetuar compensação entre linhas.
+                if (!isReal) {
+                    const parcial = complementosPorFase.get(f.id)?.get(l) || 0;
+                    if (parcial > 0) { tFaseReal = parcial; isReal = true; }
+                }
 
                 if(isReal || (f.id === 'col_mapa' && tFaseReal > 0)) {
                     fTotais[f.id].real += tFaseReal;
@@ -3716,9 +3778,9 @@ let tRef = document.getElementById('filtroReferencia').value;
     // V46: Acabamento real e base vêm da MESMA conta usada na Report.
     // As outras fases não são modificadas por este alinhamento.
     const pgAcabPorMarcaV46 = window.pgMetricasAcabamentoRealV46(
-        tRef, dtHojeISO, l => String(l.MARCA_FINAL || l.UNIDADE || 'N/A').toUpperCase());
+        tRef, dtHojeISO, l => String(l.MARCA_FINAL || l.UNIDADE || 'N/A').toUpperCase(), undefined, true);
     const pgAcabPorGraficaV46 = window.pgMetricasAcabamentoRealV46(
-        tRef, dtHojeISO, l => String(l.GRAFICA_FINAL || l['GRÁFICA'] || 'N/A').toUpperCase());
+        tRef, dtHojeISO, l => String(l.GRAFICA_FINAL || l['GRÁFICA'] || 'N/A').toUpperCase(), undefined, true);
     const pgAplicarAcabV46 = (celula, agregado) => {
         if (!celula) return;
         const a = agregado || {den:0,real:0,plan:0,

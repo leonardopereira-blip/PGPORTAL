@@ -41,7 +41,7 @@ function portal(rows, fases = ['col_mapa', 'col_tp'], recorte = {}) {
   });
   const c = {
     console: { info() {}, warn() {}, error() {} },
-    MAPA_SAIDA_CACHE: {}, dadosGlobais: rows,
+    MAPA_SAIDA_CACHE: recorte.mapa || {}, dadosGlobais: rows,
     arredondar: v => Math.round(Number(v) || 0), formatarBR: String,
     setTimeout() {}, clearTimeout() {}, setInterval() {}, clearInterval() {},
     performance: { now: () => 0 }, addEventListener() {}, dispatchEvent() {}, Event: class {},
@@ -57,7 +57,7 @@ function portal(rows, fases = ['col_mapa', 'col_tp'], recorte = {}) {
   };
   c.window = c;
   vm.createContext(c);
-  for (const nome of ['Scripts_Eventos_TP.html', 'Scripts_Globais_2.html']) {
+  for (const nome of ['Scripts_Eventos_TP.html', 'Scripts_Conclusao_SKU.html', 'Scripts_Globais_2.html']) {
     const html = fs.readFileSync(path.join(__dirname, '..', nome), 'utf8');
     for (const [, script] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
       vm.runInContext(script, c, { filename: nome });
@@ -75,7 +75,7 @@ function portal(rows, fases = ['col_mapa', 'col_tp'], recorte = {}) {
   c.dadosTotalCanonico = baseCanonica;
   c.dadosTotalPCPBase = rows;
   c.dadosFasesEstaticas = rows;
-  c.dadosAcabamentoOrigem = [];
+  c.dadosAcabamentoOrigem = recorte.acabamento ? rows : [];
   c.pgBaseGeralReportExecutiva = baseCanonica;
   c.renderColetaFinalFunil = () => c.pgObterResumoColeta();
   c.processarFunil();
@@ -93,6 +93,25 @@ function contagem(p) {
   assert.ok(valores, 'Funil renderiza contagem e percentual de séries');
   return [Number(valores[1]), Number(valores[2]), Number(valores[3])];
 }
+
+test('Funil real reconhece 98,1% coletado nas etapas anteriores, preservando total e Coleta TP', () => {
+  const linha = row('material-parcial', {
+    TIRAGEM:1000,'TIRAGEM COLETADA':981,'TIRAGEM AGENDADA':19,Coleta_TP:hoje,
+    _PG_TP_LINHA:2
+  });
+  const mapa = {__agendaTPCompleta:true,__forecastTP:{conferido:true},eventos:[{
+    eventoTPVersao:1,linhaMapa:2,marca:'SAS',grafica:'LOGPRINT',sku:'material-parcial',
+    destino:'CD JDI',envio:'V1',volumeColetado:981,coletaTP:hoje,entregaTP:hoje
+  }]};
+  const p = portal([linha],['env','rec','apv','imp','cus','oc','acab','kit','col_tp'],
+    {mapa,acabamento:true});
+  const funil = p.controles.get('containerFunilVisual').innerHTML;
+  assert.match(funil,/Total Base \(1000 \| 100%\)/);
+  for(const fase of ['Env. Arq','Rec. Bon','Apv. Bon','Impressão','Val. Custo','O.C.','Acabamento','Form. Kit'])
+    assert.match(funil,new RegExp(fase.replace('.','\\.')+' \\(98\\.1%\\)'),fase);
+  assert.match(funil,/Coleta TP \(98\.1%\)/);
+  assert.equal(linha['ENV ARQUIVO REAL'],undefined,'não grava data na linha');
+});
 
 function linhaSeries(p, tabela) {
   const html = p.controles.get('tbFunil' + tabela).innerHTML;
