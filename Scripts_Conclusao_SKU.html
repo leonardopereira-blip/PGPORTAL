@@ -4,7 +4,10 @@
   'use strict';
   var cache = null;
   var fases = new Set(['env','rec','apv','imp','cus','oc','tra','rec_acab','acab','kit','col']);
-  var normal = v => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+  var fasesAntesDaAcabadora = new Set(['env','rec','apv','imp','cus','oc','tra','col']);
+  var normal = v => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toUpperCase();
+  var ausentes = new Set(['','-','N/A','NA','NULL','UNDEFINED','#N/A']);
+  var serie = l => normal(l.serie_corrigida || l['SÉRIE'] || l['Série'] || l.SERIE || l['SÉRIES']);
   var numero = v => typeof window.pgNumeroPrazoV35 === 'function' ? window.pgNumeroPrazoV35(v) : Number(v);
   function iso(v) {
     var m = /^(\d{4}-\d{2}-\d{2})(?:$|T|\s)/.exec(String(v == null ? '' : v).trim());
@@ -25,19 +28,36 @@
   function vazio(motivo) {
     return {concluido:false,total:0,coletado:0,dataConfirmacaoColeta:'',motivo:motivo};
   }
+  function rotaTransferencia(l,id,serieLinha) {
+    if (typeof window.pgEhDestinoAcabadora !== 'function') return '';
+    var paraAcabadora = window.pgEhDestinoAcabadora(l);
+    if (id.acabadora === paraAcabadora) return '';
+    var [marca,grafica,sku,destino] = id.partes;
+    var graficaOrigem = id.acabadora ? normal(l['GRÁFICA DE ORIGEM']) : grafica;
+    var acabadora = id.acabadora ? grafica : destino;
+    if ([id.envio,serieLinha,graficaOrigem,acabadora].some(v => ausentes.has(v))) return '';
+    return JSON.stringify([marca,sku,id.envio,serieLinha,graficaOrigem,acabadora]);
+  }
   window.pgInvalidarConclusaoSKUColeta = function() { cache = null; };
   function indice(corte) {
     var base = window.dadosGlobais || [], mapa = window.MAPA_SAIDA_CACHE;
     var versao = window.pgVersaoFiltros || 0;
     if (cache && cache.base === base && cache.tamanho === base.length && cache.mapa === mapa &&
-        cache.versao === versao && cache.corte === corte) return cache.grupos;
-    var grupos = new Map(), linhas = new Map();
+        cache.versao === versao && cache.corte === corte) return cache;
+    var grupos = new Map(), linhas = new Map(), rotas = new Map(), transferencias = new Map();
     base.forEach(function(l) {
       if (window.pgSolicitacaoCancelada && window.pgSolicitacaoCancelada(l)) return;
       var id = identidade(l);
       if (!id) return;
-      if (!grupos.has(id.chave)) grupos.set(id.chave,{total:0,eventos:new Map(),inseguro:''});
-      var g = grupos.get(id.chave), linha = fisica(l,id), tiragem = numero(l.TIRAGEM);
+      if (!grupos.has(id.chave)) grupos.set(id.chave,{total:0,eventos:new Map(),inseguro:'',
+        acabadora:id.acabadora,envios:new Set(),series:new Set(),origens:new Set(),rotas:new Set()});
+      var g = grupos.get(id.chave), linha = fisica(l,id), tiragem = numero(l.TIRAGEM || l.QUANTIDADE || 0);
+      var serieLinha = serie(l), rota = rotaTransferencia(l,id,serieLinha);
+      var graficaOrigem = id.acabadora ? normal(l['GRÁFICA DE ORIGEM']) : '';
+      if (!ausentes.has(id.envio)) g.envios.add(id.envio);
+      if (!ausentes.has(serieLinha)) g.series.add(serieLinha);
+      if (!ausentes.has(graficaOrigem)) g.origens.add(graficaOrigem);
+      g.rotas.add(rota);
       if (!linha || !Number.isFinite(tiragem) || tiragem < 0) {
         g.inseguro = 'linha-ou-tiragem-sem-identidade-segura';return;
       }
@@ -79,6 +99,8 @@
       });
     });
     grupos.forEach(function(g,chave) {
+      if (g.envios.size > 1 || g.series.size > 1) g.inseguro = 'sku-com-envio-ou-serie-ambiguos';
+      if (g.origens.size > 1) g.inseguro = 'sku-com-grafica-de-origem-ambigua';
       var eventos = Array.from(g.eventos.values()).sort((a,b) => a.data.localeCompare(b.data));
       var total = Math.round(g.total), coletado = 0, confirmacao = '';
       eventos.forEach(function(e) {
@@ -86,19 +108,43 @@
         if (!confirmacao && total > 0 && coletado+1e-7 >= total) confirmacao = e.data;
       });
       var concluido = !g.inseguro && total > 0 && !!confirmacao;
-      grupos.set(chave,{concluido:concluido,total:total,coletado:coletado,
+      g.estado = {concluido:concluido,total:total,coletado:coletado,
         dataConfirmacaoColeta:concluido ? confirmacao : '',
-        motivo:g.inseguro || (concluido ? 'coleta-integral-do-grupo' : 'coleta-parcial-ou-ausente')});
+        motivo:g.inseguro || (concluido ? 'coleta-integral-do-grupo' : 'coleta-parcial-ou-ausente')};
+      // Inclui candidatos ambíguos no índice para que possam impedir o vínculo.
+      g.rotas.forEach(function(rota) {
+        if (!rota) return;
+        if (!rotas.has(rota)) rotas.set(rota,{pcp:[],acabadora:[]});
+        rotas.get(rota)[g.acabadora ? 'acabadora' : 'pcp'].push(chave);
+      });
     });
-    cache = {base:base,tamanho:base.length,mapa:mapa,versao:versao,corte:corte,grupos:grupos};
-    return grupos;
+    // A coleta final pode confirmar a perna anterior do mesmo material.
+    // Exige vínculo único, mesma tiragem e rota explícita nas duas fontes.
+    rotas.forEach(function({pcp,acabadora}) {
+      if (pcp.length !== 1 || acabadora.length !== 1) return;
+      var origem = grupos.get(pcp[0]), final = grupos.get(acabadora[0]);
+      if (origem.inseguro || origem.rotas.size !== 1 || final.rotas.size !== 1 ||
+          origem.total !== final.total || !final.estado.concluido) return;
+      transferencias.set(pcp[0],{...final.estado,motivo:'coleta-integral-na-acabadora-da-mesma-rota'});
+    });
+    cache = {base:base,tamanho:base.length,mapa:mapa,versao:versao,corte:corte,
+      grupos:grupos,linhas:linhas,transferencias:transferencias};
+    return cache;
   }
-  window.pgConclusaoSKUColeta = function(linha,corte) {
+  function buscar(linha,corte) {
     corte = iso(corte || (typeof dtHojeISO !== 'undefined' ? dtHojeISO : ''));
     var id = identidade(linha);
-    if (!id) return vazio('identidade-operacional-incompleta');
-    if (!corte) return vazio('corte-invalido');
-    return indice(corte).get(id.chave) || vazio('grupo-ausente-na-base');
+    if (!id) return {estado:vazio('identidade-operacional-incompleta')};
+    if (!corte) return {estado:vazio('corte-invalido')};
+    if (window.PG_DASHBOARD_COMPLETO === false) return {estado:vazio('base-de-skus-incompleta')};
+    var dados = indice(corte);
+    if (dados.linhas.get(fisica(linha,id))?.chave !== id.chave || window.pgSolicitacaoCancelada?.(linha)) {
+      return {estado:vazio('linha-ausente-na-base')};
+    }
+    return {estado:dados.grupos.get(id.chave).estado,transferencia:dados.transferencias.get(id.chave)};
+  }
+  window.pgConclusaoSKUColeta = function(linha,corte) {
+    return buscar(linha,corte).estado;
   };
   window.pgConclusaoFasePorColeta = function(linha,faseId,corte) {
     var fase = typeof faseId === 'object' && faseId ? faseId.id : faseId;
@@ -107,8 +153,9 @@
       ? window.pgEhFonteAcabadora(linha) : normal(linha && linha._SOURCE).includes('ACAB');
     if (!acabadora && ['rec_acab','acab','kit'].includes(fase) &&
         typeof window.pgEhDestinoAcabadora === 'function' && window.pgEhDestinoAcabadora(linha)) return null;
-    var estado = window.pgConclusaoSKUColeta(linha,corte);
-    return estado.concluido ? estado : null;
+    var {estado,transferencia} = buscar(linha,corte);
+    if (estado.concluido) return estado;
+    return fasesAntesDaAcabadora.has(fase) ? transferencia || null : null;
   };
 })();
 </script>

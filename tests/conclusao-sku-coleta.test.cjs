@@ -35,7 +35,8 @@ function portal(rows,events=[]) {
 const state=(w,r,cut=hoje)=>w.pgConclusaoSKUColeta(r,cut);
 
 test('SKU completo com quantidade concentrada conclui todas as linhas, inclusive Custo e OC',()=>{
-  const rows=[row(150,{TIRAGEM:544,'TIRAGEM COLETADA':610}),row(2903,{TIRAGEM:66,Coleta_TP:'',Entrega_TP:''})];
+  const rows=[row(150,{TIRAGEM:544,'TIRAGEM COLETADA':610,JOIN_KEY:'primeira linha'}),
+    row(2903,{TIRAGEM:66,Coleta_TP:'',Entrega_TP:'',JOIN_KEY:'outra linha'})];
   const before=JSON.stringify(rows),w=portal(rows,[event(2,610)]);
   for(const r of rows) {
     const s=state(w,r);assert.equal(s.concluido,true);assert.equal(s.total,610);assert.equal(s.coletado,610);
@@ -120,6 +121,76 @@ test('transferência PCP completa fases iniciais e financeiras, preservando fase
   for(const fase of ['env','rec','apv','imp','cus','oc','tra'])
     assert.equal(w.pgConclusaoFasePorColeta(r,fase,hoje).concluido,true,fase);
   for(const fase of ['rec_acab','acab','kit'])assert.equal(w.pgConclusaoFasePorColeta(r,fase,hoje),null,fase);
+});
+
+const transferencia = (extra={}) => row(2,{
+  'SÉRIE':'1 ANO',CD_MAPA:'HR',CD_FINAL:'HR','CD DESTINO':'HR',JOIN_KEY:'SKU-A até HR',...extra
+});
+const acabadora = (n=3,extra={}) => row(n,{
+  _SOURCE:'ACABADORA',_ROW_ID:'ACAB:'+n,'SÉRIE':'1 ANO',
+  GRAFICA_FINAL:'HR','GRÁFICA':'HR','GRÁFICA DE ORIGEM':'LOGPRINT',
+  JOIN_KEY:'SKU-A de HR ao CD','TIRAGEM COLETADA':100,...extra
+});
+
+test('coleta final confirma etapas anteriores da transferência do mesmo SKU e tiragem',()=>{
+  const pcp=transferencia(),acab=acabadora(),vizinho=transferencia({
+    _PG_TP_LINHA:4,_ROW_ID:'PCP:4',SKU_REAL:'SKU-B',SKU:'SKU-B'
+  });
+  const w=portal([pcp,acab,vizinho],[event(4,100,{grafica:'HR'})]);
+  assert.equal(state(w,pcp).concluido,false,'O registro de Coleta TP no PCP não é alterado');
+  for(const fase of ['env','rec','apv','imp','cus','oc','tra','col']) {
+    const prova=w.pgConclusaoFasePorColeta(pcp,fase,hoje);
+    assert.equal(prova.motivo,'coleta-integral-na-acabadora-da-mesma-rota',fase);
+    assert.equal(prova.dataConfirmacaoColeta,'2026-11-01',fase);
+    assert.equal(w.pgConclusaoFasePorColeta(vizinho,fase,hoje),null,fase);
+  }
+  assert.equal(w.pgConclusaoFasePorColeta(pcp,'env','2026-10-31'),null);
+  for(const fase of ['rec_acab','acab','kit','col_tp','ent_tp','ent_cd']) {
+    assert.equal(w.pgConclusaoFasePorColeta(pcp,fase,hoje),null,fase);
+  }
+  for(const fase of ['rec_acab','acab','kit']) {
+    assert.equal(w.pgConclusaoFasePorColeta(acab,fase,hoje).concluido,true,fase);
+  }
+});
+
+test('SKU coletado em outra gráfica de origem, envio, série ou tiragem não confirma a transferência',()=>{
+  const pcp=transferencia();
+  const divergencias=[{'GRÁFICA DE ORIGEM':'LEOGRAF'}, {ENVIO:'V2'}, {'SÉRIE':'2 ANO'}, {TIRAGEM:90}];
+  for(const campos of divergencias) {
+    const w=portal([pcp,acabadora(3,campos)],[event(4,100,{grafica:'HR'})]);
+    assert.equal(w.pgConclusaoFasePorColeta(pcp,'env',hoje),null,JSON.stringify(campos));
+  }
+});
+
+test('coleta final parcial ou com duas rotas finais possíveis não conclui a transferência',()=>{
+  const pcp=transferencia();
+  const parcial=portal([pcp,acabadora(3,{'TIRAGEM COLETADA':90})],[event(4,90,{grafica:'HR'})]);
+  assert.equal(parcial.pgConclusaoFasePorColeta(pcp,'env',hoje),null);
+  const outroCD=acabadora(4,{CD_FINAL:'CD RP','CD DESTINO':'CD RP','TIRAGEM COLETADA':0});
+  const ambigua=portal([pcp,acabadora(),outroCD],[event(4,100,{grafica:'HR'})]);
+  assert.equal(ambigua.pgConclusaoFasePorColeta(pcp,'env',hoje),null);
+});
+
+test('mesma rota de acabadora em envios distintos e mesmo SKU em séries distintas ficam pendentes',()=>{
+  const primeiro=acabadora(2,{GIRO_TOTAL_BA:200,'TIRAGEM COLETADA':200});
+  const segundo=acabadora(3,{ENVIO:'V2','TIRAGEM COLETADA':0});
+  const w=portal([primeiro,segundo],[event(4,200,{grafica:'HR'})]);
+  assert.equal(state(w,segundo).concluido,false);
+  assert.equal(state(w,primeiro).motivo,'sku-com-envio-ou-serie-ambiguos');
+  const a=row(2,{'SÉRIE':'1 ANO',GIRO_TOTAL_BA:200,'TIRAGEM COLETADA':200});
+  const b=row(3,{'SÉRIE':'2 ANO'});
+  assert.equal(state(portal([a,b],[event(4,200)]),b).concluido,false);
+  const outraOrigem=acabadora(3,{'GRÁFICA DE ORIGEM':'LEOGRAF','TIRAGEM COLETADA':0});
+  const mesmaAcabadora=portal([primeiro,outraOrigem],[event(4,200,{grafica:'HR'})]);
+  assert.equal(state(mesmaAcabadora,outraOrigem).motivo,'sku-com-grafica-de-origem-ambigua');
+});
+
+test('base incompleta ou linha fora do universo não confirma etapas por coleta',()=>{
+  const r=row(2,{'TIRAGEM COLETADA':100}),w=portal([r],[event(4,100)]);
+  assert.equal(state(w,r).concluido,true);
+  assert.equal(state(w,row(3)).concluido,false);
+  w.PG_DASHBOARD_COMPLETO=false;
+  assert.equal(state(w,r).concluido,false);
 });
 
 test('invalidação explícita reconstrói denominador após alteração da base',()=>{
