@@ -30,6 +30,14 @@
                 </div>
             </div>
 
+            <div id="visaoFalhasPlan" class="hidden absolute inset-0">
+                <iframe id="iframeFalhasPlan" title="Falhas de Plan." data-src="https://script.google.com/a/macros/arcoeducacao.com.br/s/AKfycbxsYC04TdQMX5R0mY90JVRiSeVLYcU6S8NnSoBdqm6AxeEbX4Yc0Ij8e4ZMWw68hbDqIQ/exec?embed=1" class="block w-full h-full bg-slate-100" style="border:0;" allow="clipboard-write" onload="if(this.getAttribute('src')) document.getElementById('loadingFalhasPlan').classList.add('hidden')"></iframe>
+                <div id="loadingFalhasPlan" class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mb-3"></div>
+                    <span class="text-indigo-800 font-black tracking-widest uppercase text-sm">Carregando Falhas de Plan...</span>
+                </div>
+            </div>
+
             <div id="visaoCaixasPre" class="hidden">
     <div class="flex flex-wrap justify-between items-center mb-4 border-b border-slate-200 pb-2">
         <h3 class="text-sm font-black text-slate-700 uppercase tracking-widest">📦 Acompanhamento de Caixas e Embalagens</h3>
@@ -115,6 +123,14 @@
                 </div>
             </div>
 
+            <div id="visaoStatusPapel" class="hidden absolute inset-0">
+                <iframe id="iframeStatusPapel" title="Status Papel" data-src="https://script.google.com/a/macros/arcoeducacao.com.br/s/AKfycbzm1Bfc_5cKVDWOWE2RXE6xMJOOr3TNGD-_DYS0EDtTw_ioSpHClU8N-eXBXFOOqctg/exec?embed=1" class="block w-full h-full bg-slate-100" style="border:0;" allow="clipboard-write" onload="if(this.getAttribute('src')) document.getElementById('loadingStatusPapel').classList.add('hidden')"></iframe>
+                <div id="loadingStatusPapel" class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mb-3"></div>
+                    <span class="text-indigo-800 font-black tracking-widest uppercase text-sm">Carregando Status Papel...</span>
+                </div>
+            </div>
+
             <div id="visaoResumoExec" class="hidden absolute inset-0">
                 <iframe id="iframeResumoExec" title="Resumo Executivo" data-src="https://script.google.com/a/macros/arcoeducacao.com.br/s/AKfycby0hS-jG65Mf5xCNkQ5-9EyJEQzgpitpSxDprk1cqQCUkh99U_0I5QzEFEKp8RlwARf/exec?embed=1" class="block w-full h-full bg-slate-100" style="border:0;" allow="clipboard-write" onload="if(this.getAttribute('src')) document.getElementById('loadingResumoExec').classList.add('hidden')"></iframe>
                 <div id="loadingResumoExec" class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
@@ -146,12 +162,16 @@
         if(elAcervo) elAcervo.classList.add('hidden');
         let elPcps = document.getElementById('visaoStatusPcps');
         if(elPcps) elPcps.classList.add('hidden');
+        let elPapel = document.getElementById('visaoStatusPapel');
+        if(elPapel) elPapel.classList.add('hidden');
+        let elFalhas = document.getElementById('visaoFalhasPlan');
+        if(elFalhas) elFalhas.classList.add('hidden');
 
         let elContainer = document.getElementById('conteinerPrincipalPre');
         elContainer.classList.remove('hidden');
 
         // Check Acervo ocupa a área inteira (sem margens), para parecer nativo
-        let semMoldura = (visaoAlvo === 'checkAcervo' || visaoAlvo === 'resumoExec' || visaoAlvo === 'statusPcps');
+        let semMoldura = (visaoAlvo === 'falhasPlan' || visaoAlvo === 'checkAcervo' || visaoAlvo === 'resumoExec' || visaoAlvo === 'statusPcps' || visaoAlvo === 'statusPapel');
         let elMain = elContainer.parentElement;
         elMain.classList.toggle('p-4', !semMoldura);
         elMain.classList.toggle('md:p-6', !semMoldura);
@@ -177,6 +197,24 @@
             if(btnAtualizarTopo) btnAtualizarTopo.classList.add('hidden');
             let ifrPcps = document.getElementById('iframeStatusPcps');
             if(ifrPcps && !ifrPcps.getAttribute('src')) ifrPcps.setAttribute('src', ifrPcps.getAttribute('data-src'));
+            return;
+        }
+
+        if(visaoAlvo === 'statusPapel') {
+            if(elPapel) elPapel.classList.remove('hidden');
+            if(elTitulo) elTitulo.innerText = '📄 Status Papel';
+            if(btnAtualizarTopo) btnAtualizarTopo.classList.add('hidden');
+            let ifrPapel = document.getElementById('iframeStatusPapel');
+            if(ifrPapel && !ifrPapel.getAttribute('src')) ifrPapel.setAttribute('src', ifrPapel.getAttribute('data-src'));
+            return;
+        }
+
+        if(visaoAlvo === 'falhasPlan') {
+            if(elFalhas) elFalhas.classList.remove('hidden');
+            if(elTitulo) elTitulo.innerText = '📋 Falhas de Plan.';
+            if(btnAtualizarTopo) btnAtualizarTopo.classList.add('hidden');
+            let ifrFalhas = document.getElementById('iframeFalhasPlan');
+            if(ifrFalhas && !ifrFalhas.getAttribute('src')) ifrFalhas.setAttribute('src', ifrFalhas.getAttribute('data-src'));
             return;
         }
 

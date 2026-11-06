@@ -1,0 +1,82 @@
+<div class="flex flex-col h-full w-full bg-slate-50 overflow-hidden relative">
+    <header class="bg-white border-b border-slate-200 shadow-sm flex-none z-30 w-full relative">
+        <div class="flex flex-wrap items-center justify-between p-3">
+            <h2 class="text-lg font-black text-slate-800 uppercase tracking-tight" id="tituloVisaoQualidade">⚠️ Qualidade</h2>
+            <button onclick="qualRecarregar()" class="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded shadow transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                Atualizar
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-hidden bg-slate-100 relative">
+        <div id="visaoQual_reclamacoes" class="hidden absolute inset-0">
+            <iframe id="iframeQual_reclamacoes" title="⚠️ Reclamações 2026" data-src="https://script.google.com/a/macros/arcoeducacao.com.br/s/AKfycbwz8mEHFYyx0TRQLz7H8_U0FxwR63HMDgjxBHKRv5nw_BqEQPtPzJLzhg92ivxiFWyE/exec?embed=reclamacoes" class="block w-full h-full bg-slate-100" style="border:0;" allow="clipboard-write" onload="if(this.getAttribute('src')) document.getElementById('loadingQual_reclamacoes').classList.add('hidden')"></iframe>
+            <div id="loadingQual_reclamacoes" class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mb-3"></div>
+                <span class="text-indigo-800 font-black tracking-widest uppercase text-sm">Carregando ⚠️ Reclamações 2026...</span>
+            </div>
+        </div>
+        <div id="visaoQual_ppm" class="hidden absolute inset-0">
+            <iframe id="iframeQual_ppm" title="📊 Matriz PPM" data-src="https://script.google.com/a/macros/arcoeducacao.com.br/s/AKfycbwz8mEHFYyx0TRQLz7H8_U0FxwR63HMDgjxBHKRv5nw_BqEQPtPzJLzhg92ivxiFWyE/exec?embed=ppm" class="block w-full h-full bg-slate-100" style="border:0;" allow="clipboard-write" onload="if(this.getAttribute('src')) document.getElementById('loadingQual_ppm').classList.add('hidden')"></iframe>
+            <div id="loadingQual_ppm" class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mb-3"></div>
+                <span class="text-indigo-800 font-black tracking-widest uppercase text-sm">Carregando 📊 Matriz PPM...</span>
+            </div>
+        </div>
+        <div id="visaoQual_inspcds" class="hidden absolute inset-0">
+            <iframe id="iframeQual_inspcds" title="🔎 Inspeções CDs" data-src="https://script.google.com/a/macros/arcoeducacao.com.br/s/AKfycbwz8mEHFYyx0TRQLz7H8_U0FxwR63HMDgjxBHKRv5nw_BqEQPtPzJLzhg92ivxiFWyE/exec?embed=inspcds" class="block w-full h-full bg-slate-100" style="border:0;" allow="clipboard-write" onload="if(this.getAttribute('src')) document.getElementById('loadingQual_inspcds').classList.add('hidden')"></iframe>
+            <div id="loadingQual_inspcds" class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mb-3"></div>
+                <span class="text-indigo-800 font-black tracking-widest uppercase text-sm">Carregando 🔎 Inspeções CDs...</span>
+            </div>
+        </div>
+        <div id="visaoQual_inspgraficas" class="hidden absolute inset-0">
+            <iframe id="iframeQual_inspgraficas" title="🧐 Inspeções Gráficas" data-src="https://script.google.com/a/macros/arcoeducacao.com.br/s/AKfycbwz8mEHFYyx0TRQLz7H8_U0FxwR63HMDgjxBHKRv5nw_BqEQPtPzJLzhg92ivxiFWyE/exec?embed=inspgraficas" class="block w-full h-full bg-slate-100" style="border:0;" allow="clipboard-write" onload="if(this.getAttribute('src')) document.getElementById('loadingQual_inspgraficas').classList.add('hidden')"></iframe>
+            <div id="loadingQual_inspgraficas" class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mb-3"></div>
+                <span class="text-indigo-800 font-black tracking-widest uppercase text-sm">Carregando 🧐 Inspeções Gráficas...</span>
+            </div>
+        </div>
+        <div id="visaoQual_rncs" class="hidden absolute inset-0">
+            <iframe id="iframeQual_rncs" title="📋 Gestão RNCs" data-src="https://script.google.com/a/macros/arcoeducacao.com.br/s/AKfycbwz8mEHFYyx0TRQLz7H8_U0FxwR63HMDgjxBHKRv5nw_BqEQPtPzJLzhg92ivxiFWyE/exec?embed=rncs" class="block w-full h-full bg-slate-100" style="border:0;" allow="clipboard-write" onload="if(this.getAttribute('src')) document.getElementById('loadingQual_rncs').classList.add('hidden')"></iframe>
+            <div id="loadingQual_rncs" class="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mb-3"></div>
+                <span class="text-indigo-800 font-black tracking-widest uppercase text-sm">Carregando 📋 Gestão RNCs...</span>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    window.QUAL_TELAS = {
+        'reclamacoes': '⚠️ Reclamações 2026',
+        'ppm': '📊 Matriz PPM',
+        'inspcds': '🔎 Inspeções CDs',
+        'inspgraficas': '🧐 Inspeções Gráficas',
+        'rncs': '📋 Gestão RNCs'
+    };
+    window.qualVisaoAtual = 'reclamacoes';
+
+    // Cada botão do menu/Home da Qualidade chama aqui com a chave da sua tela
+    window.chamarTelaQualidade = function(visao) {
+        if (!window.QUAL_TELAS[visao]) return;
+        window.qualVisaoAtual = visao;
+        Object.keys(window.QUAL_TELAS).forEach(function(k) {
+            var el = document.getElementById('visaoQual_' + k);
+            if (el) el.classList.toggle('hidden', k !== visao);
+        });
+        var t = document.getElementById('tituloVisaoQualidade');
+        if (t) t.innerText = window.QUAL_TELAS[visao];
+        var ifr = document.getElementById('iframeQual_' + visao);
+        if (ifr && !ifr.getAttribute('src')) ifr.setAttribute('src', ifr.getAttribute('data-src'));
+    };
+
+    window.qualRecarregar = function() {
+        var k = window.qualVisaoAtual;
+        var ifr = document.getElementById('iframeQual_' + k);
+        if (!ifr) return;
+        document.getElementById('loadingQual_' + k).classList.remove('hidden');
+        ifr.setAttribute('src', ifr.getAttribute('data-src') + '&t=' + Date.now());
+    };
+</script>

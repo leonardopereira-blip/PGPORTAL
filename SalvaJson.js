@@ -466,10 +466,6 @@ function pgAtualizarArquivoCache_(arquivo, carregar) {
 
 // cache_pre_producao.json (Resumo Executivo) e gerado pelo projeto do Resumo Executivo.
 
-function atualizarCacheQualidade() {
-  pgAtualizarArquivoCache_('cache_qualidade.json', getDadosQualidade);
-}
-
 function atualizarCacheMapa() {
   pgAtualizarArquivoCache_('cache_mapa.json', getDadosMapaSaida);
   return atualizarAcompanhamentoMapa();
@@ -486,9 +482,6 @@ function atualizarTodoOCache() {
   }
   var etapas = [
     ['cache_cockpit.json', getDadosCockpit],
-    ['cache_qualidade.json', getDadosQualidade],
-    ['cache_ppm.json', getDadosPPM],
-    ['cache_inspecoes.json', getDadosInspecaoCDs],
     ['cache_alocacao.json', getDadosAlocacao],
     ['cache_chamados.json', getDadosChamados],
     ['cache_caixas.json', getDadosCaixas],
@@ -515,7 +508,6 @@ function getDadosAlocacao_Cache() { return JSON.parse(lerJSONDoDrive("cache_aloc
 function getDadosCaixas_Cache() { return JSON.parse(lerJSONDoDrive("cache_caixas.json")); }
 function getDadosChamados_Cache() { return JSON.parse(lerJSONDoDrive("cache_chamados.json")); }
 function getDadosCockpit_Cache() { return JSON.parse(lerJSONDoDrive("cache_cockpit.json")); }
-function getDadosInspecaoCDs_Cache() { return JSON.parse(lerJSONDoDrive("cache_inspecoes.json")); }
 function getDadosMapaSaida_Cache() {
   try {
     var json = lerJSONDoDrive("cache_mapa.json", true);
@@ -528,9 +520,7 @@ function getDadosMapaSaida_Cache() {
   }
 }
 function buscarHistoricoObsGiro_Cache() { return buscarHistoricoObsGiro(); }
-function getDadosPPM_Cache() { return JSON.parse(lerJSONDoDrive("cache_ppm.json")); }
 function getDadosPreProducao_Cache() { return JSON.parse(lerJSONDoDrive("cache_pre_producao.json")); }
-function getDadosQualidade_Cache() { return JSON.parse(lerJSONDoDrive("cache_qualidade.json")); }
 
 function otimizarPayload(dados) {
   if (!Array.isArray(dados)) return dados;

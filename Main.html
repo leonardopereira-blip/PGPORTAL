@@ -203,7 +203,7 @@ window.exportarSkusFiltradosSheets = function() {
             </button>
             <div id="sub-pre" class="hidden flex-col gap-1 pl-3 ml-2 border-l border-neutral-800 mt-1 pb-2">
                 <span class="text-[9px] text-neutral-600 uppercase mt-2 mb-1">Planejamento</span>
-                <button onclick="abrirGrafico('abaFalhasPlan', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📋 Falhas de Plan.</button>
+                <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('falhasPlan')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📋 Falhas de Plan.</button>
                 <button onclick="abrirGrafico('abaQualidade', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">💎 ICP & Acurácia</button>
                 <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('statusPcps')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📌 Status PCPs</button>
                 <span class="text-[9px] text-neutral-600 uppercase mt-3 mb-1">Arquivos</span>
@@ -212,7 +212,7 @@ window.exportarSkusFiltradosSheets = function() {
                 <span class="text-[9px] text-neutral-600 uppercase mt-3 mb-1">Caixas</span>
                 <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('caixas')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📦 Acompanhamento</button>
                 <span class="text-[9px] text-neutral-600 uppercase mt-3 mb-1">Papel</span>
-                <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-700 cursor-not-allowed text-left">📄 Pendente</button>
+                <button onclick="navegarView('viewPreProd', this); window.chamarTelaPreProd('statusPapel')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📄 Status Papel</button>
             </div>
         </div>
 
@@ -269,13 +269,11 @@ window.exportarSkusFiltradosSheets = function() {
             </button>
             <div id="sub-qual" class="hidden flex-col gap-1 pl-3 ml-2 border-l border-neutral-800 mt-1 pb-2">
                 <!-- BOTÕES ATIVOS -->
-                <button onclick="abrirGrafico('abaQualidadeReclamacoes', this); iniciarAbaQualidadeReclamacoes();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">⚠️ Reclamações 2026</button>
-                <button onclick="abrirGrafico('abaQualidadePPM', this); iniciarAbaQualidadePPM();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📊 Matriz PPM</button>
-                
-                <!-- BOTÕES "EM BREVE" -->
-                <button onclick="abrirGrafico('abaInspecaoCDs', this); iniciarAbaInspecaoCDs(); document.querySelector('.bg-slate-50.p-2.rounded-xl.shadow-sm.border')?.setHTMLUnsafe ? document.querySelector('.bg-slate-50.p-2.rounded-xl.shadow-sm.border').style.display='none' : document.getElementById('filtrosGlobaisPCP') ? document.getElementById('filtrosGlobaisPCP').style.display='none' : document.querySelector('.flex.flex-wrap.items-center.justify-between').style.display='none';" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🔎 Inspeções CDs</button>
-                <button class="w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-neutral-600 cursor-not-allowed text-left">🧐 Insp. Gráficas (Breve)</button>
-                <button onclick="abrirGrafico('abaRNCs', this); setTimeout(iniciarAbaRNCs, 100);" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📋 Gestão RNCs</button>
+                <button onclick="navegarView('viewQualidade', this); window.chamarTelaQualidade('reclamacoes')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">⚠️ Reclamações 2026</button>
+                <button onclick="navegarView('viewQualidade', this); window.chamarTelaQualidade('ppm')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📊 Matriz PPM</button>
+                <button onclick="navegarView('viewQualidade', this); window.chamarTelaQualidade('inspcds')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">🔎 Inspeções CDs</button>
+                <button onclick="navegarView('viewQualidade', this); window.chamarTelaQualidade('inspgraficas')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">🧐 Inspeções Gráficas</button>
+                <button onclick="navegarView('viewQualidade', this); window.chamarTelaQualidade('rncs')" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📋 Gestão RNCs</button>
             </div>
         </div>
 
@@ -313,6 +311,9 @@ window.exportarSkusFiltradosSheets = function() {
             </div>
             <div id="viewPreProd" class="view-section absolute inset-0 z-10 flex-col">
                 <?!= include('PreProducao'); ?>
+            </div>
+            <div id="viewQualidade" class="view-section absolute inset-0 z-10 flex-col">
+                <?!= include('Qualidade'); ?>
             </div>
         </div>
     </div>
