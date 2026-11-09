@@ -45,8 +45,9 @@ test('cálculos e dados brutos da curva continuam sem arredondamento', () => {
 
 test('Report Executiva usa D-1 apenas para planejados, mantendo títulos e realizados', () => {
   assert.match(fonte, /const cortePlanejadoRE = diaAnteriorReV57;/);
-  assert.match(fonte, /tRef, hojeIso, chaveLinha, cortePlanejadoRE/);
-  assert.match(fonte, /const dias = dtPlan \? calcDiffDiasISO\(dtPlan, cortePlanejadoRE\) : null;\s*linhasKitReportAuditoriaPortal/);
+  assert.match(fonte, /const progressoEtapas = window\.pgREProgressoEtapasSKU\(/);
+  assert.match(fonte, /const diasAcab = dtPlanAcab \? calcDiffDiasISO\(dtPlanAcab, cortePlanejadoRE\) : null;/);
+  assert.match(fonte, /const diasKit = dtPlanKit \? calcDiffDiasISO\(dtPlanKit, cortePlanejadoRE\) : null;/);
   assert.match(fonte, /const dias = dtPlan \? calcDiffDiasISO\(dtPlan, cortePlanejadoRE\) : null;\s*const volumePlan/);
   assert.match(fonte, /pgVolumesColetaUnificadosV37\(l, hojeIso\)/);
   assert.match(fonte, /thEntCD\.textContent = \x60Coleta \(Plan\. \$\{fmtData\(hojeIso\)\}\)\x60/);

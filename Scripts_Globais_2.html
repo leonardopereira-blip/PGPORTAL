@@ -10019,6 +10019,94 @@ window.pgREPercentualExibido = function(valor) {
     return Number.isFinite(n) ? Math.round(Math.max(0, Math.min(100, n))) : 0;
 };
 
+// A Report usa as mesmas linhas finais que alimentam Coleta CD e Entrega TP.
+// PCP -> acabadora e PCP_ACABADORAS nao podem ocupar duas vezes o denominador.
+window.pgREBaseEtapasCD = function(base) {
+    return window.pgLinhasUnicas((base || []).filter(l =>
+        window.pgLinhaDoDestino(l, 'CD', 'TODOS') &&
+        (!window.pgEhFonteAcabadora(l) ||
+            !['ATHOS', 'KN', 'RAIZES'].includes(String(
+                l.GRAFICA_FINAL || l['GRÁFICA'] || l.GRAFICA || l.BQ || ''
+            ).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()))));
+};
+
+// Preserva o Acabamento registrado no PCP para rotas que depois passam pela
+// acabadora. O vinculo deve ser unico nas duas fontes, com mesma tiragem,
+// marca, SKU, serie, envio, grafica de origem e acabadora. SAS usa apenas
+// PCP_ACABADORAS. Ambiguidades nao autorizam credito ao outro registro.
+window.pgREAcabamentoPCPNaRotaFinal = function(baseGeral, baseFinal, corte, faseAcab) {
+    const normal = v => String(v == null ? '' : v).normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
+    const valido = v => !!v && !['-', 'N/A', 'NA', 'NULL', 'UNDEFINED', '#N/A'].includes(v);
+    const rota = (l, pcp) => {
+        const id = window.pgIdentidadeOperacionalTPLinha?.(l);
+        const serie = normal(window.pgSerieCorrigidaFunil?.(l) ||
+            l.serie_corrigida || l['SÉRIE'] || l.SERIE);
+        if (!id?.completa || !valido(id.envio) || !valido(serie) || id.partes[0] === 'SAS') return '';
+        const [marca, grafica, sku, destino] = id.partes;
+        const graficaOrigem = pcp ? grafica : normal(l['GRÁFICA DE ORIGEM']);
+        const acabadora = pcp ? destino : grafica;
+        if (!valido(graficaOrigem) || !valido(acabadora)) return '';
+        return JSON.stringify([marca, sku, id.envio, serie, graficaOrigem, acabadora]);
+    };
+    const indexar = (linhas, pcp) => {
+        const grupos = new Map();
+        linhas.forEach(l => {
+            const chave = rota(l, pcp);
+            if (!chave) return;
+            if (!grupos.has(chave)) grupos.set(chave, []);
+            grupos.get(chave).push(l);
+        });
+        return grupos;
+    };
+    const origens = indexar((baseGeral || []).filter(l =>
+        !window.pgEhFonteAcabadora(l) && window.pgEhDestinoAcabadora(l)), true);
+    const finais = indexar((baseFinal || []).filter(window.pgEhFonteAcabadora), false);
+    const resultado = new Map();
+    finais.forEach((linhasFinais, chave) => {
+        const linhasPCP = origens.get(chave);
+        if (linhasFinais.length !== 1 || linhasPCP?.length !== 1) return;
+        const final = linhasFinais[0], pcp = linhasPCP[0];
+        const volumeFinal = Math.max(0, window.pgNumeroPrazoV35(final.TIRAGEM || final.QUANTIDADE || 0));
+        const volumePCP = Math.max(0, window.pgNumeroPrazoV35(pcp.TIRAGEM || pcp.QUANTIDADE || 0));
+        if (!(volumeFinal > 0) || Math.abs(volumeFinal - volumePCP) > 1e-7) return;
+        const data = extrairDataISO(pcp[faseAcab.colReal]);
+        if (data && data <= corte) resultado.set(final, volumeFinal);
+    });
+    return resultado;
+};
+
+// Uma etapa posterior confirma somente o volume correspondente de etapas
+// anteriores do MESMO SKU/rota. Para a coleta parcial, o motor de conclusao
+// concilia o grupo inteiro e aplica max(registrado, coletado), sem somar.
+window.pgREProgressoEtapasSKU = function(base, corte, faseAcab, faseKit, obterVolume, acabamentoPCP = new Map()) {
+    const registro = (l, fase) => {
+        if (!belongsToPhase(l, fase.id)) return false;
+        const data = window.pgDataRealFaseFunil(l, fase, corte);
+        return !!data && data <= corte && dataFoiPreenchida(l, fase, corte);
+    };
+    const kitRegistrado = new Map();
+    const acabRegistrado = new Map();
+    base.forEach(l => {
+        const kit = registro(l, faseKit);
+        kitRegistrado.set(l, kit);
+        acabRegistrado.set(l, registro(l, faseAcab) || kit);
+    });
+    const complementoKit = window.pgComplementosParciaisSKUFunil(
+        base, faseKit, corte, l => belongsToPhase(l, faseKit.id),
+        l => kitRegistrado.get(l));
+    const complementoAcab = window.pgComplementosParciaisSKUFunil(
+        base, faseAcab, corte, l => belongsToPhase(l, faseAcab.id),
+        l => acabRegistrado.get(l));
+    return base.map(l => {
+        const volume = Math.max(0, obterVolume(l));
+        const kit = Math.min(volume, kitRegistrado.get(l) ? volume : (complementoKit.get(l) || 0));
+        const acabado = Math.min(volume, acabRegistrado.get(l) ? volume : (complementoAcab.get(l) || 0));
+        return {linha:l, volume, acabado:Math.max(acabado, kit,
+            acabamentoPCP.get(l) || 0), kit};
+    });
+};
+
 window.processarReportExecutiva = function() {
     const tbody = document.getElementById('reTabelaMarcas');
     if (!tbody) return;
@@ -10353,123 +10441,55 @@ window.processarReportExecutiva = function() {
         map[marca][campo] += Number(valor || 0);
     };
 
-    // V50 - somente Report Executiva, sem alterar o Funil.
-    // Para marcas diferentes de SAS, uma coleta parcial comprovada por
-    // Coleta_TP (ate hoje) conta somente sua TIRAGEM COLETADA, ate a tiragem
-    // da linha; nunca transforma qualquer coleta em 100% da linha.
-    // O acabamento registrado permanece integral. A coleta real so complementa
-    // o volume faltante, sem transformar coleta parcial em 100% da linha.
-    const pgAcabamentoReportV46 = window.pgMetricasAcabamentoRealV46(
-        tRef, hojeIso, chaveLinha, cortePlanejadoRE);
-    const acabPorMarca = pgAcabamentoReportV46.porGrupo;
-    const acabTotal = pgAcabamentoReportV46.total;
-    const faseAcabReportV50 = FASES.find(f => f.id === 'acab');
-    if (!faseAcabReportV50) throw new Error('Fase de acabamento ausente.');
-    if (typeof window.pgVolumesColetaUnificadosV37 !== 'function') {
-        throw new Error('Leitura do volume real de Coleta TP indisponivel.');
-    }
-    const vistosAcabReportV50 = new Set();
-    const auditoriaAcabReportV50 = {
-        complementoParcial: 0, ajusteParcial: 0, linhasParciais: 0,
-        porMarca: {}
-    };
-
-    (window.dadosAcabamentoOrigem || []).forEach(l => {
-        const chave = getKey(l);
-        if (vistosAcabReportV50.has(chave)) return;
-        vistosAcabReportV50.add(chave);
-        if (!belongsToPhase(l, 'acab')) return;
-        const marca = marcaLinha(l);
-        // SAS mantem exclusivamente o calculo V46: PCP_ACABADORAS no
-        // destino acabadora; nenhuma inferencia por coleta.
-        if (marca === 'SAS') return;
-
-        const tiragemLinha = Math.max(0,
-            Number(window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0)) || 0);
-        if (!(tiragemLinha > 0)) return;
-        const dataAcab = window.pgDataRealFaseFunil(l, faseAcabReportV50, hojeIso);
-        const acabadoRegistrado = dataAcab && dataAcab <= hojeIso &&
-            dataFoiPreenchida(l, faseAcabReportV50, hojeIso) ? tiragemLinha : 0;
-
-        const tp = window.pgVolumesColetaUnificadosV37(l, hojeIso);
-        // tp.coleta e o NUMERO da coluna TIRAGEM COLETADA, mas somente
-        // com data valida em Coleta_TP ate hoje (nunca um booleano).
-        const coletadoReal = Math.min(tiragemLinha,
-            Math.max(0, Number(tp && tp.coleta) || 0));
-        // Nunca subtrai acabamento que ja esta registrado na base.
-        // Coleta TP parcial so complementa o que ainda nao foi reconhecido.
-        // Exemplo: acabado 1000 e coletado 150 => 1000;
-        //          acabado 0 e coletado 150 => 150.
-        const acabadoReport = Math.max(acabadoRegistrado, coletadoReal);
-        const ajuste = acabadoReport - acabadoRegistrado;
-        if (ajuste === 0) return;
-
-        const grupo = chaveLinha(l);
-        const agregado = acabPorMarca[grupo];
-        if (!agregado) throw new Error('Grupo de acabamento nao localizado: ' + grupo);
-        const fonte = window.pgEhFonteAcabadora(l) ? 'acab' : 'pcp';
-        agregado.real += ajuste;
-        agregado[fonte].real += ajuste;
-        acabTotal.real += ajuste;
-        acabTotal[fonte].real += ajuste;
-        if (coletadoReal > 0 && coletadoReal < tiragemLinha) {
-            auditoriaAcabReportV50.linhasParciais++;
-            auditoriaAcabReportV50.ajusteParcial += ajuste;
-        }
-        if (ajuste > 0) auditoriaAcabReportV50.complementoParcial += ajuste;
-        auditoriaAcabReportV50.porMarca[marca] =
-            (auditoriaAcabReportV50.porMarca[marca] || 0) + ajuste;
-    });
-    window.pgAuditoriaAcabamentoReportV50 = auditoriaAcabReportV50;
-    if (thAcab) thAcab.title = 'Acabamento registrado ou comprovado pela coleta integral do SKU. Para não-SAS, preserva o complemento parcial datado desta tabela, sem somar novamente os SKUs já concluídos.';
-
-    // V58 - Formação de Kit na Report.
-    // Mantém a regra operacional do portal: PCP direto ao CD + PCP_ACABADORAS
-    // oficiais para o que passa por acabadora, sem empilhar a transferência.
+    // Acabamento e Kit usam exatamente o denominador de Coleta CD / Entrega TP.
+    // A saida da grafica rumo a acabadora nao duplica o lote final. Uma coleta
+    // parcial so comprova o seu proprio volume e nunca o de outro SKU/CD/rota.
+    const faseAcabReport = FASES.find(f => f.id === 'acab');
     const faseKitReportV58 = FASES.find(f => f.id === 'kit');
-    const baseKitReportV58 = faseKitReportV58
-        ? window.pgLinhasUnicas([
-            ...baseGeral.filter(l =>
-                !window.pgEhFonteAcabadora(l) &&
-                !window.pgEhDestinoAcabadora(l)
-            ),
-            ...baseGeral.filter(l =>
-                window.pgEhFonteAcabadora(l) &&
-                window.pgAcabadoraDaLista(l)
-            )
-        ])
-        : [];
-
+    if (!faseAcabReport || !faseKitReportV58) {
+        throw new Error('Fases de acabamento ou formacao de kit ausentes.');
+    }
+    const baseEtapasReport = window.pgREBaseEtapasCD(baseGeral);
+    const acabamentoPCP = window.pgREAcabamentoPCPNaRotaFinal(
+        baseGeral, baseEtapasReport, hojeIso, faseAcabReport);
+    const progressoEtapas = window.pgREProgressoEtapasSKU(
+        baseEtapasReport, hojeIso, faseAcabReport, faseKitReportV58, tiragem, acabamentoPCP);
+    const acabPorMarca = {};
+    const acabTotal = novoAgg();
     const kitPorMarca = {};
     const kitTotal = novoAgg();
+    const linhasAcabReportAuditoriaPortal = [];
     const linhasKitReportAuditoriaPortal = [];
 
-    if (faseKitReportV58) {
-        baseKitReportV58.forEach(l => {
-            const volume = tiragem(l);
-            if (!(volume > 0)) return;
+    progressoEtapas.forEach(({linha:l, volume, acabado, kit}) => {
+        if (!(volume > 0)) return;
+        const grupo = chaveLinha(l);
+        const dtPlanAcab = window.pgDataPlanoFaseFunil(l, faseAcabReport, tRef);
+        const diasAcab = dtPlanAcab ? calcDiffDiasISO(dtPlanAcab, cortePlanejadoRE) : null;
+        const planAcab = dtPlanAcab && diasAcab !== null && diasAcab >= 3 ? volume : 0;
+        const dtPlanKit = window.pgDataPlanoFaseFunil(l, faseKitReportV58, tRef);
+        const diasKit = dtPlanKit ? calcDiffDiasISO(dtPlanKit, cortePlanejadoRE) : null;
+        const planKit = dtPlanKit && diasKit !== null && diasKit >= 3 ? volume : 0;
 
-            const grupo = chaveLinha(l);
-            add(kitPorMarca, grupo, 'den', volume);
-            kitTotal.den += volume;
-
-            const dtReal = window.pgDataRealFaseFunil(l, faseKitReportV58, hojeIso);
-            if (dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, faseKitReportV58, hojeIso)) {
-                add(kitPorMarca, grupo, 'real', volume);
-                kitTotal.real += volume;
-            }
-
-            const dtPlan = window.pgDataPlanoFaseFunil(l, faseKitReportV58, tRef);
-            const dias = dtPlan ? calcDiffDiasISO(dtPlan, cortePlanejadoRE) : null;
-            linhasKitReportAuditoriaPortal.push({ linha: l, volume, dtPlan, dtReal,
-                plan: dtPlan && dias !== null && dias >= 3 ? volume : 0,
-                real: dtReal && dtReal <= hojeIso && dataFoiPreenchida(l, faseKitReportV58, hojeIso) ? volume : 0 });
-            if (dtPlan && dias !== null && dias >= 3) {
-                add(kitPorMarca, grupo, 'plan', volume);
-                kitTotal.plan += volume;
-            }
-        });
-    }
+        for (const [map, total, real, plan] of [
+            [acabPorMarca, acabTotal, acabado, planAcab],
+            [kitPorMarca, kitTotal, kit, planKit]
+        ]) {
+            add(map, grupo, 'den', volume);
+            add(map, grupo, 'real', real);
+            add(map, grupo, 'plan', plan);
+            total.den += volume;
+            total.real += real;
+            total.plan += plan;
+        }
+        linhasAcabReportAuditoriaPortal.push({linha:l, volume, dtPlan:dtPlanAcab,
+            dtReal:window.pgDataRealFaseFunil(l, faseAcabReport, hojeIso),
+            plan:planAcab, real:acabado});
+        linhasKitReportAuditoriaPortal.push({linha:l, volume, dtPlan:dtPlanKit,
+            dtReal:window.pgDataRealFaseFunil(l, faseKitReportV58, hojeIso),
+            plan:planKit, real:kit});
+    });
+    if (thAcab) thAcab.title = 'Mesmo recorte de Coleta CD. Acabamento registrado, Kit concluido e coleta comprovada do proprio SKU/rota; sem compensacao entre materiais.';
 
     // 2) ENTREGAS — cenários fixos pedidos na Report.
     // TODAS sempre aceita toda a base; não há necessidade de filtrar linha a linha.
@@ -10482,6 +10502,10 @@ window.processarReportExecutiva = function() {
         if (baseCanonicaCenarioCache.has(chaveCache)) {
             return baseCanonicaCenarioCache.get(chaveCache);
         }
+        if (origemCenario === 'TODOS' && destino === 'CD') {
+            baseCanonicaCenarioCache.set(chaveCache, baseEtapasReport);
+            return baseEtapasReport;
+        }
 
         const baseOrigemCenario = origemCenario === 'GRAFICA'
             ? baseOrigemGrafica
@@ -10490,13 +10514,6 @@ window.processarReportExecutiva = function() {
         let linhas = baseOrigemCenario.filter(l =>
             window.pgLinhaDoDestino(l, destino, origemCenario)
         );
-
-        if (origemCenario === 'TODOS' && destino === 'CD') {
-            linhas = linhas.filter(l => {
-                if (!window.pgEhFonteAcabadora(l)) return true;
-                return !['ATHOS', 'KN', 'RAIZES'].includes(graficaLinha(l));
-            });
-        }
 
         const unicas = window.pgLinhasUnicas(linhas);
         baseCanonicaCenarioCache.set(chaveCache, unicas);
@@ -10582,6 +10599,7 @@ window.processarReportExecutiva = function() {
     // Entrega TP usa a base CD, plano de coleta + Matriz_SLA e real datado em Entrega_TP.
     const entTP = calcularEntrega('TODOS', 'CD', 'entrega');
     window.pgReportAuditoriaPortal = { base: baseGeral, corte: hojeIso,
+        acabamento: { linhas: linhasAcabReportAuditoriaPortal, total: acabTotal, corte: hojeIso },
         kit: { linhas: linhasKitReportAuditoriaPortal, total: kitTotal, corte: hojeIso },
         coletaCD: entCD, coletaTodos: entTodos, entregaTP: entTP };
 
