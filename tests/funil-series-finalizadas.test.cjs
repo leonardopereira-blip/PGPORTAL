@@ -113,7 +113,7 @@ test('Funil real reconhece 98,1% coletado nas etapas anteriores, preservando tot
   assert.equal(linha['ENV ARQUIVO REAL'],undefined,'não grava data na linha');
 });
 
-test('excedente do SKU coletado não compensa outro em nenhuma etapa do funil', () => {
+test('produção limita a coleta ao SKU e os indicadores TP conservam o realizado bruto', () => {
   const sobra = row('sobra', {
     'TIRAGEM COLETADA':150, 'TIRAGEM AGENDADA':0, Coleta_TP:hoje, Entrega_TP:hoje
   });
@@ -124,9 +124,9 @@ test('excedente do SKU coletado não compensa outro em nenhuma etapa do funil', 
     {acabamento:true});
   const html = p.controles.get('containerFunilVisual').innerHTML;
   const fases = [...html.matchAll(/\((\d+\.\d+)%\)/g)].map(m => Number(m[1]));
-  assert.deepEqual(fases,Array(11).fill(75));
+  assert.deepEqual(fases,[...Array(8).fill(75),100,100,100]);
   for (const tabela of ['MarcaPct','GraficaPct'])
-    linhaIndicador(p,tabela,'10 - Coleta TP').forEach(celula => assert.match(celula,/>75%<\/span>/));
+    linhaIndicador(p,tabela,'10 - Coleta TP').forEach(celula => assert.match(celula,/>100%<\/span>/));
   for (const tabela of ['MarcaTiragem','GraficaTiragem'])
     assert.deepEqual(linhaIndicador(p,tabela,'10 - Coleta TP').map(celula => celula.replace(/<[^>]*>/g,'')),['200','200']);
 });
@@ -141,16 +141,45 @@ test('Coleta TP concentrada conta todas as linhas do mesmo SKU nas etapas anteri
     assert.ok(html.includes(fase + ' (100.0%)'),fase);
 });
 
-test('Custo e OC usam só o PCP na base inicial, sem somar outra fonte', () => {
+test('Custo e OC usam o mesmo total canônico das outras fases', () => {
   const real = {'Validação de Custo Final Real':hoje,'OC Final Real':hoje};
   const pcp = row('pcp', real);
   const acabadora = row('acabadora', {...real,_SOURCE:'ACABADORA',GRAFICA_FINAL:'HR','GRÁFICA':'HR'});
   const p = portal([pcp,acabadora],['cus','oc']);
   const html = p.controles.get('containerFunilVisual').innerHTML;
   assert.match(html,/Total Base \(200 \| 100%\)/);
-  assert.match(html,/Val\. Custo \(100\.0%\)/);
-  assert.match(html,/O\.C\. \(100\.0%\)/);
+  assert.match(html,/Val\. Custo \(50\.0%\)/);
+  assert.match(html,/O\.C\. \(50\.0%\)/);
   assert.doesNotMatch(html,/200\.0%/);
+});
+
+test('Impressão e Kit comprovam as etapas anteriores dos próprios lotes, mesmo com fases ocultas', () => {
+  const impressao = row('impressao', {'Impressão Final Real.':hoje});
+  const kit = row('kit', {'Formação de kit/Encaixotamento Final Real':hoje});
+  const futuro = row('futuro', {'Formação de kit/Encaixotamento Final Real':'2026-10-15'});
+  const p = portal([impressao,kit,futuro],['env','rec','apv','imp','acab','kit']);
+  const html = p.controles.get('containerFunilVisual').innerHTML;
+  for (const fase of ['Env. Arq','Rec. Bon','Apv. Bon','Impressão'])
+    assert.ok(html.includes(fase + ' (66.7%)'),fase);
+  for (const fase of ['Acabamento','Form. Kit'])
+    assert.ok(html.includes(fase + ' (33.3%)'),fase);
+  p.selecionarFases(['env','acab']);
+  const resumido = p.controles.get('containerFunilVisual').innerHTML;
+  assert.ok(resumido.includes('Env. Arq (66.7%)'));
+  assert.ok(resumido.includes('Acabamento (33.3%)'));
+  const pendencias = p.w.pgPendenciasCaixaFunil({fase:'acab',tipo:'marca',grupo:'SAS'});
+  assert.deepEqual(Array.from(pendencias,r=>r.sku),['impressao','futuro']);
+  assert.equal(kit['Acbto Final Real'],undefined);
+});
+
+test('saída do PCP para a acabadora comprova apenas a perna já percorrida', () => {
+  const l = row('transferencia', {CD_MAPA:'HR',CD_FINAL:'HR','CD DESTINO':'HR',DT_ENTREGA_DG:hoje});
+  const p = portal([l],['env','imp','oc','acab','kit']);
+  const html = p.controles.get('containerFunilVisual').innerHTML;
+  assert.ok(html.includes('Impressão (100.0%)'));
+  assert.ok(html.includes('O.C. (100.0%)'));
+  assert.ok(html.includes('Acabamento (0.0%)'));
+  assert.ok(html.includes('Form. Kit (0.0%)'));
 });
 
 function linhaSeries(p, tabela) {
@@ -192,7 +221,6 @@ for (const variasMarcas of [false, true]) {
     }
     const p = portal(rows, ['env', 'col_mapa'], { destino: 'CD', baseCanonica });
     const totais = variasMarcas ? ['1833433', '500000', '2333433'] : ['1833433', '1833433'];
-    const iniciais = variasMarcas ? ['2597232', '700000', '3297232'] : ['2597232', '2597232'];
     const fasesAntes = new Map();
     for (const tabela of ['MarcaTiragem', 'GraficaTiragem']) {
       const valores = linhaIndicador(p, tabela, '00 - Tiragem Total');
@@ -200,7 +228,7 @@ for (const variasMarcas of [false, true]) {
       assert.equal(valores.slice(0, -1).reduce((s, v) => s + Number(v), 0),
         Number(valores.at(-1)), 'soma dos grupos coincide com Total Geral');
       const faseInicial = linhaIndicador(p, tabela, '01 - Env. Arq');
-      assert.deepEqual(faseInicial, iniciais, 'fase inicial preserva PCP destinado a acabadora');
+      assert.deepEqual(faseInicial, totais, 'fase inicial usa a mesma coorte do Total Base');
       fasesAntes.set(tabela, faseInicial);
     }
     for (const tabela of ['MarcaPct', 'GraficaPct']) {

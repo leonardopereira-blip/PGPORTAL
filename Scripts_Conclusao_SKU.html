@@ -165,7 +165,7 @@
   };
   // Volume provado pela coleta para fases operacionais; a conclusão com data
   // continua exigindo 100%. O volume parcial será conciliado por grupo na visão.
-  window.pgVolumeSKUComprovadoParaFase = function(linha,faseId,corte) {
+  window.pgVolumeSKUComprovadoParaFase = function(linha,faseId,corte,considerarRotaCompleta = false) {
     var fase = typeof faseId === 'object' && faseId ? faseId.id : faseId;
     if (!fases.has(fase)) return null;
     var id = identidade(linha);
@@ -178,7 +178,7 @@
     if (!seguro(estado)) return null;
     var coletado = coletaDaLinhaComprovaFase(linha,fase)
       ? Math.min(estado.total,Math.max(0,estado.coletado)) : 0;
-    if (seguro(transferencia) && (fasesAntesDaAcabadora.has(fase) || window.belongsToPhase?.(linha,fase)))
+    if (seguro(transferencia) && (considerarRotaCompleta || fasesAntesDaAcabadora.has(fase) || window.belongsToPhase?.(linha,fase)))
       coletado = Math.max(coletado,Math.min(transferencia.total,Math.max(0,transferencia.coletado)));
     return {chave:id.chave,total:estado.total,coletado:coletado};
   };

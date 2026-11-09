@@ -638,7 +638,7 @@ window.getVolFase = function(linha, fObj, tBase) {
 // Complementa volumes parciais apenas dentro da identidade operacional do SKU.
 // Por grupo/fase, o realizado é max(etapa registrada, coleta comprovada), nunca
 // a soma dos dois. Não distribui saldo entre SKUs, CDs, séries ou fontes.
-window.pgComplementosParciaisSKUFunil = function(linhas, fase, corte, elegivel) {
+window.pgComplementosParciaisSKUFunil = function(linhas, fase, corte, elegivel, registroCumulativo) {
     const complemento = new Map(), grupos = new Map();
     if (!['env','rec','apv','imp','cus','oc','tra','rec_acab','acab','kit','col'].includes(fase?.id) ||
         typeof window.pgVolumeSKUComprovadoParaFase !== 'function') return complemento;
@@ -646,8 +646,12 @@ window.pgComplementosParciaisSKUFunil = function(linhas, fase, corte, elegivel) 
         if (elegivel && !elegivel(l)) return;
         const volume = Math.max(0, Number(window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0)) || 0);
         if (!volume) return;
-        const prova = window.pgVolumeSKUComprovadoParaFase(l, fase.id, corte);
-        if (!prova || !prova.total || !prova.coletado || prova.coletado >= prova.total) return;
+        const prova = window.pgVolumeSKUComprovadoParaFase(l, fase.id, corte, !!registroCumulativo);
+        if (!prova || !prova.total || !prova.coletado) return;
+        if (prova.coletado >= prova.total) {
+            if (registroCumulativo && !registroCumulativo(l)) complemento.set(l,volume);
+            return;
+        }
         const serie = window.pgSerieCorrigidaFunil?.(l) || '';
         const tipo = String(l.TIPO || l.Tipo || '').trim().toUpperCase();
         if (!grupos.has(prova.chave)) grupos.set(prova.chave, {
@@ -658,7 +662,7 @@ window.pgComplementosParciaisSKUFunil = function(linhas, fase, corte, elegivel) 
         grupo.tiragem += window.pgNumeroPrazoV35(l.TIRAGEM || l.QUANTIDADE || 0);
         if (serie) grupo.series.add(String(serie).trim().toUpperCase());
         if (tipo) grupo.tipos.add(tipo);
-        if (dataFoiPreenchida(l, fase, corte)) grupo.registrado += volume;
+        if (registroCumulativo ? registroCumulativo(l) : dataFoiPreenchida(l, fase, corte)) grupo.registrado += volume;
         else grupo.linhas.push({linha:l,volume});
     });
     grupos.forEach(g => {
@@ -679,7 +683,7 @@ window.pgComplementosParciaisSKUFunil = function(linhas, fase, corte, elegivel) 
     return complemento;
 };
     
-// V46 — única fonte de realizado/planejado de Acabamento para Funil e Report.
+// V46 — realizado/planejado de Acabamento no recorte histórico da Report.
 window.pgMetricasAcabamentoRealV46 = function(tRef, hojeIso, agrupar, cortePlanoIso, incluirParcialFunil = false) {
     const fase = FASES.find(f => f.id === 'acab');
     const novo = () => ({ den: 0, real: 0, plan: 0,
@@ -3122,6 +3126,41 @@ const pgFasesIniciaisFunil = new Set(['env', 'rec', 'apv', 'imp', 'cus', 'oc']);
 const pgLinhaElegivelNoFunil = (l, fase) =>
     (!pgFasesIniciaisFunil.has(fase) || !window.pgEhFonteAcabadora(l)) && belongsToPhase(l, fase);
 
+function pgVolumesCumulativosFunil(base, corte, origemAcabadora) {
+    const fases = FASES.filter(f => pgFasesIniciaisFunil.has(f.id) || ['acab', 'kit'].includes(f.id));
+    const ordem = new Map(fases.map((f, i) => [f.id, i]));
+    const marcos = FASES.filter(f => ordem.has(f.id) || ['tra', 'rec_acab', 'col'].includes(f.id));
+    const etapaAtingida = new Map();
+
+    base.forEach(l => {
+        const transferencia = !window.pgEhFonteAcabadora(l) && window.pgEhDestinoAcabadora(l);
+        let etapa = origemAcabadora ? ordem.get('oc') : -1;
+        marcos.forEach(f => {
+            if (!pgLinhaElegivelNoFunil(l, f.id) || (transferencia && f.id === 'kit')) return;
+            const colunas = [f.colReal, f.colRealAlt].filter(Boolean);
+            const realizado = colunas.some(coluna => {
+                const data = window.pgNormalizarDataColeta(window.pgCampoColeta(l, coluna), corte);
+                return data && data <= corte;
+            });
+            if (!realizado) return;
+            // A coleta interna do PCP rumo à acabadora confirma somente a
+            // perna anterior. A saída final confirma até a formação do kit.
+            const indice = ordem.get(f.id) ?? ordem.get(f.id === 'col' && !transferencia ? 'kit' : 'oc');
+            etapa = Math.max(etapa, indice);
+        });
+        etapaAtingida.set(l, etapa);
+    });
+
+    return new Map(fases.map((f, i) => {
+        const registrada = l => etapaAtingida.get(l) >= i;
+        const complementos = window.pgComplementosParciaisSKUFunil(base, f, corte, null, registrada);
+        const volumes = new Map(base.map(l => [l, registrada(l)
+            ? window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0)
+            : complementos.get(l) || 0]));
+        return [f.id, volumes];
+    }));
+}
+
 window.pgPendenciasCaixaFunil = function(contexto) {
     if (contexto.coletaConcluida) return [];
     const norm = v => String(v || 'N/A').trim().toUpperCase();
@@ -3133,19 +3172,21 @@ window.pgPendenciasCaixaFunil = function(contexto) {
     const f = FASES.find(f => f.id === (contexto.fase === 'series' ? 'col_tp' : contexto.fase));
     if (!f) return [];
     const tRef = document.getElementById('filtroReferencia').value;
-    const basePendencias = ['col_tp', 'ent_tp'].includes(f.id) ? (window.dadosBaseTPPortal || [])
+    const volumes = window.pgAvancoProducaoFunil?.get(f.id);
+    const basePendencias = volumes ? Array.from(volumes.keys())
+        : ['col_tp', 'ent_tp'].includes(f.id) ? (window.dadosBaseTPPortal || [])
         : f.id === 'ent_cd' ? (window.dadosBaseEntCDPortal || dadosFiltrados)
         : pgFasesIniciaisFunil.has(f.id) ? (window.dadosFasesEstaticas || [])
         : f.id === 'acab' ? (window.dadosAcabamentoOrigem || []) : dadosFiltrados;
-    const complementos = window.pgComplementosParciaisSKUFunil(basePendencias,f,dtHojeISO,
+    const complementos = volumes || window.pgComplementosParciaisSKUFunil(basePendencias,f,dtHojeISO,
         l => pgLinhaElegivelNoFunil(l,f.id));
     return basePendencias.flatMap(l => {
         const g = l.GRAFICA_FINAL || l['GRÁFICA'], m = l.MARCA_FINAL || l.UNIDADE;
-        if (!casa(g, m) || !pgLinhaElegivelNoFunil(l, f.id)) return [];
+        if (!casa(g, m) || (!volumes && !pgLinhaElegivelNoFunil(l, f.id))) return [];
         const base = window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0);
         const volume = window.getVolFase(l, f, base);
         const real = dataFoiPreenchida(l, f) || (volume > 0 && ['col_mapa', 'ent_cd'].includes(f.id));
-        const saldo = Math.max(0, base - (real ? volume : (complementos.get(l) || 0)));
+        const saldo = Math.max(0, base - (volumes ? volumes.get(l) : (real ? volume : (complementos.get(l) || 0))));
         const dtPlan = window.pgDataPlanoFaseFunil(l, f, tRef);
         const dias = dtPlan ? -calcDiffDiasISO(dtPlan, dtHojeISO) : null;
         const serie = String(l['SÉRIE'] || l['Série'] || l.SERIE || '-');
@@ -3205,15 +3246,16 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
 
     const matriz = {};
     const setSeries = new Set();
+    const avanco = window.pgAvancoProducaoFunil?.get(faseId);
     // dadosFiltrados é a variável lexical do motor, não window.dadosFiltrados.
-    const arrayBase = dadosFiltrados || window.dadosGlobais || [];
-    const complementos = window.pgComplementosParciaisSKUFunil(arrayBase,faseObj,dtHojeISO,
+    const arrayBase = avanco ? Array.from(avanco.keys()) : (dadosFiltrados || window.dadosGlobais || []);
+    const complementos = avanco || window.pgComplementosParciaisSKUFunil(arrayBase,faseObj,dtHojeISO,
         l => (typeof belongsToPhase !== 'function' || belongsToPhase(l,faseId)));
 
     arrayBase.forEach(l => {
         let tBase = window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"]);
         if (tBase <= 0) return;
-        if (typeof belongsToPhase === 'function' && !belongsToPhase(l, faseId) && faseId !== 'col_mapa') return;
+        if (!avanco && typeof belongsToPhase === 'function' && !belongsToPhase(l, faseId) && faseId !== 'col_mapa') return;
         let marca = String(l["MARCA_FINAL"] || l["UNIDADE"] || "N/A").trim().toUpperCase();
         let serie = window.pgSerieCorrigidaFunil(l);
         let tipo = String(l["TIPO"] || l["Tipo"] || "Outros").trim().toUpperCase();
@@ -3246,7 +3288,7 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
             Aluno:{base:0,real:0,bruto:0,excedente:0}, Professor:{base:0,real:0,bruto:0,excedente:0}, Outros:{base:0,real:0,bruto:0,excedente:0}
         };
         // Cada linha tem seu próprio limite. Excesso de uma tiragem não quita outra.
-        const bruto = (isReal || (faseId === 'col_mapa' && tFaseReal > 0))
+        const bruto = avanco ? avanco.get(l) : (isReal || (faseId === 'col_mapa' && tFaseReal > 0))
             ? Math.max(0, Number(window.arredondar(tFaseReal)) || 0)
             : (complementos.get(l) || 0);
         const considerado = Math.min(tBase, bruto);
@@ -3550,7 +3592,7 @@ let tRef = document.getElementById('filtroReferencia').value;
 
     let fasesAtivas = FASES.filter(f => fasesAtivasIds.includes(f.id));
 
-    const initVolumeFase = () => ({ pendenciasMapaAY: 0, base: 0, real: 0, considerado: 0, planAtHoje: 0, pendenteVencido: 0 });
+    const initVolumeFase = () => ({ pendenciasMapaAY: 0, base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0 });
     const initFase = () => ({ ...initVolumeFase(), pcp: initVolumeFase(), acab: initVolumeFase() });
     fasesAtivas.forEach(f => fTotais[f.id] = initFase());
 
@@ -3562,22 +3604,20 @@ let tRef = document.getElementById('filtroReferencia').value;
     const dadosFinalOrigem = destinoCDAtivo ? (window.dadosDestinoCDOrigem || []) : dadosPadrao;
     const dadosAcabamentoOrigem = window.dadosAcabamentoOrigem || [];
     const dadosFasesEstaticas = window.dadosFasesEstaticas || [];
-    const setFasesEstaticas = new Set(dadosFasesEstaticas);
+    const linhasBaseCanonica = window.pgLinhasUnicas(window.dadosTotalCanonico || [])
+        .filter(l => window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0) > 0);
+    const origemAcabadoraAtiva = document.getElementById('pgFiltroOrigem')?.value === 'ACABADORA';
+    const avancoProducao = pgVolumesCumulativosFunil(linhasBaseCanonica, dtHojeISO, origemAcabadoraAtiva);
+    window.pgAvancoProducaoFunil = avancoProducao;
 
     const setPadrao = new Set(dadosPadrao);
     const setFinalTotal = new Set(dadosFinalTotal);
     const setFinalOrigem = new Set(dadosFinalOrigem);
-    const setAcabamentoOrigem = new Set(dadosAcabamentoOrigem);
-    const setColeta = new Set(window.dadosBaseColetaFunil || []);
     const setTP = new Set(window.dadosBaseTPPortal || []);
     const idsDaBaseFinal = new Set(['acab', 'kit', 'col', 'col_mapa', 'col_tp', 'ent_tp', 'ent_cd', 'int_cd']);
 
     const linhaPermitidaNaFase = (l, id) => {
-        // De Env. Arquivo até O.C., o seletor Destino NÃO interfere.
-        if (pgFasesIniciaisFunil.has(id)) return setFasesEstaticas.has(l) && !window.pgEhFonteAcabadora(l);
-
-        // Acabamento também é soberano ao Destino e mantém sua regra própria.
-        if (id === 'acab') return setAcabamentoOrigem.has(l);
+        if (avancoProducao.has(id)) return avancoProducao.get(id).has(l);
 
         // Estas três fases são exclusivamente PCP.
         if (['col_mapa', 'col_tp', 'ent_tp'].includes(id)) return setTP.has(l);
@@ -3589,10 +3629,10 @@ let tRef = document.getElementById('filtroReferencia').value;
     };
 
     const dadosProcessamento = destinoCDAtivo
-        ? Array.from(new Set([...dadosInicio, ...dadosFinalTotal, ...dadosFinalOrigem, ...dadosAcabamentoOrigem, ...dadosFasesEstaticas, ...dadosPadrao]))
-        : Array.from(new Set([...dadosPadrao, ...dadosAcabamentoOrigem, ...dadosFasesEstaticas]));
+        ? Array.from(new Set([...linhasBaseCanonica, ...dadosInicio, ...dadosFinalTotal, ...dadosFinalOrigem, ...dadosAcabamentoOrigem, ...dadosFasesEstaticas, ...dadosPadrao]))
+        : Array.from(new Set([...linhasBaseCanonica, ...dadosPadrao, ...dadosAcabamentoOrigem, ...dadosFasesEstaticas]));
 
-    const complementosPorFase = new Map(fasesAtivas.map(f => [f.id,
+    const complementosPorFase = new Map(fasesAtivas.filter(f => !avancoProducao.has(f.id)).map(f => [f.id,
         window.pgComplementosParciaisSKUFunil(dadosProcessamento,f,dtHojeISO,
             l => linhaPermitidaNaFase(l,f.id) && belongsToPhase(l,f.id))]));
 
@@ -3608,8 +3648,9 @@ let tRef = document.getElementById('filtroReferencia').value;
     const pgAtrasosFaseFunil = id => {
         if (pgItensAtrasadosPorFase.has(id)) return pgItensAtrasadosPorFase.get(id);
         const fase = FASES.find(f => f.id === id), itens = [];
+        const volumes = avancoProducao.get(id);
         if (fase) dadosProcessamento.forEach(l => {
-            if (!linhaPermitidaNaFase(l, id) || (id !== 'col_mapa' && !belongsToPhase(l, id))) return;
+            if (!linhaPermitidaNaFase(l, id) || (!volumes && id !== 'col_mapa' && !belongsToPhase(l, id))) return;
             const dt = window.pgDataPlanoFaseFunil(l, fase, tRef);
             if (!dt || dt >= dtHojeISO) return;
             const base = window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0);
@@ -3618,7 +3659,8 @@ let tRef = document.getElementById('filtroReferencia').value;
             const confirmado = dataFoiPreenchida(l, fase) ||
                 (vol > 0 && (id === 'col_mapa' || id === 'ent_cd'));
             const parcial = complementosPorFase.get(id)?.get(l) || 0;
-            const saldo = Math.max(0, base - (confirmado ? Math.min(base, Math.max(0, vol)) : parcial));
+            const real = volumes ? volumes.get(l) : (confirmado ? Math.min(base, Math.max(0, vol)) : parcial);
+            const saldo = Math.max(0, base - real);
             if (saldo <= 0) return;
             itens.push({
                 marca:pgNomeFunil(l,'marca'), grafica:pgNomeFunil(l,'grafica'),
@@ -3711,12 +3753,12 @@ let tRef = document.getElementById('filtroReferencia').value;
         fasesAtivas.forEach(f => {
             if (!linhaPermitidaNaFase(l, f.id)) return;
 
-            // A coleta integral do SKU comprova as etapas anteriores elegíveis.
-            let passaFase = belongsToPhase(l, f.id);
+            const avanco = avancoProducao.get(f.id);
+            let passaFase = avanco || belongsToPhase(l, f.id);
             if (f.id === 'col_mapa') passaFase = true;
 
             if(passaFase) {
-                let tFaseReal = window.getVolFase(l, f, tBase);
+                let tFaseReal = avanco ? avanco.get(l) : window.getVolFase(l, f, tBase);
 
                 fTotais[f.id].base += tBase;
                 mGrid[m][f.id].base += tBase;
@@ -3729,7 +3771,7 @@ let tRef = document.getElementById('filtroReferencia').value;
                 if (f.id === 'col_mapa' && window.pgEstadoColetaMapa(l).pendenteAY) {
                     [fTotais[f.id], mGrid[m][f.id], gGrid[g][f.id]].forEach(c => { c.pendenciasMapaAY++; c[src].pendenciasMapaAY++; });
                 }
-                let isReal = dataFoiPreenchida(l, f) ||
+                let isReal = avanco ? tFaseReal > 0 : dataFoiPreenchida(l, f) ||
                     (tFaseReal > 0 && (f.id === 'col_mapa' || f.id === 'ent_cd'));
                 // Coleta parcial prova somente o volume que falta na fase,
                 // sem alterar datas reais nem efetuar compensação entre linhas.
@@ -3741,9 +3783,7 @@ let tRef = document.getElementById('filtroReferencia').value;
                 if(isReal || (f.id === 'col_mapa' && tFaseReal > 0)) {
                     [fTotais[f.id], mGrid[m][f.id], gGrid[g][f.id]].forEach(c => {
                         c.real += tFaseReal;
-                        c.considerado += tFaseReal;
                         c[src].real += tFaseReal;
-                        c[src].considerado += tFaseReal;
                     });
                 }
 
@@ -3775,43 +3815,6 @@ let tRef = document.getElementById('filtroReferencia').value;
 
             }
         });
-    });
-
-    // V46: Acabamento real e base vêm da MESMA conta usada na Report.
-    // As outras fases não são modificadas por este alinhamento.
-    const pgAcabPorMarcaV46 = window.pgMetricasAcabamentoRealV46(
-        tRef, dtHojeISO, l => String(l.MARCA_FINAL || l.UNIDADE || 'N/A').toUpperCase(), undefined, true);
-    const pgAcabPorGraficaV46 = window.pgMetricasAcabamentoRealV46(
-        tRef, dtHojeISO, l => String(l.GRAFICA_FINAL || l['GRÁFICA'] || 'N/A').toUpperCase(), undefined, true);
-    const pgAplicarAcabV46 = (celula, agregado) => {
-        if (!celula) return;
-        const a = agregado || {den:0,real:0,plan:0,
-            pcp:{den:0,real:0,plan:0}, acab:{den:0,real:0,plan:0}};
-        celula.base = a.den;
-        celula.real = a.real;
-        celula.considerado = a.real;
-        celula.planAtHoje = a.plan;
-        ['pcp','acab'].forEach(fonte => {
-            celula[fonte].base = a[fonte].den;
-            celula[fonte].real = a[fonte].real;
-            celula[fonte].considerado = a[fonte].real;
-            celula[fonte].planAtHoje = a[fonte].plan;
-        });
-    };
-    if (fTotais.acab) pgAplicarAcabV46(fTotais.acab, pgAcabPorMarcaV46.total);
-    Object.entries(pgAcabPorMarcaV46.porGrupo).forEach(([m, a]) => {
-        if (!mGrid[m]) {
-            mGrid[m] = {total:0,pcp:{total:0},acab:{total:0},series:{}};
-            fasesAtivas.forEach(f => mGrid[m][f.id] = initFase());
-        }
-        pgAplicarAcabV46(mGrid[m].acab, a);
-    });
-    Object.entries(pgAcabPorGraficaV46.porGrupo).forEach(([g, a]) => {
-        if (!gGrid[g]) {
-            gGrid[g] = {total:0,pcp:{total:0},acab:{total:0},series:{}};
-            fasesAtivas.forEach(f => gGrid[g][f.id] = initFase());
-        }
-        pgAplicarAcabV46(gGrid[g].acab, a);
     });
 
     const coletaResumo = window.pgResumoColetaFunil;
@@ -3870,38 +3873,6 @@ let tRef = document.getElementById('filtroReferencia').value;
     };
     const seriesGeral = pgResumoSeriesColeta(pgSeriesColeta.geral);
 
-    // BASE CANÔNICA DO TOTAL / TABELAS
-    // A tiragem reage a Origem e Destino; Acabamento mantém seu denominador anterior.
-    // Ela já foi montada em aplicarFiltros() pela Origem:
-    // Gráfica = PCP | Acabadora = PCP_ACABADORAS | Todas = PCP direto + PCP_ACABADORAS.
-    const linhasBaseCanonica = window.dadosTotalCanonico || [];
-
-    // Denominador estático para Env. Arq / Rec. Bon / Apv. Bon: o Destino não pode alterá-lo.
-    const linhasBaseFasesIniciais = (document.getElementById('pgFiltroOrigem')?.value === 'ACABADORA'
-        ? (window.dadosTotalAcabadoraBase || [])
-        : (window.dadosTotalPCPBase || []));
-    const baseTotalFasesIniciais = new Map();
-    const baseMarcaFasesIniciais = {};
-    const baseGraficaFasesIniciais = {};
-    linhasBaseFasesIniciais.forEach(l => {
-        const volume = window.arredondar(l['TIRAGEM'] || l['QUANTIDADE'] || 0);
-        const chave = getKey(l);
-        if (volume <= 0 || baseTotalFasesIniciais.has(chave)) return;
-        baseTotalFasesIniciais.set(chave, volume);
-        const marca = String(l['MARCA_FINAL'] || l['UNIDADE'] || 'N/A').toUpperCase();
-        const grafica = String(l['GRAFICA_FINAL'] || l['GRÁFICA'] || 'N/A').toUpperCase();
-        baseMarcaFasesIniciais[marca] = (baseMarcaFasesIniciais[marca] || 0) + volume;
-        baseGraficaFasesIniciais[grafica] = (baseGraficaFasesIniciais[grafica] || 0) + volume;
-    });
-    const totalFasesIniciais = Array.from(baseTotalFasesIniciais.values()).reduce((a, b) => a + b, 0);
-
-    // V46: denominadores idênticos aos da Report, inclusive por marca/gráfica.
-    const baseMarcaAcabamento = Object.fromEntries(
-        Object.entries(pgAcabPorMarcaV46.porGrupo).map(([k, v]) => [k, v.den]));
-    const baseGraficaAcabamento = Object.fromEntries(
-        Object.entries(pgAcabPorGraficaV46.porGrupo).map(([k, v]) => [k, v.den]));
-    const totalAcabamento = pgAcabPorMarcaV46.total.den;
-
     const baseTotalCanonica = {};
     const baseMarcaCanonica = {};
     const baseGraficaCanonica = {};
@@ -3947,26 +3918,22 @@ let tRef = document.getElementById('filtroReferencia').value;
 
     // ORIGEM = ACABADORA: a aba começa operacionalmente após O.C.
     // Portanto Env. Arq até O.C. aparecem como 100% do Total Base da PCP_ACABADORAS.
-    const origemAcabadoraAtiva = document.getElementById('pgFiltroOrigem')?.value === 'ACABADORA';
-    const fases100Acabadora = new Set(['env', 'rec', 'apv', 'imp', 'cus', 'oc']);
+    const fases100Acabadora = pgFasesIniciaisFunil;
     const forcarFase100Acabadora = (cell, total) => {
         if (!cell) return;
         const v = Math.max(0, Number(total || 0));
         cell.base = v;
         cell.real = v;
-        cell.considerado = v;
         cell.planAtHoje = v;
         cell.pendenteVencido = 0;
         cell.pendenciasMapaAY = 0;
         cell.pcp.base = 0;
         cell.pcp.real = 0;
-        cell.pcp.considerado = 0;
         cell.pcp.planAtHoje = 0;
         cell.pcp.pendenteVencido = 0;
         cell.pcp.pendenciasMapaAY = 0;
         cell.acab.base = v;
         cell.acab.real = v;
-        cell.acab.considerado = v;
         cell.acab.planAtHoje = v;
         cell.acab.pendenteVencido = 0;
         cell.acab.pendenciasMapaAY = 0;
@@ -3991,66 +3958,41 @@ let tRef = document.getElementById('filtroReferencia').value;
     const totaisUnificados = {};
     const marcasUnificadas = {};
     const graficasUnificadas = {};
-    const camposTP = Object.values(camposUnificados);
-    const volumesTP = () => ({mapa:0, coleta:0, entrega:0});
-    const volumeUnificado = () => ({base:0, plan:0, bruto:volumesTP(), considerado:volumesTP()});
-    const acumularUnificado = (destino, chave, grupo) => {
-        if (!destino[chave]) destino[chave] = { ...volumeUnificado(), pcp:volumeUnificado(), acab:volumeUnificado() };
-        const total = destino[chave];
-        for (const item of [total, total[grupo.fonte]]) {
-            item.base += grupo.base;
-            item.plan += grupo.plan;
-            camposTP.forEach(id => {
-                item.bruto[id] += grupo.bruto[id];
-                item.considerado[id] += Math.min(grupo.base, Math.max(0, grupo.considerado[id]));
-            });
-        }
+    const zeroUnificado = () => ({mapa:0, coleta:0, entrega:0, plan:0,
+                                  pcp:{mapa:0,coleta:0,entrega:0,plan:0},
+                                  acab:{mapa:0,coleta:0,entrega:0,plan:0}});
+    const acumularUnificado = (destino, chave, fonte, volumes, plan) => {
+        const k = chave || 'N/A';
+        if (!destino[k]) destino[k] = zeroUnificado();
+        ['mapa','coleta','entrega'].forEach(id => {
+            destino[k][id] += volumes[id];
+            destino[k][fonte][id] += volumes[id];
+        });
+        destino[k].plan += plan;
+        destino[k][fonte].plan += plan;
     };
-    // O volume pode estar concentrado em uma linha do SKU. O limite é aplicado
-    // ao SKU e rota completos, antes de qualquer soma por marca ou gráfica.
-    const gruposTP = new Map();
     (resumoColetaUnico.registros || []).forEach(r => {
         const l = r.linha || r.pcp;
         if (!l) return;
-        const fonte = window.pgEhFonteAcabadora(l) ? 'acab' : 'pcp';
-        const marca = String(l.MARCA_FINAL || l.UNIDADE || 'N/A').trim().toUpperCase();
-        const grafica = String(l.GRAFICA_FINAL || l['GRÁFICA'] || 'N/A').trim().toUpperCase();
-        const id = window.pgIdentidadeOperacionalTPLinha?.(l);
-        const chave = id?.completa ? JSON.stringify([id.chave, id.envio, marca, grafica,
-            window.pgSerieCorrigidaFunil(l), pgNormPrazoV35(l['GRÁFICA DE ORIGEM'])]) : l;
-        if (!gruposTP.has(chave)) gruposTP.set(chave, { ...volumeUnificado(), fonte, marca, grafica,
-            coletaVista:new Set(), entregaVista:new Set() });
-        const grupo = gruposTP.get(chave);
-        grupo.base += r.tiragem;
-        if (r.dtPlan && r.dtPlan <= dtHojeISO) grupo.plan += r.tiragem;
+        const fonte = String(l._SOURCE || '').toUpperCase().includes('ACAB') ? 'acab' : 'pcp';
         const v = window.pgVolumesColetaUnificadosV37(l, dtHojeISO);
-        camposTP.forEach(campo => { grupo.bruto[campo] += v[campo]; });
-        grupo.considerado.mapa += v.mapa;
-        for (const [campo, eventos, vistos] of [
-            ['coleta', v.eventosColetaTP, grupo.coletaVista],
-            ['entrega', v.eventosEntregaTP, grupo.entregaVista]
-        ]) {
-            eventos.forEach(e => {
-                if (e.data > dtHojeISO || vistos.has(e.linhaMapa)) return;
-                if (Number.isInteger(e.linhaMapa)) vistos.add(e.linhaMapa);
-                grupo.considerado[campo] += e.volume;
-            });
-        }
-    });
-    gruposTP.forEach(grupo => {
-        acumularUnificado(totaisUnificados, 'GERAL', grupo);
-        acumularUnificado(marcasUnificadas, grupo.marca, grupo);
-        acumularUnificado(graficasUnificadas, grupo.grafica, grupo);
+        const plan = r.dtPlan && r.dtPlan <= dtHojeISO ? Number(r.tiragem || 0) : 0;
+        acumularUnificado(totaisUnificados, 'GERAL', fonte, v, plan);
+        acumularUnificado(marcasUnificadas,
+            String(l.MARCA_FINAL || l.UNIDADE || 'N/A').trim().toUpperCase(), fonte, v, plan);
+        acumularUnificado(graficasUnificadas,
+            String(l.GRAFICA_FINAL || l['GRÁFICA'] || 'N/A').trim().toUpperCase(), fonte, v, plan);
     });
     const aplicarUnificado = (cell, valores, id) => {
-        if (!cell || !valores) return;
+        if (!cell) return;
+        const v = valores || zeroUnificado();
         const campo = camposUnificados[id];
-        for (const [alvo, v] of [[cell, valores], [cell.pcp, valores.pcp], [cell.acab, valores.acab]]) {
-            alvo.base = v.base;
-            alvo.real = v.bruto[campo];
-            alvo.considerado = v.considerado[campo];
-            alvo.planAtHoje = v.plan;
-        }
+        cell.real = v[campo];
+        cell.pcp.real = v.pcp[campo];
+        cell.acab.real = v.acab[campo];
+        cell.planAtHoje = v.plan;
+        cell.pcp.planAtHoje = v.pcp.plan;
+        cell.acab.planAtHoje = v.acab.plan;
     };
     idsUnificados.forEach(id => {
         aplicarUnificado(fTotais[id], totaisUnificados.GERAL, id);
@@ -4154,13 +4096,8 @@ let tRef = document.getElementById('filtroReferencia').value;
     let hFunil = `<div class="funnel-layer bg-black w-full shadow-lg rounded-t-md text-white text-center py-1">00 - Total Base (${window.formatarBR(pgTotalBrutoV56)} | 100%)</div>`;
     
     fasesAtivas.forEach((f, index) => {
-        const fase = fTotais[f.id];
-        const tReal = fase.considerado;
-        const divisorFase = origemAcabadoraAtiva && fases100Acabadora.has(f.id)
-            ? tGeral
-            : (pgFasesIniciaisFunil.has(f.id)
-                ? totalFasesIniciais
-                : (f.id === 'acab' || idsUnificados.includes(f.id) ? fase.base : tGeral));
+        const tReal = fTotais[f.id].real;
+        const divisorFase = tGeral;
         let pct = divisorFase > 0 ? (tReal / divisorFase) * 100 : 0;
         let tPct = pct.toFixed(1); if (tPct === "100.0" && tReal < divisorFase) tPct = "99.9";
         
@@ -4345,39 +4282,28 @@ let tRef = document.getElementById('filtroReferencia').value;
     };
 
     const montarCelulaPctFunil = (cellData, totalDivisor, hasMeta, contexto) => {
-        if (origemAcabadoraAtiva && fases100Acabadora.has(contexto?.fase)) {
-            // Mantém o divisor já recebido: Total Base geral ou total do grupo da PCP_ACABADORAS.
-        } else if (pgFasesIniciaisFunil.has(contexto?.fase)) {
-            totalDivisor = contexto.grupo == null ? totalFasesIniciais
-                : (contexto.tipo === 'marca' ? baseMarcaFasesIniciais[contexto.grupo] : baseGraficaFasesIniciais[contexto.grupo]) || 0;
-        } else if (contexto?.fase === 'acab') {
-            totalDivisor = contexto.grupo == null ? totalAcabamento
-                : (contexto.tipo === 'marca' ? baseMarcaAcabamento[contexto.grupo] : baseGraficaAcabamento[contexto.grupo]) || 0;
-        }
         const origem = document.getElementById('pgFiltroOrigem');
         const valores = cellData && (origem && origem.value === 'ACABADORA' ? cellData.acab : origem && origem.value === 'TODOS' ? cellData : cellData.pcp);
-        if (idsUnificados.includes(contexto?.fase)) totalDivisor = valores?.base || 0;
         if (!cellData || !valores || (valores.base <= 0 && !cellData.planoColetaFinal) || totalDivisor <= 0) {
             return `<td class="p-1 border-r border-slate-200 text-center bg-slate-50 text-slate-300">-</td>`;
         }
 
-        const considerado = valores.considerado;
-        let realPct = Math.min(100, Math.round((considerado / totalDivisor) * 100));
+        let realPct = Math.min(100, Math.round((valores.real / totalDivisor) * 100));
         const plano = cellData.planoColetaFinal;
         const planoTP = ['col_mapa', 'col_tp', 'ent_tp', 'ent_cd'].includes(contexto?.fase);
         const planBase = plano && !planoTP ? plano.total : totalDivisor;
         const planVolume = plano && !planoTP ? plano.esperadoHoje : valores.planAtHoje;
         let planPct = planBase > 0 ? Math.min(100, Math.round((planVolume / planBase) * 100)) : 0;
-        if (realPct === 100 && considerado < totalDivisor) realPct = 99;
+        if (realPct === 100 && valores.real < totalDivisor) realPct = 99;
         if (planPct === 100 && planVolume < planBase) planPct = 99;
         if (!Number.isFinite(realPct)) realPct = 0;
         if (!Number.isFinite(planPct)) planPct = 0;
 
         const pendenteVencido = plano ? plano.pendenteVencido : valores.pendenteVencido;
-        const realExato = considerado / totalDivisor;
+        const realExato = valores.real / totalDivisor;
         const planExato = planBase > 0 ? planVolume / planBase : 0;
         // Usa o volume exato da própria célula, nunca o percentual arredondado.
-        const coletaConcluida = contexto?.fase === 'col_mapa' && totalDivisor > 0 && considerado >= totalDivisor;
+        const coletaConcluida = contexto?.fase === 'col_mapa' && totalDivisor > 0 && valores.real >= totalDivisor;
         const cor = coletaConcluida
             ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
             : hasMeta && realExato >= planExato && (pendenteVencido > 0 || valores.pendenciasMapaAY > 0)
