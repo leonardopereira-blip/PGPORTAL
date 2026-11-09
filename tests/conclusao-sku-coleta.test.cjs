@@ -123,6 +123,14 @@ test('transferência PCP completa fases iniciais e financeiras, preservando fase
   for(const fase of ['rec_acab','acab','kit'])assert.equal(w.pgConclusaoFasePorColeta(r,fase,hoje),null,fase);
 });
 
+test('coleta parcial da transferência comprova somente as etapas anteriores à acabadora',()=>{
+  const r=row(2,{'TIRAGEM COLETADA':50,CD_MAPA:'HR',CD_FINAL:'HR','CD DESTINO':'HR'});
+  const w=portal([r],[event(2,50,{destino:'HR'})]);
+  assert.equal(w.pgVolumeSKUComprovadoParaFase(r,'imp',hoje).coletado,50);
+  for(const fase of ['rec_acab','acab','kit'])
+    assert.equal(w.pgVolumeSKUComprovadoParaFase(r,fase,hoje).coletado,0,fase);
+});
+
 const transferencia = (extra={}) => row(2,{
   'SÉRIE':'1 ANO',CD_MAPA:'HR',CD_FINAL:'HR','CD DESTINO':'HR',JOIN_KEY:'SKU-A até HR',...extra
 });
@@ -138,14 +146,14 @@ test('coleta final confirma etapas anteriores da transferência do mesmo SKU e t
   });
   const w=portal([pcp,acab,vizinho],[event(4,100,{grafica:'HR'})]);
   assert.equal(state(w,pcp).concluido,false,'O registro de Coleta TP no PCP não é alterado');
-  for(const fase of ['env','rec','apv','imp','cus','oc','tra','col']) {
+  for(const fase of ['env','rec','apv','imp','cus','oc','tra','acab','kit','col']) {
     const prova=w.pgConclusaoFasePorColeta(pcp,fase,hoje);
     assert.equal(prova.motivo,'coleta-integral-na-acabadora-da-mesma-rota',fase);
     assert.equal(prova.dataConfirmacaoColeta,'2026-11-01',fase);
     assert.equal(w.pgConclusaoFasePorColeta(vizinho,fase,hoje),null,fase);
   }
   assert.equal(w.pgConclusaoFasePorColeta(pcp,'env','2026-10-31'),null);
-  for(const fase of ['rec_acab','acab','kit','col_tp','ent_tp','ent_cd']) {
+  for(const fase of ['rec_acab','col_tp','ent_tp','ent_cd']) {
     assert.equal(w.pgConclusaoFasePorColeta(pcp,fase,hoje),null,fase);
   }
   for(const fase of ['rec_acab','acab','kit']) {
@@ -218,6 +226,14 @@ const complemento = (w,linhas,id='env',filtradas=linhas) => {
   const fase=vm.runInContext(`FASES.find(f=>f.id==='${id}')`,w);
   return w.pgComplementosParciaisSKUFunil(filtradas,fase,hoje,()=>true);
 };
+
+test('coleta parcial reconhece todo o SKU mesmo com tiragens fracionadas',()=>{
+  const rows=[row(2,{TIRAGEM:7.5,'TIRAGEM COLETADA':10}),row(3,{TIRAGEM:7.5})];
+  const w=portal(rows,[event(2,10)]);
+  const volumes=complemento(w,rows);
+  assert.equal(rows.reduce((s,r)=>s+(volumes.get(r)||0),0),10);
+  assert.equal(complemento(w,rows,'env',[rows[0]]).size,0);
+});
 
 test('98,1% coletado comprova 98,1% de todas as etapas anteriores, sem criar data integral',()=>{
   const r=row(2,{TIRAGEM:1000,'TIRAGEM COLETADA':981});

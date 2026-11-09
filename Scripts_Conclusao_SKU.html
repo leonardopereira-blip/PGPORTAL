@@ -149,16 +149,19 @@
   window.pgConclusaoSKUColeta = function(linha,corte) {
     return buscar(linha,corte).estado;
   };
+  function coletaDaLinhaComprovaFase(linha,fase) {
+    // A saída do PCP rumo à acabadora precede as etapas executadas por ela.
+    return !['rec_acab','acab','kit'].includes(fase) ||
+      (window.pgEhFonteAcabadora?.(linha) ?? normal(linha?._SOURCE).includes('ACAB')) ||
+      !window.pgEhDestinoAcabadora?.(linha);
+  }
   window.pgConclusaoFasePorColeta = function(linha,faseId,corte) {
     var fase = typeof faseId === 'object' && faseId ? faseId.id : faseId;
     if (!fases.has(fase)) return null;
-    var acabadora = typeof window.pgEhFonteAcabadora === 'function'
-      ? window.pgEhFonteAcabadora(linha) : normal(linha && linha._SOURCE).includes('ACAB');
-    if (!acabadora && ['rec_acab','acab','kit'].includes(fase) &&
-        typeof window.pgEhDestinoAcabadora === 'function' && window.pgEhDestinoAcabadora(linha)) return null;
     var {estado,transferencia} = buscar(linha,corte);
-    if (estado.concluido) return estado;
-    return fasesAntesDaAcabadora.has(fase) && transferencia?.concluido ? transferencia : null;
+    if (estado.concluido && coletaDaLinhaComprovaFase(linha,fase)) return estado;
+    return transferencia?.concluido &&
+      (fasesAntesDaAcabadora.has(fase) || window.belongsToPhase?.(linha,fase)) ? transferencia : null;
   };
   // Volume provado pela coleta para fases operacionais; a conclusão com data
   // continua exigindo 100%. O volume parcial será conciliado por grupo na visão.
@@ -173,8 +176,9 @@
         'coleta-integral-na-acabadora-da-mesma-rota',
         'coleta-parcial-na-acabadora-da-mesma-rota'].includes(s.motivo);
     if (!seguro(estado)) return null;
-    var coletado = Math.min(estado.total,Math.max(0,estado.coletado));
-    if (fasesAntesDaAcabadora.has(fase) && seguro(transferencia))
+    var coletado = coletaDaLinhaComprovaFase(linha,fase)
+      ? Math.min(estado.total,Math.max(0,estado.coletado)) : 0;
+    if (seguro(transferencia) && (fasesAntesDaAcabadora.has(fase) || window.belongsToPhase?.(linha,fase)))
       coletado = Math.max(coletado,Math.min(transferencia.total,Math.max(0,transferencia.coletado)));
     return {chave:id.chave,total:estado.total,coletado:coletado};
   };

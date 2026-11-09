@@ -651,10 +651,11 @@ window.pgComplementosParciaisSKUFunil = function(linhas, fase, corte, elegivel) 
         const serie = window.pgSerieCorrigidaFunil?.(l) || '';
         const tipo = String(l.TIPO || l.Tipo || '').trim().toUpperCase();
         if (!grupos.has(prova.chave)) grupos.set(prova.chave, {
-            total:0, registrado:0, linhas:[], prova, series:new Set(), tipos:new Set()
+            total:0, tiragem:0, registrado:0, linhas:[], prova, series:new Set(), tipos:new Set()
         });
         const grupo = grupos.get(prova.chave);
         grupo.total += volume;
+        grupo.tiragem += window.pgNumeroPrazoV35(l.TIRAGEM || l.QUANTIDADE || 0);
         if (serie) grupo.series.add(String(serie).trim().toUpperCase());
         if (tipo) grupo.tipos.add(tipo);
         if (dataFoiPreenchida(l, fase, corte)) grupo.registrado += volume;
@@ -663,7 +664,7 @@ window.pgComplementosParciaisSKUFunil = function(linhas, fase, corte, elegivel) 
     grupos.forEach(g => {
         // Se o filtro cortou parte do SKU ou há subdivisões incompatíveis, não
         // se pode atribuir a coleta a uma linha arbitrária desse subconjunto.
-        if (g.total !== g.prova.total || g.series.size > 1 || g.tipos.size > 1) return;
+        if (Math.round(g.tiragem) !== g.prova.total || g.series.size > 1 || g.tipos.size > 1) return;
         const acrescimo = Math.max(0,Math.min(g.prova.coletado,g.total)-g.registrado);
         const aberto = g.linhas.reduce((s,l) => s+l.volume,0);
         if (!acrescimo || !aberto) return;
@@ -3117,6 +3118,10 @@ window.pgAtributosCaixaFunil = function(contexto, cor) {
     const id = window.pgCaixasFunil.push({ ...contexto, atrasados: cor.includes('rose') || cor.includes('amber') }) - 1;
     return `role="button" tabindex="0" title="Detalhes do atraso" onmouseenter="if(window.pgTooltipAtrasosFunil)this.title=window.pgTooltipAtrasosFunil(window.pgCaixasFunil[${id}])" onclick="extrairCaixaFunil(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();extrairCaixaFunil(${id});}" style="cursor:pointer"`;
 };
+const pgFasesIniciaisFunil = new Set(['env', 'rec', 'apv', 'imp', 'cus', 'oc']);
+const pgLinhaElegivelNoFunil = (l, fase) =>
+    (!pgFasesIniciaisFunil.has(fase) || !window.pgEhFonteAcabadora(l)) && belongsToPhase(l, fase);
+
 window.pgPendenciasCaixaFunil = function(contexto) {
     if (contexto.coletaConcluida) return [];
     const norm = v => String(v || 'N/A').trim().toUpperCase();
@@ -3130,13 +3135,13 @@ window.pgPendenciasCaixaFunil = function(contexto) {
     const tRef = document.getElementById('filtroReferencia').value;
     const basePendencias = ['col_tp', 'ent_tp'].includes(f.id) ? (window.dadosBaseTPPortal || [])
         : f.id === 'ent_cd' ? (window.dadosBaseEntCDPortal || dadosFiltrados)
-        : ['env', 'rec', 'apv', 'imp', 'cus', 'oc'].includes(f.id) ? (window.dadosFasesEstaticas || [])
+        : pgFasesIniciaisFunil.has(f.id) ? (window.dadosFasesEstaticas || [])
         : f.id === 'acab' ? (window.dadosAcabamentoOrigem || []) : dadosFiltrados;
     const complementos = window.pgComplementosParciaisSKUFunil(basePendencias,f,dtHojeISO,
-        l => belongsToPhase(l,f.id));
+        l => pgLinhaElegivelNoFunil(l,f.id));
     return basePendencias.flatMap(l => {
         const g = l.GRAFICA_FINAL || l['GRÁFICA'], m = l.MARCA_FINAL || l.UNIDADE;
-        if (!casa(g, m) || (f.id !== 'col_mapa' && !belongsToPhase(l, f.id))) return [];
+        if (!casa(g, m) || !pgLinhaElegivelNoFunil(l, f.id)) return [];
         const base = window.arredondar(l.TIRAGEM || l.QUANTIDADE || 0);
         const volume = window.getVolFase(l, f, base);
         const real = dataFoiPreenchida(l, f) || (volume > 0 && ['col_mapa', 'ent_cd'].includes(f.id));
@@ -3545,7 +3550,8 @@ let tRef = document.getElementById('filtroReferencia').value;
 
     let fasesAtivas = FASES.filter(f => fasesAtivasIds.includes(f.id));
 
-    const initFase = () => ({ pendenciasMapaAY: 0, base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0, pcp: {pendenciasMapaAY: 0, base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0}, acab: {pendenciasMapaAY: 0, base: 0, real: 0, planAtHoje: 0, pendenteVencido: 0} });
+    const initVolumeFase = () => ({ pendenciasMapaAY: 0, base: 0, real: 0, considerado: 0, planAtHoje: 0, pendenteVencido: 0 });
+    const initFase = () => ({ ...initVolumeFase(), pcp: initVolumeFase(), acab: initVolumeFase() });
     fasesAtivas.forEach(f => fTotais[f.id] = initFase());
 
     let mapTotal = {};
@@ -3559,18 +3565,16 @@ let tRef = document.getElementById('filtroReferencia').value;
     const setFasesEstaticas = new Set(dadosFasesEstaticas);
 
     const setPadrao = new Set(dadosPadrao);
-    const setInicio = new Set(dadosInicio);
     const setFinalTotal = new Set(dadosFinalTotal);
     const setFinalOrigem = new Set(dadosFinalOrigem);
     const setAcabamentoOrigem = new Set(dadosAcabamentoOrigem);
     const setColeta = new Set(window.dadosBaseColetaFunil || []);
     const setTP = new Set(window.dadosBaseTPPortal || []);
-    const idsInicioSemDestino = new Set(['env', 'rec', 'apv', 'imp', 'cus', 'oc']);
     const idsDaBaseFinal = new Set(['acab', 'kit', 'col', 'col_mapa', 'col_tp', 'ent_tp', 'ent_cd', 'int_cd']);
 
     const linhaPermitidaNaFase = (l, id) => {
         // De Env. Arquivo até O.C., o seletor Destino NÃO interfere.
-        if (['env', 'rec', 'apv', 'imp', 'cus', 'oc'].includes(id)) return setFasesEstaticas.has(l);
+        if (pgFasesIniciaisFunil.has(id)) return setFasesEstaticas.has(l) && !window.pgEhFonteAcabadora(l);
 
         // Acabamento também é soberano ao Destino e mantém sua regra própria.
         if (id === 'acab') return setAcabamentoOrigem.has(l);
@@ -3580,7 +3584,6 @@ let tRef = document.getElementById('filtroReferencia').value;
 
         // Confirmação CD preserva a lógica anterior do próprio fluxo.
         if (!destinoCDAtivo) return setPadrao.has(l);
-        if (idsInicioSemDestino.has(id)) return setInicio.has(l);       // Base inicial já recortada por Origem e Destino.
         if (idsDaBaseFinal.has(id)) return setFinalOrigem.has(l);       // Kit em diante mantém a lógica atual de Origem + Destino.
         return setPadrao.has(l);                                       // Transf./Rec. Acab. preservados.
     };
@@ -3736,13 +3739,13 @@ let tRef = document.getElementById('filtroReferencia').value;
                 }
 
                 if(isReal || (f.id === 'col_mapa' && tFaseReal > 0)) {
-                    fTotais[f.id].real += tFaseReal;
-                    mGrid[m][f.id].real += tFaseReal;
-                    gGrid[g][f.id].real += tFaseReal;
-
-                    fTotais[f.id][src].real += tFaseReal;
-                    mGrid[m][f.id][src].real += tFaseReal;
-                    gGrid[g][f.id][src].real += tFaseReal;
+                    const considerado = Math.min(tBase, Math.max(0, tFaseReal));
+                    [fTotais[f.id], mGrid[m][f.id], gGrid[g][f.id]].forEach(c => {
+                        c.real += tFaseReal;
+                        c.considerado += considerado;
+                        c[src].real += tFaseReal;
+                        c[src].considerado += considerado;
+                    });
                 }
 
                 let dtP = window.pgDataPlanoFaseFunil(l, f, tRef);
@@ -3787,10 +3790,12 @@ let tRef = document.getElementById('filtroReferencia').value;
             pcp:{den:0,real:0,plan:0}, acab:{den:0,real:0,plan:0}};
         celula.base = a.den;
         celula.real = a.real;
+        celula.considerado = a.real;
         celula.planAtHoje = a.plan;
         ['pcp','acab'].forEach(fonte => {
             celula[fonte].base = a[fonte].den;
             celula[fonte].real = a[fonte].real;
+            celula[fonte].considerado = a[fonte].real;
             celula[fonte].planAtHoje = a[fonte].plan;
         });
     };
@@ -3950,16 +3955,19 @@ let tRef = document.getElementById('filtroReferencia').value;
         const v = Math.max(0, Number(total || 0));
         cell.base = v;
         cell.real = v;
+        cell.considerado = v;
         cell.planAtHoje = v;
         cell.pendenteVencido = 0;
         cell.pendenciasMapaAY = 0;
         cell.pcp.base = 0;
         cell.pcp.real = 0;
+        cell.pcp.considerado = 0;
         cell.pcp.planAtHoje = 0;
         cell.pcp.pendenteVencido = 0;
         cell.pcp.pendenciasMapaAY = 0;
         cell.acab.base = v;
         cell.acab.real = v;
+        cell.acab.considerado = v;
         cell.acab.planAtHoje = v;
         cell.acab.pendenteVencido = 0;
         cell.acab.pendenciasMapaAY = 0;
@@ -3984,41 +3992,66 @@ let tRef = document.getElementById('filtroReferencia').value;
     const totaisUnificados = {};
     const marcasUnificadas = {};
     const graficasUnificadas = {};
-    const zeroUnificado = () => ({mapa:0, coleta:0, entrega:0, plan:0,
-                                  pcp:{mapa:0,coleta:0,entrega:0,plan:0},
-                                  acab:{mapa:0,coleta:0,entrega:0,plan:0}});
-    const acumularUnificado = (destino, chave, fonte, volumes, plan) => {
-        const k = chave || 'N/A';
-        if (!destino[k]) destino[k] = zeroUnificado();
-        ['mapa','coleta','entrega'].forEach(id => {
-            destino[k][id] += volumes[id];
-            destino[k][fonte][id] += volumes[id];
-        });
-        destino[k].plan += plan;
-        destino[k][fonte].plan += plan;
+    const camposTP = Object.values(camposUnificados);
+    const volumesTP = () => ({mapa:0, coleta:0, entrega:0});
+    const volumeUnificado = () => ({base:0, plan:0, bruto:volumesTP(), considerado:volumesTP()});
+    const acumularUnificado = (destino, chave, grupo) => {
+        if (!destino[chave]) destino[chave] = { ...volumeUnificado(), pcp:volumeUnificado(), acab:volumeUnificado() };
+        const total = destino[chave];
+        for (const item of [total, total[grupo.fonte]]) {
+            item.base += grupo.base;
+            item.plan += grupo.plan;
+            camposTP.forEach(id => {
+                item.bruto[id] += grupo.bruto[id];
+                item.considerado[id] += Math.min(grupo.base, Math.max(0, grupo.considerado[id]));
+            });
+        }
     };
+    // O volume pode estar concentrado em uma linha do SKU. O limite é aplicado
+    // ao SKU e rota completos, antes de qualquer soma por marca ou gráfica.
+    const gruposTP = new Map();
     (resumoColetaUnico.registros || []).forEach(r => {
         const l = r.linha || r.pcp;
         if (!l) return;
-        const fonte = String(l._SOURCE || '').toUpperCase().includes('ACAB') ? 'acab' : 'pcp';
+        const fonte = window.pgEhFonteAcabadora(l) ? 'acab' : 'pcp';
+        const marca = String(l.MARCA_FINAL || l.UNIDADE || 'N/A').trim().toUpperCase();
+        const grafica = String(l.GRAFICA_FINAL || l['GRÁFICA'] || 'N/A').trim().toUpperCase();
+        const id = window.pgIdentidadeOperacionalTPLinha?.(l);
+        const chave = id?.completa ? JSON.stringify([id.chave, id.envio, marca, grafica,
+            window.pgSerieCorrigidaFunil(l), pgNormPrazoV35(l['GRÁFICA DE ORIGEM'])]) : l;
+        if (!gruposTP.has(chave)) gruposTP.set(chave, { ...volumeUnificado(), fonte, marca, grafica,
+            coletaVista:new Set(), entregaVista:new Set() });
+        const grupo = gruposTP.get(chave);
+        grupo.base += r.tiragem;
+        if (r.dtPlan && r.dtPlan <= dtHojeISO) grupo.plan += r.tiragem;
         const v = window.pgVolumesColetaUnificadosV37(l, dtHojeISO);
-        const plan = r.dtPlan && r.dtPlan <= dtHojeISO ? Number(r.tiragem || 0) : 0;
-        acumularUnificado(totaisUnificados, 'GERAL', fonte, v, plan);
-        acumularUnificado(marcasUnificadas,
-            String(l.MARCA_FINAL || l.UNIDADE || 'N/A').trim().toUpperCase(), fonte, v, plan);
-        acumularUnificado(graficasUnificadas,
-            String(l.GRAFICA_FINAL || l['GRÁFICA'] || 'N/A').trim().toUpperCase(), fonte, v, plan);
+        camposTP.forEach(campo => { grupo.bruto[campo] += v[campo]; });
+        grupo.considerado.mapa += v.mapa;
+        for (const [campo, eventos, vistos] of [
+            ['coleta', v.eventosColetaTP, grupo.coletaVista],
+            ['entrega', v.eventosEntregaTP, grupo.entregaVista]
+        ]) {
+            eventos.forEach(e => {
+                if (e.data > dtHojeISO || vistos.has(e.linhaMapa)) return;
+                if (Number.isInteger(e.linhaMapa)) vistos.add(e.linhaMapa);
+                grupo.considerado[campo] += e.volume;
+            });
+        }
+    });
+    gruposTP.forEach(grupo => {
+        acumularUnificado(totaisUnificados, 'GERAL', grupo);
+        acumularUnificado(marcasUnificadas, grupo.marca, grupo);
+        acumularUnificado(graficasUnificadas, grupo.grafica, grupo);
     });
     const aplicarUnificado = (cell, valores, id) => {
-        if (!cell) return;
-        const v = valores || zeroUnificado();
+        if (!cell || !valores) return;
         const campo = camposUnificados[id];
-        cell.real = v[campo];
-        cell.pcp.real = v.pcp[campo];
-        cell.acab.real = v.acab[campo];
-        cell.planAtHoje = v.plan;
-        cell.pcp.planAtHoje = v.pcp.plan;
-        cell.acab.planAtHoje = v.acab.plan;
+        for (const [alvo, v] of [[cell, valores], [cell.pcp, valores.pcp], [cell.acab, valores.acab]]) {
+            alvo.base = v.base;
+            alvo.real = v.bruto[campo];
+            alvo.considerado = v.considerado[campo];
+            alvo.planAtHoje = v.plan;
+        }
     };
     idsUnificados.forEach(id => {
         aplicarUnificado(fTotais[id], totaisUnificados.GERAL, id);
@@ -4122,12 +4155,13 @@ let tRef = document.getElementById('filtroReferencia').value;
     let hFunil = `<div class="funnel-layer bg-black w-full shadow-lg rounded-t-md text-white text-center py-1">00 - Total Base (${window.formatarBR(pgTotalBrutoV56)} | 100%)</div>`;
     
     fasesAtivas.forEach((f, index) => {
-        let tReal = fTotais[f.id].real;
+        const fase = fTotais[f.id];
+        const tReal = fase.considerado;
         const divisorFase = origemAcabadoraAtiva && fases100Acabadora.has(f.id)
             ? tGeral
-            : (['env', 'rec', 'apv', 'imp', 'cus', 'oc'].includes(f.id)
+            : (pgFasesIniciaisFunil.has(f.id)
                 ? totalFasesIniciais
-                : (f.id === 'acab' ? totalAcabamento : tGeral));
+                : (f.id === 'acab' || idsUnificados.includes(f.id) ? fase.base : tGeral));
         let pct = divisorFase > 0 ? (tReal / divisorFase) * 100 : 0;
         let tPct = pct.toFixed(1); if (tPct === "100.0" && tReal < divisorFase) tPct = "99.9";
         
@@ -4314,10 +4348,7 @@ let tRef = document.getElementById('filtroReferencia').value;
     const montarCelulaPctFunil = (cellData, totalDivisor, hasMeta, contexto) => {
         if (origemAcabadoraAtiva && fases100Acabadora.has(contexto?.fase)) {
             // Mantém o divisor já recebido: Total Base geral ou total do grupo da PCP_ACABADORAS.
-        } else if (['env', 'rec', 'apv'].includes(contexto?.fase)) {
-            totalDivisor = contexto.grupo == null ? totalFasesIniciais
-                : (contexto.tipo === 'marca' ? baseMarcaFasesIniciais[contexto.grupo] : baseGraficaFasesIniciais[contexto.grupo]) || 0;
-        } else if (['imp', 'cus', 'oc'].includes(contexto?.fase)) {
+        } else if (pgFasesIniciaisFunil.has(contexto?.fase)) {
             totalDivisor = contexto.grupo == null ? totalFasesIniciais
                 : (contexto.tipo === 'marca' ? baseMarcaFasesIniciais[contexto.grupo] : baseGraficaFasesIniciais[contexto.grupo]) || 0;
         } else if (contexto?.fase === 'acab') {
@@ -4326,26 +4357,28 @@ let tRef = document.getElementById('filtroReferencia').value;
         }
         const origem = document.getElementById('pgFiltroOrigem');
         const valores = cellData && (origem && origem.value === 'ACABADORA' ? cellData.acab : origem && origem.value === 'TODOS' ? cellData : cellData.pcp);
+        if (idsUnificados.includes(contexto?.fase)) totalDivisor = valores?.base || 0;
         if (!cellData || !valores || (valores.base <= 0 && !cellData.planoColetaFinal) || totalDivisor <= 0) {
             return `<td class="p-1 border-r border-slate-200 text-center bg-slate-50 text-slate-300">-</td>`;
         }
 
-        let realPct = Math.min(100, Math.round((valores.real / totalDivisor) * 100));
+        const considerado = valores.considerado;
+        let realPct = Math.min(100, Math.round((considerado / totalDivisor) * 100));
         const plano = cellData.planoColetaFinal;
         const planoTP = ['col_mapa', 'col_tp', 'ent_tp', 'ent_cd'].includes(contexto?.fase);
         const planBase = plano && !planoTP ? plano.total : totalDivisor;
         const planVolume = plano && !planoTP ? plano.esperadoHoje : valores.planAtHoje;
         let planPct = planBase > 0 ? Math.min(100, Math.round((planVolume / planBase) * 100)) : 0;
-        if (realPct === 100 && valores.real < totalDivisor) realPct = 99;
+        if (realPct === 100 && considerado < totalDivisor) realPct = 99;
         if (planPct === 100 && planVolume < planBase) planPct = 99;
         if (!Number.isFinite(realPct)) realPct = 0;
         if (!Number.isFinite(planPct)) planPct = 0;
 
         const pendenteVencido = plano ? plano.pendenteVencido : valores.pendenteVencido;
-        const realExato = valores.real / totalDivisor;
+        const realExato = considerado / totalDivisor;
         const planExato = planBase > 0 ? planVolume / planBase : 0;
         // Usa o volume exato da própria célula, nunca o percentual arredondado.
-        const coletaConcluida = contexto?.fase === 'col_mapa' && totalDivisor > 0 && valores.real >= totalDivisor;
+        const coletaConcluida = contexto?.fase === 'col_mapa' && totalDivisor > 0 && considerado >= totalDivisor;
         const cor = coletaConcluida
             ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
             : hasMeta && realExato >= planExato && (pendenteVencido > 0 || valores.pendenciasMapaAY > 0)

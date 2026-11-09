@@ -73,7 +73,7 @@ function portal(rows, fases = ['col_mapa', 'col_tp'], recorte = {}) {
   c.dadosBaseTPPortal = baseCanonica;
   c.dadosBaseForecastColeta = baseCanonica;
   c.dadosTotalCanonico = baseCanonica;
-  c.dadosTotalPCPBase = rows;
+  c.dadosTotalPCPBase = rows.filter(l => l._SOURCE === 'PCP');
   c.dadosFasesEstaticas = rows;
   c.dadosAcabamentoOrigem = recorte.acabamento ? rows : [];
   c.pgBaseGeralReportExecutiva = baseCanonica;
@@ -111,6 +111,46 @@ test('Funil real reconhece 98,1% coletado nas etapas anteriores, preservando tot
     assert.match(funil,new RegExp(fase.replace('.','\\.')+' \\(98\\.1%\\)'),fase);
   assert.match(funil,/Coleta TP \(98\.1%\)/);
   assert.equal(linha['ENV ARQUIVO REAL'],undefined,'não grava data na linha');
+});
+
+test('excedente do SKU coletado não compensa outro em nenhuma etapa do funil', () => {
+  const sobra = row('sobra', {
+    'TIRAGEM COLETADA':150, 'TIRAGEM AGENDADA':0, Coleta_TP:hoje, Entrega_TP:hoje
+  });
+  const falta = row('falta', {
+    'TIRAGEM COLETADA':50, 'TIRAGEM AGENDADA':0, Coleta_TP:hoje, Entrega_TP:hoje
+  });
+  const p = portal([sobra,falta],['env','rec','apv','imp','cus','oc','acab','kit','col_mapa','col_tp','ent_tp'],
+    {acabamento:true});
+  const html = p.controles.get('containerFunilVisual').innerHTML;
+  const fases = [...html.matchAll(/\((\d+\.\d+)%\)/g)].map(m => Number(m[1]));
+  assert.deepEqual(fases,Array(11).fill(75));
+  for (const tabela of ['MarcaPct','GraficaPct'])
+    linhaIndicador(p,tabela,'10 - Coleta TP').forEach(celula => assert.match(celula,/>75%<\/span>/));
+  for (const tabela of ['MarcaTiragem','GraficaTiragem'])
+    assert.deepEqual(linhaIndicador(p,tabela,'10 - Coleta TP').map(celula => celula.replace(/<[^>]*>/g,'')),['200','200']);
+});
+
+test('Coleta TP concentrada conta todas as linhas do mesmo SKU nas etapas anteriores', () => {
+  const lote1 = row('lote-1', {SKU:'MESMO',SKU_REAL:'MESMO',TIRAGEM:544,
+    'TIRAGEM COLETADA':610,'TIRAGEM AGENDADA':0,Coleta_TP:hoje});
+  const lote2 = row('lote-2', {SKU:'MESMO',SKU_REAL:'MESMO',TIRAGEM:66,'TIRAGEM AGENDADA':0});
+  const p = portal([lote1,lote2],['imp','acab','kit','col_tp'],{acabamento:true});
+  const html = p.controles.get('containerFunilVisual').innerHTML;
+  for (const fase of ['Impressão','Acabamento','Form. Kit','Coleta TP'])
+    assert.ok(html.includes(fase + ' (100.0%)'),fase);
+});
+
+test('Custo e OC usam só o PCP na base inicial, sem somar outra fonte', () => {
+  const real = {'Validação de Custo Final Real':hoje,'OC Final Real':hoje};
+  const pcp = row('pcp', real);
+  const acabadora = row('acabadora', {...real,_SOURCE:'ACABADORA',GRAFICA_FINAL:'HR','GRÁFICA':'HR'});
+  const p = portal([pcp,acabadora],['cus','oc']);
+  const html = p.controles.get('containerFunilVisual').innerHTML;
+  assert.match(html,/Total Base \(200 \| 100%\)/);
+  assert.match(html,/Val\. Custo \(100\.0%\)/);
+  assert.match(html,/O\.C\. \(100\.0%\)/);
+  assert.doesNotMatch(html,/200\.0%/);
 });
 
 function linhaSeries(p, tabela) {
