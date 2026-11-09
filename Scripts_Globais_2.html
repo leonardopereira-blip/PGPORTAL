@@ -3133,10 +3133,11 @@ function pgVolumesCumulativosFunil(base, corte, origemAcabadora) {
     const etapaAtingida = new Map();
 
     base.forEach(l => {
-        const transferencia = !window.pgEhFonteAcabadora(l) && window.pgEhDestinoAcabadora(l);
+        const transferencia = (window.pgTransferenciaParaAcabadoraNoFunil || window.pgEhDestinoAcabadora)(l);
         let etapa = origemAcabadora ? ordem.get('oc') : -1;
         marcos.forEach(f => {
-            if (!pgLinhaElegivelNoFunil(l, f.id) || (transferencia && f.id === 'kit')) return;
+            const elegivel = f.id === 'tra' ? transferencia : pgLinhaElegivelNoFunil(l, f.id);
+            if (!elegivel || (transferencia && f.id === 'kit')) return;
             const colunas = [f.colReal, f.colRealAlt].filter(Boolean);
             const realizado = colunas.some(coluna => {
                 const data = window.pgNormalizarDataColeta(window.pgCampoColeta(l, coluna), corte);

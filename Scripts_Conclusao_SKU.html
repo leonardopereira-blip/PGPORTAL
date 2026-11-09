@@ -30,9 +30,16 @@
   function vazio(motivo) {
     return {concluido:false,total:0,coletado:0,dataConfirmacaoColeta:'',motivo:motivo};
   }
+  window.pgTransferenciaParaAcabadoraNoFunil = function(linha) {
+    if (window.pgOrigemAtivaPortal === 'GRAFICA' && window.pgDestinoAtivoPortal === 'ACAB' &&
+        typeof window.pgEhDestinoAcabadoraGraficaFiltro === 'function') {
+      return window.pgEhDestinoAcabadoraGraficaFiltro(linha);
+    }
+    return !!window.pgEhDestinoAcabadora?.(linha);
+  };
   function rotaTransferencia(l,id,serieLinha) {
     if (typeof window.pgEhDestinoAcabadora !== 'function') return '';
-    var paraAcabadora = window.pgEhDestinoAcabadora(l);
+    var paraAcabadora = window.pgTransferenciaParaAcabadoraNoFunil(l);
     if (id.acabadora === paraAcabadora) return '';
     var [marca,grafica,sku,destino] = id.partes;
     var graficaOrigem = id.acabadora ? normal(l['GRÁFICA DE ORIGEM']) : grafica;
@@ -149,11 +156,11 @@
   window.pgConclusaoSKUColeta = function(linha,corte) {
     return buscar(linha,corte).estado;
   };
-  function coletaDaLinhaComprovaFase(linha,fase) {
+  function coletaDaLinhaComprovaFase(linha,fase,considerarRotaCompleta) {
     // A saída do PCP rumo à acabadora precede as etapas executadas por ela.
     return !['rec_acab','acab','kit'].includes(fase) ||
       (window.pgEhFonteAcabadora?.(linha) ?? normal(linha?._SOURCE).includes('ACAB')) ||
-      !window.pgEhDestinoAcabadora?.(linha);
+      !(considerarRotaCompleta ? window.pgTransferenciaParaAcabadoraNoFunil(linha) : window.pgEhDestinoAcabadora?.(linha));
   }
   window.pgConclusaoFasePorColeta = function(linha,faseId,corte) {
     var fase = typeof faseId === 'object' && faseId ? faseId.id : faseId;
@@ -176,7 +183,7 @@
         'coleta-integral-na-acabadora-da-mesma-rota',
         'coleta-parcial-na-acabadora-da-mesma-rota'].includes(s.motivo);
     if (!seguro(estado)) return null;
-    var coletado = coletaDaLinhaComprovaFase(linha,fase)
+    var coletado = coletaDaLinhaComprovaFase(linha,fase,considerarRotaCompleta)
       ? Math.min(estado.total,Math.max(0,estado.coletado)) : 0;
     if (seguro(transferencia) && (considerarRotaCompleta || fasesAntesDaAcabadora.has(fase) || window.belongsToPhase?.(linha,fase)))
       coletado = Math.max(coletado,Math.min(transferencia.total,Math.max(0,transferencia.coletado)));

@@ -19,10 +19,11 @@ const row = (id, extra = {}) => ({
 // a pintura da curva e a comunicação de exportação são simulados.
 function portal(rows, fases = ['col_mapa', 'col_tp'], recorte = {}) {
   const destino = recorte.destino || 'TODOS';
+  const origem = recorte.origem || 'TODOS';
   const baseCanonica = recorte.baseCanonica || rows;
   const controles = new Map([
     ['filtroReferencia', { value: 'replan' }],
-    ['pgFiltroOrigem', { value: 'TODOS' }],
+    ['pgFiltroOrigem', { value: origem }],
     ['pgFiltroDestino', { value: destino }],
     ['containerFunilVisual', { innerHTML: '' }],
     ...tabelas.flatMap(s => [
@@ -65,7 +66,7 @@ function portal(rows, fases = ['col_mapa', 'col_tp'], recorte = {}) {
   }
   c.baseCanonicaTeste = baseCanonica;
   vm.runInContext(`dtHojeISO='${hoje}';dtHoje=new Date('${hoje}T12:00:00');dadosFiltrados=baseCanonicaTeste;`, c);
-  c.pgOrigemAtivaPortal = 'TODOS';
+  c.pgOrigemAtivaPortal = origem;
   c.pgDestinoAtivoPortal = destino;
   c.dadosSemFiltroCD = rows;
   c.dadosDestinoCDFinal = baseCanonica;
@@ -173,13 +174,16 @@ test('Impressão e Kit comprovam as etapas anteriores dos próprios lotes, mesmo
 });
 
 test('saída do PCP para a acabadora comprova apenas a perna já percorrida', () => {
-  const l = row('transferencia', {CD_MAPA:'HR',CD_FINAL:'HR','CD DESTINO':'HR',DT_ENTREGA_DG:hoje});
-  const p = portal([l],['env','imp','oc','acab','kit']);
-  const html = p.controles.get('containerFunilVisual').innerHTML;
-  assert.ok(html.includes('Impressão (100.0%)'));
-  assert.ok(html.includes('O.C. (100.0%)'));
-  assert.ok(html.includes('Acabamento (0.0%)'));
-  assert.ok(html.includes('Form. Kit (0.0%)'));
+  for (const [destino, recorte] of [['HR',{}],['ATHOS',{origem:'GRAFICA',destino:'ACAB'}]]) {
+    const l = row('transferencia', {CD_MAPA:destino,CD_FINAL:destino,'CD DESTINO':destino,
+      DT_ENTREGA_DG:hoje,Coleta_TP:hoje,'TIRAGEM COLETADA':100,'TIRAGEM AGENDADA':0});
+    const p = portal([l],['env','imp','oc','acab','kit'],recorte);
+    const html = p.controles.get('containerFunilVisual').innerHTML;
+    assert.ok(html.includes('Impressão (100.0%)'),destino);
+    assert.ok(html.includes('O.C. (100.0%)'),destino);
+    assert.ok(html.includes('Acabamento (0.0%)'),destino);
+    assert.ok(html.includes('Form. Kit (0.0%)'),destino);
+  }
 });
 
 function linhaSeries(p, tabela) {
