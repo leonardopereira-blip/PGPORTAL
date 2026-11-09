@@ -3739,12 +3739,11 @@ let tRef = document.getElementById('filtroReferencia').value;
                 }
 
                 if(isReal || (f.id === 'col_mapa' && tFaseReal > 0)) {
-                    const considerado = Math.min(tBase, Math.max(0, tFaseReal));
                     [fTotais[f.id], mGrid[m][f.id], gGrid[g][f.id]].forEach(c => {
                         c.real += tFaseReal;
-                        c.considerado += considerado;
+                        c.considerado += tFaseReal;
                         c[src].real += tFaseReal;
-                        c[src].considerado += considerado;
+                        c[src].considerado += tFaseReal;
                     });
                 }
 
