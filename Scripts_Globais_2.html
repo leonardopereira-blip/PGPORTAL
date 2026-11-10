@@ -8497,6 +8497,19 @@ window.exportarPendenciasGiroVisiveis = function() {
     if (!itens.length) { alert('Nenhum item filtrado para exportar.'); return; }
     const btn = document.getElementById('btnExportarFiltrados');
     if (btn.disabled) return;
+    const observacaoAtual = (tipo, chave) => {
+        const escopo = tipo === 'SKU' ? 'sku' : 'master';
+        const historico = window.pgGiroHistoricoParaChave?.(tipo, chave) || window.HISTORICO_OBS_GIRO?.[escopo]?.[chave] || [];
+        return historico[0]?.obs || '';
+    };
+    const lerDadosExibidos = ({idCampoNovaData, ...linha}) => ({
+        ...linha,
+        novaData: document.getElementById(idCampoNovaData)?.value || '',
+        observacaoGeral: observacaoAtual('MASTER', linha.chaveMaster),
+        ...(linha.chaveSku ? {observacaoSku: observacaoAtual('SKU', linha.chaveSku)} : {})
+    });
+    const linhas = itens.map(lerDadosExibidos);
+    const gruposGiro = (window.pgGiroGruposExportar || []).map(lerDadosExibidos);
     btn.disabled = true;
     const aba = window.open('about:blank', '_blank');
     const falha = erro => { btn.disabled = false; if (aba) aba.close(); alert('Erro ao gerar planilha: ' + erro); };
@@ -8506,7 +8519,7 @@ window.exportarPendenciasGiroVisiveis = function() {
         if (aba) aba.location.href = res.url;
         else window.open(res.url, '_blank');
         if (res.aviso) alert(res.aviso);
-    }).withFailureHandler(falha).gerarPlanilhaGiroFiltrado(itens, { resumoGiro: true });
+    }).withFailureHandler(falha).gerarPlanilhaGiroFiltrado(linhas, { resumoGiro: true, gruposGiro });
 };
 
 // PG_GIRO_PRAZOS_V41
@@ -8611,11 +8624,14 @@ window.reFiltrarTabelaGiro = function() {
     // nunca cobre o saldo de outro. Arredondar só na exibição, dentro da faixa real.
     const estadosMapa = new WeakMap();
     const pctColetadoGiro = (coberto, previsto) => previsto > 0 ? 100 * coberto / previsto : null;
-    const fmtPctColetadoGiro = percentual => {
-        if (percentual === null) return '—';
+    const pctColetadoDuasCasas = percentual => {
         const limite = percentual < 90 ? 89.99 : percentual < 100 ? 99.99 : 100;
-        return Math.min(percentual, limite).toFixed(2).replace('.', ',') + '%';
+        return Math.min(percentual, limite).toFixed(2);
     };
+    const fmtPctColetadoGiro = percentual => percentual === null ? '—' :
+        pctColetadoDuasCasas(percentual).replace('.', ',') + '%';
+    const pctColetadoPlanilha = percentual => percentual === null ? null :
+        Number(pctColetadoDuasCasas(percentual).replace('.', '')) / 10000;
     const corPctColetadoGiro = percentual => percentual === null ? 'text-slate-500' :
         percentual === 100 ? 'text-emerald-700' : percentual >= 90 ? 'text-amber-800' : 'text-red-700';
     const escaparCodigoGiro = valor => valor.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -9025,26 +9041,6 @@ let arrGrupos = Object.values(grupos);
         return true;
     });
 
-    window.pgGiroLinhasExportar = arrGrupos.flatMap(g => {
-        const chaveMaster = window.pgGiroChaveObs('MASTER',
-            `${g.grafica}|${g.marca}|${g.serie}|${g.envio}|${g.cd}`);
-        const responsavel = typeof window.pgResponsavelGraficaGiro === 'function'
-            ? window.pgResponsavelGraficaGiro(g.grafica) : { analista: '', time: '' };
-        return g.skus.map(l => ({
-            grafica: g.grafica, marca: g.marca, serie: g.serie, cd: l.cd || g.cd,
-            sku: l.sku, desc: l.descricao,
-            tipo: l.tipo, clientePersonalizado: l.clientePersonalizado,
-            status: l.statusLinha, pendencia: l.pendencia, dias: l.escala, tiragem: l.tiragem,
-            analista: responsavel.analista, time: responsavel.time,
-            chaveMaster: chaveMaster, chaveSku: window.pgGiroChaveObs('SKU', l.chaveUnica)
-        }));
-    });
-
-    if (arrGrupos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="15" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
-        return;
-    }
-
     // APLICA ORDENAÇÃO MÚLTIPLA
     arrGrupos.sort((a, b) => {
         if (window.GIRO_SORT_RULES.length === 0) return b.tiragemTotal - a.tiragemTotal; 
@@ -9069,6 +9065,41 @@ let arrGrupos = Object.values(grupos);
         }
         return 0;
     });
+
+    const idCampoDataGiro = (grupo, sku) => `girodata_${grupo}${sku === undefined ? '' : '_' + sku}`;
+    const gruposExportar = [];
+    window.pgGiroLinhasExportar = arrGrupos.flatMap((g, indiceGrupo) => {
+        const chaveMaster = window.pgGiroChaveObs('MASTER',
+            `${g.grafica}|${g.marca}|${g.serie}|${g.envio}|${g.cd}`);
+        gruposExportar.push({
+            grafica: g.grafica, marca: g.marca, serie: g.serie, cd: g.cd, envio: g.envio,
+            status: g.statusGrupo === 'Em Aberto' ? 'Zerado' : g.statusGrupo,
+            pendencia: Array.from(g.pendencias).join(', ') || '-',
+            qtdSkusPendentes: g.qtdSkusPendentes, qtdSkusTotal: g.qtdSkusTotal, qtdSkusColetados: g.qtdSkusColetados,
+            tiragemTotal: g.tiragemTotal, tiragemPrevistaTotal: g.tiragemPrevistaTotal, tiragemColetadaTotal: g.tiragemColetadaTotal,
+            percentualColetado: pctColetadoPlanilha(g.percentualColetado),
+            chaveMaster, idCampoNovaData: idCampoDataGiro(indiceGrupo)
+        });
+        const responsavel = typeof window.pgResponsavelGraficaGiro === 'function'
+            ? window.pgResponsavelGraficaGiro(g.grafica) : { analista: '', time: '' };
+        return g.skus.map((l, indiceSku) => ({
+            grafica: g.grafica, marca: g.marca, serie: g.serie, cd: l.cd || g.cd, envio: g.envio,
+            sku: l.sku, desc: l.descricao,
+            tipo: l.tipo, clientePersonalizado: l.clientePersonalizado,
+            status: l.statusLinha, pendencia: l.pendencia, dias: l.escala, tiragem: l.tiragem,
+            tiragemOriginal: l.tiragemOriginal, tiragemColetada: l.tiragemColetada,
+            percentualColetado: pctColetadoPlanilha(l.percentualColetado), kitPcp: l.kitPcp, mapasSaida: l.mapasSaida.join(', '),
+            analista: responsavel.analista, time: responsavel.time,
+            chaveMaster, chaveSku: window.pgGiroChaveObs('SKU', l.chaveUnica),
+            idCampoNovaData: idCampoDataGiro(indiceGrupo, indiceSku)
+        }));
+    });
+    window.pgGiroGruposExportar = gruposExportar;
+
+    if (arrGrupos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="15" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
+        return;
+    }
 
     ['grafica', 'marca', 'serie', 'status', 'pendencia', 'qtd', 'qtdSkusTotal', 'qtdSkusColetados', 'tiragemTotal', 'tiragemPrevistaTotal', 'tiragemColetadaTotal', 'percentualColetado'].forEach(k => {
         let el = document.getElementById(`sort_${k}`);
@@ -9154,7 +9185,7 @@ let arrGrupos = Object.values(grupos);
         ${badgeTempoMaster}
         </div>
         </td>
-        <td class="p-2">${window.pgGiroCampoNovaData?.(g.skus.map(x => x.linhaPrevisao),'girodata_'+indexGrupo) || '—'}</td>
+        <td class="p-2">${window.pgGiroCampoNovaData?.(g.skus.map(x => x.linhaPrevisao),idCampoDataGiro(indexGrupo)) || '—'}</td>
         </tr>
         <tr id="${idSubTabela}" class="hidden subtabela-detalhes bg-indigo-50/30 border-b border-indigo-100">
         <td colspan="15" class="p-0">
@@ -9225,7 +9256,7 @@ let arrGrupos = Object.values(grupos);
             ${primeiraObsSku ? btnHistSku : ''}
             </div>
             </td>
-            <td class="p-1.5">${window.pgGiroCampoNovaData?.([item.linhaPrevisao],'girodata_'+indexGrupo+'_'+indiceSku) || '—'}</td>
+            <td class="p-1.5">${window.pgGiroCampoNovaData?.([item.linhaPrevisao],idCampoDataGiro(indexGrupo, indiceSku)) || '—'}</td>
             </tr>
             `;
         });

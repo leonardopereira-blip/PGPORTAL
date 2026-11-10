@@ -761,52 +761,77 @@ function gerarPlanilhaGiroFiltrado(dados, opcoes) {
     var nomeArquivo = "Giro_Filtrado_" + Utilities.formatDate(new Date(), "GMT-3", "dd_MM_yyyy_HHmm");
     var ss = SpreadsheetApp.create(nomeArquivo);
     var criarResumoGiro = !!(opcoes && opcoes.resumoGiro === true);
+    var exportarTelaGiro = criarResumoGiro && Array.isArray(opcoes.gruposGiro);
     var resumo = criarResumoGiro ? ss.getActiveSheet() : null;
     if (resumo) resumo.setName("Resumo_Atrasos");
     var aba = resumo ? ss.insertSheet("Giro_Filtrado") : ss.getActiveSheet();
     if (!resumo) aba.setName("Giro_Filtrado");
 
     dados = Array.isArray(dados) ? dados.slice() : [];
-    // Ordena do mais atrasado (negativo) para o mais positivo.
-    dados.sort(function(a, b) { return a.dias - b.dias; });
+    if (exportarTelaGiro) {
+      ss.setSpreadsheetLocale('pt_BR');
+      pgEscreverAbaTelaGiro_(aba, dados, [
+        ['Gráfica', 'grafica'], ['Marca', 'marca'], ['Série', 'serie'], ['CD', 'cd'],
+        ['Envio', 'envio'], ['SKU', 'sku'], ['Descrição', 'desc'],
+        ['Status', 'status'], ['Etapa Pendente', 'pendencia'],
+        ['Dias de Atraso', 'dias', '#,##0'], ['Tiragem pendente', 'tiragem', '#,##0'],
+        ['Tiragem total', 'tiragemOriginal', '#,##0'], ['Tiragem coletada', 'tiragemColetada', '#,##0'],
+        ['% coletado', 'percentualColetado', '0.00%'], ['Kit PCP', 'kitPcp'],
+        ['Mapa de saída', 'mapasSaida'], ['Observações (Ação / Motivo)', 'observacaoGeral'],
+        ['Observação Específica do SKU', 'observacaoSku'], ['Nova data', 'novaData', 'dd/mm/yyyy'],
+        ['Analista', 'analista'], ['Time', 'time'], ['Tipo', 'tipo'],
+        ['Cliente personalizado', 'clientePersonalizado']
+      ]);
+      pgEscreverAbaTelaGiro_(ss.insertSheet("Giro_Grupos"), opcoes.gruposGiro, [
+        ['Gráfica', 'grafica'], ['Marca', 'marca'], ['Série', 'serie'], ['CD', 'cd'],
+        ['Envio', 'envio'], ['Status Geral', 'status'], ['Etapa Pendente', 'pendencia'],
+        ['SKUs pendentes', 'qtdSkusPendentes', '#,##0'], ['SKUs totais', 'qtdSkusTotal', '#,##0'],
+        ['SKUs coletados', 'qtdSkusColetados', '#,##0'], ['Tiragem pendente', 'tiragemTotal', '#,##0'],
+        ['Tiragem total', 'tiragemPrevistaTotal', '#,##0'],
+        ['Tiragem coletada', 'tiragemColetadaTotal', '#,##0'], ['% coletado', 'percentualColetado', '0.00%'],
+        ['Observações (Ação / Motivo)', 'observacaoGeral'], ['Nova data', 'novaData', 'dd/mm/yyyy']
+      ]);
+    } else {
+      // As outras visões mantêm a exportação e a ordenação anteriores.
+      dados.sort(function(a, b) { return a.dias - b.dias; });
 
-    // As observações ficam nas abas históricas do Giro, não na base PCP.
-    // Consultar a fonte no momento de exportar evita notas ausentes por
-    // carregamento assíncrono ou por atualização posterior ao filtro.
-    var temChavesObs = dados.some(function(d) { return d.chaveMaster || d.chaveSku; });
-    var historico = temChavesObs ? buscarHistoricoObsGiro() : {master:{}, sku:{}};
-    var notaMaisRecente = function(escopo, chave) {
-      var registros = (historico[escopo] || {})[String(chave || '')] || [];
-      return registros.length ? String(registros[0].obs || '').trim() : '';
-    };
-    var observacoes = dados.map(function(d) {
-      var geral = notaMaisRecente('master', d.chaveMaster);
-      var sku = notaMaisRecente('sku', d.chaveSku);
-      if (geral && sku && geral !== sku) return 'Geral: ' + geral + '\nSKU: ' + sku;
-      return sku || geral || '';
-    });
-    var temObservacoes = observacoes.some(function(nota) { return !!nota; });
+      // As observações ficam nas abas históricas do Giro, não na base PCP.
+      // Os outros pontos de entrada consultam a fonte no momento da exportação.
+      var temChavesObs = dados.some(function(d) { return d.chaveMaster || d.chaveSku; });
+      var historico = temChavesObs ? buscarHistoricoObsGiro() : {master:{}, sku:{}};
+      var notaMaisRecente = function(escopo, chave) {
+        var registros = (historico[escopo] || {})[String(chave || '')] || [];
+        return registros.length ? String(registros[0].obs || '').trim() : '';
+      };
+      var observacoes = dados.map(function(d) {
+        var geral = notaMaisRecente('master', d.chaveMaster);
+        var sku = notaMaisRecente('sku', d.chaveSku);
+        if (geral && sku && geral !== sku) return 'Geral: ' + geral + '\nSKU: ' + sku;
+        return sku || geral || '';
+      });
+      var temObservacoes = observacoes.some(function(nota) { return !!nota; });
 
-    var cabecalho = ["Gráfica", "Marca", "Série", "CD", "SKU", "Descrição",
-        "Status Geral", "Etapa Pendente", "Dias de Atraso", "Tiragem",
-        "Analista", "Time", "Tipo", "Cliente personalizado"];
-    if (temObservacoes) cabecalho.push("Observações");
-    aba.appendRow(cabecalho);
-    aba.getRange(1, 1, 1, cabecalho.length).setFontWeight("bold").setBackground("#0f172a").setFontColor("#ffffff");
+      var cabecalho = ["Gráfica", "Marca", "Série", "CD", "SKU", "Descrição",
+          "Status Geral", "Etapa Pendente", "Dias de Atraso", "Tiragem",
+          "Analista", "Time", "Tipo", "Cliente personalizado"];
+      if (temObservacoes) cabecalho.push("Observações");
+      aba.appendRow(cabecalho);
+      aba.getRange(1, 1, 1, cabecalho.length).setFontWeight("bold").setBackground("#0f172a").setFontColor("#ffffff");
 
-    var linhas = dados.map(function(d, i) {
-      var linha = [d.grafica, d.marca, d.serie, d.cd || '', d.sku, d.desc,
-          d.status, d.pendencia, d.dias, d.tiragem,
-          d.analista || '', d.time || '', d.tipo || '', d.clientePersonalizado || ''];
-      if (temObservacoes) linha.push(observacoes[i]);
-      return linha;
-    });
-    
-    if (linhas.length > 0) {
+      var linhas = dados.map(function(d, i) {
+        var linha = [d.grafica, d.marca, d.serie, d.cd || '', d.sku, d.desc,
+            d.status, d.pendencia, d.dias, d.tiragem,
+            d.analista || '', d.time || '', d.tipo || '', d.clientePersonalizado || ''];
+        if (temObservacoes) linha.push(observacoes[i]);
+        return linha;
+      });
+
+      if (linhas.length > 0) {
         aba.getRange(2, 1, linhas.length, cabecalho.length).setValues(linhas);
+      }
+      aba.autoResizeColumns(1, cabecalho.length);
+      aba.setFrozenRows(1);
     }
-    aba.autoResizeColumns(1, cabecalho.length);
-    aba.setFrozenRows(1);
 
     if (resumo) {
       var agrupado = pgResumoAtrasosGiro(dados);
@@ -829,6 +854,18 @@ function gerarPlanilhaGiroFiltrado(dados, opcoes) {
         });
       });
       if (linhasResumo.length) {
+        if (exportarTelaGiro) {
+          var linhasNecessarias = linhasResumo.length + 1;
+          var maxLinhasResumo = resumo.getMaxRows();
+          if (linhasNecessarias > maxLinhasResumo) {
+            resumo.insertRowsAfter(maxLinhasResumo, linhasNecessarias - maxLinhasResumo);
+          }
+          linhasResumo = linhasResumo.map(function(linha) {
+            return linha.map(function(celula) {
+              return typeof celula === 'string' ? pgTextoExportacaoGiro_(celula) : celula;
+            });
+          });
+        }
         resumo.getRange(2, 1, linhasResumo.length, titulosResumo.length)
             .setValues(linhasResumo);
         subtotais.forEach(function(l) {
@@ -863,10 +900,58 @@ function gerarPlanilhaGiroFiltrado(dados, opcoes) {
         aviso = 'Planilha compartilhada com você para edição. O Google Drive não permitiu transferir a propriedade.';
       }
     }
-    return { success: true, url: ss.getUrl(), proprietarioTransferido: transferido, aviso: aviso };
+    var url = ss.getUrl();
+    if (exportarTelaGiro) url += '#gid=' + aba.getSheetId();
+    return { success: true, url: url, proprietarioTransferido: transferido, aviso: aviso };
   } catch(e) {
     return { success: false, error: e.toString() };
   }
+}
+
+function pgTextoExportacaoGiro_(valor) {
+  var texto = String(valor == null ? '' : valor);
+  // O Sheets interpreta texto iniciado por "=" em setValues como fórmula.
+  return /^[\s\u200b]*[=+@'\-]/.test(texto) ? "'" + texto : texto;
+}
+
+function pgEscreverAbaTelaGiro_(aba, dados, colunas) {
+  var quantidade = dados.length;
+  var maxLinhas = aba.getMaxRows(), maxColunas = aba.getMaxColumns();
+  if (quantidade + 1 > maxLinhas) aba.insertRowsAfter(maxLinhas, quantidade + 1 - maxLinhas);
+  if (colunas.length > maxColunas) aba.insertColumnsAfter(maxColunas, colunas.length - maxColunas);
+  aba.appendRow(colunas.map(function(coluna) { return coluna[0]; }));
+  aba.getRange(1, 1, 1, colunas.length).setFontWeight("bold").setBackground("#0c2340").setFontColor("#ffffff");
+  aba.setFrozenRows(1);
+  if (quantidade) {
+    var corpo = aba.getRange(2, 1, quantidade, colunas.length).setNumberFormat('@');
+    var linhas = dados.map(function(d) {
+      return colunas.map(function(coluna) {
+        var valor = d[coluna[1]];
+        if (!coluna[2]) return pgTextoExportacaoGiro_(valor);
+        if (coluna[2] === 'dd/mm/yyyy') {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(String(valor))) return '';
+          var data = new Date(valor + 'T00:00:00Z');
+          if (!isFinite(data.getTime()) || data.toISOString().slice(0, 10) !== valor) return '';
+          // Serial civil do Sheets, independente do fuso de quem exporta.
+          return (data.getTime() - Date.UTC(1899, 11, 30)) / 86400000;
+        }
+        return typeof valor === 'number' && Number.isFinite(valor) ? valor : '';
+      });
+    });
+    colunas.forEach(function(coluna, i) {
+      if (!coluna[2]) return;
+      var intervalo = aba.getRange(2, i + 1, quantidade, 1).setNumberFormat(coluna[2]);
+      if (coluna[2] === '0.00%') {
+        intervalo.setFontColors(linhas.map(function(linha) {
+          var percentual = linha[i];
+          return [percentual === '' ? '#64748b' : percentual === 1 ? '#047857' :
+            percentual >= 0.9 ? '#92400e' : '#b91c1c'];
+        }));
+      }
+    });
+    corpo.setValues(linhas);
+  }
+  aba.autoResizeColumns(1, colunas.length);
 }
 
 

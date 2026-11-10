@@ -8,11 +8,12 @@ const source = fs.readFileSync(path.join(root, 'Scripts_Globais_2.html'), 'utf8'
 const giro = source.slice(source.indexOf('window.reFiltrarTabelaGiro = function()'),
   source.indexOf('\n</script>', source.indexOf('window.reFiltrarTabelaGiro = function()')));
 const servidor = fs.readFileSync(path.join(root, 'SalvaJson.js'), 'utf8');
-const exportacao = servidor.slice(servidor.indexOf('function gerarPlanilhaGiroFiltrado('),
+const exportacao = servidor.slice(servidor.indexOf('function pgResumoAtrasosGiro('),
   servidor.indexOf('function gerarPlanilhaReportExecutiva('));
 
 function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',ee='',campos={},materiais=null,
-  pos=false,temCampos=true,ordenacao=[],retornarTela=false,historico={master:{},sku:{}}}) {
+  pos=false,temCampos=true,ordenacao=[],retornarTela=false,historico={master:{},sku:{}},
+  configurarJanela,retornarContexto=false}) {
   const el = {};
   const linha = {TIRAGEM:100,SKU:'SKU-1',UNIDADE:'COC','GRÁFICA':'LOGPRINT',
     'CD DESTINO':'CD JDI',ENVIO:'V1','SÉRIE':'Série antiga',SERIE_CORRIGIDA:serie,
@@ -43,7 +44,9 @@ function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',e
   const make = new Function('window','document','dtHojeISO','ETAPAS_MAPA','getValFromCols',
     'isDateFilled','parseValidDate','calcDiffDiasISO','FASES','Date',giro);
   make(w,doc,'2026-10-15',[],()=>null,v=>Boolean(v),v=>v?new Date(v):null,()=>0,[],DataFixa);
+  configurarJanela?.(w);
   w.reFiltrarTabelaGiro();
+  if (retornarContexto) return {w,doc,el};
   return retornarTela ? {linhas:w.pgGiroLinhasExportar,html:el.tbodyPontosAtencaoGiro.innerHTML}
     : w.pgGiroLinhasExportar;
 }
@@ -145,16 +148,42 @@ test('ordenação por pendência usa os dias da coleta também no Pós',()=>{
   assert.ok(tela.html.indexOf('MARCA-9') < tela.html.indexOf('MARCA-6'));
 });
 
-function executarExportacao(email,{podeTransferir=true,dados,historico={master:{},sku:{}}}={}) {
-  let owner='autor@empresa.com', editor='', criações=0, cabecalho=[], linhas=[];
-  const sheet={setName(){},appendRow(row){cabecalho=row},getRange(){return {setFontWeight(){return this},
-    setBackground(){return this},setFontColor(){return this},setValues(rows){linhas=rows;return this}}},
-    autoResizeColumns(){},setFrozenRows(){}};
+function executarExportacao(email,{podeTransferir=true,dados,opcoes,historico={master:{},sku:{}}}={}) {
+  let owner='autor@empresa.com', editor='', criações=0, proximoIdAba=0;
+  const abas={};
+  const criarAba=()=>{
+    const conteudo=[], formatos=[], cores=[];
+    const idAba=proximoIdAba++;
+    return {
+      getSheetId:()=>idAba,
+      setName(nome){abas[nome]={conteudo,formatos,cores}},
+      appendRow(row){conteudo.push(row)},
+      getRange(linha,coluna,altura=1,largura=1){
+        return {
+          setFontWeight(){return this},setBackground(){return this},setFontColor(){return this},
+          setFontColors(valores){cores.push({linha,coluna,valores});return this},setWrap(){return this},
+          setNumberFormat(formato){formatos.push({linha,coluna,altura,largura,formato});return this},
+          setValues(rows){
+            rows.forEach((valores,i)=>{
+              const destino=conteudo[linha+i-1]??=[];
+              valores.forEach((valor,j)=>{destino[coluna+j-1]=valor});
+            });
+            return this;
+          },
+          setValue(valor){return this.setValues([[valor]])}
+        };
+      },
+      getMaxRows:()=>1000,getMaxColumns:()=>26,insertRowsAfter(){},insertColumnsAfter(){},
+      autoResizeColumns(){},setFrozenRows(){}
+    };
+  };
+  const sheet=criarAba();
   const arquivo={getOwner:()=>({getEmail:()=>owner}),
     setOwner:dest=>{if(!podeTransferir)throw Error('Política');owner=dest},
     addEditor:dest=>{editor=dest}};
   const ss={getId:()=> 'id',getUrl:()=> 'https://docs.google.com/spreadsheets/d/id',
-    getActiveSheet:()=>sheet};
+    getActiveSheet:()=>sheet,setSpreadsheetTimeZone(){},setSpreadsheetLocale(){},
+    insertSheet(nome){const aba=criarAba();aba.setName(nome);return aba}};
   const Sheets={create:()=>{criações++;return ss},flush(){}};
   const DriveApp={getFileById:()=>arquivo};
   const Utilities={formatDate:()=> '2026_10_15'};
@@ -163,13 +192,15 @@ function executarExportacao(email,{podeTransferir=true,dados,historico={master:{
     exportacao+'\nreturn gerarPlanilhaGiroFiltrado;')(Sheets,DriveApp,Utilities,Session,()=>historico);
   const entrada=dados||[{grafica:'A',marca:'COC',serie:'2º ANO',cd:'CD FOR',sku:'SKU',desc:'D',
     status:'Em Aberto',pendencia:'Coleta Mapa',dias:0,tiragem:100}];
-  const resultado=fn(entrada);
-  return {resultado,owner,editor,criações,cabecalho,linhas};
+  const resultado=fn(entrada,opcoes);
+  const [cabecalho=[],...linhas]=abas.Giro_Filtrado?.conteudo||[];
+  return {resultado,owner,editor,criações,cabecalho,linhas,abas};
 }
 
 test('exportação transfere a propriedade para o autor autenticado quando permitido',()=>{
   const r=executarExportacao('colega@empresa.com');
   assert.equal(r.resultado.success,true);
+  assert.equal(r.resultado.url,'https://docs.google.com/spreadsheets/d/id');
   assert.equal(r.resultado.proprietarioTransferido,true);
   assert.equal(r.owner,'colega@empresa.com');
 });
@@ -253,6 +284,119 @@ test('observações atuais de grupo e SKU aparecem só nas linhas correspondente
   assert.equal(r.linhas[1][idx],'');
   assert.equal(r.linhas[0][3],'CD JDI');
   assert.equal(r.linhas[1][2],'2º ANO');
+});
+
+test('Exportar Filtrados leva quantidades e porcentagens da tela por SKU e por grupo',()=>{
+  const dados=[
+    {grafica:'WALPRINT',marca:'SPE',serie:'INF 3',cd:'POSIGRAF',sku:'EXCESSO',desc:'Portfólio',
+      status:'Coletado a mais',pendencia:'-',dias:0,tiragem:0,tiragemOriginal:19254,
+      tiragemColetada:20000,percentualColetado:1,kitPcp:'0007',mapasSaida:'MP-EXCESSO'},
+    {grafica:'WALPRINT',marca:'SPE',serie:'INF 4',cd:'POSIGRAF',sku:'FALTA-UM',desc:'Portfólio',
+      status:'Coletado a menos',pendencia:'Coleta Mapa',dias:-27,tiragem:1,tiragemOriginal:26192,
+      tiragemColetada:26191,percentualColetado:0.9999,kitPcp:'KIT-PCP',mapasSaida:'MP-01, MP-02',
+      observacaoGeral:'Prazo geral visível',observacaoSku:'Prazo do SKU visível',novaData:'2026-11-15'},
+    {grafica:'WALPRINT',marca:'SPE',serie:'INF 2',cd:'POSIGRAF',sku:'SEM-PLANO',desc:'Portfólio',
+      status:'Em Aberto',pendencia:'Coleta Mapa',dias:2,tiragem:0,tiragemOriginal:0,
+      tiragemColetada:0,percentualColetado:null,kitPcp:'',mapasSaida:'',observacaoSku:'=1+1'}
+  ];
+  const gruposGiro=[
+    {grafica:'WALPRINT',marca:'SPE',serie:'INF 4',cd:'POSIGRAF',envio:'V1',status:'Coletado a menos',
+      pendencia:'Coleta Mapa',qtdSkusPendentes:1,qtdSkusTotal:2,qtdSkusColetados:0,
+      tiragemTotal:1,tiragemPrevistaTotal:26192,tiragemColetadaTotal:26191,percentualColetado:0.9999,
+      observacaoGeral:'Prazo geral visível',novaData:'2026-11-16'},
+    {grafica:'WALPRINT',marca:'SPE',serie:'INF 3',cd:'POSIGRAF',envio:'V1',status:'Coletado a mais',
+      pendencia:'-',qtdSkusPendentes:0,qtdSkusTotal:1,qtdSkusColetados:1,
+      tiragemTotal:0,tiragemPrevistaTotal:19254,tiragemColetadaTotal:20000,percentualColetado:1}
+  ];
+  const r=executarExportacao('colega@empresa.com',{dados,opcoes:{resumoGiro:true,gruposGiro}});
+  assert.equal(r.resultado.success,true,r.resultado.error);
+  assert.deepEqual(Object.keys(r.abas).sort(),['Giro_Filtrado','Giro_Grupos','Resumo_Atrasos']);
+  assert.equal(r.resultado.url,'https://docs.google.com/spreadsheets/d/id#gid=1');
+  const tabela=nome=>{
+    const [cabecalho,...linhas]=r.abas[nome].conteudo;
+    assert(linhas.every(linha=>linha.length===cabecalho.length));
+    return linhas.map(linha=>Object.fromEntries(cabecalho.map((titulo,i)=>[titulo,linha[i]])));
+  };
+  const dataSheets=(dia)=>(Date.UTC(2026,10,dia)-Date.UTC(1899,11,30))/86400000;
+  const [excesso,parcial,semPlano]=tabela('Giro_Filtrado');
+  assert.deepEqual([excesso.SKU,parcial.SKU,semPlano.SKU],['EXCESSO','FALTA-UM','SEM-PLANO']);
+  assert.equal(excesso.Status,'Coletado a mais');
+  assert.equal(parcial.Status,'Coletado a menos');
+  const metricas=['Tiragem pendente','Tiragem total','Tiragem coletada','% coletado'];
+  assert.deepEqual(metricas.map(nome=>parcial[nome]),[1,26192,26191,0.9999]);
+  assert.deepEqual(metricas.map(nome=>excesso[nome]),[0,19254,20000,1]);
+  assert.equal(semPlano['% coletado'],'');
+  assert.equal(parcial['Kit PCP'],'KIT-PCP');
+  assert.equal(excesso['Kit PCP'],'0007');
+  assert.equal(parcial['Mapa de saída'],'MP-01, MP-02');
+  assert.equal(parcial['Observações (Ação / Motivo)'],'Prazo geral visível');
+  assert.equal(parcial['Observação Específica do SKU'],'Prazo do SKU visível');
+  assert.equal(semPlano['Observação Específica do SKU'],"'=1+1",'anotação literal não vira fórmula');
+  assert.equal(parcial['Nova data'],dataSheets(15));
+  assert.equal(semPlano['Nova data'],'');
+  const [grupoParcial,grupoExcesso]=tabela('Giro_Grupos');
+  assert.equal(grupoParcial['Status Geral'],'Coletado a menos');
+  const contagens=['SKUs pendentes','SKUs totais','SKUs coletados'];
+  assert.deepEqual(contagens.map(nome=>grupoParcial[nome]),[1,2,0]);
+  assert.deepEqual(contagens.map(nome=>grupoExcesso[nome]),[0,1,1]);
+  assert.deepEqual(metricas.map(nome=>grupoParcial[nome]),[1,26192,26191,0.9999]);
+  assert.equal(grupoParcial['Observações (Ação / Motivo)'],'Prazo geral visível');
+  assert.equal(grupoParcial['Nova data'],dataSheets(16));
+  const detalhe=r.abas.Giro_Filtrado;
+  const coluna=titulo=>r.cabecalho.indexOf(titulo)+1;
+  assert(detalhe.formatos.some(f=>f.formato==='0.00%'&&f.coluna===coluna('% coletado')));
+  assert(detalhe.formatos.some(f=>f.formato==='dd/mm/yyyy'&&f.coluna===coluna('Nova data')));
+  assert.deepEqual(detalhe.cores.find(f=>f.coluna===coluna('% coletado'))?.valores,
+    [['#047857'],['#92400e'],['#64748b']]);
+  const atrasos=tabela('Resumo_Atrasos');
+  assert.equal(atrasos.length,2);
+  assert(atrasos.every(linha=>linha['Tiragem atrasada']===1&&linha['Maior atraso (dias)']===27));
+});
+
+test('clique em Exportar Filtrados usa as datas visíveis e as chaves do grupo e do SKU',()=>{
+  const {w,doc}=executarPos({retornarContexto:true,
+    estado:{pendente:true,parcial:true,saldo:1,coletada:26191},
+    eventos:[{categoria:'Tiragem vencida',volume:1,dias:0}],
+    campos:{Coleta_TP:'2026-10-09T12:00:00','TIRAGEM TOTAL':26192,'COD KIT':'KIT-PCP'},
+    materiais:[{SKU:'SKU-1',UNIDADE:'SPE-Z'},{SKU:'SKU-2',UNIDADE:'SPE-A'}],
+    ordenacao:[{col:'marca',dir:'asc'}],
+    configurarJanela:janela=>{
+      janela.pgCodigosMapasColetadosTPLinha=()=>['MP-01','MP-02'];
+      janela.pgGiroHistoricoParaChave=tipo=>[{obs:tipo==='MASTER'?'Nota geral visível':'Nota SKU visível'}];
+    }
+  });
+  doc.getElementById('girodata_0').value='2026-10-23';
+  doc.getElementById('girodata_0_0').value='2026-10-24';
+  doc.getElementById('girodata_1').value='2026-10-25';
+  doc.getElementById('girodata_1_0').value='2026-10-26';
+  const inicio=source.indexOf('window.exportarPendenciasGiroVisiveis = function()');
+  const trecho=source.slice(inicio,source.indexOf('\n};',inicio)+3);
+  let envio;
+  const run={
+    withSuccessHandler(){return this},
+    withFailureHandler(){return this},
+    gerarPlanilhaGiroFiltrado(dados,opcoes){envio={dados,opcoes}}
+  };
+  w.open=()=>null;
+  new Function('window','document','google','alert',trecho)(w,doc,{script:{run}},mensagem=>assert.fail(mensagem));
+  w.exportarPendenciasGiroVisiveis();
+  assert.equal(envio.opcoes.resumoGiro,true);
+  assert.deepEqual(envio.dados.map(item=>[item.sku,item.novaData]),
+    [['SKU-2','2026-10-24'],['SKU-1','2026-10-26']]);
+  assert.deepEqual(envio.opcoes.gruposGiro.map(item=>[item.marca,item.novaData]),
+    [['SPE-A','2026-10-23'],['SPE-Z','2026-10-25']]);
+  const [sku]=envio.dados;
+  const [grupo]=envio.opcoes.gruposGiro;
+  assert.equal(sku.chaveMaster,grupo.chaveMaster);
+  assert.match(sku.chaveSku,/SKU-2/);
+  assert.equal(sku.observacaoGeral,'Nota geral visível');
+  assert.equal(sku.observacaoSku,'Nota SKU visível');
+  assert.equal(grupo.observacaoGeral,'Nota geral visível');
+  assert.deepEqual([sku.tiragem,sku.tiragemOriginal,sku.tiragemColetada,sku.percentualColetado],
+    [1,26192,26191,0.9999]);
+  assert.equal(sku.kitPcp,'KIT-PCP');
+  assert.equal(sku.mapasSaida,'MP-01, MP-02');
+  assert.deepEqual([grupo.qtdSkusPendentes,grupo.qtdSkusTotal,grupo.qtdSkusColetados],[1,1,0]);
 });
 
 test('excedente fica fora das pendências por padrão',()=>{
