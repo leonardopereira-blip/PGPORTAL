@@ -27,6 +27,21 @@ test('meta conta cada pedido uma vez e entrega exige todos os componentes do kit
   assert.equal(incompleto.entregue, 0, 'um componente ausente impede confirmar kit completo');
 });
 
+test('a mesma referência de Pedido pode conter kits e CDs diferentes', () => {
+  const j = janela('3', [
+    linha('PEDIDO-REUTILIZADO', 'KIT-1', 'SKU-A', 40),
+    linha('PEDIDO-REUTILIZADO', 'KIT-2', 'SKU-A', 50, 'Fortaleza - CE'),
+    linha('PEDIDO-REUTILIZADO', 'KIT-2', 'SKU-B', 50, 'Fortaleza - CE')
+  ]);
+  const [r] = calcular([j], [mapa('KIT-1', 'SKU-A', 40),
+    mapa('KIT-2', 'SKU-A', 50, { destino: 'CD FOR' }),
+    mapa('KIT-2', 'SKU-B', 35, { destino: 'CD FOR' })]);
+  assert.deepEqual([r.pedidos, r.total, r.entregue, r.saldo], [2, 90, 75, 15]);
+
+  j.valores.push(linha('PEDIDO-REUTILIZADO', 'KIT-2', 'SKU-C', 51, 'Fortaleza - CE'));
+  assert.throws(() => calcular([j]), /Dados divergentes do pedido em Janela 3, linha 5/);
+});
+
 test('parcelas repetidas usam máximo por mapa, kit, componente e CD; kits distintos somam', () => {
   const j = janela('1', [linha('P-1', 'KIT-1', 'SKU', 100), linha('P-2', 'KIT-2', 'SKU', 100)]);
   const [r] = calcular([j], [mapa('KIT-1', 'SKU', 20), mapa('KIT-1', 'SKU', 25),

@@ -17,16 +17,16 @@
   #abaTempSasAdapt .pg-sas-content { max-width:1480px; width:100%; margin:0 auto; }
   #abaTempSasAdapt .pg-sas-status { min-height:20px; display:flex; align-items:center; gap:8px; margin:0 0 20px; color:var(--sas-muted); font-size:11px; line-height:1.6; }
   #abaTempSasAdapt .pg-sas-status::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--sas-blue); flex-shrink:0; }
-  #abaTempSasAdapt .pg-sas-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-bottom:24px; }
-  #abaTempSasAdapt .pg-sas-kpi { position:relative; overflow:hidden; min-width:0; padding:22px 24px 20px; border:1px solid var(--sas-line); border-radius:12px; background:#FFF; box-shadow:0 3px 14px rgba(12,35,64,.025); }
+  #abaTempSasAdapt .pg-sas-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; margin-bottom:24px; }
+  #abaTempSasAdapt .pg-sas-kpi { position:relative; overflow:hidden; min-width:0; padding:18px 21px; border-radius:12px; background:var(--sas-navy); color:#FFF; }
   #abaTempSasAdapt .pg-sas-kpi::before { content:''; position:absolute; inset:0 auto 0 0; width:4px; background:var(--sas-blue); }
-  #abaTempSasAdapt .pg-sas-kpi--navy::before { background:var(--sas-navy); }
+  #abaTempSasAdapt .pg-sas-kpi--blue { background:#284081; }
   #abaTempSasAdapt .pg-sas-kpi--orange::before { background:var(--sas-orange); }
-  #abaTempSasAdapt .pg-sas-kpi-label { margin:0; color:var(--sas-muted); font-size:11px; line-height:1.6; font-weight:600; }
-  #abaTempSasAdapt .pg-sas-kpi-value { margin:12px 0 3px; color:#2468AC; font-size:34px; line-height:1.25; font-weight:700; letter-spacing:-.045em; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
-  #abaTempSasAdapt .pg-sas-kpi--navy .pg-sas-kpi-value { color:var(--sas-navy); }
-  #abaTempSasAdapt .pg-sas-kpi--orange .pg-sas-kpi-value { color:#CF360B; }
-  #abaTempSasAdapt .pg-sas-kpi-detail { margin:5px 0 0; min-height:18px; color:var(--sas-muted); font-size:11px; line-height:1.65; }
+  #abaTempSasAdapt .pg-sas-kpi--origem { border:1px solid var(--sas-line); background:#FFF; color:var(--sas-navy); }
+  #abaTempSasAdapt .pg-sas-kpi-label { margin:0; color:inherit; font-size:10px; line-height:1.6; font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
+  #abaTempSasAdapt .pg-sas-kpi-value { margin:8px 0 2px; color:inherit; font-size:32px; line-height:1.25; font-weight:700; letter-spacing:-.04em; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  #abaTempSasAdapt .pg-sas-kpi-detail { margin:5px 0 0; min-height:18px; color:#D7E8F8; font-size:11px; line-height:1.65; }
+  #abaTempSasAdapt .pg-sas-kpi--origem .pg-sas-kpi-detail { color:var(--sas-muted); }
   #abaTempSasAdapt .pg-sas-panels { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:22px; }
   #abaTempSasAdapt .pg-sas-panel { min-width:0; overflow:hidden; border:1px solid var(--sas-line); border-radius:12px; background:#FFF; box-shadow:0 3px 14px rgba(12,35,64,.025); }
   #abaTempSasAdapt .pg-sas-panel--wide { grid-column:1/-1; }
@@ -51,13 +51,16 @@
   #abaTempSasAdapt tbody tr:hover { background:#F0F6FC; }
   #abaTempSasAdapt td[colspan] { padding:28px 22px; text-align:center; font-weight:400; color:var(--sas-muted); }
   #abaTempSasAdapt .pg-sas-table-wrap--sku thead { position:sticky; top:0; z-index:1; }
+  #abaTempSasAdapt .pg-sas-table-wrap--sku th:nth-child(-n+3), #abaTempSasAdapt .pg-sas-table-wrap--sku td:nth-child(-n+3) { text-align:left; }
+  #abaTempSasAdapt .pg-sas-table-wrap--sku td:first-child { min-width:140px; max-width:290px; white-space:normal; overflow-wrap:anywhere; }
+  #abaTempSasAdapt .pg-sas-pct { display:block; margin-top:2px; color:var(--sas-muted); font-size:10px; }
   #abaTempSasAdapt .pg-sas-filterbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:0 22px 18px; }
   #abaTempSasAdapt .pg-sas-search { width:min(100%,320px); min-height:39px; padding:10px 13px; border:1px solid #D4E0ED; border-radius:7px; color:var(--sas-navy); background:#FFF; font-size:11px; }
   #abaTempSasAdapt .pg-sas-search::placeholder { color:var(--sas-muted); }
   #abaTempSasAdapt .pg-sas-count { margin:0; color:var(--sas-muted); font-size:10px; }
   #abaTempSasAdapt svg { flex-shrink:0; }
   @media (min-width:1600px) { #abaTempSasAdapt .pg-sas-header { padding-top:34px; padding-bottom:34px; } #abaTempSasAdapt .pg-sas-body { padding-top:28px; } }
-  @media (max-width:1100px) { #abaTempSasAdapt .pg-sas-header, #abaTempSasAdapt .pg-sas-body { padding-left:22px; padding-right:22px; } #abaTempSasAdapt .pg-sas-panels { grid-template-columns:1fr; } #abaTempSasAdapt .pg-sas-kpi { padding:20px; } #abaTempSasAdapt .pg-sas-kpi-value { font-size:30px; } }
+  @media (max-width:1100px) { #abaTempSasAdapt .pg-sas-header, #abaTempSasAdapt .pg-sas-body { padding-left:22px; padding-right:22px; } #abaTempSasAdapt .pg-sas-panels { grid-template-columns:1fr; } #abaTempSasAdapt .pg-sas-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } #abaTempSasAdapt .pg-sas-kpi-value { font-size:30px; } }
   @media (max-width:720px) { #abaTempSasAdapt .pg-sas-header { padding:22px 18px; } #abaTempSasAdapt .pg-sas-header-inner { align-items:flex-start; flex-direction:column; gap:18px; } #abaTempSasAdapt .pg-sas-title { font-size:25px; } #abaTempSasAdapt .pg-sas-body { padding:20px 16px 28px; } #abaTempSasAdapt .pg-sas-kpis { grid-template-columns:1fr; gap:12px; margin-bottom:20px; } #abaTempSasAdapt .pg-sas-kpi { padding:18px 20px; } #abaTempSasAdapt .pg-sas-kpi-value { margin-top:8px; } #abaTempSasAdapt .pg-sas-panel-header { padding:18px; } #abaTempSasAdapt .pg-sas-filterbar { padding:0 18px 18px; } #abaTempSasAdapt .pg-sas-search { width:100%; } }
   @media (prefers-reduced-motion:reduce) { #abaTempSasAdapt button { transition:none!important; } }
 </style>
@@ -67,7 +70,7 @@
       <div>
         <p class="pg-sas-eyebrow">Acompanhamento da operação</p>
         <h2 class="pg-sas-title"><span>Temp</span>SAS ADAPT</h2>
-        <p class="pg-sas-subtitle">Expedições das gráficas e acompanhamento Athos.</p>
+        <p class="pg-sas-subtitle">Expedições das gráficas, coleta na Athos e entregas nos CDs.</p>
       </div>
       <button id="pgTempAtualizar" type="button" onclick="window.pgCarregarTempSasAdapt(true)" class="pg-sas-refresh">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 6.1A8.3 8.3 0 0 1 20 12M4 12a8.3 8.3 0 0 0 13.9 5.9"/></svg>
@@ -79,20 +82,25 @@
     <div class="pg-sas-content">
       <p id="statusTempSasAdapt" role="status" aria-live="polite" class="pg-sas-status">Aguardando atualização.</p>
       <div class="pg-sas-kpis" aria-label="Indicadores da operação">
-        <section class="pg-sas-kpi" aria-labelledby="pgTempLabelGraficas">
-          <h3 id="pgTempLabelGraficas" class="pg-sas-kpi-label">Saiu das gráficas</h3>
-          <p id="pgTempSaiuPct" class="pg-sas-kpi-value">—</p>
-          <p id="pgTempSaiuVolume" class="pg-sas-kpi-detail"></p>
-        </section>
-        <section class="pg-sas-kpi pg-sas-kpi--navy" aria-labelledby="pgTempLabelAthos">
-          <h3 id="pgTempLabelAthos" class="pg-sas-kpi-label">PCP Athos · Programado</h3>
+        <section class="pg-sas-kpi" aria-labelledby="pgTempLabelAthos">
+          <h3 id="pgTempLabelAthos" class="pg-sas-kpi-label">Tiragem total no Mapa</h3>
           <p id="pgTempAthosProgramado" class="pg-sas-kpi-value">—</p>
-          <p id="pgTempAthosRecebido" class="pg-sas-kpi-detail"></p>
+          <p id="pgTempAthosTotalPct" class="pg-sas-kpi-detail"></p>
         </section>
-        <section class="pg-sas-kpi pg-sas-kpi--orange" aria-labelledby="pgTempLabelColetado">
-          <h3 id="pgTempLabelColetado" class="pg-sas-kpi-label">Coletado Athos</h3>
-          <p id="pgTempColetadoPct" class="pg-sas-kpi-value">—</p>
-          <p id="pgTempColetadoVolume" class="pg-sas-kpi-detail"></p>
+        <section class="pg-sas-kpi pg-sas-kpi--blue" aria-labelledby="pgTempLabelColetado">
+          <h3 id="pgTempLabelColetado" class="pg-sas-kpi-label">Tiragem coletada na Athos</h3>
+          <p id="pgTempColetadoVolume" class="pg-sas-kpi-value">—</p>
+          <p id="pgTempColetadoPct" class="pg-sas-kpi-detail"></p>
+        </section>
+        <section class="pg-sas-kpi pg-sas-kpi--orange" aria-labelledby="pgTempLabelInternalizado">
+          <h3 id="pgTempLabelInternalizado" class="pg-sas-kpi-label">Entregas no CD · Internalizado</h3>
+          <p id="pgTempInternalizadoVolume" class="pg-sas-kpi-value">—</p>
+          <p id="pgTempInternalizadoPct" class="pg-sas-kpi-detail"></p>
+        </section>
+        <section class="pg-sas-kpi pg-sas-kpi--origem" aria-labelledby="pgTempLabelGraficas">
+          <h3 id="pgTempLabelGraficas" class="pg-sas-kpi-label">Saiu das gráficas</h3>
+          <p id="pgTempSaiuVolume" class="pg-sas-kpi-value">—</p>
+          <p id="pgTempSaiuPct" class="pg-sas-kpi-detail"></p>
         </section>
       </div>
       <section class="pg-sas-panel pg-sas-janelas" aria-labelledby="pgTempTituloJanelas">
@@ -102,7 +110,7 @@
         </div>
         <div class="pg-sas-table-wrap">
           <table aria-label="Entregas por janela"><thead><tr>
-            <th scope="col">Janela</th><th scope="col">Programado</th><th scope="col">Entregue confirmado</th><th scope="col">A conferir</th><th scope="col">Saldo</th><th scope="col">% confirmado</th>
+            <th scope="col">Janela</th><th scope="col">Programado</th><th scope="col">Coleta confirmada</th><th scope="col">A conferir</th><th scope="col">Saldo</th><th scope="col">% coletado</th>
           </tr></thead><tbody id="pgTempTabelaJanelas"><tr><td colspan="6">Atualize a visão para acompanhar as entregas por janela.</td></tr></tbody></table>
         </div>
       </section>
@@ -120,27 +128,27 @@
         </section>
         <section class="pg-sas-panel" aria-labelledby="pgTempTituloExpedicoes">
           <div class="pg-sas-panel-header">
-            <div><h3 id="pgTempTituloExpedicoes">Expedições Athos · CD</h3><p class="pg-sas-panel-caption">Coletas por centro de distribuição</p></div>
-            <button type="button" onclick="window.pgExportarTempSasAdapt('expedicoesAthos')" class="pg-sas-export" aria-label="Baixar CSV das expedições Athos"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
+            <div><h3 id="pgTempTituloExpedicoes">Entregas por CD</h3><p class="pg-sas-panel-caption">Coletado na Athos e internalizado no destino</p></div>
+            <button type="button" onclick="window.pgExportarTempSasAdapt('expedicoesAthos')" class="pg-sas-export" aria-label="Baixar CSV das entregas por CD"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
           </div>
           <div class="pg-sas-table-wrap">
-            <table aria-label="Expedições Athos por CD"><thead><tr>
-              <th scope="col">CD destino</th><th scope="col">Total</th><th scope="col">Coletado</th><th scope="col">%</th>
+            <table aria-label="Entregas por CD"><thead><tr>
+              <th scope="col">CD destino</th><th scope="col">Tiragem total</th><th scope="col">Tiragem coletada</th><th scope="col">Internalizado</th>
             </tr></thead><tbody id="pgTempTabelaExpedicoesAthos"></tbody></table>
           </div>
         </section>
         <section class="pg-sas-panel pg-sas-panel--wide" aria-labelledby="pgTempTituloSku">
           <div class="pg-sas-panel-header">
-            <div><h3 id="pgTempTituloSku">Athos · SKUs</h3><p class="pg-sas-panel-caption">Programação, recebimento e coleta por SKU</p></div>
-            <button type="button" onclick="window.pgExportarTempSasAdapt('athos')" class="pg-sas-export" aria-label="Baixar CSV dos SKUs Athos"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
+            <div><h3 id="pgTempTituloSku">Entregas no CD · SKUs</h3><p class="pg-sas-panel-caption">Percentuais sobre a tiragem total. Traço indica dado indisponível no CD.</p></div>
+            <button type="button" onclick="window.pgExportarTempSasAdapt('athos')" class="pg-sas-export" aria-label="Baixar CSV das entregas por SKU e CD"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
           </div>
           <div class="pg-sas-filterbar">
             <input id="pgTempFiltroSku" type="search" aria-label="Filtrar SKU" placeholder="Buscar por SKU…" oninput="window.pgFiltrarTempSasAdapt()" class="pg-sas-search">
             <p id="pgTempQtdSku" class="pg-sas-count" aria-live="polite"></p>
           </div>
           <div class="pg-sas-table-wrap pg-sas-table-wrap--sku">
-            <table aria-label="Acompanhamento dos SKUs Athos"><thead><tr>
-              <th scope="col">SKU</th><th scope="col">Programado</th><th scope="col">Recebido</th><th scope="col">Coletado</th><th scope="col">% coletado</th>
+            <table aria-label="Entregas por SKU e CD"><thead><tr>
+              <th scope="col">Kit</th><th scope="col">SKU</th><th scope="col">CD destino</th><th scope="col">Tiragem total</th><th scope="col">Tiragem coletada</th><th scope="col">Internalizado</th>
             </tr></thead><tbody id="pgTempTabelaAthos"></tbody></table>
           </div>
         </section>
@@ -159,7 +167,13 @@
     if (raiz && raiz.setAttribute) raiz.setAttribute('aria-busy', valor ? 'true' : 'false');
   }
   function fmt(v) { return Math.round(Number(v) || 0).toLocaleString('pt-BR'); }
-  function pct(v, t) { return t > 0 ? ((Number(v) || 0) * 100 / t).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%' : '—'; }
+  function pct(v, t) {
+    if (v == null || !(t > 0)) return '—';
+    var percentual = Number(v) * 100 / t;
+    if (percentual > 99.99 && percentual < 100) percentual = 99.99;
+    if (percentual > 100 && percentual < 100.01) percentual = 100.01;
+    return percentual.toLocaleString('pt-BR', {maximumFractionDigits:2}) + '%';
+  }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function tituloJanela(valor) {
     return String(valor == null ? '' : valor).trim().replace(/^Janela[_-](\d)/i, 'Janela $1').replace(/(\d{2})-(\d{2})$/, '$1/$2');
@@ -189,26 +203,31 @@
   function expedicoesAthos(linhas) {
     el('pgTempTabelaExpedicoesAthos').innerHTML = (linhas || []).map(function(l) {
       return '<tr class="border-t border-slate-100"><td class="p-2 text-slate-700">' + esc(l.destino) +
-        '</td><td class="p-2 text-right tabular-nums">' + fmt(l.total) +
-        '</td><td class="p-2 text-right font-bold tabular-nums">' + fmt(l.coletado) +
-        '</td><td class="p-2 text-right text-slate-500 tabular-nums">' + pct(l.coletado, l.total) + '</td></tr>';
+        '</td>' + volumeComPct(l.total, l.total) + volumeComPct(l.coletado, l.total) +
+        volumeComPct(l.internalizado, l.total) + '</tr>';
     }).join('') || '<tr><td colspan="4" class="p-4 text-center text-slate-500">Nenhum registro encontrado</td></tr>';
+  }
+  function volumeComPct(volume, total) {
+    return '<td>' + (volume == null ? '—' : '<strong>' + fmt(volume) + '</strong>' +
+      '<span class="pg-sas-pct">' + pct(volume, total) + '</span>') + '</td>';
+  }
+  function skusVisiveis() {
+    var busca = (el('pgTempFiltroSku').value || '').trim().toUpperCase();
+    return (ultimo.athosPorSku || []).filter(function(s) {
+      return !busca || String(s.sku).toUpperCase().indexOf(busca) >= 0;
+    });
   }
   window.pgFiltrarTempSasAdapt = function() {
     if (!ultimo) return;
-    var busca = (el('pgTempFiltroSku').value || '').trim().toUpperCase();
-    var filtradas = (ultimo.athosPorSku || []).filter(function(s) {
-      return !busca || String(s.sku).toUpperCase().indexOf(busca) >= 0;
-    });
-    el('pgTempQtdSku').textContent = filtradas.length + ' SKUs';
+    var filtradas = skusVisiveis();
+    el('pgTempQtdSku').textContent = new Set(filtradas.map(function(s) { return s.sku; })).size + ' SKUs';
     el('pgTempTabelaAthos').innerHTML = filtradas.map(function(s) {
       return '<tr class="border-t border-slate-100 hover:bg-slate-50">' +
+        '<td>' + esc(s.kit || '—') + '</td>' +
         '<td class="p-2 font-semibold">' + esc(s.sku) + '</td>' +
-        '<td class="p-2 text-right tabular-nums">' + fmt(s.total) + '</td>' +
-        '<td class="p-2 text-right tabular-nums">' + fmt(s.recebido) + '</td>' +
-        '<td class="p-2 text-right tabular-nums">' + fmt(s.coletado) + '</td>' +
-        '<td class="p-2 text-right tabular-nums">' + pct(s.coletado, s.total) + '</td></tr>';
-    }).join('') || '<tr><td colspan="5" class="p-5 text-center text-slate-500">Sem SKUs para o filtro</td></tr>';
+        '<td>' + esc(s.destino) + '</td>' + volumeComPct(s.total, s.total) +
+        volumeComPct(s.coletado, s.total) + volumeComPct(s.internalizado, s.total) + '</tr>';
+    }).join('') || '<tr><td colspan="6" class="p-5 text-center text-slate-500">Sem SKUs para o filtro</td></tr>';
   };
   function csvValor(valor) {
     var texto = String(valor == null ? '' : valor);
@@ -217,10 +236,11 @@
   }
   window.pgExportarTempSasAdapt = function(tipo) {
     if (!ultimo) { alert('Atualize a visão antes de baixar.'); return; }
+    var volumesAthos = ['total','pctTotal','coletado','pctColetado','internalizado','pctInternalizado'];
     var definicoes = {
       graficas: {nome:'SAS_ADAPT_GRAFICAS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','tiragemRaw','saiuBruto','saiuReconhecido','operacao','totalOperacao','saiuBrutoOperacao','excedenteOperacao','linhasAgrupadas','dataColeta','dataColetaRaw','entregaTP','entregaTPRaw'], linhas:ultimo.linhasGraficas},
-      athos: {nome:'SAS_ADAPT_ATHOS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','recebidoRaw','recebido','recebidoReconhecido','linhasAgrupadas','recebimentoDivergente','dataAcabamento','dataAcabamentoRaw','dataFinalizacao','dataFinalizacaoRaw','statusFinalizacao','produzido','producaoApontada','saidaMapa','codigosMapa'], linhas:ultimo.linhasAthos},
-      expedicoesAthos: {nome:'SAS_ADAPT_EXPEDICOES_ATHOS', colunas:['fonte','linha','sku','destino','total','saidaMapa','codigosMapa'], linhas:ultimo.linhasAthos},
+      athos: {nome:'SAS_ADAPT_ENTREGAS_CD_SKU', colunas:['kit','sku','destino'].concat(volumesAthos), linhas:skusVisiveis()},
+      expedicoesAthos: {nome:'SAS_ADAPT_ENTREGAS_CD', colunas:['destino'].concat(volumesAthos), linhas:ultimo.expedicoesAthos},
       janelas: {nome:'SAS_ADAPT_ENTREGAS_POR_JANELA', colunas:['titulo','total','entregue','aConferir','saldo','pedidos','fonte','id','fonteUrl'], linhas:ultimo.erroEntregasPorJanela ? [] : (ultimo.entregasPorJanela || []).map(function(r) {
         return {titulo:r.titulo,total:r.total,entregue:r.entregue,aConferir:r.aConferir,saldo:r.saldo,pedidos:r.pedidos,
           fonte:'Janelas_SAS ADAPT',id:r.id,fonteUrl:'https://docs.google.com/spreadsheets/d/1vBqSFyKqv8Ttco5LkfQm4SBLOU2EX7FWkOw3maBndIQ/edit#gid=' + encodeURIComponent(r.id)};
@@ -231,22 +251,23 @@
     var cabecalho = {
       fonte:'FONTE',linha:'LINHA NA FONTE',id:'ID',sku:'SKU',grafica:'GRÁFICA',destino:'CD DESTINO',
       rawUnit:'UNIDADE ORIGINAL',envio:'ENVIO',caracteristica:'CARACTERÍSTICA DA SOLICITAÇÃO',
-      total:tipo === 'janelas' ? 'PROGRAMADO (KITS)' : tipo === 'graficas' ? 'TIRAGEM TOTAL' : 'TIRAGEM A ENTREGAR (total por CD)',
-      titulo:'JANELA',entregue:'ENTREGUE CONFIRMADO (KITS)',aConferir:'A CONFERIR (INCLUÍDO NO SALDO)',saldo:'SALDO (KITS)',pedidos:'PEDIDOS',fonteUrl:'LINK NA FONTE',
+      total:tipo === 'janelas' ? 'PROGRAMADO (KITS)' : 'TIRAGEM TOTAL',
+      kit:'KIT',coletado:'TIRAGEM COLETADA',internalizado:'INTERNALIZADO',
+      pctTotal:'% TOTAL',pctColetado:'% COLETADO',pctInternalizado:'% INTERNALIZADO',
+      titulo:'JANELA',entregue:'COLETA CONFIRMADA (KITS)',aConferir:'A CONFERIR (INCLUÍDO NO SALDO)',saldo:'SALDO (KITS)',pedidos:'PEDIDOS',fonteUrl:'LINK NA FONTE',
       tiragemRaw:'TIRAGEM ORIGINAL',saiuBruto:'COLETADO INFORMADO',saiuReconhecido:'COLETADO RECONHECIDO (uma vez por operação)',
       operacao:'OPERAÇÃO',totalOperacao:'TOTAL DA OPERAÇÃO',saiuBrutoOperacao:'COLETADO DA OPERAÇÃO',
       excedenteOperacao:'EXCEDENTE DA OPERAÇÃO',linhasAgrupadas:'LINHAS AGRUPADAS NA FONTE',
-      dataColeta:'DATA COLETA',dataColetaRaw:'DATA COLETA ORIGINAL',entregaTP:'ENTREGA TP',entregaTPRaw:'ENTREGA TP ORIGINAL',
-      recebidoRaw:'RECEBIDO INFORMADO (Total SKU)',recebido:'RECEBIDO SEM DUPLICIDADE (uma vez por SKU)',
-      recebidoReconhecido:'RECEBIDO RECONHECIDO (uma vez por SKU)',recebimentoDivergente:'RECEBIMENTOS DIVERGENTES',
-      dataAcabamento:'ACABAMENTO FINAL REAL',dataAcabamentoRaw:'ACABAMENTO FINAL REAL ORIGINAL',
-      dataFinalizacao:'FINALIZAÇÃO ATHOS',dataFinalizacaoRaw:'FINALIZAÇÃO ATHOS ORIGINAL',statusFinalizacao:'STATUS FINALIZAÇÃO',
-      produzido:'PRODUZIDO COMPROVADO',producaoApontada:'FINALIZAÇÃO COMPROVADA',saidaMapa:'COLETADO ATHOS → CD NO MAPA',codigosMapa:'CÓDIGOS DOS MAPAS'
+      dataColeta:'DATA COLETA',dataColetaRaw:'DATA COLETA ORIGINAL',entregaTP:'ENTREGA TP',entregaTPRaw:'ENTREGA TP ORIGINAL'
     };
     if (tipo === 'janelas') cabecalho.id = 'ABA NA FONTE (GID)';
     var linhas = [spec.colunas.map(function(k) { return csvValor(cabecalho[k] || k); }).join(';')];
     spec.linhas.forEach(function(r) {
-      linhas.push(spec.colunas.map(function(k) { return csvValor(r[k]); }).join(';'));
+      var linha = tipo === 'athos' || tipo === 'expedicoesAthos' ? Object.assign({}, r, {
+        pctTotal:pct(r.total, r.total), pctColetado:pct(r.coletado, r.total),
+        pctInternalizado:pct(r.internalizado, r.total)
+      }) : r;
+      linhas.push(spec.colunas.map(function(k) { return csvValor(linha[k]); }).join(';'));
     });
     var blob = new Blob(['\uFEFF' + linhas.join('\r\n')], {type:'text/csv;charset=utf-8;'});
     var url = URL.createObjectURL(blob), a = document.createElement('a');
@@ -260,12 +281,18 @@
   function mostrar(d) {
     ultimo = d;
     entregasPorJanela(d);
-    el('pgTempSaiuPct').textContent = pct(d.saiuGraficas, d.pcpTotal);
-    el('pgTempSaiuVolume').textContent = fmt(d.saiuGraficas) + ' de ' + fmt(d.pcpTotal);
+    el('pgTempSaiuPct').textContent = pct(d.saiuGraficas, d.pcpTotal) + ' de ' + fmt(d.pcpTotal);
+    el('pgTempSaiuVolume').textContent = fmt(d.saiuGraficas);
     el('pgTempAthosProgramado').textContent = fmt(d.totalAthos);
-    el('pgTempAthosRecebido').textContent = 'Recebido: ' + fmt(d.recebidoAthos);
-    el('pgTempColetadoPct').textContent = pct(d.coletadoAthos, d.totalAthos);
-    el('pgTempColetadoVolume').textContent = fmt(d.coletadoAthos) + ' de ' + fmt(d.totalAthos);
+    el('pgTempAthosTotalPct').textContent = pct(d.totalAthos, d.totalAthos) + ' da tiragem mapeada';
+    el('pgTempColetadoVolume').textContent = fmt(d.coletadoAthos);
+    el('pgTempColetadoPct').textContent = pct(d.coletadoAthos, d.totalAthos) + ' da tiragem total';
+    var indisponiveis = d.internalizacaoIndisponivel || [];
+    el('pgTempInternalizadoVolume').textContent = d.internalizadoAthos == null ? '—' : fmt(d.internalizadoAthos);
+    var semRegistro = d.internalizacaoSemCorrespondencia > 0 ?
+      ' · ' + fmt(d.internalizacaoSemCorrespondencia) + ' vínculos kit/SKU sem registro' : '';
+    el('pgTempInternalizadoPct').textContent = indisponiveis.length ? 'Fonte indisponível em ' + indisponiveis.join(' e ') :
+      pct(d.internalizadoAthos, d.totalAthos) + ' da tiragem total' + semRegistro;
     graficas(d.graficas);
     expedicoesAthos(d.expedicoesAthos);
     window.pgFiltrarTempSasAdapt();

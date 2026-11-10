@@ -211,19 +211,12 @@ test('colunas de total e finalização são obrigatórias e não viram números 
   assert.throws(() => contexto.pgTempSasAdaptResumo_(tabela(pHeader, pcp), a, 'data inválida'), /data|hoje/i);
 });
 
-test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos com vazios', () => {
+test('endpoint usa PCP para gráficas e Mapa original mais fontes do CD para entregas', () => {
   const p = tabela(['COLUNA EXTRA', ...pHeader].reverse(), [
     pLinha({ ID: 'PCP-LINHA-3', TIRAGEM: 999, 'TIRAGEM COLETADA': 25 }),
     pLinha({ ID: 'PCP-LINHA-4', SKU: 'SKU-2', 'TIRAGEM TOTAL': 50, 'TIRAGEM COLETADA': 10 })
   ]);
   p.splice(1, 0, []);
-  const a = tabela(['COLUNA EXTRA', ...aHeader].reverse(), [
-    aLinha({ ID: 'ATHOS-LINHA-2', 'TIRAGEM A ENTREGAR (total por CD)': 60,
-      'Tiragem recebida (Total SKU)': 30, 'Formação de kit/Encaixotamento Final Real': '14/10/2026' }),
-    aLinha({ ID: 'ATHOS-LINHA-4', SKU: 'SKU-2', 'TIRAGEM A ENTREGAR (total por CD)': 50,
-      'Tiragem recebida (Total SKU)': 20 })
-  ]);
-  a.splice(2, 0, []);
   const mapaLinha = Array(50).fill('');
   mapaLinha[1] = 'CD ERRADO PCP'; // B: nao usar
   mapaLinha[2] = 'ATHOS'; // C: GRÁFICA PCP é a única coluna PCP usada
@@ -233,11 +226,35 @@ test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos c
   mapaLinha[10] = 'K-1'; // K: KIT original
   mapaLinha[11] = 'SKU-2'; // L: SKU original
   mapaLinha[13] = 'LOGPRINT'; // N: gráfica original, não deve ser usada
+  mapaLinha[14] = 45; // O: TIRAGEM original
   mapaLinha[39] = 20; // AN: Volume Coletado
   mapaLinha[45] = '14/10/2026'; // AT: Coleta TP
   mapaLinha[49] = 'V1'; // AX: envio normalizado
-  const mapa = [Array.from({length: 50}, (_, i) => 'COLUNA ' + i), mapaLinha];
-  const sheets = { PCP: p, PCP_ACABADORAS: a, 'MAPA DE SAÍDA': mapa };
+  const semColeta = mapaLinha.slice();
+  semColeta[4] = 'MP-ATHOS-FOR';
+  semColeta[6] = 'ITAITINGA - CE';
+  semColeta[10] = 'K-2';
+  semColeta[14] = 30;
+  semColeta[39] = 0;
+  const outraGrafica = mapaLinha.slice();
+  outraGrafica[2] = 'LOGPRINT'; outraGrafica[13] = 'ATHOS';
+  const outroEnvio = mapaLinha.slice();
+  outroEnvio[7] = 'V2';
+  const semCDOriginal = mapaLinha.slice();
+  semCDOriginal[1] = 'CD JDI'; semCDOriginal[6] = '';
+  const mapa = [Array.from({length: 50}, (_, i) => 'COLUNA ' + i), mapaLinha, semColeta,
+    outraGrafica, outroEnvio, semCDOriginal];
+  const sheets = { PCP: p, 'MAPA DE SAÍDA': mapa };
+  const fontes = {
+    'planilha-teste': sheets,
+    '1qyRgj1_hdiJDo1zEu21vMSioeZe_i-emmnCPV4FMErk': {
+      'SAS V1 27': [['Cód Kit', 'Cód Item', 'Recebido'], ['K-1', 'SKU-2', 3], [], ['K-1', 'SKU-2', 7],
+        ['K-OUTRO', 'SKU-2', 888], ['K-1', 'SKU-NÃO-ENVIADO', 999]]
+    },
+    '1nCVxwkQw_loqHCGahYoTa-8ZyFy42gXg7hC2MliUoHM': {
+      'SAS V1 27': [['Cód Kit', 'Cód Item', 'Recebido'], ['K-2', 'SKU-2', 0], ['K-1', 'SKU-2', 4]]
+    }
+  };
   const sourceRequests = [], headers = [], batches = [];
   const FixedDate = class extends Date {
     constructor(...args) { super(...(args.length ? args : ['2026-10-15T15:00:00Z'])); }
@@ -245,8 +262,8 @@ test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos c
   const api = vm.createContext({
     Date: FixedDate, Utilities: contexto.Utilities,
     pgFonteExternaCache_(names) { sourceRequests.push(Array.from(names)); return 'planilha-teste'; },
-    pgMetadadosPlanilhaCache_() {
-      return { id: 'planilha-teste', nomes: Object.keys(sheets), abas: Object.entries(sheets).map(([title, rows]) => ({
+    pgMetadadosPlanilhaCache_(id) {
+      return { id, nomes: Object.keys(fontes[id]), abas: Object.entries(fontes[id]).map(([title, rows]) => ({
         title, gridProperties: { rowCount: 12, columnCount: rows[0].length }
       })) };
     },
@@ -254,20 +271,18 @@ test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos c
       get(id, range, options) {
         const match = /^'([^']+)'!A1:([A-Z]+)1$/.exec(range);
         assert.ok(match, range);
-        assert.equal(id, 'planilha-teste');
         assert.equal(options.dateTimeRenderOption, 'SERIAL_NUMBER');
         headers.push(match[1]);
-        return { values: [sheets[match[1]][0]] };
+        return { values: [fontes[id][match[1]][0]] };
       },
       batchGet(id, options) {
-        assert.equal(id, 'planilha-teste');
         assert.equal(options.valueRenderOption, 'UNFORMATTED_VALUE');
         batches.push(Array.from(options.ranges));
         return { valueRanges: options.ranges.map(range => {
           const match = /^'([^']+)'!([A-Z]+)([12]):\2(\d+)$/.exec(range);
           assert.ok(match, range);
           const column = Array.from(match[2]).reduce((n, char) => n * 26 + char.charCodeAt(0) - 64, 0) - 1;
-          const values = sheets[match[1]].slice(Number(match[3]) - 1)
+          const values = fontes[id][match[1]].slice(Number(match[3]) - 1)
             .map(row => row[column] == null || row[column] === '' ? [] : [row[column]]);
           while (values.length && !values.at(-1).length) values.pop();
           return { values };
@@ -277,23 +292,63 @@ test('endpoint lê PCP, acabadoras e Mapa original, mantendo índices físicos c
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'TempSasAdapt.js'), 'utf8'), api);
   const r = api.getTempSasAdapt();
-  assert.deepEqual(sourceRequests, [['PCP'], ['PCP_ACABADORAS'], ['MAPA DE SAÍDA','MAPA DE SAIDA','MAPA DE SAIDA ']]);
-  assert.deepEqual(headers, ['PCP', 'PCP_ACABADORAS']);
-  assert.equal(batches.length, 3);
+  assert.deepEqual(sourceRequests, [['PCP'], ['MAPA DE SAÍDA','MAPA DE SAIDA','MAPA DE SAIDA ']]);
+  assert.deepEqual(headers, ['PCP', 'SAS V1 27', 'SAS V1 27']);
+  assert.equal(batches.length, 4);
   assert.equal(batches[0].length, pHeader.length);
-  assert.equal(batches[1].length, aHeader.length);
-  assert.equal(batches[2].length, 8);
+  assert.deepEqual(batches[1], ['C','E','G','H','K','L','O','AN','AT'].map(c => "'MAPA DE SAÍDA'!" + c + "2:" + c + "12"));
   assert.equal(r.pcpTotal, 150);
   assert.equal(r.saiuGraficas, 35);
-  assert.equal(r.totalAthos, 110);
-  assert.equal(r.recebidoAthos, 50);
-  assert.equal(r.produzidoAthos, 80, 'saida fisica da ATHOS confirma 20 sem BP');
+  assert.equal(r.totalAthos, 75, 'total da expedição soma O inclusive quando AN está zerada');
+  assert.equal('recebidoAthos' in r, false);
+  assert.equal('produzidoAthos' in r, false);
   assert.equal(r.coletadoAthos, 20, 'saída efetiva somente de AN no Mapa original com gráfica PCP=ATHOS');
-  assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.coletado]), [['CD JDI',110,20]]);
+  assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.coletado,x.internalizado]),
+    [['CD JDI',45,20,10], ['CD FOR',30,0,0]]);
+  assert.equal(r.internalizadoAthos, 10);
+  assert.deepEqual(Array.from(r.internalizacaoIndisponivel), []);
+  assert.equal(r.internalizacaoSemCorrespondencia, 0);
+  assert.deepEqual(Array.from(r.athosPorSku, x => [x.kit,x.sku,x.destino,x.total,x.coletado,x.internalizado]),
+    [['K-2','SKU-2','CD FOR',30,0,0], ['K-1','SKU-2','CD JDI',45,20,10]]);
   assert.deepEqual(Array.from(r.linhasGraficas, row => row.linha), [3, 4]);
-  assert.deepEqual(Array.from(r.linhasAthos, row => row.linha), [2, 4]);
+  assert.equal('linhasAthos' in r, false);
   assert.equal(r.dataReferencia, hoje);
   assert.match(r.atualizadoEm, /^2026-10-15T/);
+});
+
+test('mapa Athos soma kits distintos no mesmo SKU e CD, conserva coleta acima da tiragem e sinaliza falha do CD', () => {
+  const entrada = [
+    {sku:'SKU-1', destino:'CD JDI', kit:'K-1', codigoMapa:'MP-1', tiragem:10, coletado:8},
+    {sku:'SKU-1', destino:'Jundiaí - SP', kit:'K-1', codigoMapa:'MP-1', tiragem:9, coletado:12},
+    {sku:'SKU-1', destino:'CD JDI', kit:'K-2', codigoMapa:'MP-1', tiragem:4, coletado:5},
+    {sku:'SKU-1', destino:'CD JDI', kit:'K-1', codigoMapa:'MP-4', tiragem:3, coletado:2},
+    {sku:'SKU-1', destino:'CD FOR', kit:'K-1', codigoMapa:'MP-1', tiragem:4, coletado:0},
+    {sku:'SKU-2', destino:'CD JDI', kit:'K-2', codigoMapa:'MP-2', tiragem:2, coletado:0},
+    {sku:'SKU-1', destino:'CD RP', kit:'K-1', codigoMapa:'MP-3', tiragem:30, coletado:20}
+  ];
+  const vinculo = (sku, kit) => JSON.stringify([sku, kit]);
+  const jdi = {
+    [vinculo('SKU-1', 'K-1')]: 7,
+    [vinculo('SKU-1', 'K-OUTRO')]: 99,
+    [vinculo('SKU-2', 'K-2')]: 0
+  };
+  const r = contexto.pgTempSasAdaptSaidaPorSkuCD_(entrada, {porCD:{'CD JDI':jdi}, indisponiveis:['CD FOR']});
+  assert.deepEqual(Array.from(r.athosPorSku, x => [x.kit,x.sku,x.destino,x.total,x.coletado,x.internalizado]), [
+    ['K-1','SKU-1','CD FOR',4,0,null], ['K-1, K-2','SKU-1','CD JDI',17,19,7],
+    ['K-2','SKU-2','CD JDI',2,0,0]
+  ]);
+  assert.equal(r.totalAthos, 23);
+  assert.equal(r.coletadoAthos, 19);
+  assert.equal(r.internalizadoAthos, null);
+  assert.deepEqual(Array.from(r.internalizacaoIndisponivel), ['CD FOR']);
+  assert.equal(r.internalizacaoSemCorrespondencia, 1, 'falha da fonte de FOR não entra nas correspondências ausentes');
+
+  const legivel = contexto.pgTempSasAdaptSaidaPorSkuCD_(entrada, {
+    porCD:{'CD JDI':jdi, 'CD FOR':{[vinculo('SKU-1', 'K-OUTRO')]:99}}, indisponiveis:[]
+  });
+  assert.equal(legivel.internalizacaoSemCorrespondencia, 2);
+  assert.equal(legivel.expedicoesAthos.find(cd => cd.destino === 'CD FOR').internalizado, null);
+  assert.equal(legivel.internalizadoAthos, 7, 'CD legível sem correspondências não esconde os valores confirmados');
 });
 
 function frontHarness(data) {
@@ -325,33 +380,57 @@ function frontHarness(data) {
   return { html, elements, context, downloads, blobs };
 }
 
-test('visão exibe os três indicadores e detalhe sem as explicações de bases removidas', () => {
+function dadosVisaoAthos() {
   const { pcp, athos } = exemplo();
-  const h = frontHarness(resumo(pcp, athos));
+  const data = resumo(pcp, athos);
+  data.athosPorSku = [
+    {kit:'KIT-A, KIT-B',sku:'SKU-1',destino:'CD JDI',total:100,coletado:75,internalizado:105},
+    {kit:'KIT-C',sku:'SKU-2',destino:'CD FOR',total:50,coletado:0,internalizado:10}
+  ];
+  data.expedicoesAthos = data.athosPorSku.map(({destino,total,coletado,internalizado}) =>
+    ({destino,total,coletado,internalizado}));
+  data.totalAthos = 150;
+  data.coletadoAthos = 75;
+  data.internalizadoAthos = 115;
+  data.internalizacaoSemCorrespondencia = 2;
+  return data;
+}
+
+test('visão exibe cartões de volume e percentual e detalha o mesmo recorte por SKU e CD', () => {
+  const h = frontHarness(dadosVisaoAthos());
   h.context.window.pgCarregarTempSasAdapt(true);
+  assert.match(h.html, /Tiragem coletada na Athos/);
+  assert.match(h.html, /Entregas no CD · Internalizado/);
+  assert.match(h.html, /Entregas no CD · SKUs/);
   assert.match(h.elements.get('pgTempSaiuPct').textContent, /48(?:[,.]0+)?\s*%/);
-  assert.match(h.elements.get('pgTempSaiuVolume').textContent, /120/);
-  assert.match(h.elements.get('pgTempAthosRecebido').textContent, /200/);
-  assert.match(h.elements.get('pgTempAthosProgramado').textContent, /150/);
-  assert.equal(h.elements.get('pgTempColetadoPct').textContent, '0%');
-  assert.match(h.elements.get('pgTempColetadoVolume').textContent, /0 de 150/);
+  assert.equal(h.elements.get('pgTempSaiuVolume').textContent, '120');
+  assert.equal(h.elements.get('pgTempAthosProgramado').textContent, '150');
+  assert.match(h.elements.get('pgTempAthosTotalPct').textContent, /^100%/);
+  assert.equal(h.elements.get('pgTempColetadoVolume').textContent, '75');
+  assert.match(h.elements.get('pgTempColetadoPct').textContent, /^50%/);
+  assert.equal(h.elements.get('pgTempInternalizadoVolume').textContent, '115');
+  assert.match(h.elements.get('pgTempInternalizadoPct').textContent, /^76,67%/);
+  assert.match(h.elements.get('pgTempInternalizadoPct').textContent, /2 vínculos kit\/SKU sem registro/);
   assert.match(h.elements.get('pgTempTabelaGraficas').innerHTML, /LOGPRINT/);
   assert.match(h.elements.get('pgTempTabelaExpedicoesAthos').innerHTML, /CD JDI/);
-  assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-1/);
-  const visible = h.html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ');
-  assert.doesNotMatch(visible, /Critério|Etapa\s*[12]|MAPA DE SA[IÍ]DA|não é estoque|não comprovação/i);
+  assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /KIT-A, KIT-B.*SKU-1.*CD JDI.*100%.*75%.*105%/);
   h.elements.get('pgTempFiltroSku').value = 'SKU-2';
   h.context.window.pgFiltrarTempSasAdapt();
-  assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-2/);
+  assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /KIT-C.*SKU-2.*CD FOR.*100%.*0%.*20%/);
   assert.doesNotMatch(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-1/);
-  const missing = frontHarness(resumo(pcp, athos.slice(1)));
+  const parcial = dadosVisaoAthos();
+  parcial.athosPorSku[1].internalizado = null;
+  parcial.internalizadoAthos = null;
+  parcial.internalizacaoIndisponivel = ['CD FOR'];
+  const missing = frontHarness(parcial);
   missing.context.window.pgCarregarTempSasAdapt(true);
-  assert.equal(missing.elements.get('pgTempColetadoPct').textContent, '0%');
+  assert.equal(missing.elements.get('pgTempInternalizadoVolume').textContent, '—');
+  assert.equal(missing.elements.get('pgTempInternalizadoPct').textContent, 'Fonte indisponível em CD FOR');
+  assert.match(missing.elements.get('pgTempTabelaAthos').innerHTML, /SKU-2.*<td>—<\/td>/);
 });
 
 test('CSV auditável preserva quantidades negativas e neutraliza fórmulas em campos de texto', () => {
-  const { pcp, athos } = exemplo();
-  const data = resumo(pcp, athos);
+  const data = dadosVisaoAthos();
   data.linhasGraficas[0].id = '=1+1';
   data.linhasGraficas[0].sku = '@COMANDO';
   data.linhasGraficas[0].tiragemRaw = -10;
@@ -372,17 +451,16 @@ test('CSV auditável preserva quantidades negativas e neutraliza fórmulas em ca
   assert.equal(campo('COLETADO RECONHECIDO (uma vez por operação)'), '100');
   assert.equal(campo('UNIDADE ORIGINAL'), 'SAS ADAPT');
   assert.equal(campo('LINHAS AGRUPADAS NA FONTE'), '2, 3');
+  h.elements.get('pgTempFiltroSku').value = 'SKU-1';
   h.context.window.pgExportarTempSasAdapt('athos');
   const athosCsv = h.blobs[1].parts.join('');
-  assert.match(athosCsv, /"ATHOS-1"/);
-  assert.match(athosCsv, /"170"/);
-  assert.match(athosCsv, /"15\/10\/2026"/);
-  assert.match(athosCsv, /"Finalizado no PCP"/);
+  assert.match(athosCsv, /"KIT";"SKU";"CD DESTINO";"TIRAGEM TOTAL";"% TOTAL";"TIRAGEM COLETADA";"% COLETADO";"INTERNALIZADO";"% INTERNALIZADO"/);
+  assert.match(athosCsv, /"KIT-A, KIT-B";"SKU-1";"CD JDI";"100";"100%";"75";"75%";"105";"105%"/);
+  assert.doesNotMatch(athosCsv, /SKU-2/);
   h.context.window.pgExportarTempSasAdapt('expedicoesAthos');
   assert.equal(h.downloads.length, 3);
   const expCsv = h.blobs[2].parts.join('');
-  assert.match(expCsv, /COLETADO ATHOS/);
-  assert.match(expCsv, /"JUNDIAI - SP"/);
+  assert.match(expCsv, /"CD FOR";"50";"100%";"0";"0%";"10";"20%"/);
 });
 
 
@@ -434,6 +512,7 @@ test('entregas por janela aparece na mesma visão e exporta o resumo com a fonte
   assert.match(h.downloads[0].download, /ENTREGAS_POR_JANELA/);
   const csv = h.blobs[0].parts.join('');
   assert.match(csv, /"PROGRAMADO \(KITS\)"/);
+  assert.match(csv, /"COLETA CONFIRMADA \(KITS\)"/);
   assert.match(csv, /"A CONFERIR \(INCLUÍDO NO SALDO\)"/);
   assert.match(csv, /gid=676724057/);
 });
@@ -447,7 +526,8 @@ test('falha na referência de janelas mantém os indicadores, busca e exportaç�
   h.context.window.pgCarregarTempSasAdapt(true);
   assert.match(h.elements.get('pgTempTabelaJanelas').innerHTML, /Não foi possível carregar/);
   assert.equal(h.elements.get('pgTempExportarJanelas').disabled, true);
-  assert.match(h.elements.get('pgTempSaiuVolume').textContent, /120 de 250/);
+  assert.equal(h.elements.get('pgTempSaiuVolume').textContent, '120');
+  assert.match(h.elements.get('pgTempSaiuPct').textContent, /48% de 250/);
   h.elements.get('pgTempFiltroSku').value = 'SKU-2';
   h.context.window.pgFiltrarTempSasAdapt();
   assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-2/);
