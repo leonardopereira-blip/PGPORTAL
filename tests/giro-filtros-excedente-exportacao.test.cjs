@@ -13,7 +13,7 @@ const exportacao = servidor.slice(servidor.indexOf('function pgResumoAtrasosGiro
 
 function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',ee='',campos={},materiais=null,
   pos=false,temCampos=true,ordenacao=[],retornarTela=false,historico={master:{},sku:{}},
-  configurarJanela,retornarContexto=false}) {
+  configurarJanela,retornarContexto=false,busca=''}) {
   const el = {};
   const linha = {TIRAGEM:100,SKU:'SKU-1',UNIDADE:'COC','GRÁFICA':'LOGPRINT',
     'CD DESTINO':'CD JDI',ENVIO:'V1','SÉRIE':'Série antiga',SERIE_CORRIGIDA:serie,
@@ -36,7 +36,7 @@ function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',e
     pgNormalizarDataColeta:v=>v
   };
   const doc={getElementById:id=>el[id]??={value:id==='sldGiroDiasMin'?String(min):
-    id==='sldGiroDiasMax'?String(max):id==='filtroObsStatus'?'TODOS':'',
+    id==='sldGiroDiasMax'?String(max):id==='filtroObsStatus'?'TODOS':id==='filtroSkuKitGiro'?busca:'',
     checked:id==='chkGiroAberto'||(id==='chkGiroPos'&&pos),innerHTML:''}};
   class DataFixa extends Date {
     constructor(...args) { super(...(args.length ? args : [2026,9,15,12])); }
@@ -225,6 +225,38 @@ test('payload filtrado inclui CD, Série corrigida e chaves das observações',(
   assert.equal(linhas[0].serie,'2º ANO');
   assert.match(linhas[0].chaveMaster,/LOGPRINT.*COC.*2º ANO/);
   assert.match(linhas[0].chaveSku,/SKU-1/);
+});
+
+test('Giro pesquisa SKU parcialmente e recalcula os totais do grupo e da exportação',()=>{
+  const {w}=executarGiro({retornarContexto:true,busca:'sku-20',
+    estado:{pendente:true,saldo:50},eventos:[{categoria:'Vencida',volume:50,dias:0}],
+    materiais:[
+      {SKU:'SKU-10',KIT:'KIT-AAA','TIRAGEM TOTAL':100},
+      {SKU:'SKU-20',KIT:'KIT-BBB','TIRAGEM TOTAL':200}
+    ]});
+  assert.deepEqual(w.pgGiroLinhasExportar.map(l=>l.sku),['SKU-20']);
+  assert.equal(w.pgGiroGruposExportar.length,1);
+  assert.equal(w.pgGiroGruposExportar[0].qtdSkusTotal,1);
+  assert.equal(w.pgGiroGruposExportar[0].tiragemPrevistaTotal,200);
+});
+
+test('Giro pesquisa KIT parcialmente sem diferenciar maiúsculas e exporta só SKUs correspondentes',()=>{
+  const {w}=executarGiro({retornarContexto:true,busca:'kit-bb',
+    estado:{pendente:true,saldo:50},eventos:[{categoria:'Vencida',volume:50,dias:0}],
+    materiais:[
+      {SKU:'SKU-10',KIT:'KIT-AAA','TIRAGEM TOTAL':100},
+      {SKU:'SKU-20',KIT:'KIT-BBB','TIRAGEM TOTAL':200}
+    ]});
+  assert.deepEqual(w.pgGiroLinhasExportar.map(l=>l.kitPcp),['KIT-BBB']);
+  assert.equal(w.pgGiroGruposExportar[0].tiragemPrevistaTotal,200);
+});
+
+test('Giro remove apenas o painel da curva e mantém a busca e os filtros existentes',()=>{
+  const html=fs.readFileSync(path.join(root,'abaGiroSemanal_1.html'),'utf8');
+  assert.doesNotMatch(html,/Curva de Coleta Prevista|grafColetaFinalFunilGiro/);
+  assert.match(html,/id="filtroSkuKitGiro"/);
+  assert.match(html,/id="filtroEtapasGiro"/);
+  assert.match(html,/id="tbodyPontosAtencaoGiro"/);
 });
 
 test('extração leva tipo e personalização da linha do SKU até a planilha',()=>{

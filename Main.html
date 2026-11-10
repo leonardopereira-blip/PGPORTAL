@@ -618,9 +618,8 @@ window.exportarSkusFiltradosSheets = function() {
                         }
                     }
                     if (chave === 'PG_FORECAST_COLETA' && typeof window.renderColetaFinalFunil === 'function') {
-                        // Atualiza Meta CD publicada nas duas curvas sem recarregar o portal inteiro.
+                        // Atualiza Meta CD na curva do funil sem recarregar o portal inteiro.
                         try { window.renderColetaFinalFunil(); } catch (e) { console.warn('[META CD] Funil ainda não pronto:', e); }
-                        try { window.renderColetaFinalFunil('Giro'); } catch (e) { console.warn('[META CD] Giro ainda não pronto:', e); }
                     }
                 } catch (erro) {
                     if (chave === 'DADOS_PCP_CACHE') {

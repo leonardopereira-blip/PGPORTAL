@@ -1628,7 +1628,6 @@ function aplicarFiltros() {
     }
 window.processarGiroSemanal = function() {
     if (!document.getElementById('abaGiroSemanal') || !dadosFiltrados) return;
-    window.renderColetaFinalFunil('Giro');
     if (typeof window.renderizarPontosAtencaoGiro === 'function') {
         window.renderizarPontosAtencaoGiro(dadosFiltrados);
     }
@@ -8575,6 +8574,19 @@ window.reFiltrarTabelaGiro = function() {
     const tbody = document.getElementById('tbodyPontosAtencaoGiro');
     if (!tbody) return;
 
+    const normalizarBuscaGiro = valor => String(valor ?? '').normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    const buscaSkuKit = normalizarBuscaGiro(document.getElementById('filtroSkuKitGiro')?.value);
+    const kitPcpGiro = linha => ['KIT', 'COD KIT', 'CÓDIGO KIT', 'COD_KIT']
+        .map(nome => String(window.pgCampoColeta(linha, nome) ?? '').trim()).find(Boolean) || '';
+    const linhasGiroFiltradas = buscaSkuKit
+        ? window.GIRO_DADOS_RAW.filter(l => {
+            const sku = normalizarBuscaGiro(l['SKU_REAL'] || l['SKU']);
+            const kit = normalizarBuscaGiro(kitPcpGiro(l));
+            return sku.includes(buscaSkuKit) || kit.includes(buscaSkuKit);
+        })
+        : window.GIRO_DADOS_RAW;
+
     const optAberto = document.getElementById('chkGiroAberto').checked;
     const optPos = document.getElementById('chkGiroPos') ? document.getElementById('chkGiroPos').checked : true;
     const optConcluido = document.getElementById('chkGiroConcluido').checked;
@@ -8637,7 +8649,7 @@ window.reFiltrarTabelaGiro = function() {
     const escaparCodigoGiro = valor => valor.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     const totaisGrupos = new Map();
-    window.GIRO_DADOS_RAW.forEach(l => {
+    linhasGiroFiltradas.forEach(l => {
         if (parcelaJaConsolidadaGiro(l)) return;
         const {chave} = identificarGrupo(l);
         if (!totaisGrupos.has(chave)) totaisGrupos.set(chave, {skus: 0, skusColetados: 0, tiragem: 0, coletado: 0, coberto: 0});
@@ -8656,7 +8668,7 @@ window.reFiltrarTabelaGiro = function() {
     (window.pgObterResumoColeta().registros || []).forEach(r => {
         if (r.pcp && r.dtPlan && (!planosFinais.has(r.pcp) || planosFinais.get(r.pcp) < r.dtPlan)) planosFinais.set(r.pcp, r.dtPlan);
     });
-    window.GIRO_DADOS_RAW.forEach(l => {
+    linhasGiroFiltradas.forEach(l => {
         if (parcelaJaConsolidadaGiro(l)) return;
         const estadoMapa = estadosMapa.get(l);
         const prazoGiro = window.pgGiroSaldoPrazosV41(l, dtHojeISO, estadoMapa.coletada);
@@ -8952,8 +8964,7 @@ window.reFiltrarTabelaGiro = function() {
 
         // CHAVE DO SKU BLINDADA
         let superChaveSku = window.pgGiroChaveObs('SKU', `${grafica}|${marca}|${sku}|${envio}|${cd}`);
-        const kitPcp = ['KIT', 'COD KIT', 'CÓDIGO KIT', 'COD_KIT']
-            .map(nome => String(window.pgCampoColeta(l, nome) ?? '').trim()).find(Boolean) || '';
+        const kitPcp = kitPcpGiro(l);
         const mapasSaida = ['Coletado a menos', 'Concluído', 'Coletado a mais'].includes(statusFinalStr)
             ? window.pgCodigosMapasColetadosTPLinha?.(l) || [] : [];
 
