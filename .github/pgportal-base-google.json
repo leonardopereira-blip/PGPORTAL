@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-10T11:40:15.164Z",
+  "lido_em": "2026-11-10T12:55:02.332Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -50,7 +50,7 @@
     "HTML:PreProducao": "0da511380e5f45a042ee1ab028cfc807dd0c8299a53dd77eeec029bcc690e7ba",
     "HTML:Qualidade": "2e7fa50812e55536391ba451dc8ceb68806464644367c84e2ada6a54250843a1",
     "SERVER_JS:RegistroGiroJSON": "def59184ff3c6d9efe2ee13853b47936c97a613de611eb4040fa9aa2d13647bf",
-    "SERVER_JS:SalvaJson": "d2cbf1ee7b9ccad85190a1df487107614facb2569697367c71f42d4a85c1299c",
+    "SERVER_JS:SalvaJson": "80ce132f6ee5838f816659a525278e9ec52da4132745f12d820e6defbe51d9bf",
     "HTML:Scripts_Acompanhamento_Mapa": "da868d37ad728d90c935d9ab3c4dc3504672a61c9478488d0d659288d44e6e34",
     "HTML:Scripts_Conclusao_SKU": "8483ba32d573ef5ddf4a22392534d1485e8f641fd326582922dafc6ff6d60458",
     "HTML:Scripts_Eficiencia_Aging_UI": "f72b957127faa413eced959412dcd77320c52bc5202944f55e6687d8aee5c42d",
@@ -59,7 +59,7 @@
     "HTML:Scripts_EntregasCD_Modelo": "6af7811b9a34bfd4fb7dfde821815b7a80cd93b35efcbc3da97da0958c4d5de2",
     "HTML:Scripts_Eventos_TP": "67bc649d7204dd7db2867df3443da0b255e21f782017141c55e23d76e55655ee",
     "HTML:Scripts_Giro_Registro": "495aa98b40c761371ab340e5d194770bb3d17aa7ee5c6db9220cef47b15da719",
-    "HTML:Scripts_Globais_2": "88a1ac8321d93be6e749c191fbb18daf027e622bd6303237a2b7ccd1afc9cd74",
+    "HTML:Scripts_Globais_2": "ef87c1d293da518d1e8c689957e7653549cf350c554a7d20aa5c5b73b9ecbac6",
     "HTML:Scripts_Historico_PCP2026": "c6238f34d35ffd9c1adcb4435ff737563f806c1f234ee0b58c835bdafdafb8a5",
     "HTML:Scripts_Meta_Armazem_Realizado": "ae22d29077e27b204359486acc6557a4769d2ab99ee5556d65876220f17e51f5",
     "SERVER_JS:Sem título": "0d554ca9e8b80dd09850906f18cdd0f84d35dd7bbe6abab69ab4ccbada526ef8",
