@@ -126,6 +126,52 @@ test('Athos aceita SAS apenas para SKUs de origem SAS Adapt V1 e exclui outros e
   assert.deepEqual(Array.from(r.linhasAthos, x => x.id).sort(), ['VALIDO-ADAPT', 'VALIDO-SAS']);
 });
 
+test('tiragem total da operação vem só da Athos V1 no PCP Acabadoras, mesmo com UNIDADE SAS', () => {
+  const campos = ['GRÁFICA','UNIDADE','ENVIO','CARACTERÍSTICA DA SOLICITAÇÃO',
+    'SKU','TIRAGEM A ENTREGAR (total por CD)'];
+  const linhas = tabela(campos, [
+    {'GRÁFICA':'ATHOS',UNIDADE:'SAS',ENVIO:'V1',SKU:'SKU-SAS',
+      'TIRAGEM A ENTREGAR (total por CD)':100},
+    {'GRÁFICA':'ATHOS',UNIDADE:'SAS ADAPT',ENVIO:'V1',SKU:'SKU-ADAPT',
+      'TIRAGEM A ENTREGAR (total por CD)':200},
+    {'GRÁFICA':'ATHOS',UNIDADE:'SAS',ENVIO:'V1',SKU:'SKU-SAS',
+      'CARACTERÍSTICA DA SOLICITAÇÃO':'Cancelado','TIRAGEM A ENTREGAR (total por CD)':500},
+    {'GRÁFICA':'LOGPRINT',UNIDADE:'SAS ADAPT',ENVIO:'V1',SKU:'OUTRO',
+      'TIRAGEM A ENTREGAR (total por CD)':900},
+    {'GRÁFICA':'ATHOS',UNIDADE:'SAS',ENVIO:'V2',SKU:'V2',
+      'TIRAGEM A ENTREGAR (total por CD)':800}
+  ]);
+  const r = contexto.pgTempSasAdaptTiragemAcabadoras_(linhas);
+  assert.equal(r.total, 300);
+  assert.deepEqual(Array.from(r.skus), ['SKU-SAS','SKU-ADAPT']);
+});
+
+test('Coleta TP e Entrega TP são independentes; Previsão não é substituída pelo Mapa', () => {
+  const k = (sku,kit) => JSON.stringify([sku,kit]);
+  const saidas = [
+    {sku:'SKU-1',kit:'KIT-A',destino:'CD JDI',codigoMapa:'MAP-1',tiragem:80,coletado:70,
+      dataColeta:'',dataEntrega:'2026-11-09'},
+    {sku:'SKU-1',kit:'KIT-B',destino:'CD JDI',codigoMapa:'MAP-2',tiragem:50,coletado:45,
+      dataColeta:'2026-11-09',dataEntrega:''},
+    {sku:'SKU-OUTRO',kit:'KIT-A',destino:'CD JDI',codigoMapa:'MAP-3',tiragem:999,coletado:999,
+      dataColeta:'2026-11-09',dataEntrega:'2026-11-09'}
+  ];
+  const r = contexto.pgTempSasAdaptSaidaPorSkuCD_(saidas, {
+    previsoesPorCD:{'CD JDI':{[k('SKU-1','KIT-A')]:100,[k('SKU-1','KIT-B')]:60,
+      [k('SKU-1','KIT-NÃO-É-ADAPT')]:999}},
+    porCD:{'CD JDI':{[k('SKU-1','KIT-A')]:20,[k('SKU-1','KIT-B')]:15}},
+    indisponiveis:[]
+  }, ['SKU-1']);
+  assert.deepEqual(Array.from(r.athosPorSku, x => [x.kit,x.total,x.mapaSolicitado,x.coletado,x.entregue,x.internalizado]), [
+    ['KIT-A',100,80,0,70,20],['KIT-B',60,50,45,0,15]
+  ]);
+  assert.equal(r.mapaSolicitado, 130);
+  assert.equal(r.coletadoAthos, 45);
+  assert.equal(r.entregueAthos, 70);
+  assert.equal(r.expedicoesAthos[0].total, 160);
+  assert.equal(r.internalizadoAthos, 35);
+});
+
 test('recebido é um único total por SKU, limitado ao seu próprio PCP para o saldo programado', () => {
   const r = resumo([pLinha(), pLinha({ SKU: 'SKU-2' })], [
     aLinha({ 'TIRAGEM A ENTREGAR (total por CD)': 60, 'Tiragem recebida (Total SKU)': 170 }),
@@ -229,6 +275,7 @@ test('endpoint usa PCP para gráficas e Mapa original mais fontes do CD para ent
   mapaLinha[14] = 45; // O: TIRAGEM original
   mapaLinha[39] = 20; // AN: Volume Coletado
   mapaLinha[45] = '14/10/2026'; // AT: Coleta TP
+  mapaLinha[46] = '15/10/2026'; // AU: Entrega TP
   mapaLinha[49] = 'V1'; // AX: envio normalizado
   const semColeta = mapaLinha.slice();
   semColeta[4] = 'MP-ATHOS-FOR';
@@ -244,15 +291,24 @@ test('endpoint usa PCP para gráficas e Mapa original mais fontes do CD para ent
   semCDOriginal[1] = 'CD JDI'; semCDOriginal[6] = '';
   const mapa = [Array.from({length: 50}, (_, i) => 'COLUNA ' + i), mapaLinha, semColeta,
     outraGrafica, outroEnvio, semCDOriginal];
-  const sheets = { PCP: p, 'MAPA DE SAÍDA': mapa };
+  const acab = tabela(['GRÁFICA','UNIDADE','ENVIO','CARACTERÍSTICA DA SOLICITAÇÃO',
+    'SKU','TIRAGEM A ENTREGAR (total por CD)'], [
+    { 'GRÁFICA':'ATHOS', UNIDADE:'SAS', ENVIO:'V1', SKU:'SKU-2',
+      'CARACTERÍSTICA DA SOLICITAÇÃO':'PRODUÇÃO', 'TIRAGEM A ENTREGAR (total por CD)':50 },
+    { 'GRÁFICA':'ATHOS', UNIDADE:'SAS ADAPT', ENVIO:'V1', SKU:'SKU-1',
+      'CARACTERÍSTICA DA SOLICITAÇÃO':'PRODUÇÃO', 'TIRAGEM A ENTREGAR (total por CD)':100 }
+  ]);
+  const sheets = { PCP: p, PCP_ACABADORAS: acab, 'MAPA DE SAÍDA': mapa };
   const fontes = {
     'planilha-teste': sheets,
     '1qyRgj1_hdiJDo1zEu21vMSioeZe_i-emmnCPV4FMErk': {
-      'SAS V1 27': [['Cód Kit', 'Cód Item', 'Recebido'], ['K-1', 'SKU-2', 3], [], ['K-1', 'SKU-2', 7],
-        ['K-OUTRO', 'SKU-2', 888], ['K-1', 'SKU-NÃO-ENVIADO', 999]]
+      'SAS V1 27': [['Cód Kit', 'Cód Item', 'Previsão', 'Recebido'],
+        ['K-1', 'SKU-2', 30, 3], [], ['K-1', 'SKU-2', 15, 7],
+        ['K-OUTRO', 'SKU-2', 888, 888], ['K-1', 'SKU-NÃO-ENVIADO', 999, 999]]
     },
     '1nCVxwkQw_loqHCGahYoTa-8ZyFy42gXg7hC2MliUoHM': {
-      'SAS V1 27': [['Cód Kit', 'Cód Item', 'Recebido'], ['K-2', 'SKU-2', 0], ['K-1', 'SKU-2', 4]]
+      'SAS V1 27': [['Cód Kit', 'Cód Item', 'Previsão', 'Recebido'],
+        ['K-2', 'SKU-2', 30, 0], ['K-1', 'SKU-2', 15, 4]]
     }
   };
   const sourceRequests = [], headers = [], batches = [];
@@ -292,24 +348,26 @@ test('endpoint usa PCP para gráficas e Mapa original mais fontes do CD para ent
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'TempSasAdapt.js'), 'utf8'), api);
   const r = api.getTempSasAdapt();
-  assert.deepEqual(sourceRequests, [['PCP'], ['MAPA DE SAÍDA','MAPA DE SAIDA','MAPA DE SAIDA ']]);
-  assert.deepEqual(headers, ['PCP', 'SAS V1 27', 'SAS V1 27']);
-  assert.equal(batches.length, 4);
+  assert.deepEqual(sourceRequests, [['PCP'], ['PCP_ACABADORAS'],
+    ['MAPA DE SAÍDA','MAPA DE SAIDA','MAPA DE SAIDA ']]);
+  assert.deepEqual(headers, ['PCP', 'PCP_ACABADORAS', 'SAS V1 27', 'SAS V1 27']);
+  assert.equal(batches.length, 5);
   assert.equal(batches[0].length, pHeader.length);
-  assert.deepEqual(batches[1], ['C','E','G','H','K','L','O','AN','AT'].map(c => "'MAPA DE SAÍDA'!" + c + "2:" + c + "12"));
+  assert.deepEqual(batches[2], ['C','E','G','H','K','L','O','AN','AT','AU'].map(c => "'MAPA DE SAÍDA'!" + c + "2:" + c + "12"));
   assert.equal(r.pcpTotal, 150);
   assert.equal(r.saiuGraficas, 35);
-  assert.equal(r.totalAthos, 75, 'total da expedição soma O inclusive quando AN está zerada');
+  assert.equal(r.mapaSolicitado, 75, 'mapa solicitado soma O inclusive quando AN está zerada');
   assert.equal('recebidoAthos' in r, false);
   assert.equal('produzidoAthos' in r, false);
-  assert.equal(r.coletadoAthos, 20, 'saída efetiva somente de AN no Mapa original com gráfica PCP=ATHOS');
-  assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.coletado,x.internalizado]),
-    [['CD JDI',45,20,10], ['CD FOR',30,0,0]]);
+  assert.equal(r.coletadoAthos, 20, 'AN precisa da data Coleta TP');
+  assert.equal(r.entregueAthos, 20, 'AN precisa da data Entrega TP');
+  assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.mapaSolicitado,x.coletado,x.entregue,x.internalizado]),
+    [['CD JDI',45,45,20,20,10], ['CD FOR',30,30,0,0,0]]);
   assert.equal(r.internalizadoAthos, 10);
   assert.deepEqual(Array.from(r.internalizacaoIndisponivel), []);
   assert.equal(r.internalizacaoSemCorrespondencia, 0);
-  assert.deepEqual(Array.from(r.athosPorSku, x => [x.kit,x.sku,x.destino,x.total,x.coletado,x.internalizado]),
-    [['K-1','SKU-2','CD JDI',45,20,10], ['K-2','SKU-2','CD FOR',30,0,0]]);
+  assert.deepEqual(Array.from(r.athosPorSku, x => [x.kit,x.sku,x.destino,x.total,x.mapaSolicitado,x.coletado,x.entregue,x.internalizado]),
+    [['K-1','SKU-2','CD JDI',45,45,20,20,10], ['K-2','SKU-2','CD FOR',30,30,0,0,0]]);
   assert.deepEqual(Array.from(r.linhasGraficas, row => row.linha), [3, 4]);
   assert.equal('linhasAthos' in r, false);
   assert.equal(r.dataReferencia, hoje);
@@ -318,10 +376,10 @@ test('endpoint usa PCP para gráficas e Mapa original mais fontes do CD para ent
 
 test('mapa Athos separa kits no mesmo SKU e CD e conserva os volumes e os totais', () => {
   const entrada = [
-    {sku:'SKU-1', destino:'CD JDI', kit:'K-1', codigoMapa:'MP-1', tiragem:10, coletado:8},
-    {sku:'SKU-1', destino:'Jundiaí - SP', kit:'K-1', codigoMapa:'MP-1', tiragem:9, coletado:12},
-    {sku:'SKU-1', destino:'CD JDI', kit:'K-2', codigoMapa:'MP-1', tiragem:4, coletado:5},
-    {sku:'SKU-1', destino:'CD JDI', kit:'K-1', codigoMapa:'MP-4', tiragem:3, coletado:2},
+    {sku:'SKU-1', destino:'CD JDI', kit:'K-1', codigoMapa:'MP-1', tiragem:10, coletado:8, dataColeta:'2026-10-14'},
+    {sku:'SKU-1', destino:'Jundiaí - SP', kit:'K-1', codigoMapa:'MP-1', tiragem:9, coletado:12, dataColeta:'2026-10-14', dataEntrega:'2026-10-15'},
+    {sku:'SKU-1', destino:'CD JDI', kit:'K-2', codigoMapa:'MP-1', tiragem:4, coletado:5, dataColeta:'2026-10-14'},
+    {sku:'SKU-1', destino:'CD JDI', kit:'K-1', codigoMapa:'MP-4', tiragem:3, coletado:2, dataColeta:'2026-10-14'},
     {sku:'SKU-1', destino:'CD FOR', kit:'K-1', codigoMapa:'MP-1', tiragem:4, coletado:0},
     {sku:'SKU-2', destino:'CD JDI', kit:'K-2', codigoMapa:'MP-2', tiragem:2, coletado:0},
     {sku:'SKU-1', destino:'CD RP', kit:'K-1', codigoMapa:'MP-3', tiragem:30, coletado:20}
@@ -332,22 +390,26 @@ test('mapa Athos separa kits no mesmo SKU e CD e conserva os volumes e os totais
     [vinculo('SKU-1', 'K-OUTRO')]: 99,
     [vinculo('SKU-2', 'K-2')]: 0
   };
-  const r = contexto.pgTempSasAdaptSaidaPorSkuCD_(entrada, {porCD:{'CD JDI':jdi}, indisponiveis:['CD FOR']});
-  assert.deepEqual(Array.from(r.athosPorSku, x => [x.kit,x.sku,x.destino,x.total,x.coletado,x.internalizado]), [
-    ['K-1','SKU-1','CD FOR',4,0,null], ['K-1','SKU-1','CD JDI',13,14,7],
-    ['K-2','SKU-1','CD JDI',4,5,null],
-    ['K-2','SKU-2','CD JDI',2,0,0]
+  const previsoes = {[vinculo('SKU-1','K-1')]:13,[vinculo('SKU-1','K-2')]:4,[vinculo('SKU-2','K-2')]:2};
+  const r = contexto.pgTempSasAdaptSaidaPorSkuCD_(entrada,
+    {porCD:{'CD JDI':jdi},previsoesPorCD:{'CD JDI':previsoes}, indisponiveis:['CD FOR']});
+  assert.deepEqual(Array.from(r.athosPorSku, x => [x.kit,x.sku,x.destino,x.total,x.mapaSolicitado,x.coletado,x.entregue,x.internalizado]), [
+    ['K-1','SKU-1','CD FOR',null,4,0,0,null], ['K-1','SKU-1','CD JDI',13,13,14,12,7],
+    ['K-2','SKU-1','CD JDI',4,4,5,0,null],
+    ['K-2','SKU-2','CD JDI',2,2,0,0,0]
   ]);
-  assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.coletado,x.internalizado]),
-    [['CD JDI',19,19,7], ['CD FOR',4,0,null]]);
-  assert.equal(r.totalAthos, 23);
+  assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.mapaSolicitado,x.coletado,x.entregue,x.internalizado]),
+    [['CD JDI',19,19,19,12,7], ['CD FOR',0,4,0,0,null]]);
+  assert.equal(r.mapaSolicitado, 23);
   assert.equal(r.coletadoAthos, 19);
+  assert.equal(r.entregueAthos, 12);
   assert.equal(r.internalizadoAthos, null);
   assert.deepEqual(Array.from(r.internalizacaoIndisponivel), ['CD FOR']);
   assert.equal(r.internalizacaoSemCorrespondencia, 1, 'falha da fonte de FOR não entra nas correspondências ausentes');
 
   const legivel = contexto.pgTempSasAdaptSaidaPorSkuCD_(entrada, {
-    porCD:{'CD JDI':jdi, 'CD FOR':{[vinculo('SKU-1', 'K-OUTRO')]:99}}, indisponiveis:[]
+    porCD:{'CD JDI':jdi, 'CD FOR':{[vinculo('SKU-1', 'K-OUTRO')]:99}},
+    previsoesPorCD:{'CD JDI':previsoes, 'CD FOR':{}}, indisponiveis:[]
   });
   assert.equal(legivel.internalizacaoSemCorrespondencia, 2);
   assert.equal(legivel.expedicoesAthos.find(cd => cd.destino === 'CD FOR').internalizado, null);
@@ -387,16 +449,17 @@ function dadosVisaoAthos() {
   const { pcp, athos } = exemplo();
   const data = resumo(pcp, athos);
   data.athosPorSku = [
-    {kit:'KIT-A',sku:'SKU-1',destino:'CD JDI',total:60,coletado:40,internalizado:55},
-    {kit:'KIT-B',sku:'SKU-1',destino:'CD JDI',total:40,coletado:35,internalizado:50},
-    {kit:'KIT-C',sku:'SKU-2',destino:'CD FOR',total:50,coletado:0,internalizado:10}
+    {kit:'KIT-A',sku:'SKU-1',destino:'CD JDI',total:60,mapaSolicitado:50,coletado:40,entregue:30,internalizado:55},
+    {kit:'KIT-B',sku:'SKU-1',destino:'CD JDI',total:40,mapaSolicitado:35,coletado:35,entregue:20,internalizado:50},
+    {kit:'KIT-C',sku:'SKU-2',destino:'CD FOR',total:50,mapaSolicitado:20,coletado:0,entregue:0,internalizado:10}
   ];
   data.expedicoesAthos = [
-    {destino:'CD JDI',total:100,coletado:75,internalizado:105},
-    {destino:'CD FOR',total:50,coletado:0,internalizado:10}
+    {destino:'CD JDI',total:100,mapaSolicitado:85,coletado:75,entregue:50,internalizado:105},
+    {destino:'CD FOR',total:50,mapaSolicitado:20,coletado:0,entregue:0,internalizado:10}
   ];
-  data.totalAthos = 150;
+  data.mapaSolicitado = 105;
   data.coletadoAthos = 75;
+  data.entregueAthos = 50;
   data.internalizadoAthos = 115;
   data.internalizacaoSemCorrespondencia = 2;
   return data;
@@ -405,31 +468,35 @@ function dadosVisaoAthos() {
 test('visão usa a tiragem total como base dos cards e mantém uma linha por kit, SKU e CD', () => {
   const h = frontHarness(dadosVisaoAthos());
   h.context.window.pgCarregarTempSasAdapt(true);
-  assert.match(h.html, /Tiragem coletada na Athos/);
-  assert.match(h.html, /Entregas no CD · Internalizado/);
+  assert.match(h.html, /Mapa solicitado/);
+  assert.match(h.html, />Coletado<\/h3>/);
+  assert.match(h.html, />Entrega<\/h3>/);
+  assert.match(h.html, />Internalizado<\/h3>/);
   assert.match(h.html, /Entregas no CD · SKUs/);
   assert.match(h.html, /id="pgTempLabelTotal"[^>]*>Tiragem total<\/h3>/);
   assert.deepEqual(Array.from(h.html.matchAll(/<section class="pg-sas-kpi[^"]*" aria-labelledby="([^"]+)"/g), m => m[1]),
-    ['pgTempLabelTotal','pgTempLabelAthos','pgTempLabelColetado','pgTempLabelInternalizado']);
+    ['pgTempLabelTotal','pgTempLabelAthos','pgTempLabelColetado','pgTempLabelEntregue','pgTempLabelInternalizado']);
   assert.equal(h.elements.get('pgTempTotalVolume').textContent, '250');
   assert.match(h.elements.get('pgTempTotalPct').textContent, /^100%/);
-  assert.equal(h.elements.get('pgTempAthosProgramado').textContent, '150');
-  assert.match(h.elements.get('pgTempAthosTotalPct').textContent, /^60%/);
+  assert.equal(h.elements.get('pgTempAthosProgramado').textContent, '105');
+  assert.equal(h.elements.get('pgTempAthosTotalPct').textContent, '42%');
   assert.equal(h.elements.get('pgTempColetadoVolume').textContent, '75');
   assert.match(h.elements.get('pgTempColetadoPct').textContent, /^30%/);
+  assert.equal(h.elements.get('pgTempEntregueVolume').textContent, '50');
+  assert.equal(h.elements.get('pgTempEntreguePct').textContent, '20%');
   assert.equal(h.elements.get('pgTempInternalizadoVolume').textContent, '115');
   assert.match(h.elements.get('pgTempInternalizadoPct').textContent, /^46%/);
-  assert.match(h.elements.get('pgTempInternalizadoPct').textContent, /2 vínculos kit\/SKU sem registro/);
+  assert.equal(h.elements.get('pgTempInternalizadoPct').textContent, '46%');
   assert.match(h.elements.get('pgTempTabelaGraficas').innerHTML, /LOGPRINT/);
   assert.match(h.elements.get('pgTempTabelaExpedicoesAthos').innerHTML, /CD JDI/);
   const linhas = Array.from(h.elements.get('pgTempTabelaAthos').innerHTML.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g), m => m[1]);
   assert.equal(linhas.length, 3);
-  assert.match(linhas[0], /KIT-A.*SKU-1.*CD JDI.*100%.*66,67%.*91,67%/);
-  assert.match(linhas[1], /KIT-B.*SKU-1.*CD JDI.*100%.*87,5%.*125%/);
+  assert.match(linhas[0], /KIT-A.*SKU-1.*CD JDI.*100%.*83,33%.*66,67%.*50%.*91,67%/);
+  assert.match(linhas[1], /KIT-B.*SKU-1.*CD JDI.*100%.*87,5%.*87,5%.*50%.*125%/);
   assert.equal(h.elements.get('pgTempQtdSku').textContent, '3 linhas · 2 SKUs');
   h.elements.get('pgTempFiltroSku').value = 'SKU-2';
   h.context.window.pgFiltrarTempSasAdapt();
-  assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /KIT-C.*SKU-2.*CD FOR.*100%.*0%.*20%/);
+  assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /KIT-C.*SKU-2.*CD FOR.*100%.*40%.*0%.*0%.*20%/);
   assert.doesNotMatch(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-1/);
   assert.equal(h.elements.get('pgTempQtdSku').textContent, '1 linha · 1 SKU');
   const parcial = dadosVisaoAthos();
@@ -439,7 +506,7 @@ test('visão usa a tiragem total como base dos cards e mantém uma linha por kit
   const missing = frontHarness(parcial);
   missing.context.window.pgCarregarTempSasAdapt(true);
   assert.equal(missing.elements.get('pgTempInternalizadoVolume').textContent, '—');
-  assert.equal(missing.elements.get('pgTempInternalizadoPct').textContent, 'Fonte indisponível em CD FOR');
+  assert.equal(missing.elements.get('pgTempInternalizadoPct').textContent, '—');
   assert.match(missing.elements.get('pgTempTabelaAthos').innerHTML, /SKU-2.*<td>—<\/td>/);
 });
 
@@ -468,15 +535,15 @@ test('CSV auditável preserva quantidades negativas e neutraliza fórmulas em ca
   h.elements.get('pgTempFiltroSku').value = 'SKU-1';
   h.context.window.pgExportarTempSasAdapt('athos');
   const athosCsv = h.blobs[1].parts.join('');
-  assert.match(athosCsv, /"KIT";"SKU";"CD DESTINO";"TIRAGEM TOTAL";"% TOTAL";"TIRAGEM COLETADA";"% COLETADO";"INTERNALIZADO";"% INTERNALIZADO"/);
-  assert.match(athosCsv, /"KIT-A";"SKU-1";"CD JDI";"60";"100%";"40";"66,67%";"55";"91,67%"/);
-  assert.match(athosCsv, /"KIT-B";"SKU-1";"CD JDI";"40";"100%";"35";"87,5%";"50";"125%"/);
+  assert.match(athosCsv, /"KIT";"SKU";"CD DESTINO";"TIRAGEM TOTAL";"% TOTAL";"MAPA SOLICITADO";"% MAPA SOLICITADO";"COLETADO";"% COLETADO";"ENTREGA";"% ENTREGA";"INTERNALIZADO";"% INTERNALIZADO"/);
+  assert.match(athosCsv, /"KIT-A";"SKU-1";"CD JDI";"60";"100%";"50";"83,33%";"40";"66,67%";"30";"50%";"55";"91,67%"/);
+  assert.match(athosCsv, /"KIT-B";"SKU-1";"CD JDI";"40";"100%";"35";"87,5%";"35";"87,5%";"20";"50%";"50";"125%"/);
   assert.equal(athosCsv.split('\r\n').length, 3, 'exporta uma linha por kit para o SKU filtrado');
   assert.doesNotMatch(athosCsv, /SKU-2/);
   h.context.window.pgExportarTempSasAdapt('expedicoesAthos');
   assert.equal(h.downloads.length, 3);
   const expCsv = h.blobs[2].parts.join('');
-  assert.match(expCsv, /"CD FOR";"50";"100%";"0";"0%";"10";"20%"/);
+  assert.match(expCsv, /"CD FOR";"50";"100%";"20";"40%";"0";"0%";"0";"0%";"10";"20%"/);
 });
 
 
@@ -512,8 +579,7 @@ test('quando PCP_ACABADORAS não informa CD, expedição tem CD real do mapa e s
 });
 
 test('entregas por janela aparece na mesma visão e exporta o resumo com a fonte', () => {
-  const { pcp, athos } = exemplo();
-  const data = resumo(pcp, athos);
+  const data = dadosVisaoAthos();
   data.entregasPorJanela = [{id:'676724057',titulo:'Janela_1 - 29-09',total:100,
     entregue:40,saldo:60,aConferir:20,pedidos:2}];
   const h = frontHarness(data);
@@ -534,8 +600,7 @@ test('entregas por janela aparece na mesma visão e exporta o resumo com a fonte
 });
 
 test('falha na referência de janelas mantém os indicadores, busca e exportações atuais', () => {
-  const { pcp, athos } = exemplo();
-  const data = resumo(pcp, athos);
+  const data = dadosVisaoAthos();
   data.pcpTotal = 1115039;
   data.erroEntregasPorJanela = 'referência indisponível';
   data.entregasPorJanela = [];

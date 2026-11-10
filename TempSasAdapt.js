@@ -103,25 +103,27 @@ function pgTempSasAdaptLerInternalizado_() {
     'CD JDI': '1qyRgj1_hdiJDo1zEu21vMSioeZe_i-emmnCPV4FMErk',
     'CD FOR': '1nCVxwkQw_loqHCGahYoTa-8ZyFy42gXg7hC2MliUoHM'
   };
-  var porCD = Object.create(null), indisponiveis = [];
+  var porCD = Object.create(null), previsoesPorCD = Object.create(null), indisponiveis = [];
   Object.keys(fontes).forEach(function(cd) {
     try {
-      var valores = pgTempSasAdaptLerColunas_('SAS V1 27', ['Cód Kit', 'Cód Item', 'Recebido'], fontes[cd]);
-      var itens = Object.create(null);
+      var valores = pgTempSasAdaptLerColunas_('SAS V1 27', ['Cód Kit', 'Cód Item', 'Previsão', 'Recebido'], fontes[cd]);
+      var itens = Object.create(null), previsoes = Object.create(null);
       // RECEBIDO na fonte é calculado pelo kit. Um Cód Item pode pertencer a outros kits.
       valores.slice(1).forEach(function(linha) {
         var kit = pgTempSasAdaptNormalizar_(linha[0]), sku = pgTempSasAdaptNormalizar_(linha[1]);
         if (!kit || !sku) return;
         var chave = JSON.stringify([sku, kit]);
-        itens[chave] = (itens[chave] || 0) + pgTempSasAdaptNumero_(linha[2]);
+        previsoes[chave] = (previsoes[chave] || 0) + Math.max(0, pgTempSasAdaptNumero_(linha[2]));
+        itens[chave] = (itens[chave] || 0) + Math.max(0, pgTempSasAdaptNumero_(linha[3]));
       });
       porCD[cd] = itens;
+      previsoesPorCD[cd] = previsoes;
     } catch (e) {
       indisponiveis.push(cd);
       console.warn('[TEMP SAS ADAPT] Não foi possível ler o internalizado de ' + cd + ': ' + e.message);
     }
   });
-  return {porCD: porCD, indisponiveis: indisponiveis};
+  return {porCD: porCD, previsoesPorCD: previsoesPorCD, indisponiveis: indisponiveis};
 }
 
 function pgTempSasAdaptDestino_(valor) {
@@ -143,8 +145,8 @@ function pgTempSasAdaptLerSaidasMapa_() {
   var grade = meta.abas.filter(function(x) { return x.title === aba; })[0].gridProperties;
   var prefixo = "'" + aba.replace(/'/g, "''") + "'!";
   // C=GRAFICA PCP; E=mapa; G=CD original; H=envio original;
-  // K=kit original; L=SKU original; O=tiragem; AN=coleta fisica; AT=data coleta.
-  var letras = ['C','E','G','H','K','L','O','AN','AT'];
+  // K=kit; L=SKU; O=mapa solicitado; AN=coletado; AT=Coleta TP; AU=Entrega TP.
+  var letras = ['C','E','G','H','K','L','O','AN','AT','AU'];
   var retorno = Sheets.Spreadsheets.Values.batchGet(meta.id, {
     ranges: letras.map(function(col) { return prefixo + col + '2:' + col + grade.rowCount; }),
     valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER'
@@ -164,63 +166,87 @@ function pgTempSasAdaptLerSaidasMapa_() {
     if (!sku || !destino) continue;
     saidas.push({sku: sku, destino: destino, codigoMapa: pgTempSasAdaptNormalizar_(v[1]),
       kit: pgTempSasAdaptNormalizar_(v[4]), tiragem: tiragem, coletado: coletado,
-      dataColeta: pgTempSasAdaptDiaISO_(v[8]), linhaMapa: i + 2});
+      dataColeta: pgTempSasAdaptDiaISO_(v[8]), dataEntrega: pgTempSasAdaptDiaISO_(v[9]),
+      linhaMapa: i + 2});
   }
   return saidas;
 }
 
-function pgTempSasAdaptSaidaPorSkuCD_(saidasMapa, internalizado) {
+function pgTempSasAdaptSaidaPorSkuCD_(saidasMapa, internalizado, skusOrigem) {
+  var escopo = skusOrigem ? new Set(skusOrigem) : null;
   var parcelas = new Map(), porKitSkuCD = new Map(), porCD = new Map();
+  function chaveLinha(kit, sku, destino) { return JSON.stringify([kit, sku, destino]); }
+  function linha(kit, sku, destino) {
+    var chave = chaveLinha(kit, sku, destino);
+    if (!porKitSkuCD.has(chave)) porKitSkuCD.set(chave, {
+      kit: kit, sku: sku, destino: destino, total: null, mapaSolicitado: 0,
+      coletado: 0, entregue: 0, internalizado: null
+    });
+    return porKitSkuCD.get(chave);
+  }
+
+  // Somente vínculos kit/SKU/CD existentes no Mapa da Athos pertencem a esta
+  // operação. O CD possui outros kits de SAS com o mesmo SKU; não incluí-los.
   saidasMapa.forEach(function(mapa) {
     var destino = pgTempSasAdaptDestino_(mapa.destino);
     if (destino !== 'CD JDI' && destino !== 'CD FOR') return;
     var sku = pgTempSasAdaptNormalizar_(mapa.sku);
-    if (!sku) return;
+    if (!sku || (escopo && !escopo.has(sku))) return;
     var kit = pgTempSasAdaptNormalizar_(mapa.kit);
     var codigo = pgTempSasAdaptNormalizar_(mapa.codigoMapa) || 'LINHA ' + mapa.linhaMapa;
     var chave = JSON.stringify([sku, destino, codigo, kit]);
     if (!parcelas.has(chave)) {
-      parcelas.set(chave, {sku: sku, destino: destino, kit: kit, total: 0, coletado: 0});
+      parcelas.set(chave, {sku: sku, destino: destino, kit: kit,
+        mapaSolicitado: 0, coletado: 0, entregue: 0});
     }
     var parcela = parcelas.get(chave);
-    parcela.total = Math.max(parcela.total, pgTempSasAdaptNumero_(mapa.tiragem));
-    parcela.coletado = Math.max(parcela.coletado, pgTempSasAdaptNumero_(mapa.coletado));
+    parcela.mapaSolicitado = Math.max(parcela.mapaSolicitado, pgTempSasAdaptNumero_(mapa.tiragem));
+    // AN só se torna coleta/entrega real quando a respectiva data TP existe.
+    if (pgTempSasAdaptDiaISO_(mapa.dataColeta)) {
+      parcela.coletado = Math.max(parcela.coletado, pgTempSasAdaptNumero_(mapa.coletado));
+    }
+    if (pgTempSasAdaptDiaISO_(mapa.dataEntrega)) {
+      parcela.entregue = Math.max(parcela.entregue, pgTempSasAdaptNumero_(mapa.coletado));
+    }
   });
   parcelas.forEach(function(parcela) {
-    var chave = JSON.stringify([parcela.kit, parcela.sku, parcela.destino]);
-    if (!porKitSkuCD.has(chave)) {
-      porKitSkuCD.set(chave, {kit: parcela.kit, sku: parcela.sku, destino: parcela.destino, total: 0, coletado: 0});
-    }
-    var linha = porKitSkuCD.get(chave);
-    linha.total += parcela.total;
-    linha.coletado += parcela.coletado;
+    var item = linha(parcela.kit, parcela.sku, parcela.destino);
+    item.mapaSolicitado += parcela.mapaSolicitado;
+    item.coletado += parcela.coletado;
+    item.entregue += parcela.entregue;
   });
 
-  // RECEBIDO é calculado por kit na planilha do CD. Um mesmo SKU pode estar
-  // em kits de outras operações, então só contam os kits vinculados ao Mapa.
+  // Para cada vínculo físico da operação, o denominador é a PREVISÃO do CD.
+  porKitSkuCD.forEach(function(item) {
+    var chave = JSON.stringify([item.sku, item.kit]);
+    var previsoes = (internalizado.previsoesPorCD || {})[item.destino] || {};
+    var recebidos = (internalizado.porCD || {})[item.destino] || {};
+    if (Object.prototype.hasOwnProperty.call(previsoes, chave)) {
+      item.total = pgTempSasAdaptNumero_(previsoes[chave]);
+    }
+    if (Object.prototype.hasOwnProperty.call(recebidos, chave)) {
+      item.internalizado = pgTempSasAdaptNumero_(recebidos[chave]);
+    }
+  });
+
+  // Sem Previsão no CD a linha fica auditável, sem assumir o total do Mapa.
   var internalizacaoSemCorrespondencia = 0;
-  var athosPorSku = Array.from(porKitSkuCD.values(), function(linha) {
-    var recebidos = internalizado.porCD[linha.destino];
-    var recebido = null;
-    if (recebidos && linha.kit) {
-      var chave = JSON.stringify([linha.sku, linha.kit]);
-      if (Object.prototype.hasOwnProperty.call(recebidos, chave)) {
-        recebido = pgTempSasAdaptNumero_(recebidos[chave]);
-      } else {
-        internalizacaoSemCorrespondencia++;
-      }
+  var athosPorSku = Array.from(porKitSkuCD.values(), function(item) {
+    if (item.mapaSolicitado > 0 && item.internalizado === null &&
+        (internalizado.porCD || {})[item.destino]) internalizacaoSemCorrespondencia++;
+    if (!porCD.has(item.destino)) {
+      porCD.set(item.destino, {destino: item.destino, total: 0, mapaSolicitado: 0,
+        coletado: 0, entregue: 0, internalizado: null});
     }
-    if (!porCD.has(linha.destino)) {
-      porCD.set(linha.destino, {destino: linha.destino, total: 0, coletado: 0, internalizado: null});
+    var expedicao = porCD.get(item.destino);
+    expedicao.total += item.total || 0;
+    expedicao.mapaSolicitado += item.mapaSolicitado;
+    expedicao.coletado += item.coletado;
+    expedicao.entregue += item.entregue;
+    if (item.internalizado !== null) {
+      expedicao.internalizado = (expedicao.internalizado === null ? 0 : expedicao.internalizado) + item.internalizado;
     }
-    var expedicao = porCD.get(linha.destino);
-    expedicao.total += linha.total;
-    expedicao.coletado += linha.coletado;
-    if (recebido !== null) {
-      expedicao.internalizado = (expedicao.internalizado === null ? 0 : expedicao.internalizado) + recebido;
-    }
-    return {kit: linha.kit, sku: linha.sku, destino: linha.destino,
-      total: linha.total, coletado: linha.coletado, internalizado: recebido};
+    return item;
   }).sort(function(x, y) {
     return x.sku.localeCompare(y.sku) || x.kit.localeCompare(y.kit) || x.destino.localeCompare(y.destino);
   });
@@ -228,16 +254,35 @@ function pgTempSasAdaptSaidaPorSkuCD_(saidasMapa, internalizado) {
     return y.total - x.total || x.destino.localeCompare(y.destino);
   });
   var cdsComInternalizado = expedicoesAthos.filter(function(cd) { return cd.internalizado !== null; });
-  var temCDIndisponivel = expedicoesAthos.some(function(cd) { return !internalizado.porCD[cd.destino]; });
+  var temCDIndisponivel = expedicoesAthos.some(function(cd) { return !(internalizado.porCD || {})[cd.destino]; });
   return {
     athosPorSku: athosPorSku, expedicoesAthos: expedicoesAthos,
-    totalAthos: expedicoesAthos.reduce(function(total, cd) { return total + cd.total; }, 0),
+    mapaSolicitado: expedicoesAthos.reduce(function(total, cd) { return total + cd.mapaSolicitado; }, 0),
     coletadoAthos: expedicoesAthos.reduce(function(total, cd) { return total + cd.coletado; }, 0),
+    entregueAthos: expedicoesAthos.reduce(function(total, cd) { return total + cd.entregue; }, 0),
     internalizadoAthos: temCDIndisponivel || !cdsComInternalizado.length ? null :
       cdsComInternalizado.reduce(function(total, cd) { return total + cd.internalizado; }, 0),
     internalizacaoIndisponivel: internalizado.indisponiveis,
     internalizacaoSemCorrespondencia: internalizacaoSemCorrespondencia
   };
+}
+
+function pgTempSasAdaptTiragemAcabadoras_(acabadoras) {
+  var campos = ['GRÁFICA', 'UNIDADE', 'ENVIO', 'CARACTERÍSTICA DA SOLICITAÇÃO',
+    'SKU', 'TIRAGEM A ENTREGAR (total por CD)'];
+  var p = pgTempSasAdaptIndices_(acabadoras[0], campos, 'PCP_ACABADORAS');
+  var skus = new Set(), total = 0;
+  for (var i = 1; i < acabadoras.length; i++) {
+    var l = acabadoras[i] || [], sku = pgTempSasAdaptNormalizar_(l[p.SKU]);
+    // ATHOS/V1 é SAS Adapt mesmo quando a coluna UNIDADE traz apenas SAS.
+    if (!sku || pgTempSasAdaptNormalizar_(l[p['GRÁFICA']]) !== 'ATHOS' ||
+        pgTempSasAdaptNormalizar_(l[p.ENVIO]) !== 'V1' ||
+        !['SAS', 'SAS ADAPT'].includes(pgTempSasAdaptNormalizar_(l[p.UNIDADE])) ||
+        /CANCELAD|REENTRADA/.test(pgTempSasAdaptNormalizar_(l[p['CARACTERÍSTICA DA SOLICITAÇÃO']]))) continue;
+    skus.add(sku);
+    total += Math.max(0, pgTempSasAdaptNumero_(l[p['TIRAGEM A ENTREGAR (total por CD)']]));
+  }
+  return {total: total, skus: Array.from(skus)};
 }
 
 var PG_TEMP_SAS_ADAPT_CAMPOS_PCP = ['ID','GRÁFICA','UNIDADE','ENVIO','CARACTERÍSTICA DA SOLICITAÇÃO','SKU',
@@ -622,9 +667,17 @@ function pgTempSasAdaptEntregasJanelas_(janelas, saidasMapa) {
 function getTempSasAdapt() {
   var pcp = pgTempSasAdaptLerColunas_('PCP', PG_TEMP_SAS_ADAPT_CAMPOS_PCP);
   var resumo = pgTempSasAdaptResumoGraficas_(pcp);
+  var camposAcabadoras = ['GRÁFICA', 'UNIDADE', 'ENVIO', 'CARACTERÍSTICA DA SOLICITAÇÃO',
+    'SKU', 'TIRAGEM A ENTREGAR (total por CD)'];
+  var acabadoras = pgTempSasAdaptLerColunas_('PCP_ACABADORAS', camposAcabadoras);
+  var planoAthos = pgTempSasAdaptTiragemAcabadoras_(acabadoras);
+  resumo.pcpTotal = planoAthos.total;
   var saidasMapa = pgTempSasAdaptLerSaidasMapa_();
-  var coletasMapa = saidasMapa.filter(function(saida) { return saida.coletado > 0; });
-  Object.assign(resumo, pgTempSasAdaptSaidaPorSkuCD_(saidasMapa, pgTempSasAdaptLerInternalizado_()));
+  var coletasMapa = saidasMapa.filter(function(saida) {
+    return saida.coletado > 0 && !!saida.dataColeta && planoAthos.skus.indexOf(saida.sku) >= 0;
+  });
+  Object.assign(resumo, pgTempSasAdaptSaidaPorSkuCD_(saidasMapa,
+    pgTempSasAdaptLerInternalizado_(), planoAthos.skus));
   // Falha da nova referencia nao interrompe a visao nem muda seus totais.
   try {
     resumo.entregasPorJanela = pgTempSasAdaptEntregasJanelas_(pgTempSasAdaptLerJanelas_(), coletasMapa);

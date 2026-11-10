@@ -17,7 +17,7 @@
   #abaTempSasAdapt .pg-sas-content { max-width:1480px; width:100%; margin:0 auto; }
   #abaTempSasAdapt .pg-sas-status { min-height:20px; display:flex; align-items:center; gap:8px; margin:0 0 20px; color:var(--sas-muted); font-size:11px; line-height:1.6; }
   #abaTempSasAdapt .pg-sas-status::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--sas-blue); flex-shrink:0; }
-  #abaTempSasAdapt .pg-sas-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; margin-bottom:24px; }
+  #abaTempSasAdapt .pg-sas-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-bottom:24px; }
   #abaTempSasAdapt .pg-sas-kpi { position:relative; overflow:hidden; min-width:0; padding:18px 21px; border-radius:12px; background:var(--sas-navy); color:#FFF; }
   #abaTempSasAdapt .pg-sas-kpi::before { content:''; position:absolute; inset:0 auto 0 0; width:4px; background:var(--sas-blue); }
   #abaTempSasAdapt .pg-sas-kpi--blue { background:#284081; }
@@ -88,17 +88,22 @@
           <p id="pgTempTotalPct" class="pg-sas-kpi-detail"></p>
         </section>
         <section class="pg-sas-kpi" aria-labelledby="pgTempLabelAthos">
-          <h3 id="pgTempLabelAthos" class="pg-sas-kpi-label">Tiragem total no Mapa</h3>
+          <h3 id="pgTempLabelAthos" class="pg-sas-kpi-label">Mapa solicitado</h3>
           <p id="pgTempAthosProgramado" class="pg-sas-kpi-value">—</p>
           <p id="pgTempAthosTotalPct" class="pg-sas-kpi-detail"></p>
         </section>
         <section class="pg-sas-kpi pg-sas-kpi--blue" aria-labelledby="pgTempLabelColetado">
-          <h3 id="pgTempLabelColetado" class="pg-sas-kpi-label">Tiragem coletada na Athos</h3>
+          <h3 id="pgTempLabelColetado" class="pg-sas-kpi-label">Coletado</h3>
           <p id="pgTempColetadoVolume" class="pg-sas-kpi-value">—</p>
           <p id="pgTempColetadoPct" class="pg-sas-kpi-detail"></p>
         </section>
+        <section class="pg-sas-kpi pg-sas-kpi--blue" aria-labelledby="pgTempLabelEntregue">
+          <h3 id="pgTempLabelEntregue" class="pg-sas-kpi-label">Entrega</h3>
+          <p id="pgTempEntregueVolume" class="pg-sas-kpi-value">—</p>
+          <p id="pgTempEntreguePct" class="pg-sas-kpi-detail"></p>
+        </section>
         <section class="pg-sas-kpi pg-sas-kpi--orange" aria-labelledby="pgTempLabelInternalizado">
-          <h3 id="pgTempLabelInternalizado" class="pg-sas-kpi-label">Entregas no CD · Internalizado</h3>
+          <h3 id="pgTempLabelInternalizado" class="pg-sas-kpi-label">Internalizado</h3>
           <p id="pgTempInternalizadoVolume" class="pg-sas-kpi-value">—</p>
           <p id="pgTempInternalizadoPct" class="pg-sas-kpi-detail"></p>
         </section>
@@ -128,12 +133,12 @@
         </section>
         <section class="pg-sas-panel" aria-labelledby="pgTempTituloExpedicoes">
           <div class="pg-sas-panel-header">
-            <div><h3 id="pgTempTituloExpedicoes">Entregas por CD</h3><p class="pg-sas-panel-caption">Coletado na Athos e internalizado no destino</p></div>
+            <div><h3 id="pgTempTituloExpedicoes">Entregas por CD</h3><p class="pg-sas-panel-caption">Tiragem total conforme Previsão do CD. Etapas sobre esse total.</p></div>
             <button type="button" onclick="window.pgExportarTempSasAdapt('expedicoesAthos')" class="pg-sas-export" aria-label="Baixar CSV das entregas por CD"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
           </div>
           <div class="pg-sas-table-wrap">
             <table aria-label="Entregas por CD"><thead><tr>
-              <th scope="col">CD destino</th><th scope="col">Tiragem total</th><th scope="col">Tiragem coletada</th><th scope="col">Internalizado</th>
+              <th scope="col">CD destino</th><th scope="col">Tiragem total</th><th scope="col">Mapa solicitado</th><th scope="col">Coletado</th><th scope="col">Entrega</th><th scope="col">Internalizado</th>
             </tr></thead><tbody id="pgTempTabelaExpedicoesAthos"></tbody></table>
           </div>
         </section>
@@ -143,12 +148,12 @@
             <button type="button" onclick="window.pgExportarTempSasAdapt('athos')" class="pg-sas-export" aria-label="Baixar CSV das entregas por SKU e CD"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
           </div>
           <div class="pg-sas-filterbar">
-            <input id="pgTempFiltroSku" type="search" aria-label="Filtrar SKU" placeholder="Buscar por SKU…" oninput="window.pgFiltrarTempSasAdapt()" class="pg-sas-search">
+            <input id="pgTempFiltroSku" type="search" aria-label="Filtrar kit ou SKU" placeholder="Buscar por kit ou SKU…" oninput="window.pgFiltrarTempSasAdapt()" class="pg-sas-search">
             <p id="pgTempQtdSku" class="pg-sas-count" aria-live="polite"></p>
           </div>
           <div class="pg-sas-table-wrap pg-sas-table-wrap--sku">
             <table aria-label="Entregas por SKU e CD"><thead><tr>
-              <th scope="col">Kit</th><th scope="col">SKU</th><th scope="col">CD destino</th><th scope="col">Tiragem total</th><th scope="col">Tiragem coletada</th><th scope="col">Internalizado</th>
+              <th scope="col">Kit</th><th scope="col">SKU</th><th scope="col">CD destino</th><th scope="col">Tiragem total</th><th scope="col">Mapa solicitado</th><th scope="col">Coletado</th><th scope="col">Entrega</th><th scope="col">Internalizado</th>
             </tr></thead><tbody id="pgTempTabelaAthos"></tbody></table>
           </div>
         </section>
@@ -205,9 +210,10 @@
   function expedicoesAthos(linhas) {
     el('pgTempTabelaExpedicoesAthos').innerHTML = (linhas || []).map(function(l) {
       return '<tr class="border-t border-slate-100"><td class="p-2 text-slate-700">' + esc(l.destino) +
-        '</td>' + volumeComPct(l.total, l.total) + volumeComPct(l.coletado, l.total) +
+        '</td>' + volumeComPct(l.total, l.total) + volumeComPct(l.mapaSolicitado, l.total) +
+        volumeComPct(l.coletado, l.total) + volumeComPct(l.entregue, l.total) +
         volumeComPct(l.internalizado, l.total) + '</tr>';
-    }).join('') || '<tr><td colspan="4" class="p-4 text-center text-slate-500">Nenhum registro encontrado</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="p-4 text-center text-slate-500">Nenhum registro encontrado</td></tr>';
   }
   function volumeComPct(volume, total) {
     return '<td>' + (volume == null ? '—' : '<strong>' + fmt(volume) + '</strong>' +
@@ -216,7 +222,8 @@
   function skusVisiveis() {
     var busca = (el('pgTempFiltroSku').value || '').trim().toUpperCase();
     return (ultimo.athosPorSku || []).filter(function(s) {
-      return !busca || String(s.sku).toUpperCase().indexOf(busca) >= 0;
+      return !busca || String(s.sku).toUpperCase().indexOf(busca) >= 0 ||
+        String(s.kit).toUpperCase().indexOf(busca) >= 0;
     });
   }
   window.pgFiltrarTempSasAdapt = function() {
@@ -230,8 +237,9 @@
         '<td>' + esc(s.kit || '—') + '</td>' +
         '<td class="p-2 font-semibold">' + esc(s.sku) + '</td>' +
         '<td>' + esc(s.destino) + '</td>' + volumeComPct(s.total, s.total) +
-        volumeComPct(s.coletado, s.total) + volumeComPct(s.internalizado, s.total) + '</tr>';
-    }).join('') || '<tr><td colspan="6" class="p-5 text-center text-slate-500">Sem SKUs para o filtro</td></tr>';
+        volumeComPct(s.mapaSolicitado, s.total) + volumeComPct(s.coletado, s.total) +
+        volumeComPct(s.entregue, s.total) + volumeComPct(s.internalizado, s.total) + '</tr>';
+    }).join('') || '<tr><td colspan="8" class="p-5 text-center text-slate-500">Sem SKUs para o filtro</td></tr>';
   };
   function csvValor(valor) {
     var texto = String(valor == null ? '' : valor);
@@ -240,7 +248,8 @@
   }
   window.pgExportarTempSasAdapt = function(tipo) {
     if (!ultimo) { alert('Atualize a visão antes de baixar.'); return; }
-    var volumesAthos = ['total','pctTotal','coletado','pctColetado','internalizado','pctInternalizado'];
+    var volumesAthos = ['total','pctTotal','mapaSolicitado','pctMapa','coletado','pctColetado',
+      'entregue','pctEntregue','internalizado','pctInternalizado'];
     var definicoes = {
       graficas: {nome:'SAS_ADAPT_GRAFICAS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','tiragemRaw','saiuBruto','saiuReconhecido','operacao','totalOperacao','saiuBrutoOperacao','excedenteOperacao','linhasAgrupadas','dataColeta','dataColetaRaw','entregaTP','entregaTPRaw'], linhas:ultimo.linhasGraficas},
       athos: {nome:'SAS_ADAPT_ENTREGAS_CD_SKU', colunas:['kit','sku','destino'].concat(volumesAthos), linhas:skusVisiveis()},
@@ -256,19 +265,22 @@
       fonte:'FONTE',linha:'LINHA NA FONTE',id:'ID',sku:'SKU',grafica:'GRÁFICA',destino:'CD DESTINO',
       rawUnit:'UNIDADE ORIGINAL',envio:'ENVIO',caracteristica:'CARACTERÍSTICA DA SOLICITAÇÃO',
       total:tipo === 'janelas' ? 'PROGRAMADO (KITS)' : 'TIRAGEM TOTAL',
-      kit:'KIT',coletado:'TIRAGEM COLETADA',internalizado:'INTERNALIZADO',
-      pctTotal:'% TOTAL',pctColetado:'% COLETADO',pctInternalizado:'% INTERNALIZADO',
-      titulo:'JANELA',entregue:'COLETA CONFIRMADA (KITS)',aConferir:'A CONFERIR (INCLUÍDO NO SALDO)',saldo:'SALDO (KITS)',pedidos:'PEDIDOS',fonteUrl:'LINK NA FONTE',
+      kit:'KIT',mapaSolicitado:'MAPA SOLICITADO',coletado:'COLETADO',entregue:'ENTREGA',internalizado:'INTERNALIZADO',
+      pctTotal:'% TOTAL',pctMapa:'% MAPA SOLICITADO',pctColetado:'% COLETADO',
+      pctEntregue:'% ENTREGA',pctInternalizado:'% INTERNALIZADO',
+      titulo:'JANELA',aConferir:'A CONFERIR (INCLUÍDO NO SALDO)',saldo:'SALDO (KITS)',pedidos:'PEDIDOS',fonteUrl:'LINK NA FONTE',
       tiragemRaw:'TIRAGEM ORIGINAL',saiuBruto:'COLETADO INFORMADO',saiuReconhecido:'COLETADO RECONHECIDO (uma vez por operação)',
       operacao:'OPERAÇÃO',totalOperacao:'TOTAL DA OPERAÇÃO',saiuBrutoOperacao:'COLETADO DA OPERAÇÃO',
       excedenteOperacao:'EXCEDENTE DA OPERAÇÃO',linhasAgrupadas:'LINHAS AGRUPADAS NA FONTE',
       dataColeta:'DATA COLETA',dataColetaRaw:'DATA COLETA ORIGINAL',entregaTP:'ENTREGA TP',entregaTPRaw:'ENTREGA TP ORIGINAL'
     };
     if (tipo === 'janelas') cabecalho.id = 'ABA NA FONTE (GID)';
+    if (tipo === 'janelas') cabecalho.entregue = 'COLETA CONFIRMADA (KITS)';
     var linhas = [spec.colunas.map(function(k) { return csvValor(cabecalho[k] || k); }).join(';')];
     spec.linhas.forEach(function(r) {
       var linha = tipo === 'athos' || tipo === 'expedicoesAthos' ? Object.assign({}, r, {
-        pctTotal:pct(r.total, r.total), pctColetado:pct(r.coletado, r.total),
+        pctTotal:pct(r.total, r.total), pctMapa:pct(r.mapaSolicitado, r.total),
+        pctColetado:pct(r.coletado, r.total), pctEntregue:pct(r.entregue, r.total),
         pctInternalizado:pct(r.internalizado, r.total)
       }) : r;
       linhas.push(spec.colunas.map(function(k) { return csvValor(linha[k]); }).join(';'));
@@ -286,17 +298,17 @@
     ultimo = d;
     entregasPorJanela(d);
     el('pgTempTotalVolume').textContent = fmt(d.pcpTotal);
-    el('pgTempTotalPct').textContent = pct(d.pcpTotal, d.pcpTotal) + ' da tiragem total';
-    el('pgTempAthosProgramado').textContent = fmt(d.totalAthos);
-    el('pgTempAthosTotalPct').textContent = pct(d.totalAthos, d.pcpTotal) + ' da tiragem total';
+    el('pgTempTotalPct').textContent = pct(d.pcpTotal, d.pcpTotal);
+    el('pgTempAthosProgramado').textContent = fmt(d.mapaSolicitado);
+    el('pgTempAthosTotalPct').textContent = pct(d.mapaSolicitado, d.pcpTotal);
     el('pgTempColetadoVolume').textContent = fmt(d.coletadoAthos);
-    el('pgTempColetadoPct').textContent = pct(d.coletadoAthos, d.pcpTotal) + ' da tiragem total';
+    el('pgTempColetadoPct').textContent = pct(d.coletadoAthos, d.pcpTotal);
+    el('pgTempEntregueVolume').textContent = fmt(d.entregueAthos);
+    el('pgTempEntreguePct').textContent = pct(d.entregueAthos, d.pcpTotal);
     var indisponiveis = d.internalizacaoIndisponivel || [];
     el('pgTempInternalizadoVolume').textContent = d.internalizadoAthos == null ? '—' : fmt(d.internalizadoAthos);
-    var semRegistro = d.internalizacaoSemCorrespondencia > 0 ?
-      ' · ' + fmt(d.internalizacaoSemCorrespondencia) + ' vínculos kit/SKU sem registro' : '';
-    el('pgTempInternalizadoPct').textContent = indisponiveis.length ? 'Fonte indisponível em ' + indisponiveis.join(' e ') :
-      pct(d.internalizadoAthos, d.pcpTotal) + ' da tiragem total' + semRegistro;
+    el('pgTempInternalizadoPct').textContent = indisponiveis.length ? '—' :
+      pct(d.internalizadoAthos, d.pcpTotal);
     graficas(d.graficas);
     expedicoesAthos(d.expedicoesAthos);
     window.pgFiltrarTempSasAdapt();
@@ -312,9 +324,10 @@
     google.script.run.withSuccessHandler(function(d) {
       carregando = false;
       estadoCarregando(false);
-      if (!d || typeof d.pcpTotal !== 'number' || typeof d.totalAthos !== 'number' ||
+      if (!d || typeof d.pcpTotal !== 'number' || typeof d.mapaSolicitado !== 'number' ||
           !Array.isArray(d.graficas) || !Array.isArray(d.expedicoesAthos) ||
-          typeof d.coletadoAthos !== 'number' || !Array.isArray(d.athosPorSku)) {
+          typeof d.coletadoAthos !== 'number' || typeof d.entregueAthos !== 'number' ||
+          !Array.isArray(d.athosPorSku)) {
         el('statusTempSasAdapt').textContent = 'Não foi possível carregar. Tente atualizar a visão.';
         return;
       }
