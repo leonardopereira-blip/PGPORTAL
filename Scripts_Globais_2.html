@@ -8510,8 +8510,8 @@ window.exportarPendenciasGiroVisiveis = function() {
 };
 
 // PG_GIRO_PRAZOS_V41
-// TIRAGEM VENCIDA / A_Vencer e Coleta_TP. Sem usar Coleta Inicial/Final do PCP.
-window.pgGiroSaldoPrazosV41 = function(linha, hoje) {
+// TIRAGEM VENCIDA / A_Vencer com o volume efetivamente coletado no PCP.
+window.pgGiroSaldoPrazosV41 = function(linha, hoje, coletada) {
     const p = window.pgPrazoLinhaV35(linha, hoje);
     // A previsão manual pertence ao calendário de entrega, não ao atraso de produção.
     // Etapa pendente e aging usam exclusivamente as datas originais do PCP.
@@ -8521,11 +8521,9 @@ window.pgGiroSaldoPrazosV41 = function(linha, hoje) {
         const x = window.pgCampoPrazoV35(linha, nome);
         return x !== null && x !== undefined && String(x).trim() !== '';
     });
-    // A coleta só abate depois de Coleta_TP efetivamente preenchida.
     const totalSku = n(window.pgCampoColeta(linha, 'TIRAGEM TOTAL'));
-    // Cada SKU abate no máximo sua própria tiragem. Excedentes não cobrem outros SKUs.
-    let disponivel = p.dtColeta && p.dtColeta <= hoje
-        ? Math.min(n(p.coletadaBruta), totalSku > 0 ? totalSku : n(p.coletadaBruta)) : 0;
+    // A data informa o aging. O saldo usa o volume realizado, mesmo sem data.
+    let disponivel = n(coletada);
     let capacidadeSku = totalSku > 0 ? totalSku : Infinity;
     const eventos = [];
     const dias = data => data ? Math.round(
@@ -8609,32 +8607,34 @@ window.reFiltrarTabelaGiro = function() {
     const parcelaJaConsolidadaGiro = l => tiragemOriginalGiro(l) === 0 &&
         skusComTotalConsolidado.has(chaveSkuConsolidadoGiro(l));
 
-    // O percentual usa somente coleta real (Coleta_TP) e é limitado a 100% por SKU.
-    // O denominador e o escopo são os mesmos da coluna Tiragem total.
-    const coletadoPorLinha = new WeakMap();
-    const tiragemColetadaGiro = l => {
-        if (coletadoPorLinha.has(l)) return coletadoPorLinha.get(l);
-        const total = tiragemOriginalGiro(l);
-        const volume = typeof window.pgTiragemColetadaReal === 'function'
-            ? window.pgNumeroPrazoV35(window.pgTiragemColetadaReal(l)) : 0;
-        const coletado = Math.min(total, Math.max(0, volume));
-        coletadoPorLinha.set(l, coletado);
-        return coletado;
+    // A tiragem coletada vem do PCP (AZ). Na cobertura, o excedente de um SKU
+    // nunca cobre o saldo de outro. Arredondar só na exibição, dentro da faixa real.
+    const estadosMapa = new WeakMap();
+    const pctColetadoGiro = (coberto, previsto) => previsto > 0 ? 100 * coberto / previsto : null;
+    const fmtPctColetadoGiro = percentual => {
+        if (percentual === null) return '—';
+        const limite = percentual < 90 ? 89.99 : percentual < 100 ? 99.99 : 100;
+        return Math.min(percentual, limite).toFixed(2).replace('.', ',') + '%';
     };
-    const pctColetadoGiro = (coletado, total) => total > 0
-        ? Math.min(100, Math.round(1000 * coletado / total) / 10) : null;
-    const fmtPctColetadoGiro = percentual => percentual === null
-        ? '—' : percentual.toFixed(1).replace('.', ',') + '%';
+    const corPctColetadoGiro = percentual => percentual === null ? 'text-slate-500' :
+        percentual === 100 ? 'text-emerald-700' : percentual >= 90 ? 'text-amber-800' : 'text-red-700';
+    const escaparCodigoGiro = valor => valor.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     const totaisGrupos = new Map();
     window.GIRO_DADOS_RAW.forEach(l => {
         if (parcelaJaConsolidadaGiro(l)) return;
         const {chave} = identificarGrupo(l);
-        if (!totaisGrupos.has(chave)) totaisGrupos.set(chave, {skus: 0, tiragem: 0, coletado: 0});
+        if (!totaisGrupos.has(chave)) totaisGrupos.set(chave, {skus: 0, skusColetados: 0, tiragem: 0, coletado: 0, coberto: 0});
         const total = totaisGrupos.get(chave);
+        const estadoMapa = window.pgEstadoColetaMapa(l);
+        estadosMapa.set(l, estadoMapa);
+        const previsto = tiragemOriginalGiro(l);
+        const coletado = estadoMapa.coletada;
         total.skus++;
-        total.tiragem += tiragemOriginalGiro(l);
-        total.coletado += tiragemColetadaGiro(l);
+        if (previsto > 0 && coletado >= previsto) total.skusColetados++;
+        total.tiragem += previsto;
+        total.coletado += coletado;
+        total.coberto += Math.min(previsto, coletado);
     });
     const planosFinais = new Map();
     (window.pgObterResumoColeta().registros || []).forEach(r => {
@@ -8642,12 +8642,12 @@ window.reFiltrarTabelaGiro = function() {
     });
     window.GIRO_DADOS_RAW.forEach(l => {
         if (parcelaJaConsolidadaGiro(l)) return;
-        const estadoMapa = window.pgEstadoColetaMapa(l);
-        const prazoGiro = window.pgGiroSaldoPrazosV41(l, dtHojeISO);
+        const estadoMapa = estadosMapa.get(l);
+        const prazoGiro = window.pgGiroSaldoPrazosV41(l, dtHojeISO, estadoMapa.coletada);
         const statusColetaFonte = String(window.pgCampoColeta(l, 'STATUS COLETA') || '')
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-        const totalColeta = window.pgNumeroPrazoV35(window.pgCampoColeta(l, 'TIRAGEM TOTAL'));
-        const realizadoColeta = window.pgNumeroPrazoV35(window.pgCampoColeta(l, 'TIRAGEM COLETADA'));
+        const totalColeta = tiragemOriginalGiro(l);
+        const realizadoColeta = estadoMapa.coletada;
         const coletadoAMais = /COLETAD[OA] A MAIS|COLETA A MAIS/.test(estadoMapa.ay) ||
             /COLETAD[OA] A MAIS|COLETA A MAIS/.test(statusColetaFonte) ||
             (totalColeta > 0 && realizadoColeta > totalColeta);
@@ -8885,7 +8885,8 @@ window.reFiltrarTabelaGiro = function() {
         let sku = String(l["SKU_REAL"] || l["SKU"] || "-").trim();
         let tiragemBase = window.arredondar ? window.arredondar(l["TIRAGEM"] || l["QUANTIDADE"] || 0) : 0;
         let ehLinhaColeta = coletadoAMenos || etapaPendente.includes('Coleta Mapa');
-        let tiragemExibida = statusFinalStr === 'Coletado a mais' ? 0 :
+        const skuPendente = statusFinalStr === 'Em Aberto' || statusFinalStr === 'Coletado a menos';
+        let tiragemExibida = !skuPendente ? 0 :
             (ehLinhaColeta ? saldoColeta : tiragemBase);
 
         if (!grupos[chaveGrupo]) {
@@ -8893,12 +8894,14 @@ window.reFiltrarTabelaGiro = function() {
             grupos[chaveGrupo] = { 
                 grafica: grafica, marca: marca, serie: serie, envio: envio, cd: cd,
                 skus: [], tiragemTotal: 0, tiragemNormal: 0, piorEscala: 999, diasPos: null,
-                qtdSkusTotal: total.skus, tiragemPrevistaTotal: total.tiragem,
+                qtdSkusPendentes: 0, qtdSkusTotal: total.skus, qtdSkusColetados: total.skusColetados,
+                tiragemPrevistaTotal: total.tiragem,
                 tiragemColetadaTotal: total.coletado,
-                percentualColetado: pctColetadoGiro(total.coletado, total.tiragem),
+                percentualColetado: pctColetadoGiro(total.coberto, total.tiragem),
                 statusGrupo: statusFinalStr, pendencias: new Set() 
             };
         }
+        if (skuPendente) grupos[chaveGrupo].qtdSkusPendentes++;
 
         if (ehLinhaColeta) {
             const grupoSaldo = grupos[chaveGrupo];
@@ -8933,6 +8936,10 @@ window.reFiltrarTabelaGiro = function() {
 
         // CHAVE DO SKU BLINDADA
         let superChaveSku = window.pgGiroChaveObs('SKU', `${grafica}|${marca}|${sku}|${envio}|${cd}`);
+        const kitPcp = ['KIT', 'COD KIT', 'CÓDIGO KIT', 'COD_KIT']
+            .map(nome => String(window.pgCampoColeta(l, nome) ?? '').trim()).find(Boolean) || '';
+        const mapasSaida = ['Coletado a menos', 'Concluído', 'Coletado a mais'].includes(statusFinalStr)
+            ? window.pgCodigosMapasColetadosTPLinha?.(l) || [] : [];
 
         grupos[chaveGrupo].skus.push({
             linhaPrevisao: l,
@@ -8944,9 +8951,11 @@ window.reFiltrarTabelaGiro = function() {
             clientePersonalizado: String(l["CLIENTE_PERSONALIZADO"] || '').trim(),
             descricao: l["DESC_REAL"] || l["DESCRIÇÃO"] || l["PRODUTO"] || "-",
             tiragem: tiragemExibida,
-            tiragemOriginal: tiragemOriginalGiro(l),
-            tiragemColetada: tiragemColetadaGiro(l),
-            percentualColetado: pctColetadoGiro(tiragemColetadaGiro(l), tiragemOriginalGiro(l)),
+            tiragemOriginal: totalColeta,
+            tiragemColetada: realizadoColeta,
+            percentualColetado: pctColetadoGiro(Math.min(totalColeta, realizadoColeta), totalColeta),
+            kitPcp,
+            mapasSaida,
             statusLinha: statusFinalStr,
             excedenteColeta: totalColeta > 0 ? Math.max(0, realizadoColeta - totalColeta) : 0,
             pendencia: etapaPendente,
@@ -9032,7 +9041,7 @@ let arrGrupos = Object.values(grupos);
     });
 
     if (arrGrupos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="13" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="15" class="p-6 text-center text-slate-500 font-bold bg-slate-50">Nenhum registro atende aos filtros atuais.</td></tr>`;
         return;
     }
 
@@ -9045,9 +9054,11 @@ let arrGrupos = Object.values(grupos);
             if (rule.col === 'grafica') { valA = a.grafica; valB = b.grafica; }
             else if (rule.col === 'marca') { valA = a.marca; valB = b.marca; }
             else if (rule.col === 'serie') { valA = a.serie; valB = b.serie; }
-            else if (rule.col === 'qtd') { valA = a.skus.length; valB = b.skus.length; }
+            else if (rule.col === 'qtd') { valA = a.qtdSkusPendentes; valB = b.qtdSkusPendentes; }
             else if (rule.col === 'qtdSkusTotal') { valA = a.qtdSkusTotal; valB = b.qtdSkusTotal; }
+            else if (rule.col === 'qtdSkusColetados') { valA = a.qtdSkusColetados; valB = b.qtdSkusColetados; }
             else if (rule.col === 'tiragemPrevistaTotal') { valA = a.tiragemPrevistaTotal; valB = b.tiragemPrevistaTotal; }
+            else if (rule.col === 'tiragemColetadaTotal') { valA = a.tiragemColetadaTotal; valB = b.tiragemColetadaTotal; }
             else if (rule.col === 'percentualColetado') { valA = a.percentualColetado ?? -1; valB = b.percentualColetado ?? -1; }
             else if (rule.col === 'status') { valA = a.statusGrupo; valB = b.statusGrupo; }
             else if (rule.col === 'pendencia') { valA = a.piorEscala; valB = b.piorEscala; }
@@ -9059,7 +9070,7 @@ let arrGrupos = Object.values(grupos);
         return 0;
     });
 
-    ['grafica', 'marca', 'serie', 'status', 'pendencia', 'qtd', 'qtdSkusTotal', 'tiragemTotal', 'tiragemPrevistaTotal', 'percentualColetado'].forEach(k => {
+    ['grafica', 'marca', 'serie', 'status', 'pendencia', 'qtd', 'qtdSkusTotal', 'qtdSkusColetados', 'tiragemTotal', 'tiragemPrevistaTotal', 'tiragemColetadaTotal', 'percentualColetado'].forEach(k => {
         let el = document.getElementById(`sort_${k}`);
         if (el) {
             let ruleIndex = window.GIRO_SORT_RULES.findIndex(r => r.col === k);
@@ -9129,11 +9140,13 @@ let arrGrupos = Object.values(grupos);
         <td class="p-2 text-slate-600 font-medium border-r border-slate-200" style="width:8ch;max-width:calc(8ch + 1rem)"><span style="display:block;width:8ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(g.serie ?? '-').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}">${String(g.serie ?? '-').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span></td>
         <td class="p-2 border-r border-slate-200 text-center"><span class="px-2 py-1 rounded text-[10px] font-bold uppercase ${corStatusMaster}">${g.statusGrupo === 'Em Aberto' ? 'Zerado' : g.statusGrupo}</span></td>
         <td class="p-2 border-r border-slate-200 font-bold text-slate-700" style="width:30ch;max-width:calc(30ch + 1rem)"><span style="display:block;width:30ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(pendenciasStr).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}">${String(pendenciasStr).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span><span style="display:block;width:30ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(prazoMasterLabel).replace(/<[^>]*>/g, '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">${prazoMasterLabel}</span></td>
-        <td class="p-2 text-center font-bold text-slate-600 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.skus.length) : g.skus.length}</td>
+        <td class="p-2 text-center font-bold text-slate-600 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.qtdSkusPendentes) : g.qtdSkusPendentes}</td>
         <td class="p-2 text-center font-bold text-slate-600 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.qtdSkusTotal) : g.qtdSkusTotal}</td>
+        <td class="p-2 text-center font-bold text-slate-600 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.qtdSkusColetados) : g.qtdSkusColetados}</td>
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemTotal) : g.tiragemTotal}</td>
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemPrevistaTotal) : g.tiragemPrevistaTotal}</td>
-        <td class="p-2 text-right font-extrabold text-emerald-700 border-r border-slate-200 text-sm" title="${window.formatarBR ? window.formatarBR(g.tiragemColetadaTotal) : g.tiragemColetadaTotal} coletadas de ${window.formatarBR ? window.formatarBR(g.tiragemPrevistaTotal) : g.tiragemPrevistaTotal} previstas; máximo 100% por SKU">${fmtPctColetadoGiro(g.percentualColetado)}</td>
+        <td class="p-2 text-right text-slate-800 font-bold border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemColetadaTotal) : g.tiragemColetadaTotal}</td>
+        <td class="p-2 text-right font-extrabold ${corPctColetadoGiro(g.percentualColetado)} border-r border-slate-200 text-sm" title="Cobertura da tiragem prevista, limitada a 100% por SKU">${fmtPctColetadoGiro(g.percentualColetado)}</td>
         <td class="p-2">
         <div class="flex items-center w-full">
         <input type="text" id="${idInputMaster}" name="${idInputMaster}" autocomplete="off" value="${ultimaObsMaster}" placeholder="Ação / Motivo (Aperte Enter)..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('MASTER', '${safeChaveMaster}', this)" class="w-full text-[11px] p-2 border border-slate-300 hover:border-indigo-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg bg-white outline-none transition-all text-slate-700 font-semibold shadow-inner" />
@@ -9144,7 +9157,7 @@ let arrGrupos = Object.values(grupos);
         <td class="p-2">${window.pgGiroCampoNovaData?.(g.skus.map(x => x.linhaPrevisao),'girodata_'+indexGrupo) || '—'}</td>
         </tr>
         <tr id="${idSubTabela}" class="hidden subtabela-detalhes bg-indigo-50/30 border-b border-indigo-100">
-        <td colspan="13" class="p-0">
+        <td colspan="15" class="p-0">
         <div class="pl-10 pr-2 py-3">
         <table class="w-full text-[9px] text-left bg-white shadow-sm rounded border border-slate-200 overflow-hidden">
         <thead class="bg-slate-100 text-slate-500 uppercase font-bold">
@@ -9157,7 +9170,10 @@ let arrGrupos = Object.values(grupos);
         <th class="p-1.5 border-r border-slate-200">Etapa Pendente</th>
         <th class="p-1.5 text-right border-r border-slate-200">Tiragem pendente</th>
         <th class="p-1.5 text-right border-r border-slate-200">Tiragem total</th>
+        <th class="p-1.5 text-right border-r border-slate-200">Tiragem coletada</th>
         <th class="p-1.5 text-right border-r border-slate-200">% coletado</th>
+        <th class="p-1.5 border-r border-slate-200">Kit PCP</th>
+        <th class="p-1.5 border-r border-slate-200">Mapa de saída</th>
         <th class="p-1.5 w-1/3">Observação Específica do SKU</th>
         <th class="p-1.5">Nova data</th>
         </tr>
@@ -9195,11 +9211,14 @@ let arrGrupos = Object.values(grupos);
             <td class="p-1.5 font-bold border-r border-slate-100">${item.sku}</td>
             <td class="p-1.5 font-semibold border-r border-slate-100 text-indigo-700">${item.cd}</td>
             <td class="p-1.5 truncate border-r border-slate-100" title="${item.descricao}">${item.descricao}</td>
-            <td class="p-1.5 text-center font-bold border-r border-slate-100 ${corStatusSku}" title="${item.excedenteColeta > 0 ? 'Excedente de ' + item.excedenteColeta + ' un. fora do cálculo; SKU limitado a 100%' : ''}">${item.statusLinha}</td>
+            <td class="p-1.5 text-center font-bold border-r border-slate-100 ${corStatusSku}" title="${item.excedenteColeta > 0 ? 'Excedente de ' + item.excedenteColeta + ' un.' : ''}">${item.statusLinha}</td>
             <td class="p-1.5 border-r border-slate-100 font-bold text-slate-700">${item.pendenciaHtml}</td>
             <td class="p-1.5 text-right font-bold border-r border-slate-100">${window.formatarBR ? window.formatarBR(item.tiragem) : item.tiragem}</td>
             <td class="p-1.5 text-right font-bold border-r border-slate-100">${window.formatarBR ? window.formatarBR(item.tiragemOriginal) : item.tiragemOriginal}</td>
-            <td class="p-1.5 text-right font-extrabold text-emerald-700 border-r border-slate-100" title="${window.formatarBR ? window.formatarBR(item.tiragemColetada) : item.tiragemColetada} coletadas de ${window.formatarBR ? window.formatarBR(item.tiragemOriginal) : item.tiragemOriginal} previstas; excedente fora do percentual">${fmtPctColetadoGiro(item.percentualColetado)}</td>
+            <td class="p-1.5 text-right font-bold border-r border-slate-100">${window.formatarBR ? window.formatarBR(item.tiragemColetada) : item.tiragemColetada}</td>
+            <td class="p-1.5 text-right font-extrabold ${corPctColetadoGiro(item.percentualColetado)} border-r border-slate-100" title="Cobertura da tiragem prevista, limitada a 100% por SKU">${fmtPctColetadoGiro(item.percentualColetado)}</td>
+            <td class="p-1.5 border-r border-slate-100">${escaparCodigoGiro(item.kitPcp) || '—'}</td>
+            <td class="p-1.5 border-r border-slate-100">${item.mapasSaida.map(escaparCodigoGiro).join(', ') || '—'}</td>
             <td class="p-1.5">
             <div class="flex items-center w-full">
             ${primeiraObsSku ? `<input type="text" id="${idInputSku}" name="${idInputSku}" autocomplete="off" value="${ultimaObsSku}" class="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1.5 outline-none focus:border-indigo-400 focus:bg-white text-[10px] transition-all text-slate-700 font-semibold shadow-inner" placeholder="Nova observação (Enter)..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('SKU', '${safeChaveSku}', this)" />` : '<span class="text-[9px] text-slate-500" title="Observação compartilhada pelo mesmo SKU e destino">Observação unificada com o mesmo SKU/CD</span>'}

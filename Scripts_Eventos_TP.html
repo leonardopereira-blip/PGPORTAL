@@ -142,6 +142,16 @@
             .filter(r => r.envio === id.envio)
             .map(r => String(r.evento.kit || '').trim()).filter(Boolean))];
     };
+    // O código identifica a saída registrada no mapa, mesmo sem data TP conciliada.
+    window.pgCodigosMapasColetadosTPLinha = function(linha) {
+        const id = window.pgIdentidadeOperacionalTPLinha(linha);
+        const indice = indexarMapa(window.MAPA_SAIDA_CACHE);
+        if (!id.completa || !indice) return [];
+        const candidatos = indice.grupos.get(chave(id.partes)) || [];
+        return [...new Set(candidatos.filter(({ evento, envio }) =>
+            (id.acabadora || envio === id.envio) && evento.volumeColetado > 0)
+            .map(({ evento }) => String(evento.codigoMapa ?? '').trim()).filter(Boolean))];
+    };
     let cacheAgenda;
     function obterAgenda(hoje) {
         const mapa = window.MAPA_SAIDA_CACHE;

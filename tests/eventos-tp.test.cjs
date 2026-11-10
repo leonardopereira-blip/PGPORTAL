@@ -28,6 +28,20 @@ function portal(mapa) {
 const valores = eventos => JSON.parse(JSON.stringify(eventos));
 const legacy = (quantidade = 1403, dt = primeiraData) => [{ data: dt, volume: quantidade }];
 
+test('codigos de saida usam so movimentos coletados da identidade operacional', () => {
+  const w = portal({ key: [
+    evento({ coletaTP: null }),
+    segunda(),
+    evento({ codigoMapa: 'MP 95 V1 COC FC', linhaMapa: 746 }),
+    segunda({ codigoMapa: 'OUTRO ENVIO', envio: 'V2' }),
+    segunda({ codigoMapa: 'OUTRO DESTINO', destino: 'OUTRO' }),
+    segunda({ codigoMapa: 'SOMENTE AGENDADO', volumeColetado: 0 })
+  ] });
+  assert.deepEqual(valores(w.pgCodigosMapasColetadosTPLinha(linha({ _PG_TP_FORECAST: true }))),
+    ['MP 95 V1 COC FC', 'MP-506731-COC-V1-FORMACERTA']);
+  assert.deepEqual(valores(w.pgCodigosMapasColetadosTPLinha(linha({ ENVIO: '' }))), []);
+});
+
 test('dois codigos redistribuem 1403 nas datas comprovadas e preservam hoje', () => {
   const mapa = { legadoKey: [evento(), segunda()] };
   const w = portal(mapa);

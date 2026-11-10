@@ -17,7 +17,7 @@ function calcular(linha) {
    pgNumeroPrazoV35:v=>Number(v)||0
  };
  vm.runInNewContext(trecho,{window,Date});
- return window.pgGiroSaldoPrazosV41(linha,hoje);
+ return window.pgGiroSaldoPrazosV41(linha,hoje,linha.p.coletadaBruta);
 }
 test('nova data altera previsão de entrega, nunca a etapa nem os dias de atraso do Giro',()=>{
  const l={'TIRAGEM TOTAL':100,'TIRAGEM VENCIDA':100,
@@ -34,4 +34,13 @@ test('excedente do SKU é limitado a 100%, sem abater outro SKU',()=>{
    coletadaBruta:20,dtColeta:'2026-10-21'}});
  assert.equal(a.totalPendente,0);
  assert.equal(b.totalPendente,180);
+});
+test('Giro abate a tiragem coletada registrada mesmo sem data TP',()=>{
+ for (const [coletada,saldo] of [[99,1],[100,0]]) {
+   const r=calcular({'TIRAGEM TOTAL':100,'TIRAGEM VENCIDA':100,
+     p:{vencida:100,aVencer:0,dtVencida:'2026-10-20',coletadaBruta:coletada,dtColeta:''}});
+   assert.equal(r.totalPendente,saldo);
+   assert.equal(r.eventos.length,saldo>0 ? 1 : 0);
+   assert.equal(r.coletaTP,'');
+ }
 });

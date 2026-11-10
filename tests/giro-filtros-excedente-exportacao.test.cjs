@@ -12,7 +12,7 @@ const exportacao = servidor.slice(servidor.indexOf('function gerarPlanilhaGiroFi
   servidor.indexOf('function gerarPlanilhaReportExecutiva('));
 
 function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',ee='',campos={},materiais=null,
-  pos=false,temCampos=true,ordenacao=[],retornarTela=false}) {
+  pos=false,temCampos=true,ordenacao=[],retornarTela=false,historico={master:{},sku:{}}}) {
   const el = {};
   const linha = {TIRAGEM:100,SKU:'SKU-1',UNIDADE:'COC','GRÁFICA':'LOGPRINT',
     'CD DESTINO':'CD JDI',ENVIO:'V1','SÉRIE':'Série antiga',SERIE_CORRIGIDA:serie,
@@ -20,7 +20,7 @@ function executarGiro({min=-90,max=15,eventos=[],estado={},serie='Série nova',e
   const w = {
     GIRO_DADOS_RAW:materiais ? materiais.map(m=>({...linha,...m})) : [linha],
     GIRO_ETAPAS_SELECIONADAS:new Set(['Coleta Mapa','Coletado a mais']),
-    GIRO_SORT_RULES:ordenacao,HISTORICO_OBS_GIRO:{master:{},sku:{}},CONTEXTOS_TEMP:{},
+    GIRO_SORT_RULES:ordenacao,HISTORICO_OBS_GIRO:historico,CONTEXTOS_TEMP:{},
     pgObterResumoColeta:()=>({registros:[]}),pgEstadoColetaMapa:()=>({
       ay:'',total:100,coletada:0,saldo:0,pendente:false,parcial:false,concluida:false,...estado
     }),
