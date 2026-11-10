@@ -22,11 +22,11 @@
   #abaTempSasAdapt .pg-sas-kpi::before { content:''; position:absolute; inset:0 auto 0 0; width:4px; background:var(--sas-blue); }
   #abaTempSasAdapt .pg-sas-kpi--blue { background:#284081; }
   #abaTempSasAdapt .pg-sas-kpi--orange::before { background:var(--sas-orange); }
-  #abaTempSasAdapt .pg-sas-kpi--origem { border:1px solid var(--sas-line); background:#FFF; color:var(--sas-navy); }
+  #abaTempSasAdapt .pg-sas-kpi--base { border:1px solid var(--sas-line); background:#FFF; color:var(--sas-navy); }
   #abaTempSasAdapt .pg-sas-kpi-label { margin:0; color:inherit; font-size:10px; line-height:1.6; font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
   #abaTempSasAdapt .pg-sas-kpi-value { margin:8px 0 2px; color:inherit; font-size:32px; line-height:1.25; font-weight:700; letter-spacing:-.04em; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
   #abaTempSasAdapt .pg-sas-kpi-detail { margin:5px 0 0; min-height:18px; color:#D7E8F8; font-size:11px; line-height:1.65; }
-  #abaTempSasAdapt .pg-sas-kpi--origem .pg-sas-kpi-detail { color:var(--sas-muted); }
+  #abaTempSasAdapt .pg-sas-kpi--base .pg-sas-kpi-detail { color:var(--sas-muted); }
   #abaTempSasAdapt .pg-sas-panels { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:22px; }
   #abaTempSasAdapt .pg-sas-panel { min-width:0; overflow:hidden; border:1px solid var(--sas-line); border-radius:12px; background:#FFF; box-shadow:0 3px 14px rgba(12,35,64,.025); }
   #abaTempSasAdapt .pg-sas-panel--wide { grid-column:1/-1; }
@@ -82,6 +82,11 @@
     <div class="pg-sas-content">
       <p id="statusTempSasAdapt" role="status" aria-live="polite" class="pg-sas-status">Aguardando atualização.</p>
       <div class="pg-sas-kpis" aria-label="Indicadores da operação">
+        <section class="pg-sas-kpi pg-sas-kpi--base" aria-labelledby="pgTempLabelTotal">
+          <h3 id="pgTempLabelTotal" class="pg-sas-kpi-label">Tiragem total</h3>
+          <p id="pgTempTotalVolume" class="pg-sas-kpi-value">—</p>
+          <p id="pgTempTotalPct" class="pg-sas-kpi-detail"></p>
+        </section>
         <section class="pg-sas-kpi" aria-labelledby="pgTempLabelAthos">
           <h3 id="pgTempLabelAthos" class="pg-sas-kpi-label">Tiragem total no Mapa</h3>
           <p id="pgTempAthosProgramado" class="pg-sas-kpi-value">—</p>
@@ -96,11 +101,6 @@
           <h3 id="pgTempLabelInternalizado" class="pg-sas-kpi-label">Entregas no CD · Internalizado</h3>
           <p id="pgTempInternalizadoVolume" class="pg-sas-kpi-value">—</p>
           <p id="pgTempInternalizadoPct" class="pg-sas-kpi-detail"></p>
-        </section>
-        <section class="pg-sas-kpi pg-sas-kpi--origem" aria-labelledby="pgTempLabelGraficas">
-          <h3 id="pgTempLabelGraficas" class="pg-sas-kpi-label">Saiu das gráficas</h3>
-          <p id="pgTempSaiuVolume" class="pg-sas-kpi-value">—</p>
-          <p id="pgTempSaiuPct" class="pg-sas-kpi-detail"></p>
         </section>
       </div>
       <section class="pg-sas-panel pg-sas-janelas" aria-labelledby="pgTempTituloJanelas">
@@ -159,6 +159,8 @@
 <script>
 (function () {
   var ultimo = null, carregando = false;
+  var formatoVolume = new Intl.NumberFormat('pt-BR');
+  var formatoPct = new Intl.NumberFormat('pt-BR', {maximumFractionDigits:2});
   function el(id) { return document.getElementById(id); }
   function estadoCarregando(valor) {
     var botao = el('pgTempAtualizar');
@@ -166,13 +168,13 @@
     var raiz = el('abaTempSasAdapt');
     if (raiz && raiz.setAttribute) raiz.setAttribute('aria-busy', valor ? 'true' : 'false');
   }
-  function fmt(v) { return Math.round(Number(v) || 0).toLocaleString('pt-BR'); }
+  function fmt(v) { return formatoVolume.format(Math.round(Number(v) || 0)); }
   function pct(v, t) {
     if (v == null || !(t > 0)) return '—';
     var percentual = Number(v) * 100 / t;
     if (percentual > 99.99 && percentual < 100) percentual = 99.99;
     if (percentual > 100 && percentual < 100.01) percentual = 100.01;
-    return percentual.toLocaleString('pt-BR', {maximumFractionDigits:2}) + '%';
+    return formatoPct.format(percentual) + '%';
   }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function tituloJanela(valor) {
@@ -220,7 +222,9 @@
   window.pgFiltrarTempSasAdapt = function() {
     if (!ultimo) return;
     var filtradas = skusVisiveis();
-    el('pgTempQtdSku').textContent = new Set(filtradas.map(function(s) { return s.sku; })).size + ' SKUs';
+    var totalSkus = new Set(filtradas.map(function(s) { return s.sku; })).size;
+    el('pgTempQtdSku').textContent = fmt(filtradas.length) + (filtradas.length === 1 ? ' linha' : ' linhas') +
+      ' · ' + fmt(totalSkus) + (totalSkus === 1 ? ' SKU' : ' SKUs');
     el('pgTempTabelaAthos').innerHTML = filtradas.map(function(s) {
       return '<tr class="border-t border-slate-100 hover:bg-slate-50">' +
         '<td>' + esc(s.kit || '—') + '</td>' +
@@ -281,18 +285,18 @@
   function mostrar(d) {
     ultimo = d;
     entregasPorJanela(d);
-    el('pgTempSaiuPct').textContent = pct(d.saiuGraficas, d.pcpTotal) + ' de ' + fmt(d.pcpTotal);
-    el('pgTempSaiuVolume').textContent = fmt(d.saiuGraficas);
+    el('pgTempTotalVolume').textContent = fmt(d.pcpTotal);
+    el('pgTempTotalPct').textContent = pct(d.pcpTotal, d.pcpTotal) + ' da tiragem total';
     el('pgTempAthosProgramado').textContent = fmt(d.totalAthos);
-    el('pgTempAthosTotalPct').textContent = pct(d.totalAthos, d.totalAthos) + ' da tiragem mapeada';
+    el('pgTempAthosTotalPct').textContent = pct(d.totalAthos, d.pcpTotal) + ' da tiragem total';
     el('pgTempColetadoVolume').textContent = fmt(d.coletadoAthos);
-    el('pgTempColetadoPct').textContent = pct(d.coletadoAthos, d.totalAthos) + ' da tiragem total';
+    el('pgTempColetadoPct').textContent = pct(d.coletadoAthos, d.pcpTotal) + ' da tiragem total';
     var indisponiveis = d.internalizacaoIndisponivel || [];
     el('pgTempInternalizadoVolume').textContent = d.internalizadoAthos == null ? '—' : fmt(d.internalizadoAthos);
     var semRegistro = d.internalizacaoSemCorrespondencia > 0 ?
       ' · ' + fmt(d.internalizacaoSemCorrespondencia) + ' vínculos kit/SKU sem registro' : '';
     el('pgTempInternalizadoPct').textContent = indisponiveis.length ? 'Fonte indisponível em ' + indisponiveis.join(' e ') :
-      pct(d.internalizadoAthos, d.totalAthos) + ' da tiragem total' + semRegistro;
+      pct(d.internalizadoAthos, d.pcpTotal) + ' da tiragem total' + semRegistro;
     graficas(d.graficas);
     expedicoesAthos(d.expedicoesAthos);
     window.pgFiltrarTempSasAdapt();

@@ -309,14 +309,14 @@ test('endpoint usa PCP para gráficas e Mapa original mais fontes do CD para ent
   assert.deepEqual(Array.from(r.internalizacaoIndisponivel), []);
   assert.equal(r.internalizacaoSemCorrespondencia, 0);
   assert.deepEqual(Array.from(r.athosPorSku, x => [x.kit,x.sku,x.destino,x.total,x.coletado,x.internalizado]),
-    [['K-2','SKU-2','CD FOR',30,0,0], ['K-1','SKU-2','CD JDI',45,20,10]]);
+    [['K-1','SKU-2','CD JDI',45,20,10], ['K-2','SKU-2','CD FOR',30,0,0]]);
   assert.deepEqual(Array.from(r.linhasGraficas, row => row.linha), [3, 4]);
   assert.equal('linhasAthos' in r, false);
   assert.equal(r.dataReferencia, hoje);
   assert.match(r.atualizadoEm, /^2026-10-15T/);
 });
 
-test('mapa Athos soma kits distintos no mesmo SKU e CD, conserva coleta acima da tiragem e sinaliza falha do CD', () => {
+test('mapa Athos separa kits no mesmo SKU e CD e conserva os volumes e os totais', () => {
   const entrada = [
     {sku:'SKU-1', destino:'CD JDI', kit:'K-1', codigoMapa:'MP-1', tiragem:10, coletado:8},
     {sku:'SKU-1', destino:'Jundiaí - SP', kit:'K-1', codigoMapa:'MP-1', tiragem:9, coletado:12},
@@ -334,9 +334,12 @@ test('mapa Athos soma kits distintos no mesmo SKU e CD, conserva coleta acima da
   };
   const r = contexto.pgTempSasAdaptSaidaPorSkuCD_(entrada, {porCD:{'CD JDI':jdi}, indisponiveis:['CD FOR']});
   assert.deepEqual(Array.from(r.athosPorSku, x => [x.kit,x.sku,x.destino,x.total,x.coletado,x.internalizado]), [
-    ['K-1','SKU-1','CD FOR',4,0,null], ['K-1, K-2','SKU-1','CD JDI',17,19,7],
+    ['K-1','SKU-1','CD FOR',4,0,null], ['K-1','SKU-1','CD JDI',13,14,7],
+    ['K-2','SKU-1','CD JDI',4,5,null],
     ['K-2','SKU-2','CD JDI',2,0,0]
   ]);
+  assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.coletado,x.internalizado]),
+    [['CD JDI',19,19,7], ['CD FOR',4,0,null]]);
   assert.equal(r.totalAthos, 23);
   assert.equal(r.coletadoAthos, 19);
   assert.equal(r.internalizadoAthos, null);
@@ -384,11 +387,14 @@ function dadosVisaoAthos() {
   const { pcp, athos } = exemplo();
   const data = resumo(pcp, athos);
   data.athosPorSku = [
-    {kit:'KIT-A, KIT-B',sku:'SKU-1',destino:'CD JDI',total:100,coletado:75,internalizado:105},
+    {kit:'KIT-A',sku:'SKU-1',destino:'CD JDI',total:60,coletado:40,internalizado:55},
+    {kit:'KIT-B',sku:'SKU-1',destino:'CD JDI',total:40,coletado:35,internalizado:50},
     {kit:'KIT-C',sku:'SKU-2',destino:'CD FOR',total:50,coletado:0,internalizado:10}
   ];
-  data.expedicoesAthos = data.athosPorSku.map(({destino,total,coletado,internalizado}) =>
-    ({destino,total,coletado,internalizado}));
+  data.expedicoesAthos = [
+    {destino:'CD JDI',total:100,coletado:75,internalizado:105},
+    {destino:'CD FOR',total:50,coletado:0,internalizado:10}
+  ];
   data.totalAthos = 150;
   data.coletadoAthos = 75;
   data.internalizadoAthos = 115;
@@ -396,30 +402,38 @@ function dadosVisaoAthos() {
   return data;
 }
 
-test('visão exibe cartões de volume e percentual e detalha o mesmo recorte por SKU e CD', () => {
+test('visão usa a tiragem total como base dos cards e mantém uma linha por kit, SKU e CD', () => {
   const h = frontHarness(dadosVisaoAthos());
   h.context.window.pgCarregarTempSasAdapt(true);
   assert.match(h.html, /Tiragem coletada na Athos/);
   assert.match(h.html, /Entregas no CD · Internalizado/);
   assert.match(h.html, /Entregas no CD · SKUs/);
-  assert.match(h.elements.get('pgTempSaiuPct').textContent, /48(?:[,.]0+)?\s*%/);
-  assert.equal(h.elements.get('pgTempSaiuVolume').textContent, '120');
+  assert.match(h.html, /id="pgTempLabelTotal"[^>]*>Tiragem total<\/h3>/);
+  assert.deepEqual(Array.from(h.html.matchAll(/<section class="pg-sas-kpi[^"]*" aria-labelledby="([^"]+)"/g), m => m[1]),
+    ['pgTempLabelTotal','pgTempLabelAthos','pgTempLabelColetado','pgTempLabelInternalizado']);
+  assert.equal(h.elements.get('pgTempTotalVolume').textContent, '250');
+  assert.match(h.elements.get('pgTempTotalPct').textContent, /^100%/);
   assert.equal(h.elements.get('pgTempAthosProgramado').textContent, '150');
-  assert.match(h.elements.get('pgTempAthosTotalPct').textContent, /^100%/);
+  assert.match(h.elements.get('pgTempAthosTotalPct').textContent, /^60%/);
   assert.equal(h.elements.get('pgTempColetadoVolume').textContent, '75');
-  assert.match(h.elements.get('pgTempColetadoPct').textContent, /^50%/);
+  assert.match(h.elements.get('pgTempColetadoPct').textContent, /^30%/);
   assert.equal(h.elements.get('pgTempInternalizadoVolume').textContent, '115');
-  assert.match(h.elements.get('pgTempInternalizadoPct').textContent, /^76,67%/);
+  assert.match(h.elements.get('pgTempInternalizadoPct').textContent, /^46%/);
   assert.match(h.elements.get('pgTempInternalizadoPct').textContent, /2 vínculos kit\/SKU sem registro/);
   assert.match(h.elements.get('pgTempTabelaGraficas').innerHTML, /LOGPRINT/);
   assert.match(h.elements.get('pgTempTabelaExpedicoesAthos').innerHTML, /CD JDI/);
-  assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /KIT-A, KIT-B.*SKU-1.*CD JDI.*100%.*75%.*105%/);
+  const linhas = Array.from(h.elements.get('pgTempTabelaAthos').innerHTML.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g), m => m[1]);
+  assert.equal(linhas.length, 3);
+  assert.match(linhas[0], /KIT-A.*SKU-1.*CD JDI.*100%.*66,67%.*91,67%/);
+  assert.match(linhas[1], /KIT-B.*SKU-1.*CD JDI.*100%.*87,5%.*125%/);
+  assert.equal(h.elements.get('pgTempQtdSku').textContent, '3 linhas · 2 SKUs');
   h.elements.get('pgTempFiltroSku').value = 'SKU-2';
   h.context.window.pgFiltrarTempSasAdapt();
   assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /KIT-C.*SKU-2.*CD FOR.*100%.*0%.*20%/);
   assert.doesNotMatch(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-1/);
+  assert.equal(h.elements.get('pgTempQtdSku').textContent, '1 linha · 1 SKU');
   const parcial = dadosVisaoAthos();
-  parcial.athosPorSku[1].internalizado = null;
+  parcial.athosPorSku[2].internalizado = null;
   parcial.internalizadoAthos = null;
   parcial.internalizacaoIndisponivel = ['CD FOR'];
   const missing = frontHarness(parcial);
@@ -455,7 +469,9 @@ test('CSV auditável preserva quantidades negativas e neutraliza fórmulas em ca
   h.context.window.pgExportarTempSasAdapt('athos');
   const athosCsv = h.blobs[1].parts.join('');
   assert.match(athosCsv, /"KIT";"SKU";"CD DESTINO";"TIRAGEM TOTAL";"% TOTAL";"TIRAGEM COLETADA";"% COLETADO";"INTERNALIZADO";"% INTERNALIZADO"/);
-  assert.match(athosCsv, /"KIT-A, KIT-B";"SKU-1";"CD JDI";"100";"100%";"75";"75%";"105";"105%"/);
+  assert.match(athosCsv, /"KIT-A";"SKU-1";"CD JDI";"60";"100%";"40";"66,67%";"55";"91,67%"/);
+  assert.match(athosCsv, /"KIT-B";"SKU-1";"CD JDI";"40";"100%";"35";"87,5%";"50";"125%"/);
+  assert.equal(athosCsv.split('\r\n').length, 3, 'exporta uma linha por kit para o SKU filtrado');
   assert.doesNotMatch(athosCsv, /SKU-2/);
   h.context.window.pgExportarTempSasAdapt('expedicoesAthos');
   assert.equal(h.downloads.length, 3);
@@ -520,14 +536,15 @@ test('entregas por janela aparece na mesma visão e exporta o resumo com a fonte
 test('falha na referência de janelas mantém os indicadores, busca e exportações atuais', () => {
   const { pcp, athos } = exemplo();
   const data = resumo(pcp, athos);
+  data.pcpTotal = 1115039;
   data.erroEntregasPorJanela = 'referência indisponível';
   data.entregasPorJanela = [];
   const h = frontHarness(data);
   h.context.window.pgCarregarTempSasAdapt(true);
   assert.match(h.elements.get('pgTempTabelaJanelas').innerHTML, /Não foi possível carregar/);
   assert.equal(h.elements.get('pgTempExportarJanelas').disabled, true);
-  assert.equal(h.elements.get('pgTempSaiuVolume').textContent, '120');
-  assert.match(h.elements.get('pgTempSaiuPct').textContent, /48% de 250/);
+  assert.equal(h.elements.get('pgTempTotalVolume').textContent, '1.115.039');
+  assert.match(h.elements.get('pgTempTotalPct').textContent, /^100%/);
   h.elements.get('pgTempFiltroSku').value = 'SKU-2';
   h.context.window.pgFiltrarTempSasAdapt();
   assert.match(h.elements.get('pgTempTabelaAthos').innerHTML, /SKU-2/);

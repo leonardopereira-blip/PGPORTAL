@@ -170,7 +170,7 @@ function pgTempSasAdaptLerSaidasMapa_() {
 }
 
 function pgTempSasAdaptSaidaPorSkuCD_(saidasMapa, internalizado) {
-  var parcelas = new Map(), porSkuCD = new Map(), porCD = new Map();
+  var parcelas = new Map(), porKitSkuCD = new Map(), porCD = new Map();
   saidasMapa.forEach(function(mapa) {
     var destino = pgTempSasAdaptDestino_(mapa.destino);
     if (destino !== 'CD JDI' && destino !== 'CD FOR') return;
@@ -187,12 +187,11 @@ function pgTempSasAdaptSaidaPorSkuCD_(saidasMapa, internalizado) {
     parcela.coletado = Math.max(parcela.coletado, pgTempSasAdaptNumero_(mapa.coletado));
   });
   parcelas.forEach(function(parcela) {
-    var chave = JSON.stringify([parcela.sku, parcela.destino]);
-    if (!porSkuCD.has(chave)) {
-      porSkuCD.set(chave, {sku: parcela.sku, destino: parcela.destino, kits: new Set(), total: 0, coletado: 0});
+    var chave = JSON.stringify([parcela.kit, parcela.sku, parcela.destino]);
+    if (!porKitSkuCD.has(chave)) {
+      porKitSkuCD.set(chave, {kit: parcela.kit, sku: parcela.sku, destino: parcela.destino, total: 0, coletado: 0});
     }
-    var linha = porSkuCD.get(chave);
-    if (parcela.kit) linha.kits.add(parcela.kit);
+    var linha = porKitSkuCD.get(chave);
     linha.total += parcela.total;
     linha.coletado += parcela.coletado;
   });
@@ -200,18 +199,16 @@ function pgTempSasAdaptSaidaPorSkuCD_(saidasMapa, internalizado) {
   // RECEBIDO é calculado por kit na planilha do CD. Um mesmo SKU pode estar
   // em kits de outras operações, então só contam os kits vinculados ao Mapa.
   var internalizacaoSemCorrespondencia = 0;
-  var athosPorSku = Array.from(porSkuCD.values(), function(linha) {
+  var athosPorSku = Array.from(porKitSkuCD.values(), function(linha) {
     var recebidos = internalizado.porCD[linha.destino];
     var recebido = null;
-    if (recebidos) {
-      linha.kits.forEach(function(kit) {
-        var chave = JSON.stringify([linha.sku, kit]);
-        if (Object.prototype.hasOwnProperty.call(recebidos, chave)) {
-          recebido = (recebido === null ? 0 : recebido) + pgTempSasAdaptNumero_(recebidos[chave]);
-        } else {
-          internalizacaoSemCorrespondencia++;
-        }
-      });
+    if (recebidos && linha.kit) {
+      var chave = JSON.stringify([linha.sku, linha.kit]);
+      if (Object.prototype.hasOwnProperty.call(recebidos, chave)) {
+        recebido = pgTempSasAdaptNumero_(recebidos[chave]);
+      } else {
+        internalizacaoSemCorrespondencia++;
+      }
     }
     if (!porCD.has(linha.destino)) {
       porCD.set(linha.destino, {destino: linha.destino, total: 0, coletado: 0, internalizado: null});
@@ -222,9 +219,11 @@ function pgTempSasAdaptSaidaPorSkuCD_(saidasMapa, internalizado) {
     if (recebido !== null) {
       expedicao.internalizado = (expedicao.internalizado === null ? 0 : expedicao.internalizado) + recebido;
     }
-    return {kit: Array.from(linha.kits).sort().join(', '), sku: linha.sku, destino: linha.destino,
+    return {kit: linha.kit, sku: linha.sku, destino: linha.destino,
       total: linha.total, coletado: linha.coletado, internalizado: recebido};
-  }).sort(function(x, y) { return x.sku.localeCompare(y.sku) || x.destino.localeCompare(y.destino); });
+  }).sort(function(x, y) {
+    return x.sku.localeCompare(y.sku) || x.kit.localeCompare(y.kit) || x.destino.localeCompare(y.destino);
+  });
   var expedicoesAthos = Array.from(porCD.values()).sort(function(x, y) {
     return y.total - x.total || x.destino.localeCompare(y.destino);
   });
