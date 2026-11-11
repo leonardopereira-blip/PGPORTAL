@@ -98,6 +98,53 @@
     }
     return null;
   }
+  function observacoesTP(entradas, fase, base, modo, corte) {
+    if (typeof window.pgVolumesColetaUnificadosV37 !== 'function') return null;
+    var grupos = new Map(), tipo = fase.id === 'ent_tp' ? 'entrega' : 'coleta';
+    entradas.forEach(function(item, i) {
+      var l = item.linha, total = numero(item.total);
+      if (!total || !aplicavel(l, fase)) return;
+      var prazo = prazoFase(l, fase, base);
+      var id = window.pgIdentidadeOperacionalTPLinha && window.pgIdentidadeOperacionalTPLinha(l);
+      // Prazos distintos nao autorizam distribuir o realizado entre as linhas.
+      var chave = JSON.stringify([id && id.completa ? id.chave : 'LINHA:' + i, prazo]);
+      if (!grupos.has(chave)) grupos.set(chave, {total:0, prazo:prazo, entradas:[], eventos:new Map()});
+      var g = grupos.get(chave);
+      g.total += total;
+      g.entradas.push(item);
+      var conciliacao = l._PG_MA;
+      var volumes = conciliacao ? null : window.pgVolumesColetaUnificadosV37(l, corte);
+      var eventos = conciliacao ? conciliacao[tipo === 'entrega' ? 'eventosEntrega' : 'eventosColeta'] :
+        volumes[tipo === 'entrega' ? 'eventosEntregaTP' : 'eventosColetaTP'];
+      (eventos || []).forEach(function(e, n) {
+        var dt = data(e.data), volume = numero(e.volume);
+        if (!dt || dt > corte || !volume) return;
+        var fisica = Number.isInteger(e.linhaMapa) && e.linhaMapa >= 2;
+        var identidade = fisica ? 'MAPA:' + e.linhaMapa : 'LINHA:' + i + ':PARCELA:' + n;
+        if (!g.eventos.has(identidade)) g.eventos.set(identidade, {linha:l, data:dt, volume:volume});
+      });
+    });
+    var registros = [];
+    grupos.forEach(function(g) {
+      var realizado = 0;
+      Array.from(g.eventos.values()).sort(function(a,b) { return a.data.localeCompare(b.data); }).forEach(function(e) {
+        var volume = Math.min(e.volume, Math.max(0, g.total - realizado));
+        realizado += volume;
+        if (modo !== 'aberto' && volume > 0) registros.push(registro(e.linha, fase, g.prazo, e.data, volume));
+      });
+      if (modo === 'aberto') {
+        var pendente = Math.max(0, g.total - realizado);
+        if (pendente > 0) registros.push(registro(g.entradas[0].linha, fase, g.prazo, corte, pendente));
+      } else if (!g.eventos.size) {
+        var semData = g.entradas.reduce(function(s,item) {
+          return s + (!realFase(item.linha, fase) ? numero(campo(item.linha, 'TIRAGEM COLETADA')) : 0);
+        }, 0);
+        if (semData > 0) registros.push(registro(g.entradas[0].linha, fase, g.prazo, null,
+          Math.min(g.total, semData), 'Quantidade registrada sem a data operacional da etapa.'));
+      }
+    });
+    return registros;
+  }
   function itensCanonicos(cenario, corte) {
     if (typeof window.pgMAObterItens === 'function') return window.pgMAObterItens(corte ? { cenario: cenario, corte: corte } : { cenario: cenario });
     var base = window.pgBaseGeralReportExecutiva || window.dadosGlobais || [];
@@ -157,11 +204,18 @@
         if (total <= 0) return;
         fases().forEach(function(f) {
           if (!aplicavel(l, f)) return;
+          if (['col_tp','ent_tp'].includes(f.id) && typeof window.pgVolumesColetaUnificadosV37 === 'function') return;
           var r = observacaoFase(l, f, base, modo, corte, total);
           if (r) { porFase.get(f.id).registros.push(r); geral.push(r); }
         });
       });
-      itens.forEach(function(item) {
+      fases().filter(function(f) { return ['col_tp','ent_tp'].includes(f.id); }).forEach(function(f) {
+        var registros = observacoesTP(linhas.map(function(l) { return {linha:l, total:tiragem(l)}; }), f, base, modo, corte);
+        if (registros) registros.forEach(function(r) { porFase.get(f.id).registros.push(r); geral.push(r); });
+      });
+      var entregasTP = observacoesTP(itens, faseEntrega, base, modo, corte);
+      if (entregasTP) entrega.push.apply(entrega, entregasTP);
+      else itens.forEach(function(item) {
         var r = observacaoFase(item.linha, faseEntrega, base, modo, corte, item.total);
         if (r) entrega.push(r);
       });

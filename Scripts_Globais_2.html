@@ -446,36 +446,40 @@ window.pgDataPlanoEntregaSLA = function(l, coletaPlanejada = window.pgDataPlanoC
 const pgCacheVolumesColetaV37 = new WeakMap();
 
 window.pgVolumesColetaUnificadosV37 = function(linha, corte = dtHojeISO) {
+    const n = nome => window.pgNumeroPrazoV35(window.pgCampoPrazoV35(linha, nome));
+    const d = nome => window.pgNormalizarDataColeta(
+        window.pgCampoPrazoV35(linha, nome), dtHojeISO
+    );
+    // A linha pode receber ajustes sem trocar de objeto ou de cache do mapa.
+    // Rele os valores efetivos, inclusive zero e datas apagadas.
+    const atuais = {
+        bruto: n('TIRAGEM COLETADA'),
+        agendadaPCP: window.pgTiragemAgendadaPCP(linha),
+        mapaAgendado: d('Mapa_Agendado'), // coluna EB
+        coletaTP: d('Coleta_TP'),
+        entregaTP: d('Entrega_TP')
+    };
     let base = linha && typeof linha === 'object'
         ? pgCacheVolumesColetaV37.get(linha)
         : null;
 
-    if (!base) {
-        const n = nome => window.pgNumeroPrazoV35(window.pgCampoPrazoV35(linha, nome));
-        const d = nome => window.pgNormalizarDataColeta(
-            window.pgCampoPrazoV35(linha, nome), dtHojeISO
-        );
-
-        base = {
-            bruto: n('TIRAGEM COLETADA'),
-            agendadaPCP: window.pgTiragemAgendadaPCP(linha),
-            mapaAgendado: d('Mapa_Agendado'), // coluna EB
-            coletaTP: d('Coleta_TP'),
-            entregaTP: d('Entrega_TP')
-        };
-
+    if (!base || Object.keys(atuais).some(nome => base[nome] !== atuais[nome])) {
+        base = atuais;
         if (linha && typeof linha === 'object') {
             pgCacheVolumesColetaV37.set(linha, base);
         }
     }
 
+    // O motor ja memoriza por identidade, quantidade, data e dia de referencia.
+    // Consulta-lo evita que este cache esconda mudancas de rota, Forecast ou DG.
+    const eventos = (tipo, data) => typeof window.pgEventosTPLinha === 'function'
+        ? window.pgEventosTPLinha(linha, tipo, dtHojeISO, base.bruto, data)
+        : (data && base.bruto > 0 ? [{ data, volume: base.bruto }] : []);
+    const coleta = eventos('coleta', base.coletaTP), entrega = eventos('entrega', base.entregaTP);
     if (!base.eventos || base.mapaReferencia !== window.MAPA_SAIDA_CACHE ||
-        base.baseAgenda !== window.dadosGlobais || base.tamanhoAgenda !== window.dadosGlobais?.length) {
-        const eventos = (tipo, data) => typeof window.pgEventosTPLinha === 'function'
-            ? window.pgEventosTPLinha(linha, tipo, dtHojeISO,
-                base.bruto, data)
-            : (data && base.bruto > 0 ? [{ data, volume: base.bruto }] : []);
-        base.eventos = { coleta: eventos('coleta', base.coletaTP), entrega: eventos('entrega', base.entregaTP),
+        base.baseAgenda !== window.dadosGlobais || base.tamanhoAgenda !== window.dadosGlobais?.length ||
+        base.hoje !== dtHojeISO || base.eventos.coleta !== coleta || base.eventos.entrega !== entrega) {
+        base.eventos = { coleta, entrega,
             agendado: window.pgEventosAgendaMapaLinha(linha, dtHojeISO,
                 base.agendadaPCP ?? base.bruto, base.agendadaPCP === null
                     ? (base.coletaTP ? null : base.mapaAgendado)
@@ -483,6 +487,7 @@ window.pgVolumesColetaUnificadosV37 = function(linha, corte = dtHojeISO) {
         base.mapaReferencia = window.MAPA_SAIDA_CACHE;
         base.baseAgenda = window.dadosGlobais;
         base.tamanhoAgenda = window.dadosGlobais?.length;
+        base.hoje = dtHojeISO;
     }
     const eventosColetaTP = base.eventos.coleta;
     const eventosEntregaTP = base.eventos.entrega;
@@ -3264,15 +3269,10 @@ window.renderTabelaMarcaSerieTipo = function renderTabelaMarcaSerieTipo() {
         else tipo = 'Outros';
 
         let tFaseReal = window.getVolFase ? window.getVolFase(l, faseObj, tBase) : tBase;
-        if (faseId === 'col_tp' || faseId === 'ent_tp') {
-            tFaseReal = window.arredondar(l["VOLUME_AZ"] || l["TIRAGEM COLETADA"] || l["COLETADA_MAPA"] || 0);
-        }
         let isReal = false;
         if (typeof dataFoiPreenchida === 'function') {
             isReal = dataFoiPreenchida(l, faseObj) || (tFaseReal > 0 && (faseId === 'col_mapa' || faseId === 'ent_cd'));
         }
-        if (faseId === 'col_tp') isReal = !!(l["DATA_DZ"] && String(l["DATA_DZ"]).trim() !== "");
-        if (faseId === 'ent_tp') isReal = !!(l["DATA_EA"] && String(l["DATA_EA"]).trim() !== "");
 
         setSeries.add(serie);
         if (!matriz[marca]) matriz[marca] = {
@@ -5746,9 +5746,17 @@ window.processarEvolucao = function() {
                 let cols = getCols(f, tRef);
                 let dtP = extrairDataISO(l[cols.plan]);
                 let dtR = extrairDataISO(l[cols.real]) || (cols.realAlt ? extrairDataISO(l[cols.realAlt]) : null);
+                const tipoTP = f.id === 'col_tp' ? 'coleta' : f.id === 'ent_tp' ? 'entrega' : null;
+                const volumesTP = tipoTP && typeof window.pgVolumesColetaUnificadosV37 === 'function'
+                    ? window.pgVolumesColetaUnificadosV37(l, dtHojeISO) : null;
+                const parcelasPeriodoTP = volumesTP
+                    ? volumesTP[tipoTP === 'entrega' ? 'eventosEntregaTP' : 'eventosColetaTP']
+                        .filter(e => e.data >= strIni && e.data <= strFim && e.data <= dtHojeISO && e.volume > 0)
+                    : null;
+                if (parcelasPeriodoTP) tFaseReal = parcelasPeriodoTP.reduce((s, e) => s + e.volume, 0);
                 
                 let isInPlan = dtP && dtP >= strIni && dtP <= strFim;
-                let isInReal = dtR && dtR >= strIni && dtR <= strFim;
+                let isInReal = parcelasPeriodoTP ? parcelasPeriodoTP.length > 0 : dtR && dtR >= strIni && dtR <= strFim;
 
                 if (!isInPlan && !isInReal) return; // Só processa se tocou no período
 
@@ -5780,12 +5788,15 @@ window.processarEvolucao = function() {
                         if(!chartData[grP]) chartData[grP] = { plan:0, realDoPlan:0, realAntecipado:0, realAtrasado:0 };
                         chartData[grP].plan += tBase; // CORRIGIDO t -> tBase
                     }
-                    if (isInReal && grR) {
-                        if(!chartData[grR]) chartData[grR] = { plan:0, realDoPlan:0, realAntecipado:0, realAtrasado:0 };
-                        if (grP && grP === grR) chartData[grR].realDoPlan += tFaseReal; 
-                        else if (dtP && dtP < dtR) chartData[grR].realAtrasado += tFaseReal; 
-                        else chartData[grR].realAntecipado += tFaseReal; 
-                    }
+                    const parcelasGrafico = parcelasPeriodoTP || (isInReal && grR ? [{ data: dtR, volume: tFaseReal }] : []);
+                    parcelasGrafico.forEach(e => {
+                        const grupoReal = formatarGrupo(e.data);
+                        if (!grupoReal) return;
+                        if(!chartData[grupoReal]) chartData[grupoReal] = { plan:0, realDoPlan:0, realAntecipado:0, realAtrasado:0 };
+                        if (grP && grP === grupoReal) chartData[grupoReal].realDoPlan += e.volume;
+                        else if (dtP && dtP < e.data) chartData[grupoReal].realAtrasado += e.volume;
+                        else chartData[grupoReal].realAntecipado += e.volume;
+                    });
 
                     // Tabelas de Detalhamento
                     let g = l["GRÁFICA"] || "N/A";
@@ -9865,7 +9876,9 @@ let arrGrupos = Object.values(grupos);
             planEsperado++;
             if (datas.plan) planPreenchido++;
 
-            let concluido = !!datas.real;
+            const tp = ['col_tp', 'ent_tp'].includes(spec.id);
+            const volumeTP = tp ? Math.max(0, Number(pgVolumeReal(l, spec, tBase)) || 0) : null;
+            let concluido = tp ? volumeTP > 0 : !!datas.real;
             if (!concluido && spec.custom !== 'entrada_maquina') {
                 const f = pgFase(spec.id);
                 if (f && typeof dataFoiPreenchida === 'function') concluido = dataFoiPreenchida(l, f);
@@ -9873,7 +9886,7 @@ let arrGrupos = Object.values(grupos);
 
             if (concluido) {
                 completosSku++;
-                const vReal = Math.max(0, Number(pgVolumeReal(l, spec, tBase)) || tBase);
+                const vReal = tp ? volumeTP : Math.max(0, Number(pgVolumeReal(l, spec, tBase)) || tBase);
                 completoVol += vReal;
 
                 if (datas.plan && datas.real) {
@@ -10743,24 +10756,49 @@ window.processarReportExecutiva = function() {
     const planejadoQuadroRE = (data, antecedencia = 0) =>
         data && calcDiffDiasISO(data, cortePlanejadoRE) >= antecedencia;
 
-    progressoEtapas.forEach(({linha:l, volume, acabado, kit}) => {
+    // A formula pode concentrar o realizado de um SKU em uma de suas linhas.
+    // Concilia esse SKU/rota antes do teto, sem ratear parcelas entre linhas.
+    const gruposQuadroRE = new Map();
+    progressoEtapas.forEach(({linha:l, volume, acabado, kit}, indice) => {
         if (!(volume > 0)) return;
         const grupo = chaveLinha(l);
-        const volumes = typeof window.pgVolumesColetaUnificadosV37 === 'function'
-            ? window.pgVolumesColetaUnificadosV37(l, hojeIso) : null;
-        const realTP = (etapa, campo) => {
-            if (volumes) return limitarQuadroRE(volumes[etapa], volume);
-            const data = window.pgNormalizarDataColeta(
-                window.pgCampoColeta(l, campo), hojeIso);
-            return data && data <= hojeIso ? limitarQuadroRE(tiragemColetada(l), volume) : 0;
-        };
+        const identidade = window.pgIdentidadeOperacionalTPLinha?.(l);
+        const fonte = identidade?.fonte || (window.pgEhFonteAcabadora(l) ? 'ACABADORA' : 'PCP');
+        const fisica = JSON.stringify([fonte, l._PG_TP_LINHA ?? l._ROW_ID ?? l.ID ?? indice]);
+        const serie = norm(window.pgSerieCorrigidaFunil?.(l) || l.serie_corrigida ||
+            l['SÉRIE'] || l['Série'] || l.SERIE || '');
+        const origemGrafica = identidade?.acabadora
+            ? norm(window.pgCampoColeta(l, 'GRÁFICA DE ORIGEM')) : identidade?.partes?.[1] || '';
+        const chave = JSON.stringify([grupo, identidade?.completa ? identidade.chave : fisica,
+            norm(identidade?.envio || l.ENVIO || ''), serie, origemGrafica]);
+        if (!gruposQuadroRE.has(chave)) gruposQuadroRE.set(chave, {
+            grupo, volume: 0, acabado: 0, kit: 0, planos: {acab: 0, kit: 0, entCD: 0, entTP: 0},
+            linhas: new Set(), coleta: new Map(), entrega: new Map()
+        });
+        const conciliado = gruposQuadroRE.get(chave);
+        if (conciliado.linhas.has(fisica)) return;
+        conciliado.linhas.add(fisica);
+        conciliado.volume += volume;
+        conciliado.acabado += limitarQuadroRE(acabado, volume);
+        conciliado.kit += limitarQuadroRE(kit, volume);
 
-        // A entrega confirma a coleta, que confirma Kit e Acabamento do
-        // proprio SKU. O credito nunca ultrapassa a tiragem daquela linha.
-        const entregue = realTP('entrega', 'Entrega_TP');
-        const coletado = Math.max(realTP('coleta', 'Coleta_TP'), entregue);
-        const kitReal = Math.max(limitarQuadroRE(kit, volume), coletado);
-        const acabReal = Math.max(limitarQuadroRE(acabado, volume), kitReal);
+        const volumes = window.pgVolumesColetaUnificadosV37?.(l, hojeIso);
+        [['coleta', 'Coleta_TP', 'eventosColetaTP'],
+         ['entrega', 'Entrega_TP', 'eventosEntregaTP']].forEach(([etapa, campo, eventos]) => {
+            const data = window.pgNormalizarDataColeta(window.pgCampoColeta(l, campo), hojeIso);
+            const parcelas = Array.isArray(volumes?.[eventos]) ? volumes[eventos]
+                : data && data <= hojeIso
+                    ? [{data, volume: volumes ? volumes[etapa] : tiragemColetada(l)}] : [];
+            parcelas.forEach((e, i) => {
+                const dia = window.pgNormalizarDataColeta(e.data, hojeIso);
+                const quantidade = Math.max(0, numero(e.volume));
+                if (!dia || dia > hojeIso || !quantidade) return;
+                const id = Number.isInteger(e.linhaMapa) && e.linhaMapa >= 2
+                    ? 'MAPA:' + e.linhaMapa : fisica + ':PCP:' + i;
+                // O mesmo movimento fisico nunca multiplica o realizado do grupo.
+                if (!conciliado[etapa].has(id)) conciliado[etapa].set(id, quantidade);
+            });
+        });
 
         // No Funil, Plan. Entrega TP e Plan. Coleta TP compartilham a MESMA
         // previsao de coleta consolidada, com corte na data de referencia.
@@ -10783,12 +10821,24 @@ window.processarReportExecutiva = function() {
             planKit
         );
 
-        [
-            ['acab', acabReal, planAcab],
-            ['kit', kitReal, planKit],
-            ['entCD', coletado, planColeta],
-            ['entTP', entregue, planEntTP]
-        ].forEach(([etapa, real, plan]) => {
+        conciliado.planos.acab += planAcab;
+        conciliado.planos.kit += planKit;
+        conciliado.planos.entCD += planColeta;
+        conciliado.planos.entTP += planEntTP;
+    });
+
+    gruposQuadroRE.forEach(conciliado => {
+        const {grupo, volume} = conciliado;
+        const realizado = etapa => limitarQuadroRE(
+            Array.from(conciliado[etapa].values()).reduce((s, n) => s + n, 0), volume);
+        // Hierarquia restrita ao mesmo SKU, fonte, envio, serie e rota.
+        const entregue = realizado('entrega');
+        const coletado = Math.max(realizado('coleta'), entregue);
+        const kitReal = Math.max(limitarQuadroRE(conciliado.kit, volume), coletado);
+        const acabReal = Math.max(limitarQuadroRE(conciliado.acabado, volume), kitReal);
+        [['acab', acabReal], ['kit', kitReal], ['entCD', coletado], ['entTP', entregue]]
+        .forEach(([etapa, real]) => {
+            const plan = conciliado.planos[etapa];
             const quadro = quadroCoerenteRE[etapa];
             add(quadro.porMarca, grupo, 'den', volume);
             add(quadro.porMarca, grupo, 'real', real);
