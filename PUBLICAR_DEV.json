@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-10-21T13:34:00.061Z",
-  "motivo": "Atualizar somente DEV com a correção do arredondamento para cima da linha azul de aderência acumulada; preservar demais atualizações."
+  "solicitado_em": "2026-11-11T21:19:50.931Z",
+  "motivo": "Publicar imediatamente no /dev a main atual, incluindo unificacao da base planejada de Entrega TP da Report e testes, sem publicar /exec."
 }
