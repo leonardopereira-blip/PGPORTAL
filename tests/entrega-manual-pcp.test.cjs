@@ -114,7 +114,8 @@ test('entrega exige sua propria data manual valida ate hoje, mesmo com coleta re
   for (const dt of ['', null, '2026-02-30', '2026-11-12']) {
     const l = linha({ Entrega_TP: dt }), w = portal(l, [movimento(l)]);
     const eventos = entrega(w, l);
-    assert.deepEqual(simples(eventos), [{ data: '2026-11-06', volume: 100 }], String(dt));
+    assert.deepEqual(datasVolumes(eventos), [['2026-11-06', 100]], String(dt));
+    assert.equal(eventos[0].linhaMapa, 2, 'a entrega conserva a identidade do mapa');
     assert.equal(eventos.conciliacao.motivo, 'an-realizado-por-data',
       'sem data manual válida não apaga a entrega comprovada pelo mapa');
   }
