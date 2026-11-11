@@ -65,7 +65,7 @@ test('ajustes de quantidade e datas no mesmo objeto atualizam coleta, entrega e 
   assert.equal(repeated.eventosEntregaTP,after.eventosEntregaTP);
 });
 
-test('zerar tiragem ou apagar cada data elimina o realizado manual antes armazenado', () => {
+test('zerar tiragem elimina realizado; apagar data manual preserva somente as parcelas confirmadas no mapa', () => {
   const r = row(), {w} = portal([r],[movement(r)]);
   w.pgVolumesColetaUnificadosV37(r);
   r['TIRAGEM COLETADA'] = 0;
@@ -74,10 +74,10 @@ test('zerar tiragem ou apagar cada data elimina o realizado manual antes armazen
   r['TIRAGEM COLETADA'] = 200;
   r.Coleta_TP = '';
   v = w.pgVolumesColetaUnificadosV37(r);
-  assert.equal(v.coletaTP,null);assert.equal(v.coleta,0);assert.equal(v.entrega,200);
+  assert.equal(v.coletaTP,null);assert.equal(v.coleta,100);assert.equal(v.entrega,200);
   r.Entrega_TP = '';
   v = w.pgVolumesColetaUnificadosV37(r);
-  assert.equal(v.entregaTP,null);assert.equal(v.entrega,0);
+  assert.equal(v.entregaTP,null);assert.equal(v.entrega,100);
   r.Coleta_TP = '2026-11-05';
   r.Entrega_TP = '2026-11-08';
   assert.equal(w.pgVolumesColetaUnificadosV37(r).entrega,200);
