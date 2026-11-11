@@ -20,7 +20,7 @@ function pgGravarArquivoDrive_(pasta, nomeArquivo, conteudoJSON) {
       pgBuscarHistoricoObsGiroPortal_(),cache.historico,recebido]);
     return pgGravarArquivoDriveDireto_(pasta,nomeArquivo,JSON.stringify(completo));
   } finally { if (bloqueado) lock.releaseLock(); }
-}
+} 
 
 function pgGravarArquivoDriveDireto_(pasta, nomeArquivo, conteudoJSON) {
   var blob = Utilities.newBlob(conteudoJSON, 'application/json', nomeArquivo);
@@ -774,8 +774,8 @@ function gerarPlanilhaGiroFiltrado(dados, opcoes) {
         ['Gráfica', 'grafica'], ['Marca', 'marca'], ['Série', 'serie'], ['CD', 'cd'],
         ['Envio', 'envio'], ['SKU', 'sku'], ['Descrição', 'desc'],
         ['Status', 'status'], ['Etapa Pendente', 'pendencia'],
-        ['Dias de Atraso', 'dias', '#,##0'], ['Tiragem total', 'tiragemOriginal', '#,##0'],
-        ['Tiragem coletada', 'tiragemColetada', '#,##0'], ['Tiragem pendente', 'tiragem', '#,##0'],
+        ['Dias de Atraso', 'dias', '#,##0'], ['Tiragem pendente', 'tiragem', '#,##0'],
+        ['Tiragem total', 'tiragemOriginal', '#,##0'], ['Tiragem coletada', 'tiragemColetada', '#,##0'],
         ['% coletado', 'percentualColetado', '0.00%'], ['Kit PCP', 'kitPcp'],
         ['Mapa de saída', 'mapasSaida'], ['Observações (Ação / Motivo)', 'observacaoGeral'],
         ['Observação Específica do SKU', 'observacaoSku'], ['Nova data', 'novaData', 'dd/mm/yyyy'],
@@ -785,10 +785,10 @@ function gerarPlanilhaGiroFiltrado(dados, opcoes) {
       pgEscreverAbaTelaGiro_(ss.insertSheet("Giro_Grupos"), opcoes.gruposGiro, [
         ['Gráfica', 'grafica'], ['Marca', 'marca'], ['Série', 'serie'], ['CD', 'cd'],
         ['Envio', 'envio'], ['Status Geral', 'status'], ['Etapa Pendente', 'pendencia'],
-        ['SKUs totais', 'qtdSkusTotal', '#,##0'], ['SKUs coletados', 'qtdSkusColetados', '#,##0'],
-        ['SKUs pendentes', 'qtdSkusPendentes', '#,##0'], ['Tiragem total', 'tiragemPrevistaTotal', '#,##0'],
-        ['Tiragem coletada', 'tiragemColetadaTotal', '#,##0'], ['Tiragem pendente', 'tiragemTotal', '#,##0'],
-        ['% coletado', 'percentualColetado', '0.00%'],
+        ['SKUs pendentes', 'qtdSkusPendentes', '#,##0'], ['SKUs totais', 'qtdSkusTotal', '#,##0'],
+        ['SKUs coletados', 'qtdSkusColetados', '#,##0'], ['Tiragem pendente', 'tiragemTotal', '#,##0'],
+        ['Tiragem total', 'tiragemPrevistaTotal', '#,##0'],
+        ['Tiragem coletada', 'tiragemColetadaTotal', '#,##0'], ['% coletado', 'percentualColetado', '0.00%'],
         ['Observações (Ação / Motivo)', 'observacaoGeral'], ['Nova data', 'novaData', 'dd/mm/yyyy']
       ]);
     } else {
