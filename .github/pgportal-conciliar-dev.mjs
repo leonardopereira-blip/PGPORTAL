@@ -2,7 +2,7 @@
 // Não sobrescreve modificações externas concorrentes nem resolve conflitos no chute.
 import fs from 'node:fs';
 import path from 'node:path';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {initAuth} from '../node_modules/@google/clasp/build/src/auth/auth.js';
@@ -44,35 +44,63 @@ try {
       externos.push(remoto);
     }
   }
+  const integrados=[];
   if(conflitos.length) {
-    console.error('Conflitos que precisam de conciliação específica: '+conflitos.join(', '));
-    // Diagnóstico somente leitura: mostra o delta de codigo para conciliar,
-    // sem desabilitar a proteção nem publicar sobre a versão do Google.
-    for (const chaveConflito of conflitos) {
-      if(chaveConflito !== 'HTML:Scripts_Globais_2')continue;
-      const remoto=mapaRemoto.get(chaveConflito);
-      const local=mapaLocal.get(chaveConflito);
-      if(!remoto||!local)continue;
-      const remotoPath=path.resolve(process.env.RUNNER_TEMP||'/tmp','pgportal-google-conflito.html');
-      const localPath=path.resolve(process.env.RUNNER_TEMP||'/tmp','pgportal-main-conflito.html');
-      fs.writeFileSync(remotoPath,remoto.source,'utf8');
-      fs.writeFileSync(localPath,local.source,'utf8');
-      let diff='';
-      try {
-        diff=execFileSync('git',['diff','--no-index','--unified=2','--',remotoPath,localPath],
-          {encoding:'utf8',stdio:['ignore','pipe','ignore'],maxBuffer:8*1024*1024});
-      } catch(error) {
-        diff=String(error.stdout||'');
+    // Conciliacao de tres vias SOMENTE para o arquivo das visoes e somente
+    // se a base exata que foi lida do Google existir no historico Git.
+    // Os demais conflitos seguem bloqueados: nunca sobrescrever no chute.
+    const pendentes=[];
+    for(const k of conflitos) {
+      const local=mapaLocal.get(k),remoto=mapaRemoto.get(k);
+      const registro=base.files[k];
+      if(k!=='HTML:Scripts_Globais_2'||!local||!remoto||!registro) {
+        pendentes.push(k);continue;
       }
-      console.log('DIAGNOSTICO_DIFF_GLOBAIS_GOOGLE_PARA_MAIN_BEGIN');
-      console.log(String(diff).slice(0,40000));
-      console.log('DIAGNOSTICO_DIFF_GLOBAIS_GOOGLE_PARA_MAIN_END');
+      etapa='localizar base comprovada de Scripts_Globais_2';
+      const arquivo=path.relative(path.resolve('.'),path.resolve(local.localPath));
+      const objetos=git('rev-list','--objects','HEAD','--',arquivo).split('\n')
+        .map(s=>s.split(' ')).filter(a=>a.length>=2&&a.slice(1).join(' ')===arquivo);
+      let comum=null;
+      for(const [oid] of objetos) {
+        const src=execFileSync('git',['cat-file','-p',oid],{encoding:'utf8',maxBuffer:4*1024*1024});
+        if(hash(src)===registro){comum=src;break;}
+      }
+      if(comum===null){
+        console.error('Base de Scripts_Globais_2 nao encontrada no historico Git. Nenhuma sobreposicao foi permitida.');
+        pendentes.push(k);continue;
+      }
+      const pasta=process.env.RUNNER_TEMP||'/tmp';
+      const caminhoGoogle=path.join(pasta,'pgportal-conflito-google.html');
+      const caminhoBase=path.join(pasta,'pgportal-conflito-base.html');
+      const caminhoGit=path.join(pasta,'pgportal-conflito-git.html');
+      fs.writeFileSync(caminhoGoogle,remoto.source,'utf8');
+      fs.writeFileSync(caminhoBase,comum,'utf8');
+      fs.writeFileSync(caminhoGit,local.source,'utf8');
+      etapa='mescla sem conflitos de Scripts_Globais_2';
+      const merge=spawnSync('git',['merge-file','-p','--diff3',caminhoGoogle,caminhoBase,caminhoGit],
+        {encoding:'utf8',maxBuffer:5*1024*1024});
+      if(merge.status!==0){
+        console.error('Conflito real na mescla de Scripts_Globais_2; enviar foi bloqueado. Trecho: '+
+          String(merge.stdout||merge.stderr||'').slice(0,3000));
+        pendentes.push(k);continue;
+      }
+      const unido=String(merge.stdout);
+      if(unido.includes('<<<<<<<')||unido.includes('>>>>>>>')) {
+        pendentes.push(k);continue;
+      }
+      fs.writeFileSync(local.localPath,unido,'utf8');
+      integrados.push(arquivo);
+      console.log('Scripts_Globais_2 mesclado sem conflitos a partir da base Google verificada. Google SHA-256='+
+        hash(remoto.source)+' GitHub SHA-256='+hash(local.source)+' Mescla SHA-256='+hash(unido));
     }
-    throw Error('MERGE_CONFLICT');
+    if(pendentes.length) {
+      console.error('Conflitos nao conciliados: '+pendentes.join(', '));
+      throw Error('MERGE_CONFLICT');
+    }
   }
 
   etapa='preservação das alterações externas no GitHub';
-  const stage=[];
+  const stage=[...integrados];
   for(const f of externos) {
     const destino=path.resolve(f.localPath);
     const raiz=path.resolve('.');
@@ -80,6 +108,21 @@ try {
     fs.mkdirSync(path.dirname(destino),{recursive:true});
     fs.writeFileSync(destino,f.source,'utf8');
     stage.push(path.relative(raiz,destino));
+  }
+  if(integrados.length) {
+    etapa='testes direcionados apos mescla de Globais';
+    const testes=spawnSync('node',['--test',
+      'tests/report-executiva-coleta-manual-quadro.test.cjs',
+      'tests/coleta-manual-pcp.test.cjs',
+      'tests/entrega-manual-pcp.test.cjs',
+      'tests/volumes-tp-cache-manual.test.cjs'],
+      {encoding:'utf8',maxBuffer:8*1024*1024});
+    if(testes.status!==0) {
+      console.error('Testes direcionados falharam; Google nao alterado. '+
+        String(testes.stdout||testes.stderr||'').slice(-6500));
+      throw Error('TESTS_FAILED');
+    }
+    console.log('Testes de conciliação e Report passaram após mescla do Google e GitHub.');
   }
   const {files:mesclados}=await clasp.files.collectLocalFiles();
   if(mesclados.length!==new Set(mesclados.map(key)).size)throw Error('DUPLICATE_FILES');
