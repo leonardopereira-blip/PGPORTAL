@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-11-11T22:16:30.567Z",
-  "motivo": "Conciliar por três vias a base efetiva do Google com as correções de TP e Report, testar Funil/Report antes de publicar exclusivamente em /dev; preservar alterações externas, não tocar /exec."
+  "solicitado_em": "2026-11-11T22:19:15.172Z",
+  "motivo": "Conciliar regressões de volume TP e cache com base histórica validada; publicar somente /dev se os testes de Funil e Report passarem, sem tocar /exec."
 }
