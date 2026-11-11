@@ -8617,20 +8617,9 @@ window.reFiltrarTabelaGiro = function() {
         const numero = window.pgNumeroPrazoV35(total);
         return window.arredondar ? window.arredondar(numero) : numero;
     };
-    // A fonte pode ter varias parcelas do mesmo SKU/destino: a TIRAGEM TOTAL
-    // fica so na linha consolidada; as demais parcelas nascem com total zero.
-    // Nao exibir nem contar novamente essas parcelas no Giro.
-    const chaveSkuConsolidadoGiro = l => {
-        const {chave} = identificarGrupo(l);
-        const sku = String(l["SKU_REAL"] || l["SKU"] || "-").trim();
-        return JSON.stringify([chave, sku]);
-    };
-    const skusComTotalConsolidado = new Set();
-    window.GIRO_DADOS_RAW.forEach(l => {
-        if (tiragemOriginalGiro(l) > 0) skusComTotalConsolidado.add(chaveSkuConsolidadoGiro(l));
-    });
-    const parcelaJaConsolidadaGiro = l => tiragemOriginalGiro(l) === 0 &&
-        skusComTotalConsolidado.has(chaveSkuConsolidadoGiro(l));
+    // TIRAGEM TOTAL zero ou ausente nao e material do Giro, mesmo que haja
+    // saldo, coleta ou prazo em outras colunas. Nao contar nem exportar essas linhas.
+    const semTiragemTotalGiro = l => tiragemOriginalGiro(l) <= 0;
 
     // A tiragem coletada bruta vem do PCP (AZ). No total atendido e no percentual,
     // limitar cada SKU a sua propria tiragem: excedentes nao cobrem faltas de outros SKUs.
@@ -8650,26 +8639,35 @@ window.reFiltrarTabelaGiro = function() {
 
     const totaisGrupos = new Map();
     linhasGiroFiltradas.forEach(l => {
-        if (parcelaJaConsolidadaGiro(l)) return;
+        if (semTiragemTotalGiro(l)) return;
         const {chave} = identificarGrupo(l);
-        if (!totaisGrupos.has(chave)) totaisGrupos.set(chave, {skus: 0, skusColetados: 0, tiragem: 0, coletado: 0, coberto: 0});
+        if (!totaisGrupos.has(chave)) totaisGrupos.set(chave, {skus: 0, skusColetados: 0, tiragem: 0, coletado: 0, coberto: 0, porSku: new Map()});
         const total = totaisGrupos.get(chave);
         const estadoMapa = window.pgEstadoColetaMapa(l);
         estadosMapa.set(l, estadoMapa);
         const previsto = tiragemOriginalGiro(l);
         const coletado = estadoMapa.coletada;
-        total.skus++;
-        if (previsto > 0 && coletado >= previsto) total.skusColetados++;
-        total.tiragem += previsto;
-        total.coletado += coletado;
-        total.coberto += Math.min(previsto, coletado);
+        const sku = String(l['SKU_REAL'] || l['SKU'] || '-').trim().toUpperCase();
+        if (!total.porSku.has(sku)) total.porSku.set(sku, {previsto: 0, coletado: 0});
+        const somaSku = total.porSku.get(sku);
+        somaSku.previsto += previsto;
+        somaSku.coletado += coletado;
+    });
+    totaisGrupos.forEach(total => {
+        total.skus = total.porSku.size;
+        total.porSku.forEach(sku => {
+            total.tiragem += sku.previsto;
+            total.coletado += sku.coletado;
+            total.coberto += Math.min(sku.previsto, sku.coletado);
+            if (sku.previsto > 0 && sku.coletado >= sku.previsto) total.skusColetados++;
+        });
     });
     const planosFinais = new Map();
     (window.pgObterResumoColeta().registros || []).forEach(r => {
         if (r.pcp && r.dtPlan && (!planosFinais.has(r.pcp) || planosFinais.get(r.pcp) < r.dtPlan)) planosFinais.set(r.pcp, r.dtPlan);
     });
     linhasGiroFiltradas.forEach(l => {
-        if (parcelaJaConsolidadaGiro(l)) return;
+        if (semTiragemTotalGiro(l)) return;
         const estadoMapa = estadosMapa.get(l);
         const prazoGiro = window.pgGiroSaldoPrazosV41(l, dtHojeISO, estadoMapa.coletada);
         const statusColetaFonte = String(window.pgCampoColeta(l, 'STATUS COLETA') || '')
@@ -8925,8 +8923,6 @@ window.reFiltrarTabelaGiro = function() {
                 qtdSkusPendentes: 0, qtdSkusTotal: total.skus, qtdSkusColetados: total.skusColetados,
                 tiragemPrevistaTotal: total.tiragem,
                 tiragemColetadaTotal: total.coberto,
-                tiragemColetadaBruta: total.coletado,
-                tiragemExcedenteTotal: Math.max(0, total.coletado - total.coberto),
                 percentualColetado: pctColetadoGiro(total.coberto, total.tiragem),
                 statusGrupo: statusFinalStr, pendencias: new Set() 
             };
@@ -8996,6 +8992,48 @@ window.reFiltrarTabelaGiro = function() {
         const saldosUnicos = grupoAtual.saldosColeta ?
             Array.from(grupoAtual.saldosColeta.values()).reduce((s, v) => s + v, 0) : 0;
         grupoAtual.tiragemTotal = grupoAtual.tiragemNormal + saldosUnicos;
+    });
+
+    // KIT nao cria um novo SKU no Giro. Agrupar somente as linhas com
+    // TIRAGEM TOTAL positiva pela chave estavel grafica/marca/SKU/envio/CD.
+    // O detalhamento e o saldo do grupo usam exatamente os mesmos SKUs.
+    Object.values(grupos).forEach(grupo => {
+        const porSku = new Map();
+        grupo.skus.forEach(item => {
+            const chave = item.chaveUnica;
+            if (!porSku.has(chave)) {
+                porSku.set(chave, {
+                    ...item,
+                    linhasPrevisao: [item.linhaPrevisao],
+                    _kits: new Set(item.kitPcp ? [item.kitPcp] : []),
+                    _pendenciasHtml: new Set(item.pendenciaHtml && item.pendenciaHtml !== '-' ? [item.pendenciaHtml] : [])
+                });
+                return;
+            }
+            const unido = porSku.get(chave);
+            unido.linhasPrevisao.push(item.linhaPrevisao);
+            unido.tiragem += item.tiragem;
+            unido.tiragemOriginal += item.tiragemOriginal;
+            unido.tiragemColetada += item.tiragemColetada;
+            unido.excedenteColeta += item.excedenteColeta;
+            if (item.kitPcp) unido._kits.add(item.kitPcp);
+            if (item.pendenciaHtml && item.pendenciaHtml !== '-') unido._pendenciasHtml.add(item.pendenciaHtml);
+            unido.mapasSaida = [...new Set([...unido.mapasSaida, ...item.mapasSaida])];
+            unido.escala = Math.min(unido.escala, item.escala);
+        });
+        grupo.skus = Array.from(porSku.values()).map(item => {
+            const coletado = Math.min(item.tiragemOriginal, item.tiragemColetada);
+            item.tiragem = Math.min(item.tiragem, Math.max(0, item.tiragemOriginal - coletado));
+            item.tiragemColetada = coletado;
+            item.percentualColetado = pctColetadoGiro(coletado, item.tiragemOriginal);
+            item.kitPcp = [...item._kits].join(' | ');
+            item.pendenciaHtml = [...item._pendenciasHtml].join('') || '-';
+            delete item._kits;
+            delete item._pendenciasHtml;
+            return item;
+        });
+        grupo.qtdSkusPendentes = grupo.skus.filter(item => item.tiragem > 0).length;
+        grupo.tiragemTotal = grupo.skus.reduce((soma, item) => soma + item.tiragem, 0);
     });
 
     window.calcularTempoObs = function(dataString) {
@@ -9091,8 +9129,6 @@ let arrGrupos = Object.values(grupos);
             qtdSkusPendentes: g.qtdSkusPendentes, qtdSkusTotal: g.qtdSkusTotal, qtdSkusColetados: g.qtdSkusColetados,
             tiragemTotal: g.tiragemTotal, tiragemPrevistaTotal: g.tiragemPrevistaTotal,
             tiragemColetadaTotal: g.tiragemColetadaTotal,
-            tiragemColetadaBruta: g.tiragemColetadaBruta,
-            tiragemExcedenteTotal: g.tiragemExcedenteTotal,
             percentualColetado: pctColetadoPlanilha(g.percentualColetado),
             chaveMaster, idCampoNovaData: idCampoDataGiro(indiceGrupo)
         });
@@ -9192,7 +9228,7 @@ let arrGrupos = Object.values(grupos);
         <td class="p-2 text-center font-bold text-slate-600 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.qtdSkusColetados) : g.qtdSkusColetados}</td>
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemTotal) : g.tiragemTotal}</td>
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemPrevistaTotal) : g.tiragemPrevistaTotal}</td>
-        <td class="p-2 text-right text-slate-800 font-bold border-r border-slate-200 text-sm" title="Coleta considerada ate a tiragem de cada SKU; excedentes nao compensam outros SKUs">${window.formatarBR ? window.formatarBR(g.tiragemColetadaTotal) : g.tiragemColetadaTotal}${g.tiragemExcedenteTotal > 0 ? `<span class="block text-[9px] font-semibold text-amber-700" title="Coleta bruta: ${window.formatarBR ? window.formatarBR(g.tiragemColetadaBruta) : g.tiragemColetadaBruta}">Bruta: ${window.formatarBR ? window.formatarBR(g.tiragemColetadaBruta) : g.tiragemColetadaBruta} (+${window.formatarBR ? window.formatarBR(g.tiragemExcedenteTotal) : g.tiragemExcedenteTotal} exced.)</span>` : ''}</td>
+        <td class="p-2 text-right text-slate-800 font-bold border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemColetadaTotal) : g.tiragemColetadaTotal}</td>
         <td class="p-2 text-right font-extrabold ${corPctColetadoGiro(g.percentualColetado)} border-r border-slate-200 text-sm" title="Cobertura da tiragem prevista, limitada a 100% por SKU">${fmtPctColetadoGiro(g.percentualColetado)}</td>
         <td class="p-2">
         <div class="flex items-center w-full">
@@ -9201,7 +9237,7 @@ let arrGrupos = Object.values(grupos);
         ${badgeTempoMaster}
         </div>
         </td>
-        <td class="p-2">${window.pgGiroCampoNovaData?.(g.skus.map(x => x.linhaPrevisao),idCampoDataGiro(indexGrupo)) || '—'}</td>
+        <td class="p-2">${window.pgGiroCampoNovaData?.(g.skus.flatMap(x => x.linhasPrevisao || [x.linhaPrevisao]),idCampoDataGiro(indexGrupo)) || '—'}</td>
         </tr>
         <tr id="${idSubTabela}" class="hidden subtabela-detalhes bg-indigo-50/30 border-b border-indigo-100">
         <td colspan="15" class="p-0">
@@ -9272,7 +9308,7 @@ let arrGrupos = Object.values(grupos);
             ${primeiraObsSku ? btnHistSku : ''}
             </div>
             </td>
-            <td class="p-1.5">${window.pgGiroCampoNovaData?.([item.linhaPrevisao],idCampoDataGiro(indexGrupo, indiceSku)) || '—'}</td>
+            <td class="p-1.5">${window.pgGiroCampoNovaData?.(item.linhasPrevisao || [item.linhaPrevisao],idCampoDataGiro(indexGrupo, indiceSku)) || '—'}</td>
             </tr>
             `;
         });

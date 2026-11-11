@@ -251,6 +251,16 @@ test('Giro pesquisa KIT parcialmente sem diferenciar maiúsculas e exporta só S
   assert.equal(w.pgGiroGruposExportar[0].tiragemPrevistaTotal,200);
 });
 
+test('pesquisa por SKU nao reintroduz item cuja TIRAGEM TOTAL e zero',()=>{
+  const linhas=executarGiro({busca:'SKU-ZERO',
+    estado:{pendente:true,saldo:50},eventos:[{categoria:'Vencida',volume:50,dias:0}],
+    materiais:[
+      {SKU:'SKU-ZERO','TIRAGEM TOTAL':0,'TIRAGEM COLETADA':500},
+      {SKU:'SKU-POSITIVO','TIRAGEM TOTAL':100}
+    ]});
+  assert.equal(linhas.length,0);
+});
+
 test('Giro remove apenas o painel da curva e mantém a busca e os filtros existentes',()=>{
   const html=fs.readFileSync(path.join(root,'abaGiroSemanal_1.html'),'utf8');
   assert.doesNotMatch(html,/Curva de Coleta Prevista|grafColetaFinalFunilGiro/);
@@ -373,10 +383,10 @@ test('Exportar Filtrados leva quantidades e porcentagens da tela por SKU e por g
   const contagens=['SKUs pendentes','SKUs totais','SKUs coletados'];
   assert.deepEqual(contagens.map(nome=>grupoParcial[nome]),[1,2,0]);
   assert.deepEqual(contagens.map(nome=>grupoExcesso[nome]),[0,1,1]);
-  assert.deepEqual(['Tiragem pendente','Tiragem total','Coleta válida','% coletado']
+  assert.deepEqual(['Tiragem pendente','Tiragem total','Tiragem coletada','% coletado']
     .map(nome=>grupoParcial[nome]),[1,26192,26191,0.9999]);
-  assert.deepEqual(['Coleta válida','Coleta bruta','Excedente de coleta']
-    .map(nome=>grupoExcesso[nome]),[19254,20000,746]);
+  assert.equal(grupoExcesso['Tiragem coletada'],19254);
+  assert(!('Coleta bruta' in grupoExcesso));
   assert.equal(grupoParcial['Observações (Ação / Motivo)'],'Prazo geral visível');
   assert.equal(grupoParcial['Nova data'],dataSheets(16));
   const detalhe=r.abas.Giro_Filtrado;

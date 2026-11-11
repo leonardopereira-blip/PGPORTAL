@@ -788,10 +788,7 @@ function gerarPlanilhaGiroFiltrado(dados, opcoes) {
         ['SKUs pendentes', 'qtdSkusPendentes', '#,##0'], ['SKUs totais', 'qtdSkusTotal', '#,##0'],
         ['SKUs coletados', 'qtdSkusColetados', '#,##0'], ['Tiragem pendente', 'tiragemTotal', '#,##0'],
         ['Tiragem total', 'tiragemPrevistaTotal', '#,##0'],
-        ['Coleta válida', 'tiragemColetadaTotal', '#,##0'],
-        ['Coleta bruta', 'tiragemColetadaBruta', '#,##0'],
-        ['Excedente de coleta', 'tiragemExcedenteTotal', '#,##0'],
-        ['% coletado', 'percentualColetado', '0.00%'],
+        ['Tiragem coletada', 'tiragemColetadaTotal', '#,##0'], ['% coletado', 'percentualColetado', '0.00%'],
         ['Observações (Ação / Motivo)', 'observacaoGeral'], ['Nova data', 'novaData', 'dd/mm/yyyy']
       ]);
     } else {
