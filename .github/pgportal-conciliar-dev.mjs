@@ -46,6 +46,28 @@ try {
   }
   if(conflitos.length) {
     console.error('Conflitos que precisam de conciliação específica: '+conflitos.join(', '));
+    // Diagnóstico somente leitura: mostra o delta de codigo para conciliar,
+    // sem desabilitar a proteção nem publicar sobre a versão do Google.
+    for (const chaveConflito of conflitos) {
+      if(chaveConflito !== 'HTML:Scripts_Globais_2')continue;
+      const remoto=mapaRemoto.get(chaveConflito);
+      const local=mapaLocal.get(chaveConflito);
+      if(!remoto||!local)continue;
+      const remotoPath=path.resolve(process.env.RUNNER_TEMP||'/tmp','pgportal-google-conflito.html');
+      const localPath=path.resolve(process.env.RUNNER_TEMP||'/tmp','pgportal-main-conflito.html');
+      fs.writeFileSync(remotoPath,remoto.source,'utf8');
+      fs.writeFileSync(localPath,local.source,'utf8');
+      let diff='';
+      try {
+        diff=execFileSync('git',['diff','--no-index','--unified=2','--',remotoPath,localPath],
+          {encoding:'utf8',stdio:['ignore','pipe','ignore'],maxBuffer:8*1024*1024});
+      } catch(error) {
+        diff=String(error.stdout||'');
+      }
+      console.log('DIAGNOSTICO_DIFF_GLOBAIS_GOOGLE_PARA_MAIN_BEGIN');
+      console.log(String(diff).slice(0,40000));
+      console.log('DIAGNOSTICO_DIFF_GLOBAIS_GOOGLE_PARA_MAIN_END');
+    }
     throw Error('MERGE_CONFLICT');
   }
 
