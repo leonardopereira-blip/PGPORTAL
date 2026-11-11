@@ -46,7 +46,7 @@ test('Giro distingue pendências do total do grupo incluindo SKU concluído', ()
   const html = fs.readFileSync(path.join(__dirname,'..','abaGiroSemanal_1.html'),'utf8');
   const headers = [...html.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map(m => texto(m[1]));
   assert.deepEqual(headers.slice(6,13), ['Skus pendentes','SKUs totais','SKUs coletados',
-    'Tiragem pendente','Tiragem total','Tiragem coletada','% coletado']);
+    'Tiragem pendente','Tiragem total','Coleta válida','% coletado']);
   assert.match(r.html, /colspan="15"/, 'Linha expandida acompanha todas as colunas do grupo');
 });
 
@@ -231,9 +231,28 @@ test('excesso é limitado a 100% do próprio SKU, nunca compensa outra tiragem',
     pendente('SEM-COLETA',{'TIRAGEM TOTAL':100,'TIRAGEM COLETADA':0,
       _estado:{pendente:true,saldo:100},_eventos:[{categoria:'Vencida',volume:100,dias:0}]})
   ],{concluido:true});
-  assert.deepEqual(linhasMaster(r.html)[0].slice(6,13),['1','2','1','100','200','150','50,00%']);
+  assert.deepEqual(linhasMaster(r.html)[0].slice(6,13),
+    ['1','2','1','100','200','100Bruta: 150 (+50 exced.)','50,00%']);
+  assert.equal(r.linhas.length,2);
   assert.deepEqual(detalheSku(r,'EXCESSO').slice(6,10),['0','100','150','100,00%']);
   assert.deepEqual(detalheSku(r,'SEM-COLETA').slice(6,10),['100','100','0','0,00%']);
+});
+
+test('Antilhas: coleta bruta acima do total nao inflaciona cobertura de 99,78%', () => {
+  const materiais=[
+    ...Array.from({length:7},(_,i)=>pendente('PENDENTE-'+i,{
+      TIRAGEM:1403,'TIRAGEM TOTAL':1403,'TIRAGEM COLETADA':1380,
+      Coleta_TP:'2026-10-01',_estado:{pendente:true,parcial:true,saldo:23},
+      _eventos:[{categoria:'Vencida',volume:23,dias:0}]
+    })),
+    finalizado('CONCLUIDO-A',{TIRAGEM:20900,'TIRAGEM TOTAL':20900,'TIRAGEM COLETADA':81881}),
+    finalizado('CONCLUIDO-B',{TIRAGEM:20900,'TIRAGEM TOTAL':20900,'TIRAGEM COLETADA':20900}),
+    finalizado('CONCLUIDO-C',{TIRAGEM:20900,'TIRAGEM TOTAL':20900,'TIRAGEM COLETADA':20900})
+  ];
+  const r=tela(materiais,{pos:true});
+  assert.equal(r.linhas.length,7);
+  assert.deepEqual(linhasMaster(r.html)[0].slice(6,13),
+    ['7','10','3','161','72521','72360Bruta: 133341 (+60981 exced.)','99,78%']);
 });
 
 test('percentual de acabadora usa TIRAGEM TOTAL, não a tiragem por CD', () => {
@@ -250,7 +269,7 @@ test('percentual de acabadora usa TIRAGEM TOTAL, não a tiragem por CD', () => {
 test('tiragem total zero exibe a coleta registrada com percentual indefinido', () => {
   const r=tela([pendente('ZERO',{'TIRAGEM TOTAL':0,TIRAGEM:1000,
     'TIRAGEM COLETADA':500,Coleta_TP:'2026-10-10'})]);
-  assert.deepEqual(linhasMaster(r.html)[0].slice(10,13),['0','500','—']);
+  assert.deepEqual(linhasMaster(r.html)[0].slice(10,13),['0','0Bruta: 500 (+500 exced.)','—']);
   assert.deepEqual(detalheSku(r,'ZERO').slice(7,10),['0','500','—']);
   assert.match(celulasMaster(r.html)[0][12].atributos,/\btext-slate-500\b/);
   assert.match(celulasDetalhe(r,'ZERO')[9].atributos,/\btext-slate-500\b/);

@@ -8632,8 +8632,8 @@ window.reFiltrarTabelaGiro = function() {
     const parcelaJaConsolidadaGiro = l => tiragemOriginalGiro(l) === 0 &&
         skusComTotalConsolidado.has(chaveSkuConsolidadoGiro(l));
 
-    // A tiragem coletada vem do PCP (AZ). Na cobertura, o excedente de um SKU
-    // nunca cobre o saldo de outro. Arredondar só na exibição, dentro da faixa real.
+    // A tiragem coletada bruta vem do PCP (AZ). No total atendido e no percentual,
+    // limitar cada SKU a sua propria tiragem: excedentes nao cobrem faltas de outros SKUs.
     const estadosMapa = new WeakMap();
     const pctColetadoGiro = (coberto, previsto) => previsto > 0 ? 100 * coberto / previsto : null;
     const pctColetadoDuasCasas = percentual => {
@@ -8924,7 +8924,9 @@ window.reFiltrarTabelaGiro = function() {
                 skus: [], tiragemTotal: 0, tiragemNormal: 0, piorEscala: 999, diasPos: null,
                 qtdSkusPendentes: 0, qtdSkusTotal: total.skus, qtdSkusColetados: total.skusColetados,
                 tiragemPrevistaTotal: total.tiragem,
-                tiragemColetadaTotal: total.coletado,
+                tiragemColetadaTotal: total.coberto,
+                tiragemColetadaBruta: total.coletado,
+                tiragemExcedenteTotal: Math.max(0, total.coletado - total.coberto),
                 percentualColetado: pctColetadoGiro(total.coberto, total.tiragem),
                 statusGrupo: statusFinalStr, pendencias: new Set() 
             };
@@ -9087,7 +9089,10 @@ let arrGrupos = Object.values(grupos);
             status: g.statusGrupo === 'Em Aberto' ? 'Zerado' : g.statusGrupo,
             pendencia: Array.from(g.pendencias).join(', ') || '-',
             qtdSkusPendentes: g.qtdSkusPendentes, qtdSkusTotal: g.qtdSkusTotal, qtdSkusColetados: g.qtdSkusColetados,
-            tiragemTotal: g.tiragemTotal, tiragemPrevistaTotal: g.tiragemPrevistaTotal, tiragemColetadaTotal: g.tiragemColetadaTotal,
+            tiragemTotal: g.tiragemTotal, tiragemPrevistaTotal: g.tiragemPrevistaTotal,
+            tiragemColetadaTotal: g.tiragemColetadaTotal,
+            tiragemColetadaBruta: g.tiragemColetadaBruta,
+            tiragemExcedenteTotal: g.tiragemExcedenteTotal,
             percentualColetado: pctColetadoPlanilha(g.percentualColetado),
             chaveMaster, idCampoNovaData: idCampoDataGiro(indiceGrupo)
         });
@@ -9187,7 +9192,7 @@ let arrGrupos = Object.values(grupos);
         <td class="p-2 text-center font-bold text-slate-600 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.qtdSkusColetados) : g.qtdSkusColetados}</td>
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemTotal) : g.tiragemTotal}</td>
         <td class="p-2 text-right text-slate-800 font-black bg-slate-50/50 border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemPrevistaTotal) : g.tiragemPrevistaTotal}</td>
-        <td class="p-2 text-right text-slate-800 font-bold border-r border-slate-200 text-sm">${window.formatarBR ? window.formatarBR(g.tiragemColetadaTotal) : g.tiragemColetadaTotal}</td>
+        <td class="p-2 text-right text-slate-800 font-bold border-r border-slate-200 text-sm" title="Coleta considerada ate a tiragem de cada SKU; excedentes nao compensam outros SKUs">${window.formatarBR ? window.formatarBR(g.tiragemColetadaTotal) : g.tiragemColetadaTotal}${g.tiragemExcedenteTotal > 0 ? `<span class="block text-[9px] font-semibold text-amber-700" title="Coleta bruta: ${window.formatarBR ? window.formatarBR(g.tiragemColetadaBruta) : g.tiragemColetadaBruta}">Bruta: ${window.formatarBR ? window.formatarBR(g.tiragemColetadaBruta) : g.tiragemColetadaBruta} (+${window.formatarBR ? window.formatarBR(g.tiragemExcedenteTotal) : g.tiragemExcedenteTotal} exced.)</span>` : ''}</td>
         <td class="p-2 text-right font-extrabold ${corPctColetadoGiro(g.percentualColetado)} border-r border-slate-200 text-sm" title="Cobertura da tiragem prevista, limitada a 100% por SKU">${fmtPctColetadoGiro(g.percentualColetado)}</td>
         <td class="p-2">
         <div class="flex items-center w-full">

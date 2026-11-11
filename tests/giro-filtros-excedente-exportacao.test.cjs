@@ -334,11 +334,13 @@ test('Exportar Filtrados leva quantidades e porcentagens da tela por SKU e por g
   const gruposGiro=[
     {grafica:'WALPRINT',marca:'SPE',serie:'INF 4',cd:'POSIGRAF',envio:'V1',status:'Coletado a menos',
       pendencia:'Coleta Mapa',qtdSkusPendentes:1,qtdSkusTotal:2,qtdSkusColetados:0,
-      tiragemTotal:1,tiragemPrevistaTotal:26192,tiragemColetadaTotal:26191,percentualColetado:0.9999,
+      tiragemTotal:1,tiragemPrevistaTotal:26192,tiragemColetadaTotal:26191,
+      tiragemColetadaBruta:26191,tiragemExcedenteTotal:0,percentualColetado:0.9999,
       observacaoGeral:'Prazo geral visível',novaData:'2026-11-16'},
     {grafica:'WALPRINT',marca:'SPE',serie:'INF 3',cd:'POSIGRAF',envio:'V1',status:'Coletado a mais',
       pendencia:'-',qtdSkusPendentes:0,qtdSkusTotal:1,qtdSkusColetados:1,
-      tiragemTotal:0,tiragemPrevistaTotal:19254,tiragemColetadaTotal:20000,percentualColetado:1}
+      tiragemTotal:0,tiragemPrevistaTotal:19254,tiragemColetadaTotal:19254,
+      tiragemColetadaBruta:20000,tiragemExcedenteTotal:746,percentualColetado:1}
   ];
   const r=executarExportacao('colega@empresa.com',{dados,opcoes:{resumoGiro:true,gruposGiro}});
   assert.equal(r.resultado.success,true,r.resultado.error);
@@ -371,7 +373,10 @@ test('Exportar Filtrados leva quantidades e porcentagens da tela por SKU e por g
   const contagens=['SKUs pendentes','SKUs totais','SKUs coletados'];
   assert.deepEqual(contagens.map(nome=>grupoParcial[nome]),[1,2,0]);
   assert.deepEqual(contagens.map(nome=>grupoExcesso[nome]),[0,1,1]);
-  assert.deepEqual(metricas.map(nome=>grupoParcial[nome]),[1,26192,26191,0.9999]);
+  assert.deepEqual(['Tiragem pendente','Tiragem total','Coleta válida','% coletado']
+    .map(nome=>grupoParcial[nome]),[1,26192,26191,0.9999]);
+  assert.deepEqual(['Coleta válida','Coleta bruta','Excedente de coleta']
+    .map(nome=>grupoExcesso[nome]),[19254,20000,746]);
   assert.equal(grupoParcial['Observações (Ação / Motivo)'],'Prazo geral visível');
   assert.equal(grupoParcial['Nova data'],dataSheets(16));
   const detalhe=r.abas.Giro_Filtrado;
