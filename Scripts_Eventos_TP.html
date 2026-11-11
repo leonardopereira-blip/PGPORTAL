@@ -293,7 +293,7 @@
         return { disponivel: true, aviso: '' };
     };
     // A formula define a linha elegivel; AN e AT/AU definem o volume realizado e sua data.
-    // Nunca substituir parcelas futuras/sem data pelo solicitado na data agregada do PCP.
+    // O PCP datado complementa apenas o saldo que nao esta em AN, sem antecipar suas parcelas.
     function calcularEventosLinha(linha, tipo, hoje, volumeLegado, dataLegada) {
         const dtHoje = data(hoje), dtLegada = data(dataLegada), n = numero(volumeLegado);
         const detalhe = { modo: 'legado', motivo: '', tipo, volumeLegado: n, dataLegada: dtLegada };
@@ -358,7 +358,17 @@
         detalhe.volumeAN = somaAN;
         detalhe.fatorDuplicidade = fator;
         const quantidadeFormula = fator === 0.5 ? totalBA : Math.round(somaAN);
-        if (quantidadeFormula !== n) return vazio('quantidade-nao-concilia-tiragem-coletada');
+        const divergePCP = quantidadeFormula !== n;
+        if (divergePCP) {
+            // Coleta manual exige quantidade e data realizadas nas proprias abas PCP.
+            // Entrega TP conserva a conciliacao e as datas independentes do mapa.
+            if (tipo !== 'coleta' || !dtLegada || dtLegada > dtHoje) {
+                return vazio('quantidade-nao-concilia-tiragem-coletada');
+            }
+            // Um ajuste menor no PCP nao permite escolher ou ratear parcelas do mapa.
+            // Usa uma unica representacao manual, sem somar os dois volumes.
+            if (n < quantidadeFormula) return legado('coleta-manual-pcp');
+        }
         let acumulado = 0, arredondado = 0;
         eventos.forEach(e => {
             acumulado += e.volume * fator;
@@ -366,9 +376,18 @@
             e.volume = proximo - arredondado;
             arredondado = proximo;
         });
-        return comDiagnostico(eventos.filter(e => e.volume > 0), { ...detalhe, modo: 'eventos',
+        // somaAN inclui tambem parcelas futuras/sem data: elas nao viram saldo manual.
+        const volumeComplementarPCP = divergePCP ? n - quantidadeFormula : 0;
+        if (volumeComplementarPCP > 0) {
+            eventos.push({ data: dtLegada, volume: volumeComplementarPCP });
+            eventos.sort((a, b) => a.data.localeCompare(b.data) ||
+                (a.linhaMapa ?? Number.MAX_SAFE_INTEGER) - (b.linhaMapa ?? Number.MAX_SAFE_INTEGER));
+        }
+        return comDiagnostico(eventos.filter(e => e.volume > 0), { ...detalhe, modo: divergePCP ? 'mesclado' : 'eventos',
             volumeAN: somaAN, fatorDuplicidade: fator, volumeEventos: arredondado,
-            motivo: fator === 0.5 ? 'an-realizado-corrigido-2x' : 'an-realizado-por-data' });
+            ...(divergePCP ? { volumeComplementarPCP, volumeEventos: arredondado + volumeComplementarPCP } : {}),
+            motivo: divergePCP ? 'coleta-manual-complementar-pcp'
+                : fator === 0.5 ? 'an-realizado-corrigido-2x' : 'an-realizado-por-data' });
     }
     window.pgEventosTPLinha = function(linha, tipo, hoje, volumeLegado, dataLegada) {
         if (tipo === 'agendado' || tipo === 'agendado-pendente') {

@@ -49,7 +49,7 @@ function portal(formato, keys = [chave]) {
   vm.runInContext(frontend, ctx);
   return ctx.window;
 }
-test('Forecast novo reconhece CD original, preserva formula e data e nao libera outras linhas', () => {
+test('Forecast novo reconhece CD original e outras linhas exigem coleta manual datada', () => {
   const w = portal('grafica-marca-sku-destino');
   for (const tipo of ['coleta', 'entrega']) {
     const ev = w.pgEventosTPLinha(linha, tipo, hoje, 54326, '2026-10-01');
@@ -59,8 +59,17 @@ test('Forecast novo reconhece CD original, preserva formula e data e nao libera 
   }
   const outra = { ...linha, CD_DESTINO_PCP_ORIGINAL: 'OUTRO CD' };
   const ev = w.pgEventosTPLinha(outra, 'coleta', hoje, 54326, '2026-10-01');
-  assert.equal(ev.length, 0);
-  assert.equal(ev.conciliacao.motivo, 'quantidade-nao-concilia-tiragem-coletada');
+  assert.equal(ev.length, 1);
+  assert.equal(ev[0].volume, 54326);
+  assert.equal(ev[0].data, '2026-10-01');
+  assert.equal(ev.conciliacao.motivo, 'coleta-manual-pcp');
+  for (const tipo of ['coleta', 'entrega']) {
+    const semData = w.pgEventosTPLinha(outra, tipo, hoje, 54326, null);
+    assert.equal(semData.length, 0);
+    assert.equal(semData.conciliacao.motivo, 'quantidade-nao-concilia-tiragem-coletada');
+  }
+  assert.equal(w.pgEventosTPLinha(outra, 'entrega', hoje, 54326, '2026-10-01').length, 0,
+    'a coleta manual nao substitui as regras independentes de entrega');
   const agenda = w.pgEventosAgendaMapaLinha(linha, hoje, 500, '2026-10-14');
   assert.equal(agenda.conciliacao.motivo, 'forecast-soberano');
   assert.equal(agenda[0].volume, 500);

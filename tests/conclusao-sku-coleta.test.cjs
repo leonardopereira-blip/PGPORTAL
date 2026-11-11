@@ -95,8 +95,8 @@ test('linhas físicas e movimentos repetidos não multiplicam tiragem ou coleta'
   assert.equal(state(w,r).concluido,true);
 });
 
-test('identidade ausente e quantidade não conciliada nunca produzem conclusão inferida',()=>{
-  const r=row(2,{'TIRAGEM COLETADA':200}),w=portal([r],[event(2,100)]);
+test('identidade ausente e quantidade não conciliada sem data manual não produzem conclusão inferida',()=>{
+  const r=row(2,{'TIRAGEM COLETADA':200,Coleta_TP:''}),w=portal([r],[event(2,100)]);
   assert.equal(state(w,r).concluido,false);assert.match(state(w,r).motivo,/nao-concilia/);
   assert.equal(state(w,{...r,CD_MAPA:''}).concluido,false);
   assert.match(state(w,{...r,CD_MAPA:''}).motivo,/incompleta/);
