@@ -10692,17 +10692,18 @@ window.processarReportExecutiva = function() {
         // Planejado de Coleta CD: mesma base do total e do realizado.
         // PCP direto ao CD + PCP_ACABADORAS oficiais, sem contar o envio
         // à acabadora como uma segunda coleta. Entrega TP não é alterada.
-        let pcp = tipoReal === 'coleta'
-            ? baseCenario
-            : baseOrigemGrafica.filter(l => destino === 'TODOS' ||
-                window.pgLinhaDoDestino(l, destino, 'GRAFICA'));
+        // Planejamento de TP tem o MESMO universo do denominador e realizado:
+        // PCP direto para CD + PCP_ACABADORAS na rota final. Selecionar
+        // apenas graficas para Entrega TP descartava acabadoras do plano.
+        const pcp = baseCenario;
         const fEnt = FASES.find(f => f.id === 'ent_tp');
         pcp.forEach(l => {
             const m = chaveLinha(l);
             if (fEnt) {
-                const dtPlan = tipoReal === 'entrega'
-                    ? window.pgDataPlanoEntregaSLA(l)
-                    : window.pgDataPlanoColetaLinha(l);
+                // Coleta TP e Entrega TP usam a previsao consolidada
+                // de coleta do Funil. SLA e Confirmacao CD sao indicadores
+                // distintos, e nao alteram o planejamento destas colunas.
+                const dtPlan = window.pgDataPlanoColetaLinha(l);
                 const dias = dtPlan ? calcDiffDiasISO(dtPlan, cortePlanejadoRE) : null;
                 const volumePlan = tiragem(l);
                 // Inclui o futuro na curva, sem antecipá-lo no total da tabela.
