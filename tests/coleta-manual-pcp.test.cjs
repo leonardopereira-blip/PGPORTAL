@@ -106,8 +106,9 @@ test('complemento exige data manual valida e realizada; hoje e aceito', () => {
   for (const dt of ['', null, '2026-02-30', '2026-11-12']) {
     const l = linha({ Coleta_TP: dt }), w = portal(l, [movimento(l)]);
     const eventos = coleta(w, l);
-    assert.deepEqual(simples(eventos), [], String(dt));
-    assert.equal(eventos.conciliacao.motivo, 'quantidade-nao-concilia-tiragem-coletada');
+    assert.deepEqual(simples(eventos), [{ data: '2026-11-05', volume: 100 }], String(dt));
+    assert.equal(eventos.conciliacao.motivo, 'an-realizado-por-data',
+      'sem data manual válida não apaga o realizado confirmado pelo mapa');
   }
   const l = linha({ Coleta_TP: hoje }), w = portal(l, [movimento(l)]);
   assert.deepEqual(datasVolumes(coleta(w, l)), [['2026-11-05', 100], [hoje, 100]]);
