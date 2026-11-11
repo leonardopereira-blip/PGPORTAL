@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-11-11T21:19:50.931Z",
-  "motivo": "Publicar imediatamente no /dev a main atual, incluindo unificacao da base planejada de Entrega TP da Report e testes, sem publicar /exec."
+  "solicitado_em": "2026-11-11T22:13:11.978Z",
+  "motivo": "Diagnosticar conflito específico em Scripts_Globais_2; publicar /dev apenas se Google e main estiverem conciliados, preservando mudanças externas e sem alterar /exec."
 }
