@@ -84,6 +84,9 @@ test('quadro mostra coleta e entrega manuais concentradas no SKU de duas linhas:
     assert.deepEqual(cells(html, 'entcd', 'SAS - BRADESCO'), [realizado, 100]);
     assert.equal(app.w.pgReportAuditoriaPortal.coletaCD.total.real, realizado);
     assert.equal(app.w.pgReportAuditoriaPortal.entregaTP.total.real, realizado);
+    assert.equal(app.w.pgReportAuditoriaPortal.entregaTP.total.den, 100);
+    assert.equal(app.w.pgReportAuditoriaPortal.entregaTP.total.plan, 100,
+      'planejado da Entrega TP inclui a mesma base do Funil, inclusive acabadora');
     assert.equal(app.w.reCurvaFonteCDV43.realizadoHoje, realizado);
     assert.equal(app.w.pgObterResumoColeta().realizado, realizado);
     assert.ok(cells(html, 'kit')[0] >= realizado);
@@ -120,6 +123,8 @@ test('acabadora conserva gráfica de origem e não soma transferência PCP nem c
   assert.deepEqual(cells(app.render(), 'enttp'), [100, 100]);
   assert.equal(app.w.pgReportAuditoriaPortal.coletaCD.total.den, 100);
   assert.equal(app.w.pgReportAuditoriaPortal.entregaTP.total.real, 100);
+  assert.equal(app.w.pgReportAuditoriaPortal.entregaTP.total.plan, 100,
+    'previsao da rota final nao exclui PCP_ACABADORAS ao selecionar Entrega TP');
   const outraOrigem = rows.map(r => ({...r}));
   outraOrigem[1]['GRÁFICA DE ORIGEM'] = 'LEOGRAF';
   const separado = portal(outraOrigem, [event(outraOrigem[0], 20)]);
