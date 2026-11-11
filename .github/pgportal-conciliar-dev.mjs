@@ -155,6 +155,16 @@ try {
         }
       }
       if(unido) {
+        // Confirmado por diff: a UNICA diferença restante da mescla é
+        // reintroduzir no Giro Semanal um render antigo removido na main.
+        // Só elimina essa chamada quando o resultado for literalmente igual
+        // à main inteira; qualquer outra edição externa continua protegida.
+        const semRenderLegado=unido.replace(
+          "    window.renderColetaFinalFunil('Giro');\n",'');
+        if(semRenderLegado===local.source && semRenderLegado!==unido) {
+          unido=semRenderLegado;
+          console.log('Render legado do Giro não reintroduzido; mescla coincide integralmente com main testada.');
+        }
         fs.writeFileSync(local.localPath,unido,'utf8');
         console.log('Mescla alternativa com ancestral anterior às regressões: SHA-256='+hash(unido));
         testes=executarTestes();
