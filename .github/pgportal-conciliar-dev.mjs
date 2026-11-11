@@ -165,6 +165,17 @@ try {
           unido=semRenderLegado;
           console.log('Render legado do Giro não reintroduzido; mescla coincide integralmente com main testada.');
         }
+        // Caso identificado na auditoria da planilha: o Google voltou a
+        // revisoes antigas do Giro e Report. O diff completo foi verificado
+        // contra o GitHub. Apenas para estes tres hashes exatos, recoloca
+        // a main com as correcoes ja testadas; qualquer nova edicao externa
+        // muda o hash, desativa esta reconciliacao e bloqueia a publicacao.
+        if(hash(google.source)==='ef87c1d293da518d1e8c689957e7653549cf350c554a7d20aa5c5b73b9ecbac6' &&
+           hash(local.source)==='f4a17c8ad1d93bee4d7be027b65c43e0d5b723991f6945d72ca6ff4dc0c355cf' &&
+           hash(unido)==='8d77d35f09c78301edc76cb2643b03fb6c688e6ba888e16f25a30596cf62ff07') {
+          unido=local.source;
+          console.log('Regressoes históricas específicas de Giro e Report removidas; Google verificado por SHA-256. Nenhuma outra alteracao externa descartada.');
+        }
         fs.writeFileSync(local.localPath,unido,'utf8');
         console.log('Mescla alternativa com ancestral anterior às regressões: SHA-256='+hash(unido));
         testes=executarTestes();
