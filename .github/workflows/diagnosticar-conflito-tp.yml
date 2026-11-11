@@ -1,0 +1,74 @@
+name: Diagnosticar conflito TP do Google (somente leitura)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/diagnosticar-conflito-tp.yml
+
+permissions:
+  contents: read
+
+jobs:
+  comparar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Preparar acesso read-only ao codigo atual
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          TEST_SCRIPT_ID: ${{ vars.PGPORTAL_TESTES_SCRIPT_ID }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import os from 'node:os';
+          const id=(process.env.TEST_SCRIPT_ID||'').trim();
+          if (!/^[A-Za-z0-9_-]{20,}$/.test(id)) throw Error('Destino de testes nao configurado');
+          const auth=JSON.parse(process.env.CLASPRC_JSON||'{}');
+          if (!(auth?.tokens?.default?.refresh_token||auth?.token?.refresh_token||auth?.refresh_token)) throw Error('Credencial renovavel ausente');
+          const config=JSON.parse(fs.readFileSync('.clasp.json','utf8'));
+          config.scriptId=id; config.rootDir='.'; config.skipSubdirectories=true;
+          fs.writeFileSync('.clasp.json',JSON.stringify(config));
+          fs.writeFileSync(os.homedir()+'/.clasprc.json',JSON.stringify(auth),{mode:0o600});
+          NODE
+      - name: Ler Google e produzir comparacao sem gravar no Apps Script
+        env:
+          SNAPSHOT: ${{ runner.temp }}/Scripts_Eventos_TP.Google.html
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import {spawnSync} from 'node:child_process';
+          import {initAuth} from './node_modules/@google/clasp/build/src/auth/auth.js';
+          import {initClaspInstance} from './node_modules/@google/clasp/build/src/core/clasp.js';
+          const {credentials}=await initAuth({});
+          if(!credentials)throw Error('Sem autenticacao');
+          const clasp=await initClaspInstance({credentials});
+          const remote=(await clasp.files.fetchRemote()).find(f=>f.type==='HTML'&&f.remotePath==='Scripts_Eventos_TP');
+          if(!remote)throw Error('Arquivo nao encontrado no Google');
+          const normal=s=>String(s||'').replace(/\r\n/g,'\n');
+          const local=normal(fs.readFileSync('Scripts_Eventos_TP.html','utf8'));
+          const google=normal(remote.source);
+          fs.writeFileSync(process.env.SNAPSHOT,google,'utf8');
+          const hash=s=>createHash('sha256').update(s).digest('hex');
+          console.log('Leitura UTC:',new Date().toISOString());
+          console.log('Google SHA-256:',hash(google));
+          console.log('GitHub SHA-256:',hash(local));
+          const diff=spawnSync('git',['diff','--no-index','--unified=10','--','Scripts_Eventos_TP.html',process.env.SNAPSHOT],{encoding:'utf8',maxBuffer:3e6});
+          console.log('DIFF GOOGLE VS MAIN (limitado a 35000 caracteres):');
+          console.log((diff.stdout||'Sem diferencas').slice(0,35000));
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-google-scripts-eventos-tp
+          path: ${{ runner.temp }}/Scripts_Eventos_TP.Google.html
+          retention-days: 3
+      - name: Remover credencial
+        if: always()
+        run: rm -f "$HOME/.clasprc.json"
