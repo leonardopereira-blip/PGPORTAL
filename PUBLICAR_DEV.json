@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-11-11T22:19:15.172Z",
-  "motivo": "Conciliar regressões de volume TP e cache com base histórica validada; publicar somente /dev se os testes de Funil e Report passarem, sem tocar /exec."
+  "solicitado_em": "2026-11-11T22:21:31.779Z",
+  "motivo": "Enviar /dev apenas após reconciliar Google/main sem perder mudanças independentes e testar cache, TP e Report; não publicar /exec."
 }
