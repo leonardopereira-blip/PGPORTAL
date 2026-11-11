@@ -164,8 +164,23 @@ try {
       }
     }
     if(testes.status!==0) {
+      const local=mapaLocal.get('HTML:Scripts_Globais_2');
+      const mesclado=local&&fs.readFileSync(local.localPath,'utf8');
+      if(local&&mesclado) {
+        fs.writeFileSync(local.localPath,local.source,'utf8');
+        const baseline=executarTestes();
+        fs.writeFileSync(local.localPath,mesclado,'utf8');
+        console.log('TESTES_DA_MAIN_ORIGINAL'+String(baseline.stdout||'')
+          .split('\n').filter(s=>/^# (tests|pass|fail) /.test(s)).join('; '));
+        const pMain=path.join(process.env.RUNNER_TEMP||'/tmp','pgportal-main-testada.html');
+        const pMesclada=path.join(process.env.RUNNER_TEMP||'/tmp','pgportal-mesclada-testada.html');
+        fs.writeFileSync(pMain,local.source);fs.writeFileSync(pMesclada,mesclado);
+        const d=spawnSync('git',['diff','--no-index','--unified=1',pMesclada,pMain],
+          {encoding:'utf8',maxBuffer:7*1024*1024});
+        console.log('DIFERENCAS_MESCLA_VS_MAIN (max 21000):\n'+String(d.stdout||'').slice(0,21000));
+      }
       console.error('Regressoes direcionadas persistem; Google nao alterado. '+
-        String(testes.stdout||testes.stderr||'').slice(-6500));
+        String(testes.stdout||testes.stderr||'').slice(-18000));
       throw Error('TESTS_FAILED');
     }
     console.log('Testes de conciliação e Report passaram após mescla do Google e GitHub. '+
