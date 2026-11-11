@@ -138,14 +138,29 @@ try {
       fs.writeFileSync(pMain,local.source);
       const alternativa=spawnSync('git',['merge-file','-p','--diff3',pGoogle,pBase,pMain],
         {encoding:'utf8',maxBuffer:8*1024*1024});
-      if(alternativa.status===0 && !String(alternativa.stdout).includes('<<<<<<<')) {
-        const unido=String(alternativa.stdout);
+      const conflitosRegioes=String(alternativa.stdout||'').match(/^<<<<<<< /gm)||[];
+      console.log('Ancestral anterior: regioes sobrepostas='+conflitosRegioes.length);
+      let unido='';
+      if(alternativa.status===0 && !conflitosRegioes.length) {
+        unido=String(alternativa.stdout);
+      } else if(alternativa.status===1 && conflitosRegioes.length<=16) {
+        // Nos conflitos sobrepostos, a main preserva as correcoes de TP/Report/Giro
+        // explicitamente solicitadas. Todo trecho Google nao sobreposto e mantido.
+        // Ainda nao ha publicacao sem regressao de todas as visoes checadas.
+        const escolha=spawnSync('git',['merge-file','-p','--theirs',pGoogle,pBase,pMain],
+          {encoding:'utf8',maxBuffer:8*1024*1024});
+        if(escolha.status===0 && !String(escolha.stdout).includes('<<<<<<<')) {
+          unido=String(escolha.stdout);
+          console.log('Conflitos sobrepostos conciliados a favor das correcoes GitHub; regioes nao conflitantes do Google preservadas.');
+        }
+      }
+      if(unido) {
         fs.writeFileSync(local.localPath,unido,'utf8');
         console.log('Mescla alternativa com ancestral anterior às regressões: SHA-256='+hash(unido));
         testes=executarTestes();
       } else {
-        console.error('Ancestral anterior produziu conflito real; sem publicação. '+
-          String(alternativa.stdout||alternativa.stderr||'').slice(0,3500));
+        console.error('Ancestral anterior nao permitiu mescla segura; sem publicação. '+
+          String(alternativa.stderr||'').slice(0,1200));
       }
     }
     if(testes.status!==0) {
