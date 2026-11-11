@@ -49,7 +49,7 @@ function portal(formato, keys = [chave]) {
   vm.runInContext(frontend, ctx);
   return ctx.window;
 }
-test('Forecast novo reconhece CD original e outras linhas exigem coleta manual datada', () => {
+test('Forecast novo reconhece CD original e outras linhas exigem realizado manual datado', () => {
   const w = portal('grafica-marca-sku-destino');
   for (const tipo of ['coleta', 'entrega']) {
     const ev = w.pgEventosTPLinha(linha, tipo, hoje, 54326, '2026-10-01');
@@ -68,8 +68,11 @@ test('Forecast novo reconhece CD original e outras linhas exigem coleta manual d
     assert.equal(semData.length, 0);
     assert.equal(semData.conciliacao.motivo, 'quantidade-nao-concilia-tiragem-coletada');
   }
-  assert.equal(w.pgEventosTPLinha(outra, 'entrega', hoje, 54326, '2026-10-01').length, 0,
-    'a coleta manual nao substitui as regras independentes de entrega');
+  const entregaManual = w.pgEventosTPLinha(outra, 'entrega', hoje, 54326, '2026-10-02');
+  assert.equal(entregaManual.length, 1);
+  assert.equal(entregaManual[0].volume, 54326);
+  assert.equal(entregaManual[0].data, '2026-10-02');
+  assert.equal(entregaManual.conciliacao.motivo, 'entrega-manual-pcp');
   const agenda = w.pgEventosAgendaMapaLinha(linha, hoje, 500, '2026-10-14');
   assert.equal(agenda.conciliacao.motivo, 'forecast-soberano');
   assert.equal(agenda[0].volume, 500);

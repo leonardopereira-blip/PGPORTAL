@@ -360,14 +360,14 @@
         const quantidadeFormula = fator === 0.5 ? totalBA : Math.round(somaAN);
         const divergePCP = quantidadeFormula !== n;
         if (divergePCP) {
-            // Coleta manual exige quantidade e data realizadas nas proprias abas PCP.
-            // Entrega TP conserva a conciliacao e as datas independentes do mapa.
-            if (tipo !== 'coleta' || !dtLegada || dtLegada > dtHoje) {
+            // Coleta e entrega manuais exigem quantidade e sua propria data realizada no PCP.
+            // dataLegada e Coleta_TP ou Entrega_TP conforme a operacao, sem trocar as datas.
+            if (!dtLegada || dtLegada > dtHoje) {
                 return vazio('quantidade-nao-concilia-tiragem-coletada');
             }
             // Um ajuste menor no PCP nao permite escolher ou ratear parcelas do mapa.
             // Usa uma unica representacao manual, sem somar os dois volumes.
-            if (n < quantidadeFormula) return legado('coleta-manual-pcp');
+            if (n < quantidadeFormula) return legado(tipo + '-manual-pcp');
         }
         let acumulado = 0, arredondado = 0;
         eventos.forEach(e => {
@@ -386,7 +386,7 @@
         return comDiagnostico(eventos.filter(e => e.volume > 0), { ...detalhe, modo: divergePCP ? 'mesclado' : 'eventos',
             volumeAN: somaAN, fatorDuplicidade: fator, volumeEventos: arredondado,
             ...(divergePCP ? { volumeComplementarPCP, volumeEventos: arredondado + volumeComplementarPCP } : {}),
-            motivo: divergePCP ? 'coleta-manual-complementar-pcp'
+            motivo: divergePCP ? tipo + '-manual-complementar-pcp'
                 : fator === 0.5 ? 'an-realizado-corrigido-2x' : 'an-realizado-por-data' });
     }
     window.pgEventosTPLinha = function(linha, tipo, hoje, volumeLegado, dataLegada) {

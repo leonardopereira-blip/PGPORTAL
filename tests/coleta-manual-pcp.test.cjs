@@ -160,11 +160,16 @@ test('complemento e calculado depois da correcao 2x de AN', () => {
   assert.equal(w.pgSomaEventosTP(eventos, hoje), 250);
 });
 
-test('entrega nao recebe o complemento manual solicitado somente para coleta', () => {
-  const l = linha(), w = portal(l, [movimento(l)]);
-  const eventos = w.pgEventosTPLinha(l, 'entrega', hoje, 200, dataManual);
-  assert.deepEqual(simples(eventos), []);
-  assert.equal(eventos.conciliacao.motivo, 'quantidade-nao-concilia-tiragem-coletada');
+test('coleta e entrega recebem complementos nas respectivas datas manuais', () => {
+  const l = linha({ Entrega_TP: hoje }), w = portal(l, [movimento(l)]);
+  const eventosColeta = coleta(w, l);
+  const eventosEntrega = w.pgEventosTPLinha(l, 'entrega', hoje, 200, l.Entrega_TP);
+  assert.deepEqual(datasVolumes(eventosColeta), [['2026-11-05', 100], [dataManual, 100]]);
+  assert.deepEqual(datasVolumes(eventosEntrega), [['2026-11-06', 100], [hoje, 100]]);
+  assert.equal(eventosColeta.conciliacao.motivo, 'coleta-manual-complementar-pcp');
+  assert.equal(eventosEntrega.conciliacao.motivo, 'entrega-manual-complementar-pcp');
+  assert.equal(w.pgSomaEventosTP(eventosEntrega, dataManual, 'dia'), 0,
+    'data manual da coleta nao se torna data de entrega');
 });
 
 test('agenda continua usando a tiragem agendada e a data da parcela com AN zero', () => {
@@ -172,6 +177,7 @@ test('agenda continua usando a tiragem agendada e a data da parcela com AN zero'
   const w = portal(l, [movimento(l, { volumeColetado: 0, volumeSolicitado: 80,
     coletaTP: null, dataAgendada: '2026-11-13' })]);
   coleta(w, l);
+  w.pgEventosTPLinha(l, 'entrega', hoje, 200, dataManual);
   const eventos = w.pgEventosAgendaMapaLinha(l, hoje, 80, '2026-11-13');
   assert.deepEqual(datasVolumes(eventos), [['2026-11-13', 80]]);
   assert.equal(eventos.conciliacao.motivo, 'tiragem-agendada-por-parcela');

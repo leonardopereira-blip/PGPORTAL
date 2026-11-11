@@ -25,7 +25,7 @@ const movimento = (r, n, volume, extra = {}) => ({
 });
 
 // Executa os motores completos. Apenas DOM, pintura e chamadas externas são simulados.
-function portal(rows, events = []) {
+function portal(rows, events = [], adicionais = []) {
   const marcas = [...new Set(rows.map(r => r.UNIDADE))].map(value => ({value, checked: true}));
   const controls = {filtroReferencia: {value: 'replan'}, pgFiltroOrigem: {value: 'TODOS'},
     pgFiltroDestino: {value: 'CD', disabled: false}};
@@ -42,7 +42,7 @@ function portal(rows, events = []) {
       addEventListener() {}, createElement: element, body: element(), head: element()}};
   w.window = w;
   vm.createContext(w);
-  for (const name of ['Scripts_Eventos_TP.html', 'Scripts_Conclusao_SKU.html', 'Scripts_Globais_2.html']) {
+  for (const name of ['Scripts_Eventos_TP.html', 'Scripts_Conclusao_SKU.html', 'Scripts_Globais_2.html', ...adicionais]) {
     const html = fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
     for (const [, script] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))
       vm.runInContext(script, w, {filename: name});
@@ -138,14 +138,16 @@ test('auditorias por ponto, planilha e XLSX exportam o mesmo complemento sem dup
   assert.equal(real[2], 100);
 });
 
-test('quantidade manual menor prevalece na data PCP sem alterar entrega ou agenda', () => {
+test('quantidade manual menor prevalece nas datas PCP de coleta e entrega sem alterar agenda', () => {
   const r = linha(2, {'TIRAGEM COLETADA': 80});
   const {w} = portal([r], [movimento(r, 20, 120)]);
   const v = w.pgVolumesColetaUnificadosV37(r);
   assert.deepEqual(parcelas(v.eventosColetaTP), [[dataManual, 80]]);
   assert.equal(v.eventosColetaTP.conciliacao.motivo, 'coleta-manual-pcp');
   assert.equal(w.pgVolumesColetaUnificadosV37(r, '2026-11-03').coleta, 0);
-  assert.equal(v.entrega, 0, 'a divergência não autoriza alterar a regra de entrega');
+  assert.equal(v.entrega, 80);
+  assert.deepEqual(parcelas(v.eventosEntregaTP), [[dataManual, 80]]);
+  assert.equal(v.eventosEntregaTP.conciliacao.motivo, 'entrega-manual-pcp');
   assert.equal(v.agendado, 0);
   assert.equal(v.mapa, 80);
 });
@@ -169,4 +171,107 @@ test('falta de data válida, data futura e volume zero não geram complemento', 
     const {w} = portal([r], [movimento(r, 20, 70)]);
     assert.equal(w.pgVolumesColetaUnificadosV37(r).coleta, 0, JSON.stringify(extra));
   }
+});
+
+test('Entrega TP complementa AU na data própria do PCP sem usar a data de coleta ou confirmar CD', () => {
+  const dtEntrega = '2026-11-07';
+  const r = linha(2, {Entrega_TP: dtEntrega});
+  const {w} = portal([r], [movimento(r, 20, 70, {entregaTP: '2026-11-03'})]);
+  const v = w.pgVolumesColetaUnificadosV37(r);
+  assert.deepEqual(parcelas(v.eventosEntregaTP), [['2026-11-03', 70], [dtEntrega, 30]]);
+  assert.deepEqual(parcelas(v.eventosColetaTP), [[dataMapa, 70], [dataManual, 30]]);
+  assert.equal(v.eventosEntregaTP.conciliacao.modo, 'mesclado');
+  assert.equal(v.eventosEntregaTP.conciliacao.motivo, 'entrega-manual-complementar-pcp');
+  assert.equal(v.eventosEntregaTP.conciliacao.volumeComplementarPCP, 30);
+  assert.equal(w.pgVolumesColetaUnificadosV37(r, '2026-11-06').entrega, 70);
+  assert.equal(w.pgVolumesColetaUnificadosV37(r, '2026-11-06').coleta, 100);
+  assert.equal(w.getVolFase(r, {id: 'ent_tp'}, 100), 100);
+  assert.equal(r.Entrega_TP, dtEntrega);
+  assert.equal(r.Coleta_TP, dataManual);
+  assert.equal(r._DT_ENTREGUE_CD_REAL, null, 'entrega TP não inventa confirmação CD');
+  assert.equal(r['TIRAGEM CONFIRMADA CD'], undefined);
+  assert.equal(w.pgCampoColeta(r, 'TIRAGEM CONFIRMADA CD'), '');
+});
+
+test('complementos de coleta e entrega exigem suas respectivas datas PCP', () => {
+  for (const [ausente, esperadoColeta, esperadoEntrega] of [
+    ['Coleta_TP', 0, 100], ['Entrega_TP', 100, 0]
+  ]) {
+    const r = linha(2, {[ausente]: ''});
+    const {w} = portal([r], [movimento(r, 20, 70)]);
+    const v = w.pgVolumesColetaUnificadosV37(r);
+    assert.equal(v.coleta, esperadoColeta, ausente);
+    assert.equal(v.entrega, esperadoEntrega, ausente);
+  }
+  for (const extra of [{Entrega_TP: '2026-02-30'}, {Entrega_TP: '2026-11-20'}, {'TIRAGEM COLETADA': 0}]) {
+    const r = linha(2, extra);
+    const {w} = portal([r], [movimento(r, 20, 70)]);
+    assert.equal(w.pgVolumesColetaUnificadosV37(r).entrega, 0, JSON.stringify(extra));
+  }
+});
+
+test('entrega não antecipa AU futura ou sem data e mantém a agenda independente', () => {
+  const r = linha(2, {TIRAGEM: 150, 'TIRAGEM COLETADA': 150});
+  const events = [movimento(r, 20, 70), movimento(r, 21, 30, {entregaTP: '2026-11-20'}),
+    movimento(r, 22, 20, {entregaTP: null})];
+  const {w} = portal([r], events);
+  const v = w.pgVolumesColetaUnificadosV37(r);
+  assert.deepEqual(parcelas(v.eventosEntregaTP), [[dataMapa, 70], [dataManual, 30]]);
+  assert.equal(v.entrega, 100, 'os 50 AN com AU pendente não viram complemento manual');
+  assert.equal(v.eventosEntregaTP.conciliacao.volumeComplementarPCP, 30);
+  assert.equal(v.coleta, 150, 'AT e AU conservam suas datas independentes');
+  assert.equal(v.agendado, 0);
+  assert.equal(v.mapa, 150);
+});
+
+test('Report entrega manual de PC e acabadora respeita base CD e não soma transferência PCP', () => {
+  const pc = linha(2, {MARCA_FINAL: 'PC', UNIDADE: 'PC', TIRAGEM: 120, 'TIRAGEM COLETADA': 120});
+  const transferencia = linha(3, {MARCA_FINAL: 'COC', UNIDADE: 'COC', CD_MAPA: 'HR',
+    CD_FINAL: 'HR', 'CD DESTINO': 'HR', TIRAGEM: 90, 'TIRAGEM COLETADA': 90});
+  const acab = linha(4, {_SOURCE: 'ACABADORA', _ROW_ID: 'ACABADORA:4',
+    MARCA_FINAL: 'COC', UNIDADE: 'COC', GRAFICA_FINAL: 'HR', 'GRÁFICA': 'HR',
+    'GRÁFICA_MAPA': 'HR', 'GRÁFICA DE ORIGEM': 'LOGPRINT', TIRAGEM: 90,
+    'TIRAGEM A ENTREGAR (total por CD)': 90, 'TIRAGEM COLETADA': 90});
+  const rows = [pc, transferencia, acab];
+  const {w, controls} = portal(rows, rows.map((r, i) => movimento(r, 20 + i, 20)));
+  const simples = {querySelectorAll: () => [], querySelector: () => null};
+  controls.reTabelaMarcas = {closest: () => simples, querySelectorAll: () => [], innerHTML: ''};
+  controls.pgReSeletoresV42 = {querySelector: s => s.includes('data-re-coluna') ? {checked: s.includes('marca')} : simples};
+  w.processarReportExecutiva();
+  const entrega = w.pgReportAuditoriaPortal.entregaTP;
+  assert.deepEqual(Array.from(entrega.linhas), [pc, acab]);
+  assert.equal(entrega.total.den, 210);
+  assert.equal(entrega.total.real, 210);
+  assert.equal(entrega.eventosReal.reduce((s, e) => s + e.coletada, 0), 210);
+  assert.equal(entrega.eventosReal.filter(e => e.linha === pc).reduce((s, e) => s + e.coletada, 0), 120);
+  assert.equal(entrega.eventosReal.filter(e => e.linha === acab).reduce((s, e) => s + e.coletada, 0), 90);
+  assert.equal(entrega.eventosReal.some(e => e.linha === transferencia), false);
+});
+
+test('Entregas CD concilia owner e complemento manual uma vez e exporta entregue até ontem', () => {
+  const owner = linha(2, {TIRAGEM: 60, Entrega_TP: hoje});
+  const outra = linha(3, {TIRAGEM: 40, SKU: owner.SKU, SKU_REAL: owner.SKU_REAL,
+    'TIRAGEM COLETADA': 0, Coleta_TP: '', Entrega_TP: ''});
+  const rows = [owner, outra, {...owner}];
+  const {w} = portal(rows, [movimento(owner, 20, 70, {entregaTP: '2026-11-03'})],
+    ['Scripts_Meta_Armazem_Realizado.html', 'Scripts_EntregasCD_Modelo.html']);
+  const modelo = w.pgEntregasCDModelo;
+  const montar = base => modelo.montar(base, {}, hoje,
+    {volumeCanonico: true, conciliarRealizado: true, baseOriginal: rows});
+  const itens = montar(w.dadosBaseTPPortal);
+  assert.equal(itens.length, 1, 'agrupa as duas linhas físicas sem repetir a cópia do owner');
+  assert.equal(itens[0].total, 100);
+  assert.equal(itens[0].entregue, 100);
+  assert.deepEqual(parcelas(itens[0].eventosEntrega), [['2026-11-03', 70], [hoje, 30]]);
+  const recorte = montar([outra]);
+  assert.equal(recorte[0].entregue, 100, 'owner fora do recorte permanece conciliado uma vez');
+  assert.equal(recorte[0].total, 100);
+  const calendario = modelo.calendario(itens, {hoje, inicio: '2026-11-01', fim: '2026-11-12'});
+  assert.equal(calendario.total.realCD, 100);
+  assert.equal(calendario.total.entregueAteOntem, 70);
+  const abas = modelo.exportarCalendario(calendario);
+  const colEntregue = abas[0].cabecalho.indexOf('Entregue');
+  assert.equal(abas[0].linhas.at(-1)[colEntregue], 70);
+  const base = abas[2], colQuantidade = base.cabecalho.indexOf('Quantidade');
+  assert.equal(base.linhas.reduce((s, r) => s + r[colQuantidade], 0), 100);
 });
