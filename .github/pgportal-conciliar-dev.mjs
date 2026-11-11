@@ -111,18 +111,50 @@ try {
   }
   if(integrados.length) {
     etapa='testes direcionados apos mescla de Globais';
-    const testes=spawnSync('node',['--test',
+    const executarTestes=()=>spawnSync('node',['--test',
       'tests/report-executiva-coleta-manual-quadro.test.cjs',
       'tests/coleta-manual-pcp.test.cjs',
       'tests/entrega-manual-pcp.test.cjs',
       'tests/volumes-tp-cache-manual.test.cjs'],
       {encoding:'utf8',maxBuffer:8*1024*1024});
+    let testes=executarTestes();
+    if(testes.status!==0 && integrados.includes('Scripts_Globais_2.html')) {
+      // A base recente ja possuia as correcoes de cache e TP, mas o Google
+      // reverteu trechos. Tentar ancestral anterior a essas correcoes impede
+      // que a mescla interprete a reversao como regra nova e perca o cache.
+      // Ainda e obrigatorio merge sem conflito + regressao toda verde.
+      const chaveConflito='HTML:Scripts_Globais_2';
+      const google=mapaRemoto.get(chaveConflito);
+      const local=mapaLocal.get(chaveConflito);
+      const antigo=execFileSync('git',['show',
+        '7085ab214c61870e11c25d7268cf6fa18cc8a552:Scripts_Globais_2.html'],
+        {encoding:'utf8',maxBuffer:4*1024*1024});
+      const pasta=process.env.RUNNER_TEMP||'/tmp';
+      const pGoogle=path.join(pasta,'pgportal-alternativa-google.html');
+      const pBase=path.join(pasta,'pgportal-alternativa-ancestral.html');
+      const pMain=path.join(pasta,'pgportal-alternativa-main.html');
+      fs.writeFileSync(pGoogle,google.source);
+      fs.writeFileSync(pBase,antigo);
+      fs.writeFileSync(pMain,local.source);
+      const alternativa=spawnSync('git',['merge-file','-p','--diff3',pGoogle,pBase,pMain],
+        {encoding:'utf8',maxBuffer:8*1024*1024});
+      if(alternativa.status===0 && !String(alternativa.stdout).includes('<<<<<<<')) {
+        const unido=String(alternativa.stdout);
+        fs.writeFileSync(local.localPath,unido,'utf8');
+        console.log('Mescla alternativa com ancestral anterior às regressões: SHA-256='+hash(unido));
+        testes=executarTestes();
+      } else {
+        console.error('Ancestral anterior produziu conflito real; sem publicação. '+
+          String(alternativa.stdout||alternativa.stderr||'').slice(0,3500));
+      }
+    }
     if(testes.status!==0) {
-      console.error('Testes direcionados falharam; Google nao alterado. '+
+      console.error('Regressoes direcionadas persistem; Google nao alterado. '+
         String(testes.stdout||testes.stderr||'').slice(-6500));
       throw Error('TESTS_FAILED');
     }
-    console.log('Testes de conciliação e Report passaram após mescla do Google e GitHub.');
+    console.log('Testes de conciliação e Report passaram após mescla do Google e GitHub. '+
+      String(testes.stdout||'').slice(-400));
   }
   const {files:mesclados}=await clasp.files.collectLocalFiles();
   if(mesclados.length!==new Set(mesclados.map(key)).size)throw Error('DUPLICATE_FILES');
