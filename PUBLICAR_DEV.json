@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-11-11T22:27:27.473Z",
-  "motivo": "Corrigir divergência TP vs PCP preservando mapa, rotas, regras e cache; mesclar alteração Google com main e publicar /dev só após teste, não /exec."
+  "solicitado_em": "2026-11-11T22:29:22.074Z",
+  "motivo": "Remover regressões verificadas por hash em Scripts_Globais_2 e publicar /dev somente com testes TP/Report aprovados; produção /exec proibida."
 }
