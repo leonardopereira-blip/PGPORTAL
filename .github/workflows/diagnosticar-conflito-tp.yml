@@ -1,4 +1,4 @@
-name: Diagnosticar conflito TP do Google (somente leitura)
+name: Comparar Apps Script 176 x 177 (somente leitura)
 
 on:
   workflow_dispatch:
@@ -52,6 +52,33 @@ jobs:
           const {credentials}=await initAuth({});
           if(!credentials)throw Error('Sem autenticacao');
           const clasp=await initClaspInstance({credentials});
+          const versoes = [176,177];
+          const snapshots = {};
+          for (const numero of versoes) {
+            snapshots[numero] = await clasp.files.fetchRemote(numero);
+            console.log('VERSAO '+numero+' ARQUIVOS:',snapshots[numero].length);
+          }
+          const filesBy = files => new Map(files.map(f=>[f.type+':'+f.remotePath,f]));
+          const mapa176=filesBy(snapshots[176]),mapa177=filesBy(snapshots[177]);
+          const normalTexto=s=>String(s||'').replace(/\\r\\n/g,'\\n');
+          const alterados=[];
+          for(const chave of new Set([...mapa176.keys(),...mapa177.keys()])) {
+            const a=mapa176.get(chave)?.source,b=mapa177.get(chave)?.source;
+            if(normalTexto(a)!==normalTexto(b))alterados.push(chave);
+          }
+          console.log('ALTERADOS 176 PARA 177:',JSON.stringify(alterados));
+          const dirs = ['Scripts_Eventos_TP','Scripts_Globais_2','Scripts_Conclusao_SKU','abaFunil','abaReportExecutiva'];
+          for(const f of dirs) {
+            const k='HTML:'+f;
+            const a=normalTexto(mapa176.get(k)?.source),b=normalTexto(mapa177.get(k)?.source);
+            console.log('FONTE '+f+' V176 SHA256='+createHash('sha256').update(a).digest('hex')+' V177 SHA256='+createHash('sha256').update(b).digest('hex'));
+            if(a!==b) {
+              const p1=process.env.RUNNER_TEMP+'/'+f+'.v176.html',p2=process.env.RUNNER_TEMP+'/'+f+'.v177.html';
+              fs.writeFileSync(p1,a);fs.writeFileSync(p2,b);
+              const dif=spawnSync('git',['diff','--no-index','--unified=3','--',p1,p2],{encoding:'utf8',maxBuffer:5e6});
+              console.log('DIFF 176 -> 177 '+f+' (max 45000):\\n'+String(dif.stdout||'').slice(0,45000));
+            }
+          }
           const remotos=await clasp.files.fetchRemote();
           const remote=remotos.find(f=>f.type==='HTML'&&f.remotePath==='Scripts_Eventos_TP');
           if(!remote)throw Error('Arquivo nao encontrado no Google');
