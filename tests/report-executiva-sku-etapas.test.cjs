@@ -187,12 +187,14 @@ test('Somente o quadro corrige Real e Plan. por SKU, sem compensar materiais nem
   // SKU A só concluiu Acabamento; SKU B só entregou 50 unidades.
   // Seus créditos não podem ser compensados entre si no quadro.
   w.pgVolumesColetaUnificadosV37=l=>({
-    coleta:0,entrega:l===b?50:0,
+    coleta:0,entrega:l===b?50:0,mapa:0,eventosAgendados:[],
     eventosColetaTP:[],eventosEntregaTP:l===b?[{data:corte,volume:50}]:[]
   });
-  // Plano do SKU A chegou a Acabamento; do SKU B chegou à Coleta.
+  // Plano do SKU A chegou a Acabamento; o do SKU B vence HOJE.
+  // Mesmo sem SLA, o Funil espera Coleta/Entrega TP pela mesma data de coleta.
   w.pgDataPlanoFaseFunil=(l,f)=>l===a&&f.id==='acab'?'2026-11-01':null;
-  w.pgDataPlanoColetaLinha=l=>l===b?'2026-11-01':null;
+  w.pgDataPlanoColetaLinha=l=>l===b?'2026-11-09':null;
+  w.pgValorPlanoColetaLinha=w.pgDataPlanoColetaLinha;
   w.pgDataPlanoEntregaSLA=()=>null;
 
   const table={querySelector(){return null;},querySelectorAll(){return [];}};
@@ -221,9 +223,9 @@ test('Somente o quadro corrige Real e Plan. por SKU, sem compensar materiais nem
   assert.equal(w.pgReportAuditoriaPortal.coletaCD.total.real,0);
   assert.equal(w.pgReportAuditoriaPortal.entregaTP.total.real,50);
   assert.equal(w.pgReportAuditoriaPortal.acabamento.total.plan,100);
-  assert.equal(w.pgReportAuditoriaPortal.coletaCD.total.plan,100);
+  assert.equal(w.pgReportAuditoriaPortal.coletaCD.total.plan,0);
   assert.equal(w.reCurvaFonteCDV43.realizadoHoje,0);
-  assert.equal(w.reCurvaFonteCDV43.planejadoHoje,100);
+  assert.equal(w.reCurvaFonteCDV43.planejadoHoje,0);
 
   const linha=tbody.innerHTML.match(/<tr class="" data-re-chave="COC">([\s\S]*?)<\/tr>/)?.[1];
   assert.ok(linha);
@@ -232,5 +234,8 @@ test('Somente o quadro corrige Real e Plan. por SKU, sem compensar materiais nem
   assert.deepEqual(celulas('acab'),[75,100]);
   assert.deepEqual(celulas('kit'),[25,50]);
   assert.deepEqual(celulas('entcd'),[25,50]);
-  assert.deepEqual(celulas('enttp'),[25,0]);
+  assert.deepEqual(celulas('enttp'),[25,50]);
+  const fonteFunil=w.pgCalcularColetaFunil([a,b],corte);
+  assert.equal(fonteFunil.esperadoHoje,100);
+  assert.equal(celulas('enttp')[1],Math.round(fonteFunil.esperadoHoje/fonteFunil.total*100));
 });

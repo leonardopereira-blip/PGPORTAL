@@ -10121,6 +10121,16 @@ window.pgREPercentualExibido = function(valor) {
     return Number.isFinite(n) ? Math.round(Math.max(0, Math.min(100, n))) : 0;
 };
 
+// Somente a exibicao de Entrega TP no quadro da Report: mesma protecao do
+// Funil, que nao mostra 100% quando ainda falta algum volume da tiragem.
+window.pgREPercentualEntregaFunil = function(realizadoOuPlano, total) {
+    const parte = Math.max(0, Number(realizadoOuPlano) || 0);
+    const base = Math.max(0, Number(total) || 0);
+    if (!(base > 0)) return 0;
+    const mostrado = window.pgREPercentualExibido(parte / base * 100);
+    return mostrado === 100 && parte < base ? 99 : mostrado;
+};
+
 // A Report usa as mesmas linhas finais que alimentam Coleta CD e Entrega TP.
 // PCP -> acabadora e PCP_ACABADORAS nao podem ocupar duas vezes o denominador.
 window.pgREBaseEtapasCD = function(base) {
@@ -10752,9 +10762,14 @@ window.processarReportExecutiva = function() {
         const kitReal = Math.max(limitarQuadroRE(kit, volume), coletado);
         const acabReal = Math.max(limitarQuadroRE(acabado, volume), kitReal);
 
-        const planEntTP = planejadoQuadroRE(window.pgDataPlanoEntregaSLA(l)) ? volume : 0;
+        // No Funil, Plan. Entrega TP e Plan. Coleta TP compartilham a MESMA
+        // previsao de coleta consolidada, com corte na data de referencia.
+        // Aplicar SLA aqui criava uma segunda regra e deixava o quadro abaixo
+        // dos 99% esperados no Funil, mesmo sem nenhuma mudanca nos dados.
+        const dataPlanoTP = window.pgDataPlanoColetaLinha(l);
+        const planEntTP = dataPlanoTP && dataPlanoTP <= hojeIso ? volume : 0;
         const planColeta = Math.max(
-            planejadoQuadroRE(window.pgDataPlanoColetaLinha(l)) ? volume : 0,
+            planejadoQuadroRE(dataPlanoTP) ? volume : 0,
             planEntTP
         );
         const planKit = Math.max(
@@ -10825,8 +10840,8 @@ window.processarReportExecutiva = function() {
         const entTodosPlan = pct(et.plan, et.den);
         const entCDReal = pct(ec.real, ec.den);
         const entCDPlan = pct(ec.plan, ec.den);
-        const entTPReal = pct(tp.real, tp.den);
-        const entTPPlan = pct(tp.plan, tp.den);
+        const entTPRealExibido = window.pgREPercentualEntregaFunil(tp.real, tp.den);
+        const entTPPlanExibido = window.pgREPercentualEntregaFunil(tp.plan, tp.den);
 
         const info = infoGruposRE.get(marca) || {};
         const exibir = colunasRE.length ? colunasRE : ['agrupamento'];
@@ -10853,9 +10868,9 @@ window.processarReportExecutiva = function() {
                 <td class="re-group-entcd">${pctTxt(entCDReal)}</td>
                 <td class="re-group-entcd">${pctTxt(entCDPlan)}</td>
                 <td class="re-status-cell re-group-entcd" data-re-indicador="entCD">${dot(status(entCDReal, entCDPlan))}</td>
-                <td class="re-group-enttp">${pctTxt(entTPReal)}</td>
-                <td class="re-group-enttp">${pctTxt(entTPPlan)}</td>
-                <td class="re-status-cell re-group-enttp" data-re-indicador="entTP">${dot(status(entTPReal, entTPPlan))}</td>
+                <td class="re-group-enttp">${entTPRealExibido}%</td>
+                <td class="re-group-enttp">${entTPPlanExibido}%</td>
+                <td class="re-status-cell re-group-enttp" data-re-indicador="entTP">${dot(status(entTPRealExibido, entTPPlanExibido))}</td>
             </tr>`;
     };
 

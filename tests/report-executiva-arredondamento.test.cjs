@@ -12,6 +12,9 @@ const ctx = {window: {}};
 vm.createContext(ctx);
 vm.runInContext(helper[0], ctx);
 const exibir = ctx.window.pgREPercentualExibido;
+const compatEntrega = fonte.match(/window\.pgREPercentualEntregaFunil = function\(realizadoOuPlano, total\) \{[\s\S]*?\n\};/);
+assert.ok(compatEntrega, 'Report tem a mesma regra de exibição da Entrega TP do Funil');
+vm.runInContext(compatEntrega[0],ctx);
 
 test('percentual usa arredondamento matemático comum, sem ultrapassar 100%', () => {
   for (const [bruto, exibido] of [
@@ -23,6 +26,16 @@ test('percentual usa arredondamento matemático comum, sem ultrapassar 100%', ()
     assert.equal(exibir(bruto), exibido, String(bruto));
   }
   assert.match(fonte, /Math\.round\(Math\.max\(0, Math\.min\(100, n\)\)\)/);
+});
+
+test('Entrega TP fica em 99% se ainda existe saldo, como no Funil', () => {
+  const entrega=ctx.window.pgREPercentualEntregaFunil;
+  assert.equal(entrega(999,1000),99);
+  assert.equal(entrega(999.99,1000),99);
+  assert.equal(entrega(1000,1000),100);
+  assert.equal(entrega(1001,1000),100);
+  assert.equal(entrega(0,1000),0);
+  assert.equal(entrega(0,0),0);
 });
 
 test('tabela, curva e tooltip usam o mesmo percentual exibido', () => {
