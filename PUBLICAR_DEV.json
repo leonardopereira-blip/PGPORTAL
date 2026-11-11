@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-11-11T22:21:31.779Z",
-  "motivo": "Enviar /dev apenas após reconciliar Google/main sem perder mudanças independentes e testar cache, TP e Report; não publicar /exec."
+  "solicitado_em": "2026-11-11T22:23:18.275Z",
+  "motivo": "Auditar mescla do Google contra main e validar volumes TP por SKU; publicar /dev apenas com testes verdes e preservação de alterações externas, nunca /exec."
 }
