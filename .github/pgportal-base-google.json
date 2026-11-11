@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-11T19:24:07.371Z",
+  "lido_em": "2026-11-11T20:16:57.280Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -57,7 +57,7 @@
     "HTML:Scripts_Eficiencia_Aging": "c13fdd9749b76bdfb4e0d3babfbfa75da7f2855955e2b6699efb8960fae5f7d2",
     "HTML:Scripts_EntregasCD_Controle": "7b6e028522bfa43a874dcd2b5b5a3fbca3e8d0f4a6f9744ff5e2d7d5022cd3d1",
     "HTML:Scripts_EntregasCD_Modelo": "6af7811b9a34bfd4fb7dfde821815b7a80cd93b35efcbc3da97da0958c4d5de2",
-    "HTML:Scripts_Eventos_TP": "a3afa1f32f462eda767d131c300d87e6416667d01309ca68684bd99adb3ce6d3",
+    "HTML:Scripts_Eventos_TP": "67bc649d7204dd7db2867df3443da0b255e21f782017141c55e23d76e55655ee",
     "HTML:Scripts_Giro_Registro": "495aa98b40c761371ab340e5d194770bb3d17aa7ee5c6db9220cef47b15da719",
     "HTML:Scripts_Globais_2": "dd1755c589ec9939f54f058e459bb801daf93e3316fa0dd82f3633a178df5c55",
     "HTML:Scripts_Historico_PCP2026": "c6238f34d35ffd9c1adcb4435ff737563f806c1f234ee0b58c835bdafdafb8a5",
