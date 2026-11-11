@@ -35,7 +35,7 @@ const linhasMaster = html => celulasMaster(html).map(linha => linha.map(c => c.t
 const valores = (resultado, marca='COC') => {
   const linha = linhasMaster(resultado.html).find(c => c[2] === marca);
   assert(linha, 'Grupo ' + marca + ' está visível');
-  return [linha[6],linha[7],linha[9],linha[10]];
+  return [linha[8],linha[6],linha[11],linha[9]];
 };
 
 test('Giro distingue pendências do total do grupo incluindo SKU concluído', () => {
@@ -45,8 +45,8 @@ test('Giro distingue pendências do total do grupo incluindo SKU concluído', ()
   assert.equal(r.linhas[0].tiragem,50,'Exportação continua com o saldo filtrado');
   const html = fs.readFileSync(path.join(__dirname,'..','abaGiroSemanal_1.html'),'utf8');
   const headers = [...html.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map(m => texto(m[1]));
-  assert.deepEqual(headers.slice(6,13), ['Skus pendentes','SKUs totais','SKUs coletados',
-    'Tiragem pendente','Tiragem total','Tiragem coletada','% coletado']);
+  assert.deepEqual(headers.slice(6,13), ['SKUs totais','SKUs coletados','SKUs pendentes',
+    'Tiragem total','Tiragem coletada','Tiragem pendente','% coletado']);
   assert.match(r.html, /colspan="15"/, 'Linha expandida acompanha todas as colunas do grupo');
 });
 
@@ -108,8 +108,8 @@ test('acabadora soma TIRAGEM TOTAL e ignora a base CD de 50', () => {
   ],{pos:true});
   assert.deepEqual(valores(r),['1','2','20000','35000'],
     'Total soma TIRAGEM TOTAL das linhas, incluindo SKUs concluidos');
-  assert.equal(detalheSku(r,'ACAB-PARCIAL')[6],'20000');
-  assert.equal(detalheSku(r,'ACAB-PARCIAL')[7],'25000');
+  assert.equal(detalheSku(r,'ACAB-PARCIAL')[8],'20000');
+  assert.equal(detalheSku(r,'ACAB-PARCIAL')[6],'25000');
   assert.equal(r.linhas[0].tiragem,20000,'Saldo pendente nao deve mudar');
 });
 
@@ -175,7 +175,7 @@ test('kits da PCP Acabadoras nao multiplicam o total nem a coleta de um mesmo SK
   const r=tela([principal,...parcelas],{pos:true});
   assert.deepEqual(valores(r),['1','1','32954','52106']);
   assert.equal(r.linhas.length,1);
-  assert.deepEqual(detalheSku(r,sku).slice(6,10),['32954','52106','19152','36,76%']);
+  assert.deepEqual(detalheSku(r,sku).slice(6,10),['52106','19152','32954','36,76%']);
 });
 
 test('linha com TIRAGEM TOTAL zero fica fora, mesmo sem consolidado no SKU e CD', () => {
@@ -204,7 +204,7 @@ test('detalhe do SKU parcial distingue tiragem pendente e original sem alterar s
     _eventos:[{categoria:'Vencida',volume:100,dias:0}]})],{pos:true});
   const detalhe = detalheSku(r,'PARCIAL');
   assert.equal(detalhe.length,14,'Detalhe possui observação e nova data em colunas próprias');
-  assert.deepEqual(detalhe.slice(6,10),['100','1000','900','90,00%']);
+  assert.deepEqual(detalhe.slice(6,10),['1000','900','100','90,00%']);
   assert.equal(detalhe[13],'—','Nova data permanece na última coluna');
   assert.deepEqual(valores(r),['1','1','100','1000'],
     'Coleta parcial mantém um SKU pendente, com somente o saldo na tiragem pendente');
@@ -212,7 +212,7 @@ test('detalhe do SKU parcial distingue tiragem pendente e original sem alterar s
   assert.equal(r.linhas[0].status,'Coletado a menos');
   const header = r.html.match(/<thead\b[^>]*>([\s\S]*?)<\/thead>/)?.[1] || '';
   const colunas = [...header.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map(m => texto(m[1]));
-  assert.deepEqual(colunas.slice(6),['Tiragem pendente','Tiragem total','Tiragem coletada',
+  assert.deepEqual(colunas.slice(6),['Tiragem total','Tiragem coletada','Tiragem pendente',
     '% coletado','Kit PCP','Mapa de saída','Observação Específica do SKU','Nova data']);
 });
 
@@ -237,11 +237,11 @@ test('% coletado do grupo usa todos os SKUs da Tiragem total, mesmo concluídos 
     TIRAGEM:1000,'TIRAGEM TOTAL':1000,'TIRAGEM COLETADA':500,Coleta_TP:''
   });
   const r=tela([parcial,completo,naoConfirmado],{pos:true});
-  assert.deepEqual(linhasMaster(r.html)[0].slice(8,13),['1','100','3000','2400','80,00%'],
+  assert.deepEqual(linhasMaster(r.html)[0].slice(8,13),['1','3000','2400','100','80,00%'],
     'A tiragem coletada do PCP inclui os concluídos filtrados e o volume registrado sem data TP');
   const detalhe=detalheSku(r,'PARCIAL');
-  assert.equal(detalhe[6],'100','Pendente continua representando só o saldo');
-  assert.equal(detalhe[7],'1000','Total permanece inalterado');
+  assert.equal(detalhe[8],'100','Pendente continua representando só o saldo');
+  assert.equal(detalhe[6],'1000','Total permanece inalterado');
   assert.equal(detalhe[9],'90,00%','Coleta parcial de 900 / 1000');
 });
 
@@ -253,10 +253,10 @@ test('excesso é limitado a 100% do próprio SKU, nunca compensa outra tiragem',
       _estado:{pendente:true,saldo:100},_eventos:[{categoria:'Vencida',volume:100,dias:0}]})
   ],{concluido:true});
   assert.deepEqual(linhasMaster(r.html)[0].slice(6,13),
-    ['1','2','1','100','200','100','50,00%']);
+    ['2','1','1','200','100','100','50,00%']);
   assert.equal(r.linhas.length,2);
-  assert.deepEqual(detalheSku(r,'EXCESSO').slice(6,10),['0','100','100','100,00%']);
-  assert.deepEqual(detalheSku(r,'SEM-COLETA').slice(6,10),['100','100','0','0,00%']);
+  assert.deepEqual(detalheSku(r,'EXCESSO').slice(6,10),['100','100','0','100,00%']);
+  assert.deepEqual(detalheSku(r,'SEM-COLETA').slice(6,10),['100','0','100','0,00%']);
 });
 
 test('Antilhas: coleta bruta acima do total nao inflaciona cobertura de 99,78%', () => {
@@ -273,7 +273,7 @@ test('Antilhas: coleta bruta acima do total nao inflaciona cobertura de 99,78%',
   const r=tela(materiais,{pos:true});
   assert.equal(r.linhas.length,7);
   assert.deepEqual(linhasMaster(r.html)[0].slice(6,13),
-    ['7','10','3','161','72521','72360','99,78%']);
+    ['10','3','7','72521','72360','161','99,78%']);
 });
 
 test('percentual de acabadora usa TIRAGEM TOTAL, não a tiragem por CD', () => {
@@ -291,7 +291,7 @@ test('tiragem total zero nao soma coleta bruta e nao aparece nem na planilha', (
   const r=tela([pendente('VALIDO'),pendente('ZERO',{'TIRAGEM TOTAL':0,TIRAGEM:1000,
     'TIRAGEM COLETADA':500,Coleta_TP:'2026-10-10'})]);
   assert.deepEqual(Array.from(r.linhas,x=>x.sku),['VALIDO']);
-  assert.deepEqual(linhasMaster(r.html)[0].slice(7,13),['1','0','50','100','0','0,00%']);
+  assert.deepEqual(linhasMaster(r.html)[0].slice(7,13),['0','1','100','0','50','0,00%']);
   assert.doesNotMatch(r.html,/ZERO/);
 });
 
@@ -308,8 +308,8 @@ test('Giro mantém 99,99% em amarelo quando falta um livro e preserva as anotaç
     master:{[chaveMaster]:[{obs:'Prazo geral registrado',data:'10/10/2026 12:00'}]},
     sku:{[chaveSku]:[{obs:'Prazo do SKU registrado',data:'10/10/2026 12:00'}]}
   }});
-  assert.deepEqual(linhasMaster(r.html)[0].slice(6,13),['1','1','0','1','26192','26191','99,99%']);
-  assert.deepEqual(detalheSku(r,'UM-LIVRO').slice(6,11),['1','26192','26191','99,99%','KIT-PCP-01']);
+  assert.deepEqual(linhasMaster(r.html)[0].slice(6,13),['1','0','1','26192','26191','1','99,99%']);
+  assert.deepEqual(detalheSku(r,'UM-LIVRO').slice(6,11),['26192','26191','1','99,99%','KIT-PCP-01']);
   assert.deepEqual(detalheSku(r,'UM-LIVRO')[11].match(/MP-0[12]/g),['MP-01','MP-02']);
   assert.match(celulasMaster(r.html)[0][12].atributos,/\btext-amber-800\b/);
   assert.match(celulasDetalhe(r,'UM-LIVRO')[9].atributos,/\btext-amber-800\b/);

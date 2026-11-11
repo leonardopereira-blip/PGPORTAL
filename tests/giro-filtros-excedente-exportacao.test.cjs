@@ -355,6 +355,11 @@ test('Exportar Filtrados leva quantidades e porcentagens da tela por SKU e por g
   const r=executarExportacao('colega@empresa.com',{dados,opcoes:{resumoGiro:true,gruposGiro}});
   assert.equal(r.resultado.success,true,r.resultado.error);
   assert.deepEqual(Object.keys(r.abas).sort(),['Giro_Filtrado','Giro_Grupos','Resumo_Atrasos']);
+  assert.deepEqual(r.abas.Giro_Filtrado.conteudo[0].slice(10,14),
+    ['Tiragem total','Tiragem coletada','Tiragem pendente','% coletado']);
+  assert.deepEqual(r.abas.Giro_Grupos.conteudo[0].slice(7,14),
+    ['SKUs totais','SKUs coletados','SKUs pendentes',
+      'Tiragem total','Tiragem coletada','Tiragem pendente','% coletado']);
   assert.equal(r.resultado.url,'https://docs.google.com/spreadsheets/d/id#gid=1');
   const tabela=nome=>{
     const [cabecalho,...linhas]=r.abas[nome].conteudo;
