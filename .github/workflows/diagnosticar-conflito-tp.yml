@@ -17,6 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -44,13 +45,15 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           import {createHash} from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
           import {spawnSync} from 'node:child_process';
           import {initAuth} from './node_modules/@google/clasp/build/src/auth/auth.js';
           import {initClaspInstance} from './node_modules/@google/clasp/build/src/core/clasp.js';
           const {credentials}=await initAuth({});
           if(!credentials)throw Error('Sem autenticacao');
           const clasp=await initClaspInstance({credentials});
-          const remote=(await clasp.files.fetchRemote()).find(f=>f.type==='HTML'&&f.remotePath==='Scripts_Eventos_TP');
+          const remotos=await clasp.files.fetchRemote();
+          const remote=remotos.find(f=>f.type==='HTML'&&f.remotePath==='Scripts_Eventos_TP');
           if(!remote)throw Error('Arquivo nao encontrado no Google');
           const normal=s=>String(s||'').replace(/\r\n/g,'\n');
           const local=normal(fs.readFileSync('Scripts_Eventos_TP.html','utf8'));
@@ -60,6 +63,10 @@ jobs:
           console.log('Leitura UTC:',new Date().toISOString());
           console.log('Google SHA-256:',hash(google));
           console.log('GitHub SHA-256:',hash(local));
+          const antigo=normal(execFileSync('git',['show','7085ab214c61870e11c25d7268cf6fa18cc8a552:Scripts_Eventos_TP.html'],{encoding:'utf8'}));
+          console.log('Google identico ao GitHub antes dos complementos:',google===antigo);
+          console.log('SHA-256 da versao historica:',hash(antigo));
+          console.log('REMOTE_HASHES_JSON='+JSON.stringify(Object.fromEntries(remotos.map(f=>[f.type+':'+f.remotePath,hash(normal(f.source))]))));
           const diff=spawnSync('git',['diff','--no-index','--unified=10','--','Scripts_Eventos_TP.html',process.env.SNAPSHOT],{encoding:'utf8',maxBuffer:3e6});
           console.log('DIFF GOOGLE VS MAIN (limitado a 35000 caracteres):');
           console.log((diff.stdout||'Sem diferencas').slice(0,35000));
