@@ -359,15 +359,13 @@
         detalhe.fatorDuplicidade = fator;
         const quantidadeFormula = fator === 0.5 ? totalBA : Math.round(somaAN);
         const divergePCP = quantidadeFormula !== n;
-        if (divergePCP) {
-            // Coleta e entrega manuais exigem quantidade e sua propria data realizada no PCP.
-            // dataLegada e Coleta_TP ou Entrega_TP conforme a operacao, sem trocar as datas.
-            if (!dtLegada || dtLegada > dtHoje) {
-                return vazio('quantidade-nao-concilia-tiragem-coletada');
-            }
-            // Um ajuste menor no PCP nao permite escolher ou ratear parcelas do mapa.
-            // Usa uma unica representacao manual, sem somar os dois volumes.
-            if (n < quantidadeFormula) return legado(tipo + '-manual-pcp');
+        const manualDatado = !!dtLegada && dtLegada <= dtHoje;
+        // A falta de data manual impede somente o complemento do PCP: nao
+        // descarta movimentos do mapa ja comprovados nas suas proprias datas.
+        // Coleta_TP e Entrega_TP permanecem independentes.
+        if (divergePCP && manualDatado && n < quantidadeFormula) {
+            // PCP menor e datado substitui o mapa por uma unica representacao.
+            return legado(tipo + '-manual-pcp');
         }
         let acumulado = 0, arredondado = 0;
         eventos.forEach(e => {
@@ -377,16 +375,17 @@
             arredondado = proximo;
         });
         // somaAN inclui tambem parcelas futuras/sem data: elas nao viram saldo manual.
-        const volumeComplementarPCP = divergePCP ? n - quantidadeFormula : 0;
+        const volumeComplementarPCP = divergePCP && manualDatado
+            ? Math.max(0, n - quantidadeFormula) : 0;
         if (volumeComplementarPCP > 0) {
             eventos.push({ data: dtLegada, volume: volumeComplementarPCP });
             eventos.sort((a, b) => a.data.localeCompare(b.data) ||
                 (a.linhaMapa ?? Number.MAX_SAFE_INTEGER) - (b.linhaMapa ?? Number.MAX_SAFE_INTEGER));
         }
-        return comDiagnostico(eventos.filter(e => e.volume > 0), { ...detalhe, modo: divergePCP ? 'mesclado' : 'eventos',
+        return comDiagnostico(eventos.filter(e => e.volume > 0), { ...detalhe, modo: volumeComplementarPCP > 0 ? 'mesclado' : 'eventos',
             volumeAN: somaAN, fatorDuplicidade: fator, volumeEventos: arredondado,
             ...(divergePCP ? { volumeComplementarPCP, volumeEventos: arredondado + volumeComplementarPCP } : {}),
-            motivo: divergePCP ? tipo + '-manual-complementar-pcp'
+            motivo: volumeComplementarPCP > 0 ? tipo + '-manual-complementar-pcp'
                 : fator === 0.5 ? 'an-realizado-corrigido-2x' : 'an-realizado-por-data' });
     }
     window.pgEventosTPLinha = function(linha, tipo, hoje, volumeLegado, dataLegada) {
