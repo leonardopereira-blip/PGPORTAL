@@ -179,3 +179,58 @@ test('Tabela executiva agrega Acabamento, Kit e Coleta na mesma base sem mudar a
   assert.match(linha, /<td class="re-group-kit">95%<\/td>/);
   assert.match(linha, /<td class="re-group-entcd">45%<\/td>/);
 });
+
+test('Somente o quadro corrige Real e Plan. por SKU, sem compensar materiais nem modificar auditoria/curva',()=>{
+  const a=row(2,{'Acbto Final Real':'2026-11-07'});
+  const b=row(3,{SKU_REAL:'SKU-B',SKU:'SKU-B'});
+  const w=portal([a,b]);
+  // SKU A só concluiu Acabamento; SKU B só entregou 50 unidades.
+  // Seus créditos não podem ser compensados entre si no quadro.
+  w.pgVolumesColetaUnificadosV37=l=>({
+    coleta:0,entrega:l===b?50:0,
+    eventosColetaTP:[],eventosEntregaTP:l===b?[{data:corte,volume:50}]:[]
+  });
+  // Plano do SKU A chegou a Acabamento; do SKU B chegou à Coleta.
+  w.pgDataPlanoFaseFunil=(l,f)=>l===a&&f.id==='acab'?'2026-11-01':null;
+  w.pgDataPlanoColetaLinha=l=>l===b?'2026-11-01':null;
+  w.pgDataPlanoEntregaSLA=()=>null;
+
+  const table={querySelector(){return null;},querySelectorAll(){return [];}};
+  const tbody={innerHTML:'',closest:()=>table};
+  const grupos={querySelectorAll(){return [];}};
+  const seletor={querySelectorAll(){return [];},querySelector(){return {textContent:''};}};
+  const painel={querySelector(sel){
+    if(sel==='[data-pg-re-grupos-v58]')return grupos;
+    if(sel==='[data-pg-re-corte-v57]')return seletor;
+    if(sel.includes('data-re-coluna'))return {checked:sel.includes('marca')};
+    return null;
+  }};
+  w.document.getElementById=id=>({
+    reTabelaMarcas:tbody,pgReSeletoresV42:painel,filtroReferencia:{value:'replan'}
+  })[id]||null;
+  w.document.querySelector=()=>table;
+  w.pgREFixarAgrupamento=()=>{};
+  w.reAtivarCliquesTabela=()=>{};
+  w.renderReportExecutivaCurvaSemanal=()=>{};
+  w.pgBaseGeralReportExecutiva=[a,b];
+  w.processarReportExecutiva();
+
+  // Dados originais continuam sendo usados em auditoria e curva (sem mutação).
+  assert.equal(w.pgReportAuditoriaPortal.acabamento.total.real,100);
+  assert.equal(w.pgReportAuditoriaPortal.kit.total.real,0);
+  assert.equal(w.pgReportAuditoriaPortal.coletaCD.total.real,0);
+  assert.equal(w.pgReportAuditoriaPortal.entregaTP.total.real,50);
+  assert.equal(w.pgReportAuditoriaPortal.acabamento.total.plan,100);
+  assert.equal(w.pgReportAuditoriaPortal.coletaCD.total.plan,100);
+  assert.equal(w.reCurvaFonteCDV43.realizadoHoje,0);
+  assert.equal(w.reCurvaFonteCDV43.planejadoHoje,100);
+
+  const linha=tbody.innerHTML.match(/<tr class="" data-re-chave="COC">([\s\S]*?)<\/tr>/)?.[1];
+  assert.ok(linha);
+  const celulas=grupo=>[...linha.matchAll(new RegExp(`<td class="re-group-${grupo}">(\\d+)%<\\/td>`, 'g'))]
+    .map(m=>Number(m[1]));
+  assert.deepEqual(celulas('acab'),[75,100]);
+  assert.deepEqual(celulas('kit'),[25,50]);
+  assert.deepEqual(celulas('entcd'),[25,50]);
+  assert.deepEqual(celulas('enttp'),[25,0]);
+});

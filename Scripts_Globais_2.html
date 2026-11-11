@@ -10720,6 +10720,70 @@ window.processarReportExecutiva = function() {
         hoje: hojeIso
     };
 
+    // Exclusivo das celulas do QUADRO por marca da Report Executiva.
+    // Nao modifica as bases/auditorias acima, a curva, nem o funil do portal.
+    // Cada SKU/rota e conciliado antes de agregar: etapas posteriores comprovam
+    // apenas seu proprio volume nas anteriores, sem compensar outro material.
+    const quadroCoerenteRE = Object.fromEntries(
+        ['acab', 'kit', 'entCD', 'entTP'].map(etapa =>
+            [etapa, {porMarca: {}, total: novoAgg()}])
+    );
+    const limitarQuadroRE = (valor, volume) =>
+        Math.max(0, Math.min(volume, Number(valor) || 0));
+    const planejadoQuadroRE = (data, antecedencia = 0) =>
+        data && calcDiffDiasISO(data, cortePlanejadoRE) >= antecedencia;
+
+    progressoEtapas.forEach(({linha:l, volume, acabado, kit}) => {
+        if (!(volume > 0)) return;
+        const grupo = chaveLinha(l);
+        const volumes = typeof window.pgVolumesColetaUnificadosV37 === 'function'
+            ? window.pgVolumesColetaUnificadosV37(l, hojeIso) : null;
+        const realTP = (etapa, campo) => {
+            if (volumes) return limitarQuadroRE(volumes[etapa], volume);
+            const data = window.pgNormalizarDataColeta(
+                window.pgCampoColeta(l, campo), hojeIso);
+            return data && data <= hojeIso ? limitarQuadroRE(tiragemColetada(l), volume) : 0;
+        };
+
+        // A entrega confirma a coleta, que confirma Kit e Acabamento do
+        // proprio SKU. O credito nunca ultrapassa a tiragem daquela linha.
+        const entregue = realTP('entrega', 'Entrega_TP');
+        const coletado = Math.max(realTP('coleta', 'Coleta_TP'), entregue);
+        const kitReal = Math.max(limitarQuadroRE(kit, volume), coletado);
+        const acabReal = Math.max(limitarQuadroRE(acabado, volume), kitReal);
+
+        const planEntTP = planejadoQuadroRE(window.pgDataPlanoEntregaSLA(l)) ? volume : 0;
+        const planColeta = Math.max(
+            planejadoQuadroRE(window.pgDataPlanoColetaLinha(l)) ? volume : 0,
+            planEntTP
+        );
+        const planKit = Math.max(
+            planejadoQuadroRE(window.pgDataPlanoFaseFunil(l, faseKitReportV58, tRef), 3)
+                ? volume : 0,
+            planColeta
+        );
+        const planAcab = Math.max(
+            planejadoQuadroRE(window.pgDataPlanoFaseFunil(l, faseAcabReport, tRef), 3)
+                ? volume : 0,
+            planKit
+        );
+
+        [
+            ['acab', acabReal, planAcab],
+            ['kit', kitReal, planKit],
+            ['entCD', coletado, planColeta],
+            ['entTP', entregue, planEntTP]
+        ].forEach(([etapa, real, plan]) => {
+            const quadro = quadroCoerenteRE[etapa];
+            add(quadro.porMarca, grupo, 'den', volume);
+            add(quadro.porMarca, grupo, 'real', real);
+            add(quadro.porMarca, grupo, 'plan', plan);
+            quadro.total.den += volume;
+            quadro.total.real += real;
+            quadro.total.plan += plan;
+        });
+    });
+
     const marcas = new Set([
         ...Object.keys(acabPorMarca),
         ...Object.keys(kitPorMarca),
@@ -10797,12 +10861,14 @@ window.processarReportExecutiva = function() {
 
     let html = '';
     marcasOrdenadas.forEach(m => {
-        html += linhaHtml(m, acabPorMarca[m], kitPorMarca[m],
-            entTodos.porMarca[m], entCD.porMarca[m], entTP.porMarca[m], false);
+        html += linhaHtml(m, quadroCoerenteRE.acab.porMarca[m],
+            quadroCoerenteRE.kit.porMarca[m], entTodos.porMarca[m],
+            quadroCoerenteRE.entCD.porMarca[m], quadroCoerenteRE.entTP.porMarca[m], false);
     });
 
-    html += linhaHtml('TOTAL GERAL', acabTotal, kitTotal,
-        entTodos.total, entCD.total, entTP.total, true);
+    html += linhaHtml('TOTAL GERAL', quadroCoerenteRE.acab.total,
+        quadroCoerenteRE.kit.total, entTodos.total,
+        quadroCoerenteRE.entCD.total, quadroCoerenteRE.entTP.total, true);
     tbody.innerHTML = html || `<tr><td colspan="${15 + Math.max(1, colunasRE.length)}" class="re-empty">Sem dados para os filtros atuais.</td></tr>`;
 
     window.pgREAplicarVisibilidadeV58();
