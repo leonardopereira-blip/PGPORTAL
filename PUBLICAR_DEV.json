@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-11-11T22:13:11.978Z",
-  "motivo": "Diagnosticar conflito específico em Scripts_Globais_2; publicar /dev apenas se Google e main estiverem conciliados, preservando mudanças externas e sem alterar /exec."
+  "solicitado_em": "2026-11-11T22:16:30.567Z",
+  "motivo": "Conciliar por três vias a base efetiva do Google com as correções de TP e Report, testar Funil/Report antes de publicar exclusivamente em /dev; preservar alterações externas, não tocar /exec."
 }
