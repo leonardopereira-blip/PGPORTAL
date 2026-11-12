@@ -142,15 +142,24 @@
             .filter(r => r.envio === id.envio)
             .map(r => String(r.evento.kit || '').trim()).filter(Boolean))];
     };
-    // O código identifica a saída registrada no mapa, mesmo sem data TP conciliada.
-    window.pgCodigosMapasColetadosTPLinha = function(linha) {
+    // Identificação das saídas registradas, mesmo sem data TP conciliada.
+    function mapasColetadosLinha(linha) {
         const id = window.pgIdentidadeOperacionalTPLinha(linha);
         const indice = indexarMapa(window.MAPA_SAIDA_CACHE);
         if (!id.completa || !indice) return [];
         const candidatos = indice.grupos.get(chave(id.partes)) || [];
-        return [...new Set(candidatos.filter(({ evento, envio }) =>
-            (id.acabadora || envio === id.envio) && evento.volumeColetado > 0)
+        return candidatos.filter(({ evento, envio }) =>
+            (id.acabadora || envio === id.envio) && evento.volumeColetado > 0);
+    }
+    window.pgCodigosMapasColetadosTPLinha = function(linha) {
+        return [...new Set(mapasColetadosLinha(linha)
             .map(({ evento }) => String(evento.codigoMapa ?? '').trim()).filter(Boolean))];
+    };
+    window.pgNFsMapasColetadosTPLinha = function(linha) {
+        const mapas = mapasColetadosLinha(linha);
+        const notas = campo => [...new Set(mapas
+            .map(({ evento }) => String(evento[campo] ?? '').trim()).filter(Boolean))];
+        return { venda: notas('nfVenda'), remessa: notas('nfRemessa') };
     };
     let cacheAgenda;
     function obterAgenda(hoje) {

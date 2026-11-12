@@ -8976,6 +8976,8 @@ window.reFiltrarTabelaGiro = function() {
         const kitPcp = kitPcpGiro(l);
         const mapasSaida = ['Coletado a menos', 'Concluído', 'Coletado a mais'].includes(statusFinalStr)
             ? window.pgCodigosMapasColetadosTPLinha?.(l) || [] : [];
+        const notasFiscais = ['Coletado a menos', 'Concluído', 'Coletado a mais'].includes(statusFinalStr)
+            ? window.pgNFsMapasColetadosTPLinha?.(l) : null;
 
         grupos[chaveGrupo].skus.push({
             linhaPrevisao: l,
@@ -8992,6 +8994,8 @@ window.reFiltrarTabelaGiro = function() {
             percentualColetado: pctColetadoGiro(Math.min(totalColeta, realizadoColeta), totalColeta),
             kitPcp,
             mapasSaida,
+            nfsVenda: notasFiscais?.venda || [],
+            nfsRemessa: notasFiscais?.remessa || [],
             statusLinha: statusFinalStr,
             excedenteColeta: totalColeta > 0 ? Math.max(0, realizadoColeta - totalColeta) : 0,
             pendencia: etapaPendente,
@@ -9030,6 +9034,8 @@ window.reFiltrarTabelaGiro = function() {
             if (item.kitPcp) unido._kits.add(item.kitPcp);
             if (item.pendenciaHtml && item.pendenciaHtml !== '-') unido._pendenciasHtml.add(item.pendenciaHtml);
             unido.mapasSaida = [...new Set([...unido.mapasSaida, ...item.mapasSaida])];
+            unido.nfsVenda = [...new Set([...unido.nfsVenda, ...item.nfsVenda])];
+            unido.nfsRemessa = [...new Set([...unido.nfsRemessa, ...item.nfsRemessa])];
             unido.escala = Math.min(unido.escala, item.escala);
         });
         grupo.skus = Array.from(porSku.values()).map(item => {
@@ -9152,6 +9158,7 @@ let arrGrupos = Object.values(grupos);
             status: l.statusLinha, pendencia: l.pendencia, dias: l.escala, tiragem: l.tiragem,
             tiragemOriginal: l.tiragemOriginal, tiragemColetada: l.tiragemColetada,
             percentualColetado: pctColetadoPlanilha(l.percentualColetado), kitPcp: l.kitPcp, mapasSaida: l.mapasSaida.join(', '),
+            nfsVenda: l.nfsVenda.join(', '), nfsRemessa: l.nfsRemessa.join(', '),
             analista: responsavel.analista, time: responsavel.time,
             chaveMaster, chaveSku: window.pgGiroChaveObs('SKU', l.chaveUnica),
             idCampoNovaData: idCampoDataGiro(indiceGrupo, indiceSku)
@@ -9268,6 +9275,8 @@ let arrGrupos = Object.values(grupos);
         <th class="p-1.5 text-right border-r border-slate-200">% coletado</th>
         <th class="p-1.5 border-r border-slate-200">Kit PCP</th>
         <th class="p-1.5 border-r border-slate-200">Mapa de saída</th>
+        <th class="p-1.5 border-r border-slate-200">NF Venda</th>
+        <th class="p-1.5 border-r border-slate-200">NF Remessa</th>
         <th class="p-1.5 w-1/3">Observação Específica do SKU</th>
         <th class="p-1.5">Nova data</th>
         </tr>
@@ -9313,6 +9322,8 @@ let arrGrupos = Object.values(grupos);
             <td class="p-1.5 text-right font-extrabold ${corPctColetadoGiro(item.percentualColetado)} border-r border-slate-100" title="Cobertura da tiragem prevista, limitada a 100% por SKU">${fmtPctColetadoGiro(item.percentualColetado)}</td>
             <td class="p-1.5 border-r border-slate-100">${escaparCodigoGiro(item.kitPcp) || '—'}</td>
             <td class="p-1.5 border-r border-slate-100">${item.mapasSaida.map(escaparCodigoGiro).join(', ') || '—'}</td>
+            <td class="p-1.5 border-r border-slate-100">${item.nfsVenda.map(escaparCodigoGiro).join(', ') || '—'}</td>
+            <td class="p-1.5 border-r border-slate-100">${item.nfsRemessa.map(escaparCodigoGiro).join(', ') || '—'}</td>
             <td class="p-1.5">
             <div class="flex items-center w-full">
             ${primeiraObsSku ? `<input type="text" id="${idInputSku}" name="${idInputSku}" autocomplete="off" value="${ultimaObsSku}" class="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1.5 outline-none focus:border-indigo-400 focus:bg-white text-[10px] transition-all text-slate-700 font-semibold shadow-inner" placeholder="Nova observação (Enter)..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" onchange="window.salvarObsFront('SKU', '${safeChaveSku}', this)" />` : '<span class="text-[9px] text-slate-500" title="Observação compartilhada pelo mesmo SKU e destino">Observação unificada com o mesmo SKU/CD</span>'}

@@ -777,7 +777,8 @@ function gerarPlanilhaGiroFiltrado(dados, opcoes) {
         ['Dias de Atraso', 'dias', '#,##0'], ['Tiragem pendente', 'tiragem', '#,##0'],
         ['Tiragem total', 'tiragemOriginal', '#,##0'], ['Tiragem coletada', 'tiragemColetada', '#,##0'],
         ['% coletado', 'percentualColetado', '0.00%'], ['Kit PCP', 'kitPcp'],
-        ['Mapa de saída', 'mapasSaida'], ['Observações (Ação / Motivo)', 'observacaoGeral'],
+        ['Mapa de saída', 'mapasSaida'], ['NF Venda', 'nfsVenda'], ['NF Remessa', 'nfsRemessa'],
+        ['Observações (Ação / Motivo)', 'observacaoGeral'],
         ['Observação Específica do SKU', 'observacaoSku'], ['Nova data', 'novaData', 'dd/mm/yyyy'],
         ['Analista', 'analista'], ['Time', 'time'], ['Tipo', 'tipo'],
         ['Cliente personalizado', 'clientePersonalizado']

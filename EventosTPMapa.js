@@ -18,6 +18,8 @@ function pgComplementarEventosTPMapa_(mapa, jsonPublicado) {
         vistas[e.linhaMapa] = true;
         var parcela = { eventoTPVersao: 2, marca: e.marca, grafica: e.grafica, sku: e.sku,
           destino: e.destino, envio: e.envio, codigoMapa: e.codigoMapa, linhaMapa: e.linhaMapa,
+          nfVenda: String(e.nfVenda == null ? '' : e.nfVenda).trim(),
+          nfRemessa: String(e.nfRemessa == null ? '' : e.nfRemessa).trim(),
           chaveMapa: e.chaveMapa, kit: e.kit, volumeSolicitado: e.volumeSolicitado,
           volumeColetado: e.volumeColetado, dataAgendada: e.dataAgendada,
           coletaTP: e.coletaTP, entregaTP: e.entregaTP };

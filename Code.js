@@ -848,6 +848,8 @@ function getDadosMapaSaida() {
         chaveMapa: skuChave,
         linhaMapa: i + 1,
         codigoMapa: texto(row[4]), // E: COD MP
+        nfVenda: texto(row[20]), // U: NF VENDA
+        nfRemessa: texto(row[22]), // W: NF REMESSA
         marca: texto(row[0]), // A: UN PCP
         destino: texto(row[1]), // B: CD PCP, destino aceito pela formula
         grafica: texto(row[2]), // C: GRAFICA PCP
