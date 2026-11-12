@@ -42,7 +42,7 @@ test('codigos de saida usam so movimentos coletados da identidade operacional', 
   assert.deepEqual(valores(w.pgCodigosMapasColetadosTPLinha(linha({ ENVIO: '' }))), []);
 });
 
-test('NFs usam as mesmas saídas coletadas dos códigos e preservam texto sem repetição', () => {
+test('NFs de venda usam as mesmas saídas coletadas dos códigos e preservam texto sem repetição', () => {
   const w = portal({ __eventosTPAtuais: [
     evento({ coletaTP: null, nfVenda: ' 000123 ', nfRemessa: '000045' }),
     segunda({ nfVenda: '000124', nfRemessa: '000046' }),
@@ -56,9 +56,9 @@ test('NFs usam as mesmas saídas coletadas dos códigos e preservam texto sem re
     evento({ nfVenda: 'VENDA-SEM-COLETA', nfRemessa: 'REMESSA-SEM-COLETA', volumeColetado: 0 })
   ] });
   assert.deepEqual(valores(w.pgNFsMapasColetadosTPLinha(linha({ _PG_TP_FORECAST: true }))),
-    { venda: ['000123', '000124'], remessa: ['000045', '000046'] });
+    { venda: ['000123', '000124'] });
   assert.deepEqual(valores(w.pgNFsMapasColetadosTPLinha(linha({ ENVIO: '' }))),
-    { venda: [], remessa: [] });
+    { venda: [] });
 });
 
 test('NFs de Acabadora seguem a identidade sem envio e sem depender das datas TP', () => {
@@ -70,19 +70,24 @@ test('NFs de Acabadora seguem a identidade sem envio e sem depender das datas TP
   const acab = linha({ _SOURCE: 'ACABADORA', SKU: 'CCP25PP26111801',
     'CD DESTINO': 'ANTILHAS', CD_MAPA: 'OUTRO', ENVIO: '' });
   assert.deepEqual(valores(w.pgNFsMapasColetadosTPLinha(acab)),
-    { venda: ['001', '002'], remessa: ['010', '020'] });
+    { venda: ['001', '002'] });
   assert.deepEqual(valores(w.pgNFsMapasColetadosTPLinha({ ...acab, SKU: '', SKU_REAL: '' })),
-    { venda: [], remessa: [] });
+    { venda: [] });
 });
 
 test('NFs ausentes em cache antigo ficam vazias e zeros textuais são preservados', () => {
   for (const mapa of [undefined, {}, { key: [{ vol: 1 }] }, { key: [evento()] }]) {
     assert.deepEqual(valores(portal(mapa).pgNFsMapasColetadosTPLinha(linha())),
-      { venda: [], remessa: [] });
+      { venda: [] });
   }
   const w = portal({ key: [evento({ nfVenda: '0000', nfRemessa: '0' })] });
   assert.deepEqual(valores(w.pgNFsMapasColetadosTPLinha(linha())),
-    { venda: ['0000'], remessa: ['0'] });
+    { venda: ['0000'] });
+});
+
+test('NFs de remessa presentes no cache não são retornadas nem substituem NF Venda ausente', () => {
+  const w = portal({ key: [evento({ nfRemessa: '000045' }), segunda({ nfVenda: '', nfRemessa: '000046' })] });
+  assert.deepEqual(valores(w.pgNFsMapasColetadosTPLinha(linha())), { venda: [] });
 });
 
 test('dois codigos redistribuem 1403 nas datas comprovadas e preservam hoje', () => {

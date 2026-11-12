@@ -450,7 +450,7 @@ test('clique em Exportar Filtrados usa as datas visíveis e as chaves do grupo e
   assert.equal(sku.kitPcp,'KIT-PCP');
   assert.equal(sku.mapasSaida,'MP-01, MP-02');
   assert.equal(sku.nfsVenda,'000123, 000124');
-  assert.equal(sku.nfsRemessa,'000789');
+  assert.equal(Object.hasOwn(sku,'nfsRemessa'),false);
   assert.deepEqual([grupo.qtdSkusPendentes,grupo.qtdSkusTotal,grupo.qtdSkusColetados],[1,1,0]);
 });
 
@@ -462,7 +462,7 @@ test('excedente fica fora das pendências por padrão',()=>{
   assert.equal(r.linhas.length,0);
 });
 
-test('exportação do Giro inclui NF Venda e NF Remessa como texto, inclusive zeros e células vazias',()=>{
+test('exportação do Giro inclui somente NF Venda como texto, inclusive zeros e células vazias',()=>{
   const r=executarExportacao('colega@empresa.com',{
     dados:[{sku:'COM-NF',nfsVenda:'000123, 000124',nfsRemessa:'000789'},
       {sku:'SEM-NF'}, {sku:'TEXTO',nfsVenda:'=1+1',nfsRemessa:'0000'}],
@@ -470,10 +470,9 @@ test('exportação do Giro inclui NF Venda e NF Remessa como texto, inclusive ze
   });
   assert.equal(r.resultado.success,true,r.resultado.error);
   const [cabecalho,...linhas]=r.abas.Giro_Filtrado.conteudo;
-  const venda=cabecalho.indexOf('NF Venda'),remessa=cabecalho.indexOf('NF Remessa');
+  const venda=cabecalho.indexOf('NF Venda');
   assert.equal(venda,cabecalho.indexOf('Mapa de saída')+1);
-  assert.equal(remessa,venda+1);
-  assert.deepEqual(linhas.map(l=>[l[venda],l[remessa]]),
-    [['000123, 000124','000789'],['',''],["'=1+1",'0000']]);
+  assert.equal(cabecalho.includes('NF Remessa'),false);
+  assert.deepEqual(linhas.map(l=>l[venda]),['000123, 000124','',"'=1+1"]);
   assert(linhas.every(l=>l.length===cabecalho.length));
 });

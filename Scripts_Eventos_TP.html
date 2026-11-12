@@ -156,10 +156,9 @@
             .map(({ evento }) => String(evento.codigoMapa ?? '').trim()).filter(Boolean))];
     };
     window.pgNFsMapasColetadosTPLinha = function(linha) {
-        const mapas = mapasColetadosLinha(linha);
-        const notas = campo => [...new Set(mapas
-            .map(({ evento }) => String(evento[campo] ?? '').trim()).filter(Boolean))];
-        return { venda: notas('nfVenda'), remessa: notas('nfRemessa') };
+        const venda = [...new Set(mapasColetadosLinha(linha)
+            .map(({ evento }) => String(evento.nfVenda ?? '').trim()).filter(Boolean))];
+        return { venda };
     };
     let cacheAgenda;
     function obterAgenda(hoje) {

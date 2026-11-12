@@ -18,7 +18,7 @@ const harness = origem.slice(0, origem.indexOf('\ntest('))
   .replace("checked:id==='chkGiroAberto'||(id==='chkGiroPos'&&pos)",
     "checked:(id==='chkGiroAberto'&&aberto)||(id==='chkGiroConcluido'&&concluido)||(id==='chkGiroPos'&&pos)")
   .replace('pgGiroChaveObs:(_,x)=>x,',
-    'pgCodigosMapasColetadosTPLinha:r=>r._mapas||[],pgNFsMapasColetadosTPLinha:r=>r._nfs||{venda:[],remessa:[]},pgGiroChaveObs:(_,x)=>x,');
+    'pgCodigosMapasColetadosTPLinha:r=>r._mapas||[],pgNFsMapasColetadosTPLinha:r=>r._nfs||{venda:[]},pgGiroChaveObs:(_,x)=>x,');
 const {executarGiro} = vm.runInNewContext(harness + '\n({executarGiro});', {require, __dirname});
 
 const pendente = (sku='PENDENTE', extra={}) => ({SKU:sku,TIRAGEM:100,'TIRAGEM TOTAL':100,
@@ -203,9 +203,9 @@ test('detalhe do SKU parcial distingue tiragem pendente e original sem alterar s
     _estado:{pendente:true,parcial:true,saldo:100,coletada:900},
     _eventos:[{categoria:'Vencida',volume:100,dias:0}]})],{pos:true});
   const detalhe = detalheSku(r,'PARCIAL');
-  assert.equal(detalhe.length,16,'Detalhe possui NFs, observação e nova data em colunas próprias');
+  assert.equal(detalhe.length,15,'Detalhe possui NF Venda, observação e nova data em colunas próprias');
   assert.deepEqual(detalhe.slice(6,10),['1000','900','100','90,00%']);
-  assert.equal(detalhe[15],'—','Nova data permanece na última coluna');
+  assert.equal(detalhe[14],'—','Nova data permanece na última coluna');
   assert.deepEqual(valores(r),['1','1','100','1000'],
     'Coleta parcial mantém um SKU pendente, com somente o saldo na tiragem pendente');
   assert.equal(r.linhas[0].tiragem,100,'Saldo da exportação preservado');
@@ -213,7 +213,7 @@ test('detalhe do SKU parcial distingue tiragem pendente e original sem alterar s
   const header = r.html.match(/<thead\b[^>]*>([\s\S]*?)<\/thead>/)?.[1] || '';
   const colunas = [...header.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map(m => texto(m[1]));
   assert.deepEqual(colunas.slice(6),['Tiragem total','Tiragem coletada','Tiragem pendente',
-    '% coletado','Kit PCP','Mapa de saída','NF Venda','NF Remessa','Observação Específica do SKU','Nova data']);
+    '% coletado','Kit PCP','Mapa de saída','NF Venda','Observação Específica do SKU','Nova data']);
 });
 
 test('detalhe nao apresenta SKU zerado, mesmo com QUANTIDADE e saldo', () => {
@@ -340,7 +340,7 @@ test('Giro aplica as cores do percentual ao grupo e ao SKU nos limites', () => {
   }
 });
 
-test('Giro apresenta NFs de venda e remessa por SKU e une kits sem repetir notas ou alterar totais', () => {
+test('Giro apresenta apenas NFs de venda por SKU e une kits sem repetir notas ou alterar totais', () => {
   const parcial=extra=>pendente('COM-NF',{
     KIT:'KIT-1','TIRAGEM TOTAL':100,'TIRAGEM COLETADA':50,Coleta_TP:'2026-10-10',
     _estado:{pendente:true,parcial:true,saldo:50},_mapas:['MP-1'],...extra
@@ -353,16 +353,16 @@ test('Giro apresenta NFs de venda e remessa por SKU e une kits sem repetir notas
   assert.deepEqual(valores(r),valores(semNfs),'As notas apenas identificam os movimentos');
   assert.equal(detalheSku(r,'COM-NF')[11],'MP-1, MP-2');
   assert.equal(detalheSku(r,'COM-NF')[12],'000123, &lt;456&gt;, 000124');
-  assert.equal(detalheSku(r,'COM-NF')[13],'000789, 000790');
+  assert.doesNotMatch(r.html,/NF Remessa|000789|000790/,'Notas de remessa não entram no detalhe');
   assert.doesNotMatch(r.html,/<456>/,'Conteúdo da NF é exibido como texto');
   assert.equal(r.linhas[0].nfsVenda,'000123, <456>, 000124');
-  assert.equal(r.linhas[0].nfsRemessa,'000789, 000790');
-  assert.deepEqual(detalheSku(semNfs,'COM-NF').slice(12,14),['—','—']);
+  assert.equal(Object.hasOwn(r.linhas[0],'nfsRemessa'),false);
+  assert.equal(detalheSku(semNfs,'COM-NF')[12],'—');
 });
 
 test('Giro mantém NFs ausentes quando o status não apresenta mapas de saída', () => {
   const r=tela([pendente('SEM-SAIDA',{_nfs:{venda:['123'],remessa:['456']}})]);
-  assert.deepEqual(detalheSku(r,'SEM-SAIDA').slice(11,14),['—','—','—']);
+  assert.deepEqual(detalheSku(r,'SEM-SAIDA').slice(11,13),['—','—']);
   assert.equal(r.linhas[0].nfsVenda,'');
-  assert.equal(r.linhas[0].nfsRemessa,'');
+  assert.equal(Object.hasOwn(r.linhas[0],'nfsRemessa'),false);
 });
