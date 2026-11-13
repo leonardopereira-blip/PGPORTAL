@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-13T13:51:26.564Z",
+  "lido_em": "2026-11-13T14:01:48.059Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -24,6 +24,7 @@
     "HTML:abaReentradasGerencial": "68869cc3347fd307bbc0fdf5d75952b78ba9508e51800f57f0cad4d2936bc018",
     "HTML:abaReentradasProducao": "12998876d02407bf1f2dbcb130963ad60779e6e536e6880048e313f43bead263",
     "HTML:abaReportExecutiva": "ed7f076084b1d95a74bab64a61f29b5ef4bc8ba6e504d54ac1815d7724a3d9bf",
+    "HTML:abaResultadosAnalistas": "d9b603213921cf1178914ce8d061363b6c5530e92a2de6c88476fc929a2cfa4a",
     "HTML:abaTempSasAdapt": "1e549e3b22990c6d856054a08538b1846f7311f7ab500b8d27febecae9817441",
     "SERVER_JS:AcompanhamentoMapa": "9d8c41d5bda2f03f70196b5ea8da262932e745b0eaff7910ceb619995715bc2a",
     "SERVER_JS:AlertasMapa": "d418b14431a0381e48d18516afb43a0b5417278a833a531c7655aba886ff9f2c",
@@ -44,9 +45,9 @@
     "SERVER_JS:ExportarValores": "b873c7f243caa2fa43d2304b1a7c26d34a08b6027ffe2ae08c8c99fa5c808984",
     "SERVER_JS:GerenciadorVersao": "2ac962dee2581c4cbb3f81a90885fd076046fe3d1f8442d4836bb2b643b1b4c2",
     "SERVER_JS:HistoricoPCP2026": "444a1c0ceab3c50e257cd0193f0b01dd8e4e0d092ee005c86b1a70390abd16c3",
-    "HTML:Index": "5414f7e1fd93597aeb5bf1cd827e35aeb5fc304104ae2110d45aa10d0a223801",
+    "HTML:Index": "e04e44a6c6726ad1b104c81c344efca2e157b1c3305aeb0c83afdb429899f79c",
     "SERVER_JS:LeituraCacheSheets": "459014b75f3ec02905c0712616f348cacd3596819259789154fa04046b337f72",
-    "HTML:Main": "6109df29e54e70a2c75e3b360bd1b93297f5b7f36d1ac60975baad9388cf511c",
+    "HTML:Main": "47f38d3b78c495e833a8cc89d5a097898d40606c3a3f9619e39b4d3123f10f36",
     "HTML:PreProducao": "0da511380e5f45a042ee1ab028cfc807dd0c8299a53dd77eeec029bcc690e7ba",
     "HTML:Qualidade": "2e7fa50812e55536391ba451dc8ceb68806464644367c84e2ada6a54250843a1",
     "SERVER_JS:RegistroGiroJSON": "def59184ff3c6d9efe2ee13853b47936c97a613de611eb4040fa9aa2d13647bf",
@@ -59,9 +60,10 @@
     "HTML:Scripts_EntregasCD_Modelo": "6af7811b9a34bfd4fb7dfde821815b7a80cd93b35efcbc3da97da0958c4d5de2",
     "HTML:Scripts_Eventos_TP": "1af211c0bbd5d29719193587a169fcb7c7b423070d38cd8cbb6c189416736322",
     "HTML:Scripts_Giro_Registro": "495aa98b40c761371ab340e5d194770bb3d17aa7ee5c6db9220cef47b15da719",
-    "HTML:Scripts_Globais_2": "e2c491bad8825545924471832ca2131fe3a8534bcbd85a14e06da6f9c4f8562c",
+    "HTML:Scripts_Globais_2": "2ee2c344e94e1fb0f6658d03785344af61efdce5bcb117c7baff86672e735a5f",
     "HTML:Scripts_Historico_PCP2026": "c6238f34d35ffd9c1adcb4435ff737563f806c1f234ee0b58c835bdafdafb8a5",
     "HTML:Scripts_Meta_Armazem_Realizado": "ae22d29077e27b204359486acc6557a4769d2ab99ee5556d65876220f17e51f5",
+    "HTML:Scripts_Resultados_Analistas": "88848f4c83d4e78b9c706fc8cdeaeaa0522b91303365405627c3e9c75b7502b2",
     "SERVER_JS:Sem título": "0d554ca9e8b80dd09850906f18cdd0f84d35dd7bbe6abab69ab4ccbada526ef8",
     "SERVER_JS:TempSasAdapt": "e9b99c7fee4be761a5c4f43bb5530afb85da8d45e76e99663ff78f90b40e3fbe"
   }
