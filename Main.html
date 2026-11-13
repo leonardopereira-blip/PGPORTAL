@@ -228,6 +228,7 @@ window.exportarSkusFiltradosSheets = function() {
         <button onclick="abrirGrafico('abaFunil', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🔽 Funil de Produção</button>
         <button onclick="abrirGrafico('abaReportExecutiva', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📊 Report executiva</button>
         <button onclick="abrirGrafico('abaMetaArmazem', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📦 Entregas Meta Armazém</button>
+        <button onclick="abrirGrafico('abaResultadosAnalistas', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📊 Resultado por analista</button>
         <button onclick="abrirGrafico('abaGeral', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📈 Ritmo e Curva S</button>
         <button onclick="abrirGrafico('abaOnePage', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">📄 One Page</button>
         <button onclick="abrirGrafico('abaMatriz', this)" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors">🔀 Status WIP & Cascata</button>
@@ -593,7 +594,16 @@ window.exportarSkusFiltradosSheets = function() {
                     resultados[chave] = valor;
                     window[chave] = valor;
                     if (chave === 'MAPA_SAIDA_CACHE' && typeof window.pgAtualizarDatasTPDoMapa === 'function') {
-                        window.pgAtualizarDatasTPDoMapa();
+                        const atualizouMapa = window.pgAtualizarDatasTPDoMapa();
+                        // Um mapa válido sem movimentos também encerra a espera da avaliação.
+                        if (!atualizouMapa) {
+                            window.pgAbasRenderizadas?.delete('abaResultadosAnalistas');
+                            const abaResultados = document.getElementById('abaResultadosAnalistas');
+                            if (abaResultados && !abaResultados.classList.contains('hidden') &&
+                                typeof window.processarResultadosAnalistas === 'function') {
+                                window.processarResultadosAnalistas();
+                            }
+                        }
                     }
                     // O dashboard guarda copia local por fatia dentro de carregarDashboardPorMes.
                     if (chave === 'DADOS_COCKPIT_INICIAL' && typeof renderCockpit === 'function') renderCockpit(valor);
@@ -615,6 +625,13 @@ window.exportarSkusFiltradosSheets = function() {
                         if (typeof window.processarEntregasCD === 'function' &&
                             !document.getElementById('abaEntregasCD')?.classList.contains('hidden')) {
                             window.processarEntregasCD();
+                        }
+                        // Invalida o resultado dependente da rota, inclusive quando a aba está fechada.
+                        window.pgAbasRenderizadas?.delete('abaResultadosAnalistas');
+                        if (typeof window.processarResultadosAnalistas === 'function' &&
+                            document.getElementById('abaResultadosAnalistas') &&
+                            !document.getElementById('abaResultadosAnalistas').classList.contains('hidden')) {
+                            window.processarResultadosAnalistas();
                         }
                     }
                     if (chave === 'PG_FORECAST_COLETA' && typeof window.renderColetaFinalFunil === 'function') {

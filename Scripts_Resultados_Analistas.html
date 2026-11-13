@@ -1,0 +1,148 @@
+<script>
+// Apuração exclusiva da avaliação por analista. Recebe as parcelas conciliadas
+// da Meta Armazém e não altera suas linhas, seus filtros ou suas previsões.
+(function () {
+  'use strict';
+  var CAMPOS = ['total','entregue','noPrazo','foraPrazo','pendente','vencido',
+    'aVencer','semPrazo','naoApurado','metaVencida','noPrazoVencido','foraPrazoVencido','linhas'];
+  var BASELINE = 'COLETA/INTERNALIZAÇÃO FIM BASELINE';
+  var REPLAN = 'Coleta/Internalização de estoque final (re) plan';
+
+  function texto(v) { return String(v == null ? '' : v).trim(); }
+  function normal(v) { return texto(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase(); }
+  function numero(v) {
+    if (typeof v === 'number') return Number.isFinite(v) ? Math.max(0,v) : 0;
+    var s = texto(v);
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g,'').replace(',','.');
+    var n = Number(s);
+    return Number.isFinite(n) ? Math.max(0,n) : 0;
+  }
+  function campo(l,n) { return typeof window.pgCampoColeta === 'function' ? window.pgCampoColeta(l,n) : l[n]; }
+  function linhasOrigem(item) {
+    var linhas = item.conciliacao && item.conciliacao.linhas;
+    return Array.isArray(linhas) && linhas.length ? linhas : [item.linha || {}];
+  }
+  function valoresOrigem(item,ler) {
+    return Array.from(new Set(linhasOrigem(item).map(ler).map(texto).filter(Boolean))).join(' | ');
+  }
+  function data(v) {
+    var iso = typeof window.pgNormalizarDataColeta === 'function' ? window.pgNormalizarDataColeta(v) : texto(v);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return null;
+    var d = new Date(iso+'T12:00:00Z');
+    return Number.isFinite(d.getTime()) && d.toISOString().slice(0,10) === iso ? iso : null;
+  }
+  function domingo(iso) {
+    var d = new Date(iso+'T12:00:00Z');
+    if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate()+1);
+    return d.toISOString().slice(0,10);
+  }
+  function prazoItem(item,referencia) {
+    if (referencia === 'armazem') {
+      var meta = data(item.metaAplicada);
+      return {prazo:meta,motivo:meta ? '' : 'Meta armazém ausente ou inválida.'};
+    }
+    var linhas = linhasOrigem(item);
+    var prazos = [], nome = referencia === 'baseline' ? BASELINE : REPLAN;
+    for (var i=0; i<linhas.length; i++) {
+      var coleta = data(campo(linhas[i],nome));
+      if (!coleta) return {prazo:null,motivo:(referencia === 'baseline' ? 'Baseline' : 'Replan')+' ausente ou inválido em uma linha de origem.'};
+      var entrega = typeof window.pgDataPlanoEntregaSLA === 'function' ? data(window.pgDataPlanoEntregaSLA(linhas[i],coleta)) : null;
+      if (!entrega) return {prazo:null,motivo:'Rota sem SLA válido na Matriz_SLA.'};
+      prazos.push(domingo(entrega));
+    }
+    if (prazos.some(function(p) { return p !== prazos[0]; }))
+      return {prazo:null,motivo:'Prazos divergentes entre as linhas de origem; identificação por KIT necessária.'};
+    return {prazo:prazos[0],motivo:''};
+  }
+  function vazio() {
+    var out = {};
+    CAMPOS.forEach(function(c) { out[c] = 0; });
+    return out;
+  }
+  function somar(out,detalhe) {
+    CAMPOS.forEach(function(c) { out[c] += detalhe[c]; });
+  }
+  function aderencia(out) {
+    return out.metaVencida > 0 ? Math.min(100,out.noPrazoVencido/out.metaVencida*100) : null;
+  }
+  function detalheItem(item,referencia,corte) {
+    var l = item.linha || {}, grafica = texto(item.grafica || l.GRAFICA_FINAL || campo(l,'GRÁFICA') || l.GRAFICA) || 'Não informada';
+    var responsavel = typeof window.pgResponsavelGraficaGiro === 'function' ? window.pgResponsavelGraficaGiro(grafica) : {};
+    responsavel = responsavel || {};
+    var prazo = prazoItem(item,referencia), total = numero(item.total), entregue = 0, noPrazo = 0, foraPrazo = 0;
+    var diagnosticos = item.conciliacao && item.conciliacao.diagnosticos;
+    diagnosticos = Array.isArray(diagnosticos) ? diagnosticos.map(texto).filter(Boolean) : [];
+    var falhasEntrega = diagnosticos.filter(function(d) {
+      var n = normal(d).toLowerCase();
+      return /^entrega\s*:/.test(n) && /indisponivel|indisponiveis|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta/.test(n);
+    });
+    var apuravel = falhasEntrega.length === 0;
+    // O teto é aplicado em ordem cronológica. Previsões, coletas e datas sem
+    // parcela real não participam do resultado do ciclo.
+    (Array.isArray(item.eventosReal) ? item.eventosReal : []).map(function(e) {
+      return {data:data(e.data),volume:numero(e.volume)};
+    }).filter(function(e) { return e.data && e.data <= corte && e.volume > 0; })
+      .sort(function(a,b) { return a.data.localeCompare(b.data); })
+      .forEach(function(e) {
+        var volume = Math.min(e.volume,Math.max(0,total-entregue));
+        entregue += volume;
+        if (prazo.prazo) {
+          if (e.data <= prazo.prazo) noPrazo += volume;
+          else foraPrazo += volume;
+        }
+      });
+    var pendente = Math.max(0,total-entregue), vencida = apuravel && !!prazo.prazo && prazo.prazo <= corte;
+    return {
+      analista:texto(responsavel.analista) || 'Sem responsável',
+      time:texto(responsavel.time) || 'Não informado',grafica:grafica,
+      marca:texto(item.marca || l.MARCA_FINAL || l.UNIDADE || l.MARCA),
+      serie:texto(item.serie || l.serie_corrigida || campo(l,'SÉRIE') || l.SERIE),
+      sku:texto(l.SKU_REAL || l.SKU),kit:texto(campo(l,'KIT')),
+      descricao:texto(l.DESC_REAL || campo(l,'DESCRIÇÃO') || l.DESCRICAO),
+      ciclo:valoresOrigem(item,function(r) { return campo(r,'CICLO'); }),
+      envio:valoresOrigem(item,function(r) { return campo(r,'ENVIO'); }),
+      idOrigem:valoresOrigem(item,function(r) { return r._ROW_ID || r.ID; }),
+      prazo:prazo.prazo,total:total,entregue:entregue,noPrazo:noPrazo,foraPrazo:foraPrazo,
+      pendente:pendente,vencido:vencida ? pendente : 0,
+      aVencer:apuravel && prazo.prazo && !vencida ? pendente : 0,
+      semPrazo:prazo.prazo ? 0 : total,naoApurado:apuravel ? 0 : total,
+      motivo:[prazo.motivo,falhasEntrega.length ? 'Entrega TP não conferida: '+falhasEntrega.join(' | ')+'.' : ''].filter(Boolean).join(' '),
+      diagnosticos:diagnosticos,
+      metaVencida:vencida ? total : 0,noPrazoVencido:vencida ? noPrazo : 0,
+      foraPrazoVencido:vencida ? foraPrazo : 0,linhas:1
+    };
+  }
+
+  window.pgRAApurar = function(itens,opcoes) {
+    opcoes = opcoes || {};
+    var referencia = opcoes.referencia || 'armazem';
+    if (['armazem','baseline','replan'].indexOf(referencia) < 0) throw new Error('Referência de prazo inválida.');
+    var hoje = typeof dtHojeISO !== 'undefined' ? dtHojeISO : new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});
+    var corte = data(opcoes.corte || hoje);
+    if (!corte) throw new Error('Data de corte inválida.');
+    if (corte > hoje) throw new Error('A data de corte não pode ser futura.');
+    var analista = normal(opcoes.analista), time = normal(opcoes.time), porAnalista = new Map(), resumo = vazio();
+    var detalhes = (Array.isArray(itens) ? itens : []).map(function(item) { return detalheItem(item,referencia,corte); })
+      .filter(function(d) {
+        return d.total > 0 && (!analista || analista === 'TODOS' || normal(d.analista) === analista) &&
+          (!time || time === 'TODOS' || normal(d.time) === time);
+      });
+    detalhes.forEach(function(d) {
+      var chave = JSON.stringify([d.analista,d.time]), grupo = porAnalista.get(chave);
+      if (!grupo) {
+        grupo = Object.assign(vazio(),{analista:d.analista,time:d.time,graficas:[],semResponsavel:d.analista === 'Sem responsável'});
+        porAnalista.set(chave,grupo);
+      }
+      if (grupo.graficas.indexOf(d.grafica) < 0) grupo.graficas.push(d.grafica);
+      somar(grupo,d);somar(resumo,d);
+    });
+    var analistas = Array.from(porAnalista.values()).map(function(g) {
+      g.graficas.sort(function(a,b) { return a.localeCompare(b,'pt-BR'); });
+      g.aderencia = aderencia(g);
+      return g;
+    }).sort(function(a,b) { return a.analista.localeCompare(b.analista,'pt-BR'); });
+    resumo.aderencia = aderencia(resumo);resumo.analistas = analistas.length;
+    return {referencia:referencia,corte:corte,resumo:resumo,analistas:analistas,detalhes:detalhes};
+  };
+})();
+</script>

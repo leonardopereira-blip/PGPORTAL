@@ -1,0 +1,200 @@
+<section id="abaResultadosAnalistas" class="aba-conteudo hidden">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+    #abaResultadosAnalistas{--ra-navy:#0C2340;--ra-blue:#418EDE;--ra-deep:#284081;--ra-orange:#FA4616;--ra-gold:#FCB04E;--ra-line:#dce6f1;--ra-muted:#61748a;max-width:1680px;margin:0 auto;padding:20px;font-family:'Poppins','Segoe UI',sans-serif;color:var(--ra-navy);font-size:12px}
+    #abaResultadosAnalistas *{box-sizing:border-box}#abaResultadosAnalistas button,#abaResultadosAnalistas select,#abaResultadosAnalistas input{font:inherit}
+    #abaResultadosAnalistas .ra-hero{position:relative;overflow:hidden;border-radius:22px;background:linear-gradient(110deg,#0C2340 20%,#284081);padding:28px 32px;color:#fff;margin-bottom:18px}
+    #abaResultadosAnalistas .ra-hero:before,#abaResultadosAnalistas .ra-hero:after{content:'';position:absolute;right:30px;top:-30px;width:180px;height:180px;background:#418EDE;clip-path:polygon(0 0,42% 0,100% 50%,42% 100%,0 100%,58% 50%);opacity:.13;pointer-events:none}
+    #abaResultadosAnalistas .ra-hero:after{right:175px;top:85px;width:115px;height:115px;opacity:.08}
+    #abaResultadosAnalistas .ra-hero-content{position:relative;z-index:1;display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+    #abaResultadosAnalistas .ra-eyebrow{text-transform:uppercase;letter-spacing:.19em;font-size:10px;font-weight:600;color:#a8d0f5;margin:0 0 9px}
+    #abaResultadosAnalistas h2{font-size:30px;font-weight:700;letter-spacing:-.7px;line-height:1.25;margin:0 0 10px}
+    #abaResultadosAnalistas .ra-subtitle{color:#d3e3f5;line-height:1.7;max-width:620px;margin:0}
+    #abaResultadosAnalistas .ra-context{border:1px solid #ffffff35;border-radius:13px;background:#ffffff0b;padding:12px 16px;flex-shrink:0;min-width:190px}
+    #abaResultadosAnalistas .ra-context span{display:block;font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:#b6d5f2;margin-bottom:4px}#abaResultadosAnalistas .ra-context strong{font-weight:600;font-size:13px}
+    #abaResultadosAnalistas .ra-panel{background:#fff;border:1px solid var(--ra-line);border-radius:18px;box-shadow:0 4px 18px #0c234005;margin-bottom:18px;overflow:hidden}
+    #abaResultadosAnalistas .ra-controls{padding:20px 24px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 20px}
+    #abaResultadosAnalistas .ra-control{display:flex;flex-direction:column;gap:7px;min-width:155px;flex:1}#abaResultadosAnalistas .ra-control.ra-reference{min-width:340px;flex:1.7}
+    #abaResultadosAnalistas .ra-label{font-size:10px;color:var(--ra-muted);font-weight:600;letter-spacing:.035em}
+    #abaResultadosAnalistas .ra-segment{display:flex;gap:4px;padding:4px;border-radius:11px;background:#edf3fa;border:1px solid #e5edf6}
+    #abaResultadosAnalistas .ra-segment button{flex:1;white-space:nowrap;border:0;border-radius:8px;padding:9px 12px;background:transparent;color:var(--ra-deep);font-weight:600;cursor:pointer}
+    #abaResultadosAnalistas .ra-segment button[aria-pressed=true]{background:var(--ra-navy);color:#fff;box-shadow:0 2px 6px #0c234020}
+    #abaResultadosAnalistas select,#abaResultadosAnalistas input[type=date]{width:100%;min-height:43px;border:1px solid #c6d6e7;background:#fff;border-radius:10px;padding:9px 11px;color:var(--ra-navy)}
+    #abaResultadosAnalistas button:focus-visible,#abaResultadosAnalistas select:focus-visible,#abaResultadosAnalistas input:focus-visible,#abaResultadosAnalistas summary:focus-visible{outline:3px solid #418EDE;outline-offset:3px}
+    #abaResultadosAnalistas .ra-scope{border-top:1px solid #edf2f8;padding:11px 24px;background:#f7fafe;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;color:var(--ra-muted);font-size:10px}
+    #abaResultadosAnalistas .ra-badge{display:inline-flex;align-items:center;gap:6px;background:#e4effb;color:var(--ra-deep);padding:4px 9px;border-radius:20px;font-size:10px;font-weight:600}
+    #abaResultadosAnalistas .ra-badge:before{content:'';display:block;width:6px;height:6px;border-radius:50%;background:var(--ra-blue)}
+    #abaResultadosAnalistas .ra-alert{border:1px solid #FCB04E;background:#fff8ed;border-radius:12px;padding:13px 16px;margin:0 0 18px;line-height:1.7;color:var(--ra-navy)}
+    #abaResultadosAnalistas .ra-alert[hidden]{display:none}#abaResultadosAnalistas .ra-alert.ra-error{border-color:#FA4616;background:#fff3ef}
+    #abaResultadosAnalistas .ra-kpis{display:grid;grid-template-columns:1.22fr 1fr 1fr 1fr;gap:14px;margin-bottom:22px}
+    #abaResultadosAnalistas .ra-kpi{min-width:0;background:#fff;border:1px solid var(--ra-line);border-radius:17px;padding:20px 22px;position:relative;overflow:hidden}
+    #abaResultadosAnalistas .ra-kpi.ra-primary{background:var(--ra-navy);border-color:var(--ra-navy);color:#fff;display:flex;align-items:center;gap:17px}
+    #abaResultadosAnalistas .ra-kpi-label{font-size:10px;font-weight:600;color:var(--ra-muted);margin:0 0 9px}#abaResultadosAnalistas .ra-primary .ra-kpi-label{color:#b9d5f1}
+    #abaResultadosAnalistas .ra-kpi-value{font-size:28px;line-height:1.1;font-weight:700;letter-spacing:-.6px;white-space:nowrap;font-variant-numeric:tabular-nums}
+    #abaResultadosAnalistas .ra-kpi-note{font-size:10px;line-height:1.55;color:var(--ra-muted);margin:10px 0 0}#abaResultadosAnalistas .ra-primary .ra-kpi-note{color:#d3e3f5}
+    #abaResultadosAnalistas .ra-kpi.ra-due:before{content:'';position:absolute;left:0;top:20px;bottom:20px;width:4px;background:var(--ra-orange);border-radius:0 3px 3px 0}
+    #abaResultadosAnalistas .ra-ring{height:70px;width:70px;flex-shrink:0;border-radius:50%;background:conic-gradient(var(--ra-blue) var(--ra-pct,0%),#ffffff1c 0);position:relative;display:grid;place-items:center}
+    #abaResultadosAnalistas .ra-ring:before{content:'';position:absolute;inset:7px;border-radius:50%;background:var(--ra-navy)}#abaResultadosAnalistas .ra-ring span{position:relative;font-size:20px;color:#a8d0f5}
+    #abaResultadosAnalistas .ra-section-head{padding:21px 24px 17px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
+    #abaResultadosAnalistas h3{font-weight:700;font-size:15px;margin:0 0 5px;letter-spacing:-.15px}#abaResultadosAnalistas .ra-note{color:var(--ra-muted);font-size:10px;line-height:1.65;margin:0}
+    #abaResultadosAnalistas .ra-legend{display:flex;flex-wrap:wrap;gap:13px;font-size:9px;color:var(--ra-muted)}#abaResultadosAnalistas .ra-legend span{display:inline-flex;align-items:center;gap:5px}
+    #abaResultadosAnalistas .ra-dot{display:inline-block;width:8px;height:8px;border-radius:3px;flex-shrink:0}#abaResultadosAnalistas .ra-on{background:var(--ra-blue)}#abaResultadosAnalistas .ra-late{background:var(--ra-orange)}#abaResultadosAnalistas .ra-pending{background:#c4d3e4}
+    #abaResultadosAnalistas .ra-ranking{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;padding:0 24px 24px}
+    #abaResultadosAnalistas .ra-person{border:1px solid var(--ra-line);border-radius:13px;padding:17px 18px;background:linear-gradient(150deg,#fff,#f8fbff)}
+    #abaResultadosAnalistas .ra-person-top{display:flex;align-items:center;gap:11px;margin-bottom:14px}#abaResultadosAnalistas .ra-avatar{width:36px;height:36px;border-radius:11px;background:#e7f1fc;color:var(--ra-deep);font-weight:700;font-size:12px;display:grid;place-items:center;flex-shrink:0}
+    #abaResultadosAnalistas .ra-person-name{font-weight:600;font-size:12px;overflow-wrap:anywhere}#abaResultadosAnalistas .ra-person-meta{color:var(--ra-muted);font-size:9px;margin-top:3px}
+    #abaResultadosAnalistas .ra-person-score{margin-left:auto;text-align:right;flex-shrink:0}#abaResultadosAnalistas .ra-person-score strong{font-size:24px;line-height:1.1;letter-spacing:-.5px;font-weight:700}#abaResultadosAnalistas .ra-person-score small{display:block;font-size:8px;color:var(--ra-muted);margin-top:3px}
+    #abaResultadosAnalistas .ra-track{height:10px;background:#edf2f7;border-radius:8px;overflow:hidden;display:flex}#abaResultadosAnalistas .ra-track span{display:block;height:100%}
+    #abaResultadosAnalistas .ra-person-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:11px}#abaResultadosAnalistas .ra-person-stats span{display:block;color:var(--ra-muted);font-size:8px;line-height:1.5}#abaResultadosAnalistas .ra-person-stats b{display:block;font-weight:600;font-size:12px;color:var(--ra-navy);font-variant-numeric:tabular-nums}
+    #abaResultadosAnalistas .ra-person-foot{margin-top:12px;border-top:1px solid #e6eef7;padding-top:9px;color:var(--ra-muted);font-size:9px;line-height:1.6}
+    #abaResultadosAnalistas .ra-actions{display:flex;flex-wrap:wrap;gap:7px}#abaResultadosAnalistas .ra-btn{border:1px solid #c6d6e7;background:#fff;border-radius:9px;padding:9px 12px;color:var(--ra-deep);font-size:10px;font-weight:600;cursor:pointer}#abaResultadosAnalistas .ra-btn:hover{background:#edf5ff}#abaResultadosAnalistas .ra-btn.ra-main{color:#fff;border-color:var(--ra-deep);background:var(--ra-deep)}#abaResultadosAnalistas .ra-btn:disabled{cursor:default;opacity:.45}
+    #abaResultadosAnalistas .ra-table-scroll{overflow:auto;max-height:550px}#abaResultadosAnalistas table{border-collapse:separate;border-spacing:0;width:100%;min-width:1120px;font-size:10px;font-variant-numeric:tabular-nums}#abaResultadosAnalistas th,#abaResultadosAnalistas td{padding:13px 12px;text-align:right;border-bottom:1px solid #e7eef6;white-space:nowrap}
+    #abaResultadosAnalistas thead th{background:var(--ra-navy);color:#fff;font-weight:600;font-size:9px;position:sticky;top:0;z-index:2}#abaResultadosAnalistas th:first-child,#abaResultadosAnalistas td:first-child{text-align:left;padding-left:24px}#abaResultadosAnalistas tbody td:first-child{position:sticky;left:0;background:#fff;z-index:1;min-width:180px;white-space:normal}#abaResultadosAnalistas tbody tr:nth-child(even) td{background:#f7fafe}#abaResultadosAnalistas tbody tr:hover td{background:#eaf3fd}
+    #abaResultadosAnalistas td.ra-score{font-weight:700;color:var(--ra-deep);background:#edf5ff}#abaResultadosAnalistas td.ra-warn{color:#b33511;font-weight:600}#abaResultadosAnalistas tfoot td{background:#e6effa;font-weight:700;border-top:2px solid #c8d9ee}#abaResultadosAnalistas .ra-cell-sub{display:block;color:var(--ra-muted);font-size:8px;margin-top:4px}
+    #abaResultadosAnalistas .ra-table-note{padding:13px 24px;background:#f7fafe;border-top:1px solid #e7eef6;color:var(--ra-muted);font-size:10px;line-height:1.7}
+    #abaResultadosAnalistas .ra-method{padding:17px 24px;margin-bottom:18px;border-radius:14px;background:#edf3fa;border:1px solid #dce6f1;font-size:10px;line-height:1.9;color:var(--ra-muted)}#abaResultadosAnalistas .ra-method summary{font-size:11px;font-weight:600;color:var(--ra-deep);cursor:pointer}#abaResultadosAnalistas .ra-method p{margin:12px 0 0}#abaResultadosAnalistas .ra-method strong{color:var(--ra-navy);font-weight:600}
+    #abaResultadosAnalistas .ra-empty{padding:32px 24px;text-align:center;color:var(--ra-muted);grid-column:1/-1;line-height:1.9;border:1px dashed #c7d7e9;border-radius:12px}#abaResultadosAnalistas .ra-empty strong{display:block;color:var(--ra-navy);font-weight:600;margin-bottom:4px}
+    @media(max-width:1100px){#abaResultadosAnalistas .ra-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#abaResultadosAnalistas .ra-hero-content{align-items:flex-start}#abaResultadosAnalistas .ra-control.ra-reference{min-width:300px}}
+    @media(max-width:720px){#abaResultadosAnalistas{padding:10px}#abaResultadosAnalistas .ra-hero{padding:24px 20px;border-radius:16px}#abaResultadosAnalistas h2{font-size:25px}#abaResultadosAnalistas .ra-hero-content{flex-direction:column;gap:17px}#abaResultadosAnalistas .ra-context{min-width:0;width:100%}#abaResultadosAnalistas .ra-context span{display:inline;margin-right:8px}#abaResultadosAnalistas .ra-controls{padding:16px;gap:13px}#abaResultadosAnalistas .ra-control{min-width:calc(50% - 10px)}#abaResultadosAnalistas .ra-control.ra-reference{min-width:100%}#abaResultadosAnalistas .ra-segment button{padding:8px}#abaResultadosAnalistas .ra-scope{padding:11px 16px}#abaResultadosAnalistas .ra-kpis{gap:10px}#abaResultadosAnalistas .ra-kpi{padding:17px 14px}#abaResultadosAnalistas .ra-ring{display:none}#abaResultadosAnalistas .ra-kpi-value{font-size:24px}#abaResultadosAnalistas .ra-kpi-label{font-size:9px}#abaResultadosAnalistas .ra-ranking{grid-template-columns:1fr;padding:0 16px 16px}#abaResultadosAnalistas .ra-section-head{padding:18px 16px}#abaResultadosAnalistas .ra-method{padding:15px 17px}}
+  </style>
+
+  <div class="ra-hero">
+    <div class="ra-hero-content">
+      <div><p class="ra-eyebrow">Produção · Avaliação de ciclo</p><h2>Resultados por analista</h2><p class="ra-subtitle">Cada entrega conta. Acompanhe o realizado, compare com o prazo escolhido e tenha uma base clara para a conversa de ciclo.</p></div>
+      <div class="ra-context"><span id="raContextLabel">Referência da avaliação</span><strong id="raContextValue">Meta armazém</strong></div>
+    </div>
+  </div>
+
+  <div class="ra-panel">
+    <div class="ra-controls">
+      <div class="ra-control ra-reference"><span class="ra-label">Comparar entregas com</span><div class="ra-segment" role="group" aria-label="Referência de prazo da avaliação"><button type="button" data-ra-ref="armazem" aria-pressed="true" onclick="pgRAAlterar('referencia','armazem')">Meta armazém</button><button type="button" data-ra-ref="baseline" aria-pressed="false" onclick="pgRAAlterar('referencia','baseline')">Baseline</button><button type="button" data-ra-ref="replan" aria-pressed="false" onclick="pgRAAlterar('referencia','replan')">Replan</button></div></div>
+      <label class="ra-control"><span class="ra-label">Entregas até a data de corte</span><input id="raCorte" type="date" required onchange="pgRAAlterar('corte',this.value)"></label>
+      <label class="ra-control"><span class="ra-label">Time</span><select id="raTime" onchange="pgRAAlterar('time',this.value)"><option value="">Todos os times</option></select></label>
+      <label class="ra-control"><span class="ra-label">Analista</span><select id="raAnalista" onchange="pgRAAlterar('analista',this.value)"><option value="">Todos os analistas</option></select></label>
+      <label class="ra-control" id="raCenarioControl"><span class="ra-label">Combinado Posigraf</span><select id="raCenario" onchange="pgRAAlterar('cenario',this.value)"><option value="com">Não fere a meta</option><option value="sem">Fere a meta</option></select></label>
+    </div>
+    <div class="ra-scope"><span>Segue os filtros gerais de marca, ciclo, envio, gráfica e material. Universo de entregas ao CD da Meta Armazém.</span><span class="ra-badge" id="raScope">Realizado · Entrega TP</span></div>
+  </div>
+
+  <div id="raAviso" class="ra-alert" role="status" aria-live="polite" hidden></div>
+  <div id="raKPIs" class="ra-kpis"></div>
+
+  <div class="ra-panel">
+    <div class="ra-section-head"><div><h3>Entregas no prazo, por analista</h3><p class="ra-note">Aderência ponderada pela tiragem com prazo encerrado até o corte.</p></div><div class="ra-legend"><span><i class="ra-dot ra-on"></i>No prazo</span><span><i class="ra-dot ra-late"></i>Entregue fora</span><span><i class="ra-dot ra-pending"></i>Pendente vencido</span></div></div>
+    <div id="raRanking" class="ra-ranking"></div>
+  </div>
+
+  <div class="ra-panel">
+    <div class="ra-section-head"><div><h3>Quadro de resultados</h3><p class="ra-note" id="raContagem">Selecione o recorte para apurar.</p></div><div class="ra-actions"><button type="button" id="raExcel" class="ra-btn ra-main" onclick="pgRAExportarExcel()" disabled>Baixar Excel completo</button><button type="button" id="raCSV" class="ra-btn" onclick="pgRAExportarCSV(false)" disabled>CSV resultados</button><button type="button" id="raCSVBase" class="ra-btn" onclick="pgRAExportarCSV(true)" disabled>CSV base auditável</button></div></div>
+    <div class="ra-table-scroll"><table aria-label="Resultado de entregas por analista"><thead><tr><th scope="col">Analista / time</th><th scope="col">Aderência</th><th scope="col">Tiragem total</th><th scope="col">Entregue TP</th><th scope="col">Meta vencida</th><th scope="col">No prazo¹</th><th scope="col">Fora do prazo¹</th><th scope="col">Pendente vencido</th><th scope="col">Saldo a vencer</th><th scope="col">Sem prazo</th><th scope="col">Entrega não conferida</th></tr></thead><tbody id="raTabela"></tbody><tfoot id="raTotal"></tfoot></table></div>
+    <div class="ra-table-note">¹ As colunas “No prazo” e “Fora do prazo” consideram somente a tiragem com prazo encerrado e entrega conferida. O entregue TP inclui o realizado conhecido até o corte. Volumes sem prazo seguro ou com entrega não conferida ficam fora da aderência; essas duas condições podem se sobrepor.</div>
+  </div>
+
+  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = entregue no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e entrega conferida, o resultado aparece como “—”.</p><p><strong>Baseline e replan:</strong> data final de coleta da referência escolhida + SLA da rota, com domingo ajustado para segunda conforme a regra da visão Meta Armazém. Replan vazio não é substituído por baseline. <strong>Meta armazém:</strong> prazo aplicado pela marca e pelas exceções vigentes, incluindo o cenário Posigraf escolhido.</p><p><strong>Realizado:</strong> somente parcelas de Entrega TP com data até o corte, limitadas à tiragem, sem incluir previsões. O responsável vem do cadastro atual de gráficas; a tela não reconstrói mudanças históricas de carteira. Grupos conciliados com prazos divergentes ficam destacados como sem prazo seguro. Itens cuja entrega não foi conferida ficam fora da aderência, preservando o realizado físico conhecido na carteira.</p><p>O cenário Posigraf altera a referência Meta armazém; baseline e replan preservam suas próprias datas. O seletor desta tela é independente da “Base de Prazo” do cabeçalho. Os filtros de origem e destino não mudam o universo CD usado nesta visão.</p></details>
+
+  <script>
+  (function(){
+    'use strict';
+    var estado=window.pgRAEstado={referencia:'armazem',corte:'',cenario:'com',analista:'',time:''};
+    var resultadoAtual=null;
+    var referencias={armazem:'Meta armazém',baseline:'Baseline',replan:'Replan'};
+    function el(id){return document.getElementById(id);}
+    function html(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+    function n(v){v=Number(v);return Number.isFinite(v)?v:0;}
+    function numero(v){return n(v).toLocaleString('pt-BR',{maximumFractionDigits:0});}
+    function pct(v){return v==null||!Number.isFinite(Number(v))?'—':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';}
+    function dataBR(v){return /^\d{4}-\d{2}-\d{2}$/.test(String(v||''))?v.slice(8,10)+'/'+v.slice(5,7)+'/'+v.slice(0,4):'—';}
+    function hoje(){
+      if(typeof dtHojeISO!=='undefined'&&/^\d{4}-\d{2}-\d{2}$/.test(dtHojeISO))return dtHojeISO;
+      var partes=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+      var p={};partes.forEach(function(x){p[x.type]=x.value;});return p.year+'-'+p.month+'-'+p.day;
+    }
+    function corteValido(v){if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;var d=new Date(v+'T12:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v;}
+    function exportsAtivos(ativo){['raExcel','raCSV','raCSVBase'].forEach(function(id){var b=el(id);if(b)b.disabled=!ativo;});}
+    function aviso(texto,erro){var a=el('raAviso');a.hidden=!texto;a.textContent=texto||'';a.classList.toggle('ra-error',!!erro);}
+    function invalidar(texto){resultadoAtual=null;window.pgRAResultadoAtual=null;exportsAtivos(false);['raKPIs','raRanking','raTabela','raTotal'].forEach(function(id){el(id).innerHTML='';});el('raContagem').textContent='Apuração indisponível.';aviso(texto,true);}
+    function opcoes(id,valores,todos,selecionado){
+      var lista=Array.from(new Set(valores.filter(Boolean))).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
+      if(selecionado&&lista.indexOf(selecionado)<0)lista.unshift(selecionado);
+      el(id).innerHTML='<option value="">'+html(todos)+'</option>'+lista.map(function(v){return '<option value="'+html(v)+'">'+html(v)+'</option>';}).join('');el(id).value=selecionado;
+    }
+    function ordenar(analistas){return analistas.slice().sort(function(a,b){return (a.aderencia==null?1:0)-(b.aderencia==null?1:0)||(n(b.aderencia)-n(a.aderencia))||(n(b.metaVencida)-n(a.metaVencida))||String(a.analista).localeCompare(String(b.analista),'pt-BR');});}
+    function kpis(r){
+      var s=r.resumo,percentual=s.aderencia==null?0:Math.max(0,Math.min(100,n(s.aderencia)));
+      el('raKPIs').innerHTML='<div class="ra-kpi ra-primary"><div class="ra-ring" style="--ra-pct:'+percentual+'%" aria-hidden="true"><span>↗</span></div><div><p class="ra-kpi-label">Aderência ao prazo</p><div class="ra-kpi-value">'+pct(s.aderencia)+'</div><p class="ra-kpi-note">'+numero(s.noPrazoVencido)+' de '+numero(s.metaVencida)+' exemplares com prazo encerrado</p></div></div>'+
+        '<div class="ra-kpi"><p class="ra-kpi-label">Entregue TP até o corte</p><div class="ra-kpi-value">'+numero(s.entregue)+'</div><p class="ra-kpi-note">'+pct(s.total?100*n(s.entregue)/n(s.total):null)+' da carteira realizada</p></div>'+
+        '<div class="ra-kpi ra-due"><p class="ra-kpi-label">Pendente vencido</p><div class="ra-kpi-value">'+numero(s.vencido)+'</div><p class="ra-kpi-note">Saldo ainda sem entrega após o prazo</p></div>'+
+        '<div class="ra-kpi"><p class="ra-kpi-label">Volume da carteira</p><div class="ra-kpi-value">'+numero(s.total)+'</div><p class="ra-kpi-note">'+numero(s.analistas)+' analista(s) · '+numero(s.linhas)+' item(ns) conciliado(s)'+(n(s.naoApurado)?' · Apuração parcial':'')+'</p></div>';
+    }
+    function cards(analistas){
+      if(!analistas.length){el('raRanking').innerHTML='<div class="ra-empty"><strong>Nenhum resultado neste recorte</strong>Ajuste os filtros gerais, o time ou o analista para consultar a carteira.</div>';return;}
+      el('raRanking').innerHTML=analistas.map(function(a){
+        var base=n(a.metaVencida),larg=function(v){return base?Math.max(0,Math.min(100,100*n(v)/base)):0;};
+        var iniciais=String(a.analista).trim().split(/\s+/).filter(Boolean).slice(0,2).map(function(x){return x[0];}).join('').toUpperCase();
+        var graficas=Array.isArray(a.graficas)?a.graficas:[];
+        return '<article class="ra-person"><div class="ra-person-top"><div class="ra-avatar" aria-hidden="true">'+html(iniciais)+'</div><div><div class="ra-person-name">'+html(a.analista)+'</div><div class="ra-person-meta">'+html(a.time)+' · '+graficas.length+' gráfica(s)</div></div><div class="ra-person-score"><strong>'+pct(a.aderencia)+'</strong><small>aderência ao prazo</small></div></div>'+
+          '<div class="ra-track" role="img" aria-label="'+html('No prazo: '+numero(a.noPrazoVencido)+'. Entregue fora: '+numero(a.foraPrazoVencido)+'. Pendente vencido: '+numero(a.vencido)+'.')+'"><span class="ra-on" style="width:'+larg(a.noPrazoVencido)+'%"></span><span class="ra-late" style="width:'+larg(a.foraPrazoVencido)+'%"></span><span class="ra-pending" style="width:'+larg(a.vencido)+'%"></span></div>'+
+          '<div class="ra-person-stats"><div><span>No prazo</span><b>'+numero(a.noPrazoVencido)+'</b></div><div><span>Entregue fora</span><b>'+numero(a.foraPrazoVencido)+'</b></div><div><span>Pendente vencido</span><b>'+numero(a.vencido)+'</b></div></div>'+
+          '<div class="ra-person-foot">Meta encerrada: <strong>'+numero(a.metaVencida)+'</strong> · Saldo a vencer: '+numero(a.aVencer)+(n(a.semPrazo)?' · Sem prazo: '+numero(a.semPrazo):'')+(n(a.naoApurado)?' · Entrega não conferida: '+numero(a.naoApurado):'')+'<br><span title="'+html(graficas.join(' · '))+'">'+html(graficas.join(' · ')||'Gráfica não informada')+'</span></div></article>';
+      }).join('');
+    }
+    function linhaTabela(a,total){return '<tr><td>'+(total?'Total do recorte':'<strong>'+html(a.analista)+'</strong><span class="ra-cell-sub">'+html(a.time)+'</span>')+'</td><td class="ra-score">'+pct(a.aderencia)+'</td><td>'+numero(a.total)+'</td><td>'+numero(a.entregue)+'</td><td>'+numero(a.metaVencida)+'</td><td>'+numero(a.noPrazoVencido)+'</td><td>'+numero(a.foraPrazoVencido)+'</td><td'+(n(a.vencido)?' class="ra-warn"':'')+'>'+numero(a.vencido)+'</td><td>'+numero(a.aVencer)+'</td><td>'+numero(a.semPrazo)+'</td><td>'+numero(a.naoApurado)+'</td></tr>';}
+    window.pgRAAlterar=function(campo,valor){
+      if(campo==='referencia'&&!referencias[valor])return;
+      if(campo==='cenario'&&valor!=='com'&&valor!=='sem')return;
+      if(['referencia','corte','cenario','analista','time'].indexOf(campo)<0)return;
+      estado[campo]=valor;window.processarResultadosAnalistas();
+    };
+    window.processarResultadosAnalistas=function(){
+      if(!el('raCorte'))return;
+      resultadoAtual=null;window.pgRAResultadoAtual=null;exportsAtivos(false);
+      var limite=hoje();if(!estado.corte)estado.corte=limite;
+      el('raCorte').max=limite;el('raCorte').value=estado.corte;
+      if(!corteValido(estado.corte)){invalidar('Informe uma data de corte válida para apurar os resultados.');return;}
+      if(estado.corte>limite){estado.corte=limite;el('raCorte').value=limite;}
+      el('raCenario').value=estado.cenario;el('raCenario').disabled=estado.referencia!=='armazem';
+      el('raCenarioControl').style.opacity=estado.referencia==='armazem'?'1':'.55';
+      document.querySelectorAll('#abaResultadosAnalistas [data-ra-ref]').forEach(function(b){b.setAttribute('aria-pressed',String(b.getAttribute('data-ra-ref')===estado.referencia));});
+      el('raContextValue').textContent=referencias[estado.referencia]+' · '+dataBR(estado.corte);
+      try{
+        if(typeof window.pgMAObterItens!=='function'||typeof window.pgRAApurar!=='function')throw new Error('A base de entregas ainda está carregando. Tente novamente após o carregamento.');
+        if(typeof window.pgStatusMapaTP==='function'){var status=window.pgStatusMapaTP();if(!status.disponivel)throw new Error(status.aviso);}
+        var itens=window.pgMAObterItens({corte:estado.corte,cenario:estado.cenario,zerarSemPrevisao:false});
+        var completo=window.pgRAApurar(itens,{referencia:estado.referencia,corte:estado.corte});
+        opcoes('raTime',completo.analistas.map(function(a){return a.time;}),'Todos os times',estado.time);
+        opcoes('raAnalista',completo.analistas.map(function(a){return a.analista;}),'Todos os analistas',estado.analista);
+        var r=(estado.analista||estado.time)?window.pgRAApurar(itens,{referencia:estado.referencia,corte:estado.corte,analista:estado.analista,time:estado.time}):completo;
+        resultadoAtual=r;window.pgRAResultadoAtual=r;
+        var analistas=ordenar(r.analistas);kpis(r);cards(analistas);
+        el('raTabela').innerHTML=analistas.length?analistas.map(function(a){return linhaTabela(a,false);}).join(''):'<tr><td colspan="11" style="text-align:center;padding:28px">Nenhum item para os filtros selecionados.</td></tr>';
+        el('raTotal').innerHTML=analistas.length?linhaTabela(r.resumo,true):'';
+        el('raContagem').textContent=numero(r.resumo.analistas)+' analista(s) · '+numero(r.resumo.linhas)+' item(ns) · '+referencias[estado.referencia]+' · Corte em '+dataBR(r.corte||estado.corte);
+        el('raScope').textContent=(n(r.resumo.naoApurado)?'Apuração parcial':'Realizado')+' · Corte '+dataBR(r.corte||estado.corte);
+        var avisos=[];
+        if(n(r.resumo.naoApurado))avisos.push('Apuração parcial: '+numero(r.resumo.naoApurado)+' exemplares com entrega não conferida ficam fora da aderência. Consulte os diagnósticos na base auditável.');
+        if(n(r.resumo.semPrazo))avisos.push(numero(r.resumo.semPrazo)+' exemplares sem prazo seguro ficam fora da aderência. Consulte o motivo na base auditável.');
+        var parciais=itens.filter(function(i){return i.conciliacao&&i.conciliacao.filtroParcial;}).length;
+        if(parciais)avisos.push(parciais+' grupo(s) sem vínculo por KIT mantêm o volume integral após os filtros para evitar rateio sem evidência. Confira a composição na base da Meta Armazém.');
+        var semResponsavel=r.detalhes.filter(function(d){return d.analista==='Sem responsável';}).reduce(function(s,d){return s+n(d.total);},0);
+        if(semResponsavel)avisos.push(numero(semResponsavel)+' exemplares estão sem responsável inequívoco no cadastro de gráficas.');
+        if(!n(r.resumo.metaVencida)&&r.detalhes.length)avisos.push('Não há prazo encerrado neste recorte até a data de corte. A aderência será exibida como “—”.');
+        aviso(avisos.join(' '),false);exportsAtivos(r.detalhes.length>0);
+      }catch(erro){invalidar('Não foi possível apurar a visão: '+String(erro&&erro.message||erro));}
+    };
+    function tabelas(){
+      if(typeof window.pgStatusMapaTP==='function'){var status=window.pgStatusMapaTP();if(!status.disponivel){invalidar(status.aviso);throw new Error(status.aviso);}}
+      if(!resultadoAtual||!resultadoAtual.detalhes.length)throw new Error('Apure um recorte com dados antes de exportar.');
+      var r=resultadoAtual;
+      var resumo={nome:'Resultados por analista',cabecalho:['Analista','Time','Gráficas','Referência','Corte','Aderência (%)','Tiragem total','Entregue TP','Meta vencida','No prazo - meta vencida','Fora do prazo - meta vencida','Pendente vencido','Saldo a vencer','Sem prazo','Entrega não conferida','Itens conciliados'],colunasData:[4],colunasNumero:[6,7,8,9,10,11,12,13,14,15],linhas:ordenar(r.analistas).map(function(a){return [a.analista,a.time,(a.graficas||[]).join(' · '),referencias[r.referencia],r.corte,a.aderencia==null?'':a.aderencia,a.total,a.entregue,a.metaVencida,a.noPrazoVencido,a.foraPrazoVencido,a.vencido,a.aVencer,a.semPrazo,a.naoApurado||0,a.linhas];})};
+      resumo.linhas.push(['TOTAL DO RECORTE','','',referencias[r.referencia],r.corte,r.resumo.aderencia==null?'':r.resumo.aderencia,r.resumo.total,r.resumo.entregue,r.resumo.metaVencida,r.resumo.noPrazoVencido,r.resumo.foraPrazoVencido,r.resumo.vencido,r.resumo.aVencer,r.resumo.semPrazo,r.resumo.naoApurado||0,r.resumo.linhas]);
+      var base={nome:'Base auditável',cabecalho:['Analista','Time','Gráfica','Marca','Série','SKU','Kit','Descrição','Ciclo','Envio','Referência','Corte','Prazo de entrega','Tiragem total','Entregue TP','Entregue no prazo','Entregue fora do prazo','Pendente','Meta vencida','No prazo - meta vencida','Fora do prazo - meta vencida','Pendente vencido','Saldo a vencer','Sem prazo','Entrega não conferida','Motivo','Diagnósticos'],colunasData:[11,12],colunasNumero:[13,14,15,16,17,18,19,20,21,22,23,24],linhas:r.detalhes.map(function(d){return [d.analista,d.time,d.grafica,d.marca,d.serie,d.sku,d.kit,d.descricao,d.ciclo||'',d.envio||'',referencias[r.referencia],r.corte,d.prazo||'',d.total,d.entregue,d.noPrazo,d.foraPrazo,d.pendente,d.metaVencida,d.noPrazoVencido,d.foraPrazoVencido,d.vencido,d.aVencer,d.semPrazo,d.naoApurado||0,d.motivo||'',Array.isArray(d.diagnosticos)?d.diagnosticos.join(' · '):d.diagnosticos||''];})};
+      var metodo={nome:'Critério da avaliação',cabecalho:['Critério','Valor'],linhas:[['Referência',referencias[r.referencia]],['Data de corte',r.corte],['Cenário Posigraf',estado.cenario==='com'?'Combinado não fere a meta':'Combinado fere a meta'],['Filtro de time',estado.time||'Todos'],['Filtro de analista',estado.analista||'Todos'],['Aderência','Entregue no prazo dos itens com prazo encerrado e entrega conferida / tiragem total desses itens. Total ponderado por volume.'],['Realizado','Somente Entrega TP até o corte, limitada à tiragem; sem previsões.'],['Universo','Base canônica de CD da Meta Armazém, respeitando filtros gerais do portal.'],['Prazo baseline/replan','Data final de coleta da referência + SLA de rota. Domingo ajustado para segunda. Replan não usa baseline quando vazio.'],['Sem prazo','Inclui data/SLA ausente e agrupamentos com prazos divergentes. Fora da aderência.'],['Entrega não conferida','Itens com diagnóstico de entrega TP não conferida ficam fora da aderência, preservando realizado físico conhecido. Pode sobrepor sem prazo.'],['Responsável','Cadastro atual de responsáveis por gráfica, sem reconstrução histórica da carteira.']]};
+      return [resumo,base,metodo];
+    }
+    function baixar(blob,nome){var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);}
+    function csv(v){var s=String(v==null?'':v);if(typeof v==='string'&&/^[\s]*[=+\-@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
+    window.pgRAExportarCSV=function(base){try{var t=tabelas()[base?1:0];baixar(new Blob(['\uFEFF'+[t.cabecalho].concat(t.linhas).map(function(l){return l.map(csv).join(';');}).join('\r\n')],{type:'text/csv;charset=utf-8;'}),'Resultados_Analistas_'+(base?'Base_':'')+resultadoAtual.referencia+'_'+resultadoAtual.corte+'.csv');}catch(e){aviso(String(e.message||e),true);}};
+    window.pgRAExportarExcel=function(){try{if(typeof window.pgGerarExcelAbas!=='function'){aviso('O gerador de Excel não está disponível. Use os botões CSV para baixar os resultados e a base auditável.',false);return;}var abas=tabelas();abas[0].colunasPercentual=[5];abas[0].linhas.forEach(function(l){if(typeof l[5]==='number')l[5]/=100;});var arquivo=window.pgGerarExcelAbas(abas);if(!(arquivo instanceof Blob)||!arquivo.size)throw new Error('Não foi possível gerar o Excel. Use os botões CSV.');baixar(arquivo,'Resultados_Analistas_'+resultadoAtual.referencia+'_'+resultadoAtual.corte+'.xlsx');}catch(e){aviso('Exportação não concluída: '+String(e.message||e),true);}};
+  })();
+  </script>
+</section>
