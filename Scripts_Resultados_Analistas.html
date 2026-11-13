@@ -382,9 +382,10 @@
         var volume = Math.min(e.volume,Math.max(0,total-entregue));
         entregue += volume;
         if(volume>0)parcelasColeta.push({data:e.data,projetada:e.projetada,volume:volume,chave:e.chave,kit:e.kit});
-        if (prazo.prazo) {
-          if ((etapa==='coleta_matriz'?e.projetada:e.data) &&
-              (etapa==='coleta_matriz'?e.projetada:e.data) <= prazo.prazo) noPrazo += volume;
+        // SLA ausente não transforma uma parcela coletada em atraso.
+        var dataAvaliacao=etapa==='coleta_matriz'?e.projetada:e.data;
+        if (prazo.prazo && dataAvaliacao) {
+          if (dataAvaliacao <= prazo.prazo) noPrazo += volume;
           else foraPrazo += volume;
         }
       });
