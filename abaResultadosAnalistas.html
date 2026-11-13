@@ -54,6 +54,11 @@
     #abaResultadosAnalistas .ra-table-scroll{overflow:auto;max-height:550px}#abaResultadosAnalistas table{border-collapse:separate;border-spacing:0;width:100%;min-width:1120px;font-size:10px;font-variant-numeric:tabular-nums}#abaResultadosAnalistas th,#abaResultadosAnalistas td{padding:13px 12px;text-align:right;border-bottom:1px solid #e7eef6;white-space:nowrap}
     #abaResultadosAnalistas thead th{background:var(--ra-navy);color:#fff;font-weight:600;font-size:9px;position:sticky;top:0;z-index:2}#abaResultadosAnalistas th:first-child,#abaResultadosAnalistas td:first-child{text-align:left;padding-left:24px}#abaResultadosAnalistas tbody td:first-child{position:sticky;left:0;background:#fff;z-index:1;min-width:180px;white-space:normal}#abaResultadosAnalistas tbody tr:nth-child(even) td{background:#f7fafe}#abaResultadosAnalistas tbody tr:hover td{background:#eaf3fd}
     #abaResultadosAnalistas td.ra-score{font-weight:700;color:var(--ra-deep);background:#edf5ff}#abaResultadosAnalistas td.ra-warn{color:#b33511;font-weight:600}#abaResultadosAnalistas tfoot td{background:#e6effa;font-weight:700;border-top:2px solid #c8d9ee}#abaResultadosAnalistas .ra-cell-sub{display:block;color:var(--ra-muted);font-size:8px;margin-top:4px}
+    #abaResultadosAnalistas .ra-breakdown{margin:0 24px 24px;overflow-x:auto;border:1px solid var(--ra-line);border-radius:12px}
+    #abaResultadosAnalistas .ra-breakdown table{min-width:1040px}
+    #abaResultadosAnalistas .ra-breakdown td:first-child{font-weight:600}
+    #abaResultadosAnalistas .ra-breakdown td:nth-child(2),#abaResultadosAnalistas .ra-breakdown td:nth-child(3){text-align:left}
+    #abaResultadosAnalistas .ra-breakdown .ra-route-label{color:var(--ra-muted);font-size:9px}
     #abaResultadosAnalistas .ra-table-note{padding:13px 24px;background:#f7fafe;border-top:1px solid #e7eef6;color:var(--ra-muted);font-size:10px;line-height:1.7}
     #abaResultadosAnalistas .ra-method{padding:17px 24px;margin-bottom:18px;border-radius:14px;background:#edf3fa;border:1px solid #dce6f1;font-size:10px;line-height:1.9;color:var(--ra-muted)}#abaResultadosAnalistas .ra-method summary{font-size:11px;font-weight:600;color:var(--ra-deep);cursor:pointer}#abaResultadosAnalistas .ra-method p{margin:12px 0 0}#abaResultadosAnalistas .ra-method strong{color:var(--ra-navy);font-weight:600}
     #abaResultadosAnalistas .ra-empty{padding:32px 24px;text-align:center;color:var(--ra-muted);grid-column:1/-1;line-height:1.9;border:1px dashed #c7d7e9;border-radius:12px}#abaResultadosAnalistas .ra-empty strong{display:block;color:var(--ra-navy);font-weight:600;margin-bottom:4px}
@@ -63,7 +68,7 @@
 
   <div class="ra-hero">
     <div class="ra-hero-content">
-      <div><p class="ra-eyebrow">Produção · Avaliação de ciclo</p><h2>Resultados por analista</h2><p class="ra-subtitle">Cada entrega conta. Acompanhe o realizado, compare com o prazo escolhido e tenha uma base clara para a conversa de ciclo.</p></div>
+      <div><p class="ra-eyebrow">Produção · Avaliação de ciclo</p><h2>Resultados por analista</h2><p class="ra-subtitle">Cada coleta conta. Compare o realizado por analista, gráfica e marca com os prazos escolhidos e consolide o resultado para a avaliação de ciclo.</p></div>
       <div class="ra-context"><span id="raContextLabel">Referência da avaliação</span><strong id="raContextValue">Meta armazém</strong></div>
     </div>
   </div>
@@ -72,30 +77,35 @@
     <div class="ra-controls">
       <div class="ra-control ra-destino"><span class="ra-label">Destino da avaliação</span><div class="ra-segment" role="group" aria-label="Destino avaliado"><button type="button" data-ra-destino="total" aria-pressed="true" onclick="pgRAAlterar('destino','total')">Total</button><button type="button" data-ra-destino="cd" aria-pressed="false" onclick="pgRAAlterar('destino','cd')">Entregas no CD</button><button type="button" data-ra-destino="acabadora" aria-pressed="false" onclick="pgRAAlterar('destino','acabadora')">Acabadoras</button></div></div>
       <div class="ra-control ra-route" id="raTrajetoControl" hidden><span class="ra-label">Etapa da acabadora</span><div class="ra-segment" role="group" aria-label="Etapa de entrega da acabadora"><button type="button" data-ra-trajeto="entrada" aria-pressed="true" onclick="pgRAAlterar('trajeto','entrada')">Entrada na acabadora</button><button type="button" data-ra-trajeto="saida" aria-pressed="false" onclick="pgRAAlterar('trajeto','saida')">Saída para o CD</button></div></div>
-      <div class="ra-control ra-reference"><span class="ra-label">Comparar entregas com</span><div class="ra-segment" role="group" aria-label="Referência de prazo da avaliação"><button type="button" data-ra-ref="armazem" aria-pressed="true" onclick="pgRAAlterar('referencia','armazem')">Meta armazém</button><button type="button" data-ra-ref="baseline" aria-pressed="false" onclick="pgRAAlterar('referencia','baseline')">Baseline</button><button type="button" data-ra-ref="replan" aria-pressed="false" onclick="pgRAAlterar('referencia','replan')">Replan</button></div></div>
-      <label class="ra-control"><span class="ra-label">Entregas até a data de corte</span><input id="raCorte" type="date" required onchange="pgRAAlterar('corte',this.value)"></label>
+      <div class="ra-control ra-reference"><span class="ra-label">Comparar coletas com</span><div class="ra-segment" role="group" aria-label="Referência de prazo da avaliação"><button type="button" data-ra-ref="armazem" aria-pressed="true" onclick="pgRAAlterar('referencia','armazem')">Meta armazém</button><button type="button" data-ra-ref="baseline" aria-pressed="false" onclick="pgRAAlterar('referencia','baseline')">Baseline</button><button type="button" data-ra-ref="replan" aria-pressed="false" onclick="pgRAAlterar('referencia','replan')">Replan</button></div></div>
+      <label class="ra-control"><span class="ra-label">Coletas até a data de corte</span><input id="raCorte" type="date" required onchange="pgRAAlterar('corte',this.value)"></label>
       <label class="ra-control"><span class="ra-label">Time</span><select id="raTime" onchange="pgRAAlterar('time',this.value)"><option value="">Todos os times</option></select></label>
       <label class="ra-control"><span class="ra-label">Analista</span><select id="raAnalista" onchange="pgRAAlterar('analista',this.value)"><option value="">Todos os analistas</option></select></label>
       <label class="ra-control" id="raCenarioControl"><span class="ra-label">Combinado Posigraf</span><select id="raCenario" onchange="pgRAAlterar('cenario',this.value)"><option value="com">Não fere a meta</option><option value="sem">Fere a meta</option></select></label>
     </div>
-    <div class="ra-scope"><span id="raUniverso">Segue os filtros gerais de marca, ciclo, envio, gráfica e material. Universo de entregas ao CD da Meta Armazém.</span><span class="ra-badge" id="raScope">Realizado · Entrega TP</span></div>
+    <div class="ra-scope"><span id="raUniverso">Segue os filtros gerais de marca, ciclo, envio, gráfica e material. Universo de entregas ao CD da Meta Armazém.</span><span class="ra-badge" id="raScope">Realizado · Coleta</span></div>
   </div>
 
   <div id="raAviso" class="ra-alert" role="status" aria-live="polite" hidden></div>
   <div id="raKPIs" class="ra-kpis"></div>
 
   <div class="ra-panel">
-    <div class="ra-section-head"><div><h3 id="raTituloRanking">Entregas no prazo, por analista</h3><p class="ra-note">Aderência ponderada pela tiragem com prazo encerrado até o corte.</p></div><div class="ra-legend"><span><i class="ra-dot ra-on"></i>No prazo</span><span><i class="ra-dot ra-late"></i>Entregue fora</span><span><i class="ra-dot ra-pending"></i>Pendente vencido</span></div></div>
+    <div class="ra-section-head"><div><h3 id="raTituloRanking">Coletas no prazo, por analista</h3><p class="ra-note">Aderência ponderada pela tiragem com prazo encerrado até o corte.</p></div><div class="ra-legend"><span><i class="ra-dot ra-on"></i>No prazo</span><span><i class="ra-dot ra-late"></i>Coletado fora</span><span><i class="ra-dot ra-pending"></i>Pendente vencido</span></div></div>
     <div id="raRanking" class="ra-ranking"></div>
   </div>
 
   <div class="ra-panel">
-    <div class="ra-section-head"><div><h3>Quadro de resultados</h3><p class="ra-note" id="raContagem">Selecione o recorte para apurar.</p></div><div class="ra-actions"><button type="button" id="raExcel" class="ra-btn ra-main" onclick="pgRAExportarExcel()" disabled>Baixar Excel completo</button><button type="button" id="raCSV" class="ra-btn" onclick="pgRAExportarCSV(false)" disabled>CSV resultados</button><button type="button" id="raCSVBase" class="ra-btn" onclick="pgRAExportarCSV(true)" disabled>CSV base auditável</button></div></div>
-    <div class="ra-table-scroll"><table aria-label="Resultado de entregas por analista"><thead><tr><th scope="col">Analista / time</th><th scope="col">Aderência</th><th scope="col">Tiragem total</th><th scope="col">Entregue TP</th><th scope="col">Meta vencida</th><th scope="col">No prazo¹</th><th scope="col">Fora do prazo¹</th><th scope="col">Pendente vencido</th><th scope="col">Saldo a vencer</th><th scope="col">Sem prazo</th><th scope="col">Entrega não conferida</th></tr></thead><tbody id="raTabela"></tbody><tfoot id="raTotal"></tfoot></table></div>
-    <div class="ra-table-note">¹ As colunas “No prazo” e “Fora do prazo” consideram somente a tiragem com prazo encerrado e entrega conferida. O entregue TP inclui o realizado conhecido até o corte. Volumes sem prazo seguro ou com entrega não conferida ficam fora da aderência; essas duas condições podem se sobrepor.</div>
+    <div class="ra-section-head"><div><h3>Detalhamento · analista, gráfica e marca</h3><p class="ra-note">Volume total, coleta no prazo e aderência ponderada em cada carteira, sem médias simples.</p></div><div class="ra-actions"><button type="button" class="ra-btn" id="raCSVGraficas" onclick="pgRAExportarCSV('graficas')" disabled>Baixar CSV por gráfica e marca</button></div></div>
+    <div class="ra-breakdown"><table aria-label="Resultado por analista, gráfica e marca"><thead><tr><th>Analista / time</th><th>Gráfica</th><th>Marca / percurso</th><th>Tiragem total</th><th>Coletado</th><th>Meta vencida</th><th>No prazo</th><th>Fora do prazo</th><th>Saldo vencido</th><th>Aderência</th></tr></thead><tbody id="raDetalheGraficas"></tbody></table></div>
   </div>
 
-  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = entregue no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e entrega conferida, o resultado aparece como “—”.</p><p id="raMetodoPrazo">Entregas no CD: Baseline e Replan usam data final + SLA; Meta Armazém usa a meta aplicada.</p><p><strong>Realizado:</strong> somente parcelas de Entrega TP com data até o corte, limitadas à tiragem, sem incluir previsões. O responsável vem do cadastro atual de gráficas; a tela não reconstrói mudanças históricas de carteira. Grupos conciliados com prazos divergentes ficam destacados como sem prazo seguro. Itens cuja entrega não foi conferida ficam fora da aderência, preservando o realizado físico conhecido na carteira.</p><p id="raMetodoDestino">Os seletores desta tela são exclusivos da avaliação por analista e não alteram as demais visões.</p></details>
+  <div class="ra-panel">
+    <div class="ra-section-head"><div><h3>Quadro de resultados</h3><p class="ra-note" id="raContagem">Selecione o recorte para apurar.</p></div><div class="ra-actions"><button type="button" id="raExcel" class="ra-btn ra-main" onclick="pgRAExportarExcel()" disabled>Baixar Excel completo</button><button type="button" id="raCSV" class="ra-btn" onclick="pgRAExportarCSV(false)" disabled>CSV resultados</button><button type="button" id="raCSVBase" class="ra-btn" onclick="pgRAExportarCSV(true)" disabled>Baixar CSV base auditável</button></div></div>
+    <div class="ra-table-scroll"><table aria-label="Resultado de entregas por analista"><thead><tr><th scope="col">Analista / time</th><th scope="col">Gráficas</th><th scope="col">Aderência</th><th scope="col">Tiragem total</th><th scope="col">Coletado</th><th scope="col">Meta vencida</th><th scope="col">No prazo¹</th><th scope="col">Fora do prazo¹</th><th scope="col">Pendente vencido</th><th scope="col">Saldo a vencer</th><th scope="col">Sem prazo</th><th scope="col">Coleta não conferida</th></tr></thead><tbody id="raTabela"></tbody><tfoot id="raTotal"></tfoot></table></div>
+    <div class="ra-table-note">¹ As colunas “No prazo” e “Fora do prazo” consideram a Coleta realizada com prazo encerrado e dados conferidos. O volume coletado inclui apenas o realizado até o corte, limitado à tiragem de cada item; entregas posteriores e previsões não contam. Volumes sem prazo seguro ou com coleta não conferida ficam fora da aderência.</div>
+  </div>
+
+  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = coleta no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e entrega conferida, o resultado aparece como “—”.</p><p id="raMetodoPrazo">Entregas no CD: Baseline e Replan usam data final + SLA; Meta Armazém usa a meta aplicada.</p><p><strong>Realizado:</strong> somente parcelas de Coleta TP do mapa, com data até o corte, limitadas à tiragem. Entrega TP e previsões não entram na avaliação. O responsável vem do cadastro atual de gráficas; não há reconstrução histórica da carteira. Grupos com prazos divergentes ficam sem nota até conciliação segura. Itens com coleta não conferida ficam fora da aderência. <strong>SAS Adapt:</strong> continua no universo regular; a avaliação isolada do projeto ainda depende de alinhamento com a liderança.</p><p id="raMetodoDestino">Os seletores desta tela são exclusivos da avaliação por analista e não alteram as demais visões.</p></details>
 
   <script>
   (function(){
@@ -124,9 +134,9 @@
       var p={};partes.forEach(function(x){p[x.type]=x.value;});return p.year+'-'+p.month+'-'+p.day;
     }
     function corteValido(v){if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;var d=new Date(v+'T12:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v;}
-    function exportsAtivos(ativo){['raExcel','raCSV','raCSVBase'].forEach(function(id){var b=el(id);if(b)b.disabled=!ativo;});}
+    function exportsAtivos(ativo){['raExcel','raCSV','raCSVBase','raCSVGraficas'].forEach(function(id){var b=el(id);if(b)b.disabled=!ativo;});}
     function aviso(texto,erro){var a=el('raAviso');a.hidden=!texto;a.textContent=texto||'';a.classList.toggle('ra-error',!!erro);}
-    function invalidar(texto){resultadoAtual=null;window.pgRAResultadoAtual=null;exportsAtivos(false);['raKPIs','raRanking','raTabela','raTotal'].forEach(function(id){el(id).innerHTML='';});el('raContagem').textContent='Apuração indisponível.';aviso(texto,true);}
+    function invalidar(texto){resultadoAtual=null;window.pgRAResultadoAtual=null;exportsAtivos(false);['raKPIs','raRanking','raTabela','raTotal','raDetalheGraficas'].forEach(function(id){el(id).innerHTML='';});el('raContagem').textContent='Apuração indisponível.';aviso(texto,true);}
     function opcoes(id,valores,todos,selecionado){
       var lista=Array.from(new Set(valores.filter(Boolean))).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
       if(selecionado&&lista.indexOf(selecionado)<0)lista.unshift(selecionado);
@@ -136,8 +146,8 @@
     function kpis(r){
       var s=r.resumo,percentual=s.aderencia==null?0:Math.max(0,Math.min(100,n(s.aderencia)));
       el('raKPIs').innerHTML='<div class="ra-kpi ra-primary"><div class="ra-ring" style="--ra-pct:'+percentual+'%" aria-hidden="true"><span>↗</span></div><div><p class="ra-kpi-label">Aderência ao prazo</p><div class="ra-kpi-value">'+pct(s.aderencia)+'</div><p class="ra-kpi-note">'+numero(s.noPrazoVencido)+' de '+numero(s.metaVencida)+' exemplares com prazo encerrado</p></div></div>'+
-        '<div class="ra-kpi"><p class="ra-kpi-label">Entregue TP até o corte</p><div class="ra-kpi-value">'+numero(s.entregue)+'</div><p class="ra-kpi-note">'+pct(s.total?100*n(s.entregue)/n(s.total):null)+' da carteira realizada</p></div>'+
-        '<div class="ra-kpi ra-due"><p class="ra-kpi-label">Pendente vencido</p><div class="ra-kpi-value">'+numero(s.vencido)+'</div><p class="ra-kpi-note">Saldo ainda sem entrega após o prazo</p></div>'+
+        '<div class="ra-kpi"><p class="ra-kpi-label">Coletado até o corte</p><div class="ra-kpi-value">'+numero(s.entregue)+'</div><p class="ra-kpi-note">'+pct(s.total?100*n(s.entregue)/n(s.total):null)+' da carteira realizada</p></div>'+
+        '<div class="ra-kpi ra-due"><p class="ra-kpi-label">Pendente vencido</p><div class="ra-kpi-value">'+numero(s.vencido)+'</div><p class="ra-kpi-note">Saldo ainda sem coleta após o prazo</p></div>'+
         '<div class="ra-kpi"><p class="ra-kpi-label">Volume da carteira</p><div class="ra-kpi-value">'+numero(s.total)+'</div><p class="ra-kpi-note">'+numero(s.analistas)+' analista(s) · '+numero(s.linhas)+' item(ns) conciliado(s)'+(n(s.naoApurado)?' · Apuração parcial':'')+'</p></div>';
     }
     function cards(analistas){
@@ -147,12 +157,23 @@
         var iniciais=String(a.analista).trim().split(/\s+/).filter(Boolean).slice(0,2).map(function(x){return x[0];}).join('').toUpperCase();
         var graficas=Array.isArray(a.graficas)?a.graficas:[];
         return '<article class="ra-person"><div class="ra-person-top"><div class="ra-avatar" aria-hidden="true">'+html(iniciais)+'</div><div><div class="ra-person-name">'+html(a.analista)+'</div><div class="ra-person-meta">'+html(a.time)+' · '+graficas.length+' gráfica(s)</div></div><div class="ra-person-score"><strong>'+pct(a.aderencia)+'</strong><small>aderência ao prazo</small></div></div>'+
-          '<div class="ra-track" role="img" aria-label="'+html('No prazo: '+numero(a.noPrazoVencido)+'. Entregue fora: '+numero(a.foraPrazoVencido)+'. Pendente vencido: '+numero(a.vencido)+'.')+'"><span class="ra-on" style="width:'+larg(a.noPrazoVencido)+'%"></span><span class="ra-late" style="width:'+larg(a.foraPrazoVencido)+'%"></span><span class="ra-pending" style="width:'+larg(a.vencido)+'%"></span></div>'+
-          '<div class="ra-person-stats"><div><span>No prazo</span><b>'+numero(a.noPrazoVencido)+'</b></div><div><span>Entregue fora</span><b>'+numero(a.foraPrazoVencido)+'</b></div><div><span>Pendente vencido</span><b>'+numero(a.vencido)+'</b></div></div>'+
-          '<div class="ra-person-foot">Meta encerrada: <strong>'+numero(a.metaVencida)+'</strong> · Saldo a vencer: '+numero(a.aVencer)+(n(a.semPrazo)?' · Sem prazo: '+numero(a.semPrazo):'')+(n(a.naoApurado)?' · Entrega não conferida: '+numero(a.naoApurado):'')+'<br><span title="'+html(graficas.join(' · '))+'">'+html(graficas.join(' · ')||'Gráfica não informada')+'</span></div></article>';
+          '<div class="ra-track" role="img" aria-label="'+html('No prazo: '+numero(a.noPrazoVencido)+'. Coletado fora: '+numero(a.foraPrazoVencido)+'. Pendente vencido: '+numero(a.vencido)+'.')+'"><span class="ra-on" style="width:'+larg(a.noPrazoVencido)+'%"></span><span class="ra-late" style="width:'+larg(a.foraPrazoVencido)+'%"></span><span class="ra-pending" style="width:'+larg(a.vencido)+'%"></span></div>'+
+          '<div class="ra-person-stats"><div><span>No prazo</span><b>'+numero(a.noPrazoVencido)+'</b></div><div><span>Coletado fora</span><b>'+numero(a.foraPrazoVencido)+'</b></div><div><span>Pendente vencido</span><b>'+numero(a.vencido)+'</b></div></div>'+
+          '<div class="ra-person-foot">Meta encerrada: <strong>'+numero(a.metaVencida)+'</strong> · Saldo a vencer: '+numero(a.aVencer)+(n(a.semPrazo)?' · Sem prazo: '+numero(a.semPrazo):'')+(n(a.naoApurado)?' · Coleta não conferida: '+numero(a.naoApurado):'')+'<br><strong>Gráficas:</strong> <span title="'+html(graficas.join(' · '))+'">'+html(graficas.join(' · ')||'Gráfica não informada')+'</span></div></article>';
       }).join('');
     }
-    function linhaTabela(a,total){return '<tr><td>'+(total?'Total do recorte':'<strong>'+html(a.analista)+'</strong><span class="ra-cell-sub">'+html(a.time)+'</span>')+'</td><td class="ra-score">'+pct(a.aderencia)+'</td><td>'+numero(a.total)+'</td><td>'+numero(a.entregue)+'</td><td>'+numero(a.metaVencida)+'</td><td>'+numero(a.noPrazoVencido)+'</td><td>'+numero(a.foraPrazoVencido)+'</td><td'+(n(a.vencido)?' class="ra-warn"':'')+'>'+numero(a.vencido)+'</td><td>'+numero(a.aVencer)+'</td><td>'+numero(a.semPrazo)+'</td><td>'+numero(a.naoApurado)+'</td></tr>';}
+    function linhaTabela(a,total){return '<tr><td>'+(total?'Total do recorte':'<strong>'+html(a.analista)+'</strong><span class="ra-cell-sub">'+html(a.time)+'</span>')+'</td><td>'+html(total?'—':(a.graficas||[]).join(' · '))+'</td><td class="ra-score">'+pct(a.aderencia)+'</td><td>'+numero(a.total)+'</td><td>'+numero(a.entregue)+'</td><td>'+numero(a.metaVencida)+'</td><td>'+numero(a.noPrazoVencido)+'</td><td>'+numero(a.foraPrazoVencido)+'</td><td'+(n(a.vencido)?' class="ra-warn"':'')+'>'+numero(a.vencido)+'</td><td>'+numero(a.aVencer)+'</td><td>'+numero(a.semPrazo)+'</td><td>'+numero(a.naoApurado)+'</td></tr>';}
+    function detalhamentoGraficaMarca(grupos) {
+      var corpo=el('raDetalheGraficas');
+      if(!grupos.length){corpo.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px">Nenhum resultado neste recorte.</td></tr>';return;}
+      corpo.innerHTML=grupos.map(function(g){
+        return '<tr><td><strong>'+html(g.analista)+'</strong><span class="ra-cell-sub">'+html(g.time)+'</span></td>'+
+          '<td>'+html(g.grafica)+'</td><td>'+html(g.marca)+'<span class="ra-cell-sub ra-route-label">'+html(g.percurso)+'</span></td>'+
+          '<td>'+numero(g.total)+'</td><td>'+numero(g.entregue)+'</td><td>'+numero(g.metaVencida)+'</td>'+
+          '<td>'+numero(g.noPrazoVencido)+'</td><td>'+numero(g.foraPrazoVencido)+'</td>'+
+          '<td>'+numero(g.vencido)+'</td><td class="ra-score">'+pct(g.aderencia)+'</td></tr>';
+      }).join('');
+    }
     window.pgRAAlterar=function(campo,valor){
       if(campo==='referencia'&&!referencias[valor])return;
       if(campo==='cenario'&&valor!=='com'&&valor!=='sem')return;
@@ -197,7 +218,7 @@
         'Acabadoras: Baseline usa o baseline da etapa; Replan e Meta Armazém usam replan da etapa, diretamente, sem SLA adicional ou preenchimento de datas ausentes.':
         'CD: Baseline e Replan usam data final + SLA de rota (domingo passa para segunda); Meta armazém usa prazo aplicado pela marca e suas exceções.';
       el('raMetodoDestino').textContent=estado.destino==='total'?
-        'O Total combina obrigações de entrega de etapas diferentes: CD e entrada na acabadora. A saída da acabadora para CD já é contada pelo CD. Um mesmo material pode ter dois marcos distintos no processo; este Total mede compromissos das etapas, não SKUs físicos únicos. Os seletores afetam apenas esta visão.':
+        'O Total combina compromissos de coleta de etapas diferentes: CD e entrada na acabadora. A saída da acabadora para CD já é contada pelo CD. Um mesmo material pode ter dois marcos distintos no processo; este Total mede compromissos das etapas, não SKUs físicos únicos. Os seletores afetam apenas esta visão.':
         ehAcabadora?
         'Entrada usa transferências PCP para acabadora. Saída usa PCP_ACABADORAS, com tiragem a entregar por CD quando informada. Não some estas etapas nem com a visão CD.':
         'O cenário Posigraf vale somente para Meta Armazém no CD. Nenhum destes seletores altera o funil ou os filtros de Origem/Destino de outras telas.';
@@ -219,14 +240,14 @@
         var r=(estado.analista||estado.time)?
           window.pgRAApurar(itens,Object.assign({},opcoesApuracao,{analista:estado.analista,time:estado.time})):completo;
         resultadoAtual=r;window.pgRAResultadoAtual=r;
-        var analistas=ordenar(r.analistas);kpis(r);cards(analistas);
-        el('raTabela').innerHTML=analistas.length?analistas.map(function(a){return linhaTabela(a,false);}).join(''):'<tr><td colspan="11" style="text-align:center;padding:28px">Nenhum item para os filtros selecionados.</td></tr>';
+        var analistas=ordenar(r.analistas);kpis(r);cards(analistas);detalhamentoGraficaMarca(r.graficasMarcas||[]);
+        el('raTabela').innerHTML=analistas.length?analistas.map(function(a){return linhaTabela(a,false);}).join(''):'<tr><td colspan="12" style="text-align:center;padding:28px">Nenhum item para os filtros selecionados.</td></tr>';
         el('raTotal').innerHTML=analistas.length?linhaTabela(r.resumo,true):'';
         el('raContagem').textContent=numero(r.resumo.analistas)+' analista(s) · '+numero(r.resumo.linhas)+' item(ns) · '+fluxoRotulo()+' · '+referencias[estado.referencia]+
           (estado.destino!=='cd'?' (prazo efetivo: '+prazoRotulo()+')':'')+' · Corte em '+dataBR(r.corte||estado.corte);
-        el('raScope').textContent=fluxoRotulo()+' · '+(n(r.resumo.naoApurado)?'Apuração parcial':'Entrega TP')+' · '+dataBR(r.corte||estado.corte);
+        el('raScope').textContent=fluxoRotulo()+' · '+(n(r.resumo.naoApurado)?'Apuração parcial':'Coleta')+' · '+dataBR(r.corte||estado.corte);
         var avisos=[];
-        if(n(r.resumo.naoApurado))avisos.push('Apuração parcial: '+numero(r.resumo.naoApurado)+' exemplares com entrega não conferida ficam fora da aderência. Consulte os diagnósticos na base auditável.');
+        if(n(r.resumo.naoApurado))avisos.push('Apuração parcial: '+numero(r.resumo.naoApurado)+' exemplares com coleta não conferida ficam fora da aderência. Consulte os diagnósticos na base auditável.');
         if(n(r.resumo.semPrazo))avisos.push(numero(r.resumo.semPrazo)+' exemplares sem prazo seguro ficam fora da aderência. Consulte o motivo na base auditável.');
         var parciais=itens.filter(function(i){return i.conciliacao&&i.conciliacao.filtroParcial;}).length;
         if(parciais)avisos.push(parciais+' grupo(s) sem vínculo por KIT mantêm o volume integral após os filtros para evitar rateio sem evidência. Confira a composição na base da Meta Armazém.');
