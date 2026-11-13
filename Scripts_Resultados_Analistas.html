@@ -34,6 +34,8 @@
   }
   function correspondeEtapa(item,e) {
     if(!e || e.tipo==='tp') return true;
+    // Confirmação e internalização pertencem ao CD, nunca à entrada na acabadora.
+    if((e.id==='ent_cd'||e.id==='int_cd')&&item.fluxo==='acabadora'&&item.trajeto==='entrada')return false;
     var linhas=linhasOrigem(item);
     if(e.pcp && linhas.every(fonteAcabadora))return false;
     if(e.acab && linhas.every(function(l){return !fonteAcabadora(l);} ))return false;
