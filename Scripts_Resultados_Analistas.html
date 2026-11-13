@@ -147,8 +147,12 @@
           var dia=data(e.data),volume=quantidade(e.volume);
           if(!dia||dia>corte||!volume)return;
           var chave=idFisico(e,r.id,i);
-          if(registros.length>1&&chave.indexOf('LINHA:')===0)
+          if(registros.length>1&&chave.indexOf('LINHA:')===0) {
+            // Sem identificador físico, a mesma entrega pode aparecer em múltiplos owners.
+            // Não atribuir volume possivelmente duplicado ao desempenho de alguém.
             diagnosticos.push('entrega: parcelas-sem-identificador-fisico');
+            return;
+          }
           var anterior=fisicos.get(chave);
           if(anterior){
             if(anterior.data!==dia||anterior.volume!==volume||normal(anterior.kit)!==normal(e.kit))
@@ -208,7 +212,7 @@
     diagnosticos = Array.isArray(diagnosticos) ? diagnosticos.map(texto).filter(Boolean) : [];
     var falhasEntrega = diagnosticos.filter(function(d) {
       var n = normal(d).toLowerCase();
-      return /^entrega\s*:/.test(n) && /indisponivel|indisponiveis|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta/.test(n);
+      return /^entrega\s*:/.test(n) && /indisponivel|indisponiveis|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta|parcelas-sem-identificador-fisico/.test(n);
     });
     var apuravel = falhasEntrega.length === 0;
     // O teto é aplicado em ordem cronológica. Previsões, coletas e datas sem
