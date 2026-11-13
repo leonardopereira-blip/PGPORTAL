@@ -133,11 +133,16 @@
     function fluxoRotulo(){return estado.destino==='total'?'Total por analista':
       estado.destino==='cd'?'Entregas no CD':
       estado.trajeto==='entrada'?'Acabadoras · Entrada':'Acabadoras · Saída para CD';}
-    function prazoRotulo(){return estado.destino==='total'&&estado.referencia==='armazem'?
-      'Meta Armazém (CD) / Replan (Acabadoras)':
-      estado.destino==='acabadora'&&estado.referencia!=='baseline'?
-      'Replan':referencias[estado.referencia];}
-    function prazoResultado(r){return r.referenciaEfetiva==='mista'?
+    function prazoRotulo(){
+      if(!faseTP())return estado.referencia==='baseline'?'Baseline da fase':'Replan da fase';
+      return estado.destino==='total'&&estado.referencia==='armazem'?
+        'Meta Armazém (CD) / Replan (Acabadoras)':
+        estado.destino==='acabadora'&&estado.referencia!=='baseline'?
+        'Replan':referencias[estado.referencia];
+    }
+    function prazoResultado(r){return r.etapa!=='coleta'&&r.etapa!=='entrega'?
+      (r.referenciaEfetiva==='baseline'?'Baseline da fase':'Replan da fase'):
+      r.referenciaEfetiva==='mista'?
       'Meta Armazém (CD) / Replan (Acabadoras)':referencias[r.referenciaEfetiva];}
     function el(id){return document.getElementById(id);}
     function html(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
