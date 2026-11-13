@@ -260,7 +260,7 @@
     opcoes = opcoes || {};
     var referencia = opcoes.referencia || 'armazem';
     var destino=opcoes.destino||'cd',trajeto=opcoes.trajeto||'entrada';
-    if(['cd','acabadora'].indexOf(destino)<0)throw new Error('Destino de avaliação inválido.');
+    if(['total','cd','acabadora'].indexOf(destino)<0)throw new Error('Destino de avaliação inválido.');
     if(destino==='acabadora'&&['entrada','saida'].indexOf(trajeto)<0)
       throw new Error('Etapa de acabadora inválida.');
     if (['armazem','baseline','replan'].indexOf(referencia) < 0) throw new Error('Referência de prazo inválida.');
@@ -290,7 +290,8 @@
     }).sort(function(a,b) { return a.analista.localeCompare(b.analista,'pt-BR'); });
     resumo.aderencia = aderencia(resumo);resumo.analistas = analistas.length;
     return {referencia:referencia,referenciaEfetiva:destino==='acabadora'?
-      (referencia==='baseline'?'baseline':'replan'):referencia,
+      (referencia==='baseline'?'baseline':'replan'):
+      (destino==='total'&&referencia==='armazem'?'mista':referencia),
       destino:destino,trajeto:destino==='acabadora'?trajeto:'',
       corte:corte,resumo:resumo,analistas:analistas,detalhes:detalhes};
   };
