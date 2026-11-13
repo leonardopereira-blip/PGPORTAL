@@ -44,11 +44,15 @@
     #abaResultadosAnalistas .ra-dot{display:inline-block;width:8px;height:8px;border-radius:3px;flex-shrink:0}#abaResultadosAnalistas .ra-on{background:var(--ra-blue)}#abaResultadosAnalistas .ra-late{background:var(--ra-orange)}#abaResultadosAnalistas .ra-pending{background:#c4d3e4}
     #abaResultadosAnalistas .ra-ranking{display:grid;grid-template-columns:minmax(0,1fr);gap:13px;padding:0 24px 24px}
     #abaResultadosAnalistas .ra-person{min-width:0;width:100%;border:1px solid var(--ra-line);border-radius:13px;padding:20px 24px;background:linear-gradient(150deg,#fff,#f8fbff)}
+    #abaResultadosAnalistas .ra-scope,#abaResultadosAnalistas .ra-method{display:none!important}
+    #abaResultadosAnalistas .ra-person-export{margin-left:auto;border:1px solid #b5cbe4;background:#fff;color:var(--ra-deep);font-weight:700;font-size:10px;border-radius:9px;padding:9px 13px;cursor:pointer;white-space:nowrap}
+    #abaResultadosAnalistas .ra-person-export:hover{background:#e8f2ff}
+    #abaResultadosAnalistas .ra-person-export:disabled{opacity:.6;cursor:wait}
     #abaResultadosAnalistas .ra-person-top{display:flex;align-items:center;gap:11px;margin-bottom:14px}#abaResultadosAnalistas .ra-avatar{width:36px;height:36px;border-radius:11px;background:#e7f1fc;color:var(--ra-deep);font-weight:700;font-size:12px;display:grid;place-items:center;flex-shrink:0}
     #abaResultadosAnalistas .ra-person-name{font-weight:600;font-size:12px;overflow-wrap:anywhere}#abaResultadosAnalistas .ra-person-meta{color:var(--ra-muted);font-size:9px;margin-top:3px}
-    #abaResultadosAnalistas .ra-person-score{margin-left:auto;text-align:right;flex-shrink:0}#abaResultadosAnalistas .ra-person-score strong{font-size:24px;line-height:1.1;letter-spacing:-.5px;font-weight:700}#abaResultadosAnalistas .ra-person-score small{display:block;font-size:8px;color:var(--ra-muted);margin-top:3px}
+    #abaResultadosAnalistas .ra-person-score{margin-left:12px;text-align:right;flex-shrink:0}#abaResultadosAnalistas .ra-person-score strong{font-size:24px;line-height:1.1;letter-spacing:-.5px;font-weight:700}#abaResultadosAnalistas .ra-person-score small{display:block;font-size:8px;color:var(--ra-muted);margin-top:3px}
     #abaResultadosAnalistas .ra-track{height:10px;background:#edf2f7;border-radius:8px;overflow:hidden;display:flex}#abaResultadosAnalistas .ra-track span{display:block;height:100%}
-    #abaResultadosAnalistas .ra-person-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:11px}#abaResultadosAnalistas .ra-person-stats span{display:block;color:var(--ra-muted);font-size:8px;line-height:1.5}#abaResultadosAnalistas .ra-person-stats b{display:block;font-weight:600;font-size:12px;color:var(--ra-navy);font-variant-numeric:tabular-nums}
+    #abaResultadosAnalistas .ra-person-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:11px}#abaResultadosAnalistas .ra-person-stats span{display:block;color:var(--ra-muted);font-size:8px;line-height:1.5}#abaResultadosAnalistas .ra-person-stats b{display:block;font-weight:600;font-size:12px;color:var(--ra-navy);font-variant-numeric:tabular-nums}
     #abaResultadosAnalistas .ra-person-foot{margin-top:12px;border-top:1px solid #e6eef7;padding-top:9px;color:var(--ra-muted);font-size:9px;line-height:1.6}
     #abaResultadosAnalistas .ra-person-details{margin-top:15px;border-top:1px solid #e0eaf5;padding-top:3px}
     #abaResultadosAnalistas .ra-person-details>summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 4px 7px;cursor:pointer;list-style:none;color:var(--ra-deep);font-weight:700;font-size:11px}
@@ -77,7 +81,7 @@
     #abaResultadosAnalistas .ra-method{padding:17px 24px;margin-bottom:18px;border-radius:14px;background:#edf3fa;border:1px solid #dce6f1;font-size:10px;line-height:1.9;color:var(--ra-muted)}#abaResultadosAnalistas .ra-method summary{font-size:11px;font-weight:600;color:var(--ra-deep);cursor:pointer}#abaResultadosAnalistas .ra-method p{margin:12px 0 0}#abaResultadosAnalistas .ra-method strong{color:var(--ra-navy);font-weight:600}
     #abaResultadosAnalistas .ra-empty{padding:32px 24px;text-align:center;color:var(--ra-muted);grid-column:1/-1;line-height:1.9;border:1px dashed #c7d7e9;border-radius:12px}#abaResultadosAnalistas .ra-empty strong{display:block;color:var(--ra-navy);font-weight:600;margin-bottom:4px}
     @media(max-width:1100px){#abaResultadosAnalistas .ra-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#abaResultadosAnalistas .ra-hero-content{align-items:flex-start}#abaResultadosAnalistas .ra-control.ra-reference{min-width:300px}}
-    @media(max-width:720px){#abaResultadosAnalistas{padding:10px}#abaResultadosAnalistas .ra-hero{padding:24px 20px;border-radius:16px}#abaResultadosAnalistas h2{font-size:25px}#abaResultadosAnalistas .ra-hero-content{flex-direction:column;gap:17px}#abaResultadosAnalistas .ra-context{min-width:0;width:100%}#abaResultadosAnalistas .ra-context span{display:inline;margin-right:8px}#abaResultadosAnalistas .ra-controls{padding:16px;gap:13px}#abaResultadosAnalistas .ra-control{min-width:calc(50% - 10px)}#abaResultadosAnalistas .ra-control.ra-reference{min-width:100%}#abaResultadosAnalistas .ra-segment button{padding:8px}#abaResultadosAnalistas .ra-scope{padding:11px 16px}#abaResultadosAnalistas .ra-kpis{gap:10px}#abaResultadosAnalistas .ra-kpi{padding:17px 14px}#abaResultadosAnalistas .ra-ring{display:none}#abaResultadosAnalistas .ra-kpi-value{font-size:24px}#abaResultadosAnalistas .ra-kpi-label{font-size:9px}#abaResultadosAnalistas .ra-ranking{grid-template-columns:1fr;padding:0 16px 16px}#abaResultadosAnalistas .ra-section-head{padding:18px 16px}#abaResultadosAnalistas .ra-method{padding:15px 17px}}
+    @media(max-width:720px){#abaResultadosAnalistas{padding:10px}#abaResultadosAnalistas .ra-hero{padding:24px 20px;border-radius:16px}#abaResultadosAnalistas h2{font-size:25px}#abaResultadosAnalistas .ra-hero-content{flex-direction:column;gap:17px}#abaResultadosAnalistas .ra-context{min-width:0;width:100%}#abaResultadosAnalistas .ra-context span{display:inline;margin-right:8px}#abaResultadosAnalistas .ra-controls{padding:16px;gap:13px}#abaResultadosAnalistas .ra-control{min-width:calc(50% - 10px)}#abaResultadosAnalistas .ra-control.ra-reference{min-width:100%}#abaResultadosAnalistas .ra-segment button{padding:8px}#abaResultadosAnalistas .ra-scope{padding:11px 16px}#abaResultadosAnalistas .ra-kpis{gap:10px}#abaResultadosAnalistas .ra-kpi{padding:17px 14px}#abaResultadosAnalistas .ra-ring{display:none}#abaResultadosAnalistas .ra-kpi-value{font-size:24px}#abaResultadosAnalistas .ra-kpi-label{font-size:9px}#abaResultadosAnalistas .ra-ranking{grid-template-columns:1fr;padding:0 16px 16px}#abaResultadosAnalistas .ra-section-head{padding:18px 16px}#abaResultadosAnalistas .ra-method{padding:15px 17px}#abaResultadosAnalistas .ra-person-top{flex-wrap:wrap}#abaResultadosAnalistas .ra-person-export{margin-left:auto}#abaResultadosAnalistas .ra-person-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style>
 
   <div class="ra-hero">
@@ -165,7 +169,7 @@
         return;
       }
       var todos=Array.isArray(graficasMarcas)?graficasMarcas:[];
-      el('raRanking').innerHTML=analistas.map(function(a){
+      el('raRanking').innerHTML=analistas.map(function(a,indice){
         var base=n(a.metaVencida),larg=function(v){return base?Math.max(0,Math.min(100,100*n(v)/base)):0;};
         var iniciais=String(a.analista).trim().split(/\s+/).filter(Boolean).slice(0,2).map(function(x){return x[0];}).join('').toUpperCase();
         var graficas=Array.isArray(a.graficas)?a.graficas:[];
@@ -201,12 +205,125 @@
           '<th>Pendente vencido</th><th>Aderência</th></tr></thead><tbody>'+
           (graficaRows||'<tr><td colspan="9">Nenhuma gráfica encontrada no recorte.</td></tr>')+
           '</tbody></table></div></details>';
-        return '<article class="ra-person"><div class="ra-person-top"><div class="ra-avatar" aria-hidden="true">'+html(iniciais)+'</div><div><div class="ra-person-name">'+html(a.analista)+'</div><div class="ra-person-meta">'+html(a.time)+' · '+graficas.length+' gráfica(s)</div></div><div class="ra-person-score"><strong>'+pct(a.aderencia)+'</strong><small>aderência ao prazo</small></div></div>'+
+        return '<article class="ra-person" data-ra-index="'+indice+'"><div class="ra-person-top"><div class="ra-avatar" aria-hidden="true">'+html(iniciais)+'</div><div><div class="ra-person-name">'+html(a.analista)+'</div><div class="ra-person-meta">'+html(a.time)+' · '+graficas.length+' gráfica(s)</div></div><button type="button" class="ra-person-export" onclick="pgRABaixarImagem(this)" title="Salvar resultado e detalhamento completo deste analista em PNG">Baixar PNG</button><div class="ra-person-score"><strong>'+pct(a.aderencia)+'</strong><small>aderência ao prazo</small></div></div>'+
           '<div class="ra-track" role="img" aria-label="'+html('No prazo: '+numero(a.noPrazoVencido)+'. Coletado fora: '+numero(a.foraPrazoVencido)+'. Pendente vencido: '+numero(a.vencido)+'.')+'"><span class="ra-on" style="width:'+larg(a.noPrazoVencido)+'%"></span><span class="ra-late" style="width:'+larg(a.foraPrazoVencido)+'%"></span><span class="ra-pending" style="width:'+larg(a.vencido)+'%"></span></div>'+
-          '<div class="ra-person-stats"><div><span>No prazo</span><b>'+numero(a.noPrazoVencido)+'</b></div><div><span>Coletado fora</span><b>'+numero(a.foraPrazoVencido)+'</b></div><div><span>Pendente vencido</span><b>'+numero(a.vencido)+'</b></div></div>'+
-          '<div class="ra-person-foot">Meta encerrada: <strong>'+numero(a.metaVencida)+'</strong> · Saldo a vencer: '+numero(a.aVencer)+(n(a.semPrazo)?' · Sem prazo: '+numero(a.semPrazo):'')+(n(a.naoApurado)?' · Coleta não conferida: '+numero(a.naoApurado):'')+'<br><strong>Gráficas:</strong> <span title="'+html(graficas.join(' · '))+'">'+html(graficas.join(' · ')||'Gráfica não informada')+'</span></div>'+menu+'</article>';
+          '<div class="ra-person-stats"><div><span>Meta vencida</span><b>'+numero(a.metaVencida)+'</b></div><div><span>No prazo</span><b>'+numero(a.noPrazoVencido)+'</b></div><div><span>Coletado fora</span><b>'+numero(a.foraPrazoVencido)+'</b></div><div><span>Pendente vencido</span><b>'+numero(a.vencido)+'</b></div></div>'+menu+'</article>';
       }).join('');
     }
+
+    // PNG da avaliação individual, com as gráficas completas mesmo com o menu fechado.
+    // Renderiza diretamente os números já apurados; não consulta nem altera o motor.
+    window.pgRABaixarImagem=function(botao){
+      var card=botao&&typeof botao.closest==='function'?botao.closest('.ra-person'):null;
+      var indice=card?Number(card.getAttribute('data-ra-index')):-1;
+      var analistas=resultadoAtual?ordenar(resultadoAtual.analistas||[]):[];
+      var a=Number.isInteger(indice)&&indice>=0?analistas[indice]:null;
+      if(!a){aviso('Resultado do analista indisponível para imagem.',true);return;}
+      var grupos=(resultadoAtual.graficasMarcas||[]).filter(function(g){
+        return g.analista===a.analista&&g.time===a.time;
+      });
+      var nomes=Array.from(new Set(grupos.map(function(g){return g.grafica;}))).sort(function(x,y){
+        return x.localeCompare(y,'pt-BR');
+      });
+      var linhas=[];
+      nomes.forEach(function(nome){
+        var itens=grupos.filter(function(g){return g.grafica===nome;});
+        var total={total:0,entregue:0,metaVencida:0,noPrazoVencido:0,foraPrazoVencido:0,vencido:0};
+        itens.forEach(function(g){
+          Object.keys(total).forEach(function(k){total[k]+=n(g[k]);});
+        });
+        linhas.push({grafica:nome,marca:'TOTAL DA GRÁFICA',tipo:'grafica',dados:total,
+          aderencia:total.metaVencida?100*total.noPrazoVencido/total.metaVencida:null});
+        itens.forEach(function(g){
+          linhas.push({grafica:nome,marca:g.marca,tipo:'marca',percurso:g.percurso,
+            dados:g,aderencia:g.aderencia});
+        });
+      });
+      var W=1440,rowH=34,startY=286,H=startY+40+Math.max(1,linhas.length)*rowH+32;
+      var canvas=document.createElement('canvas'),ratio=2;
+      canvas.width=W*ratio;canvas.height=H*ratio;
+      var ctx=canvas.getContext('2d');
+      if(!ctx){aviso('O navegador não disponibilizou a captura de imagem.',true);return;}
+      ctx.scale(ratio,ratio);
+      function bloco(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h);}
+      function escrito(v,x,y,fs,c,negrito,alinhar,limite){
+        ctx.fillStyle=c;ctx.font=(negrito?'700 ':'400 ')+fs+'px Arial, sans-serif';
+        ctx.textBaseline='middle';ctx.textAlign=alinhar||'left';
+        var valor=String(v==null?'':v);
+        if(limite){
+          while(valor&&ctx.measureText(valor).width>limite)valor=valor.slice(0,-2)+'…';
+        }
+        ctx.fillText(valor,x,y);ctx.textAlign='left';
+      }
+      function valor(d,k){return numero(n(d[k]));}
+      bloco(0,0,W,H,'#ffffff');
+      bloco(0,0,W,8,'#F15B52');
+      escrito('ARCO+  |  RESULTADO POR ANALISTA',38,37,16,'#173D72',true);
+      escrito(referencias[resultadoAtual.referencia]+'   •   '+dataBR(resultadoAtual.corte),W-40,37,14,'#64748B',false,'right');
+      bloco(38,58,W-76,2,'#DFE8F2');
+      escrito(a.analista,38,104,32,'#0C2340',true);
+      escrito(a.time+'   |   '+nomes.length+' gráfica(s)',39,143,16,'#64748B');
+      escrito(pct(a.aderencia),W-42,104,39,'#0C2340',true,'right');
+      escrito('ADERÊNCIA AO PRAZO',W-42,143,13,'#64748B',true,'right');
+      var x=38,larg=W-76,base=n(a.metaVencida),y=163;
+      bloco(x,y,larg,17,'#E9F0F8');
+      if(base){
+        var p1=Math.max(0,Math.min(1,n(a.noPrazoVencido)/base))*larg;
+        var p2=Math.max(0,Math.min(1,n(a.foraPrazoVencido)/base))*larg;
+        var p3=Math.max(0,Math.min(1,n(a.vencido)/base))*larg;
+        bloco(x,y,p1,17,'#418EDE');bloco(x+p1,y,Math.min(p2,larg-p1),17,'#FA4616');
+        bloco(x+p1+p2,y,Math.max(0,Math.min(p3,larg-p1-p2)),17,'#C4D3E4');
+      }
+      var met=[
+        ['META VENCIDA',a.metaVencida],['COLETADO NO PRAZO',a.noPrazoVencido],
+        ['COLETADO FORA',a.foraPrazoVencido],['PENDENTE VENCIDO',a.vencido]
+      ];
+      met.forEach(function(m,i){
+        var xx=38+i*343;
+        escrito(m[0],xx,208,13,'#64748B',true);
+        escrito(numero(m[1]),xx,239,23,'#0C2340',true);
+      });
+      escrito('DESEMPENHO POR GRÁFICA E MARCA',38,275,17,'#173D72',true);
+      var cols=[
+        {x:42,t:'GRÁFICA',a:'left'},
+        {x:218,t:'MARCA / PERCURSO',a:'left'},
+        {x:666,t:'TIRAGEM',a:'right'},
+        {x:806,t:'COLETADO',a:'right'},
+        {x:954,t:'META VENCIDA',a:'right'},
+        {x:1087,t:'NO PRAZO',a:'right'},
+        {x:1198,t:'FORA',a:'right'},
+        {x:1311,t:'PENDENTE',a:'right'},
+        {x:1396,t:'ADERÊNCIA',a:'right'}
+      ];
+      bloco(38,startY,W-76,32,'#0C2340');
+      cols.forEach(function(c){escrito(c.t,c.x,startY+16,11,'#FFFFFF',true,c.a);});
+      linhas.forEach(function(item,i){
+        var y0=startY+32+i*rowH,d=item.dados,grupo=item.tipo==='grafica';
+        bloco(38,y0,W-76,rowH,grupo?'#EAF3FD':i%2?'#FFFFFF':'#F7FAFE');
+        if(grupo)bloco(38,y0,4,rowH,'#418EDE');
+        escrito(item.grafica,grupo?44:53,y0+17,13,grupo?'#0C2340':'#64748B',grupo,'left',156);
+        escrito(grupo?'CONSOLIDADO':item.marca+'   /   '+(item.percurso||''),218,y0+17,13,'#0C2340',grupo,'left',420);
+        [[666,'total'],[806,'entregue'],[954,'metaVencida'],[1087,'noPrazoVencido'],
+          [1198,'foraPrazoVencido'],[1311,'vencido']].forEach(function(p){
+          escrito(valor(d,p[1]),p[0],y0+17,13,'#0C2340',grupo,'right');
+        });
+        escrito(pct(item.aderencia),1396,y0+17,13,
+          item.aderencia!=null&&item.aderencia<80?'#C33918':'#173D72',true,'right');
+      });
+      if(!linhas.length)escrito('Sem gráficas nesse recorte.',44,startY+49,16,'#64748B');
+      var nome=String(a.analista||'Analista').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        .replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'')||'Analista';
+      var arquivo='Resultado_'+nome+'_'+resultadoAtual.destino+'_'+
+        resultadoAtual.referencia+'_'+resultadoAtual.corte+'.png';
+      botao.disabled=true;
+      try{
+        canvas.toBlob(function(blob){
+          botao.disabled=false;
+          if(!blob){aviso('Não foi possível gerar o PNG deste analista.',true);return;}
+          try{baixar(blob,arquivo);}catch(e){aviso('Download do PNG não concluído: '+String(e.message||e),true);}
+        },'image/png');
+      }catch(e){botao.disabled=false;aviso('Captura não concluída: '+String(e.message||e),true);}
+    };
     function linhaTabela(a,total){return '<tr><td>'+(total?'Total do recorte':'<strong>'+html(a.analista)+'</strong><span class="ra-cell-sub">'+html(a.time)+'</span>')+'</td><td>'+html(total?'—':(a.graficas||[]).join(' · '))+'</td><td class="ra-score">'+pct(a.aderencia)+'</td><td>'+numero(a.total)+'</td><td>'+numero(a.entregue)+'</td><td>'+numero(a.metaVencida)+'</td><td>'+numero(a.noPrazoVencido)+'</td><td>'+numero(a.foraPrazoVencido)+'</td><td'+(n(a.vencido)?' class="ra-warn"':'')+'>'+numero(a.vencido)+'</td><td>'+numero(a.aVencer)+'</td><td>'+numero(a.semPrazo)+'</td><td>'+numero(a.naoApurado)+'</td></tr>';}
     window.pgRAAlterar=function(campo,valor){
       if(campo==='referencia'&&!referencias[valor])return;
