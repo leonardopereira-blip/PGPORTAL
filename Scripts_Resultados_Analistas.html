@@ -132,12 +132,34 @@
     // A meta de CD sempre vem do motor Meta Armazém/combinados do cenário
     // escolhido. Para saída da acabadora, a visão a vincula por linha física.
     var armazem=data(item.metaAplicada);
-    return {prazo:armazem,motivo:armazem?'':'Meta Armazém/combinados não conciliada para este item.',
+    return {prazo:armazem,motivo:armazem?'':'Meta armazém/combinados não conciliada para este item.',
       fonte:'Meta Armazém / combinados'};
   }
+  // Compatibilidade interna com análises/testes anteriores. Esta opção não
+  // existe mais no painel; a avaliação exibida sempre usa armazem/meta destino.
+  function prazoLegado(item,referencia,etapa) {
+    var col=referencia==='baseline'?BASELINE:REPLAN;
+    var datas=linhasOrigem(item).map(function(l){
+      var d=data(campo(l,col));
+      if(!d)return null;
+      if(etapa==='coleta')return d;
+      if(item.fluxo==='acabadora'&&etapa==='entrega')return d;
+      var projetada=chegadaMatriz([l],d);
+      return projetada.data;
+    });
+    var fonte=referencia==='baseline'?'Baseline':'Replan';
+    if(!datas.length||datas.some(function(v){return !v;}))
+      return {prazo:null,motivo:fonte+' ausente ou inválido na linha de origem.',fonte:fonte};
+    if(datas.some(function(v){return v!==datas[0]}))
+      return {prazo:null,motivo:'Prazos divergentes entre as linhas de origem.',fonte:fonte};
+    return {prazo:datas[0],motivo:'',fonte:fonte};
+  }
   function prazoItem(item,referencia,etapa) {
-    if(['coleta','coleta_matriz','entrega'].indexOf(etapa)>=0)
+    if(['coleta','coleta_matriz','entrega'].indexOf(etapa)>=0) {
+      if(referencia==='baseline'||referencia==='replan')
+        return prazoLegado(item,referencia,etapa);
       return metaDoDestino(item);
+    }
     // Fases anteriores mantêm o prazo próprio já existente no funil, sem
     // expor opções de Baseline/Replan nesta avaliação.
     var e=definicaoEtapa(etapa);
