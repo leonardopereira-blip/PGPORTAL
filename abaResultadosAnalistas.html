@@ -94,7 +94,7 @@
   <div class="ra-panel">
     <div class="ra-controls">
       <div class="ra-control ra-destino"><span class="ra-label">Destino da avaliação</span><div class="ra-segment" role="group" aria-label="Destino avaliado"><button type="button" data-ra-destino="total" aria-pressed="true" onclick="pgRAAlterar('destino','total')">Total</button><button type="button" data-ra-destino="cd" aria-pressed="false" onclick="pgRAAlterar('destino','cd')">Entregas no CD</button><button type="button" data-ra-destino="acabadora" aria-pressed="false" onclick="pgRAAlterar('destino','acabadora')">Acabadoras</button></div></div>
-      <label class="ra-control ra-etapa"><span class="ra-label">Etapa avaliada</span><select id="raEtapa" onchange="pgRAAlterar('etapa',this.value)"><option value="coleta">Coleta</option><option value="entrega">Entrega</option><option value="env">Envio de arquivo</option><option value="rec">Recebimento do boneco</option><option value="apv">Aprovação do boneco</option><option value="imp">Impressão</option><option value="cus">Validação de custo</option><option value="oc">Ordem de compra</option><option value="tra">Transferência à acabadora</option><option value="rec_acab">Recebimento na acabadora</option><option value="acab">Acabamento</option><option value="kit">Formação de kit</option><option value="col_pcp">Coleta PCP</option><option value="ent_cd">Confirmação CD</option><option value="int_cd">Internalização CD</option></select></label>
+      <label class="ra-control ra-etapa"><span class="ra-label">Etapa avaliada</span><select id="raEtapa" onchange="pgRAAlterar('etapa',this.value)"><option value="coleta">Coleta</option><option value="coleta_matriz">Coleta + Matriz</option><option value="entrega">Entrega</option><option value="env">Envio de arquivo</option><option value="rec">Recebimento do boneco</option><option value="apv">Aprovação do boneco</option><option value="imp">Impressão</option><option value="cus">Validação de custo</option><option value="oc">Ordem de compra</option><option value="tra">Transferência à acabadora</option><option value="rec_acab">Recebimento na acabadora</option><option value="acab">Acabamento</option><option value="kit">Formação de kit</option><option value="col_pcp">Coleta PCP</option><option value="ent_cd">Confirmação CD</option><option value="int_cd">Internalização CD</option></select></label>
       <div class="ra-control ra-route" id="raTrajetoControl" hidden><span class="ra-label">Etapa da acabadora</span><div class="ra-segment" role="group" aria-label="Etapa de entrega da acabadora"><button type="button" data-ra-trajeto="entrada" aria-pressed="true" onclick="pgRAAlterar('trajeto','entrada')">Entrada na acabadora</button><button type="button" data-ra-trajeto="saida" aria-pressed="false" onclick="pgRAAlterar('trajeto','saida')">Saída para o CD</button></div></div>
       <div class="ra-control ra-reference"><span class="ra-label">Comparar resultados com</span><div class="ra-segment" role="group" aria-label="Referência de prazo da avaliação"><button type="button" data-ra-ref="armazem" aria-pressed="true" onclick="pgRAAlterar('referencia','armazem')">Meta armazém</button><button type="button" data-ra-ref="baseline" aria-pressed="false" onclick="pgRAAlterar('referencia','baseline')">Baseline</button><button type="button" data-ra-ref="replan" aria-pressed="false" onclick="pgRAAlterar('referencia','replan')">Replan</button></div></div>
       <label class="ra-control"><span class="ra-label">Coletas até a data de corte</span><input id="raCorte" type="date" required onchange="pgRAAlterar('corte',this.value)"></label>
@@ -124,12 +124,12 @@
   <script>
   (function(){
     'use strict';
-    var estado=window.pgRAEstado={referencia:'armazem',destino:'total',trajeto:'entrada',etapa:'coleta',corte:'',cenario:'com',analista:'',time:''};
+    var estado=window.pgRAEstado={referencia:'armazem',destino:'total',trajeto:'entrada',etapa:'coleta_matriz',corte:'',cenario:'com',analista:'',time:''};
     var resultadoAtual=null;
     var referencias={armazem:'Meta armazém',baseline:'Baseline',replan:'Replan'};
     function nomeEtapa(){var e=(window.pgRAEtapas||[]).find(function(v){return v.id===estado.etapa;});return e?e.nome:'Coleta';}
-    function participioEtapa(etapa){return etapa==='coleta'?'Coletado':etapa==='entrega'?'Entregue':'Concluído';}
-    function faseTP(){return estado.etapa==='coleta'||estado.etapa==='entrega';}
+    function participioEtapa(etapa){return etapa==='coleta'||etapa==='coleta_matriz'?'Coletado':etapa==='entrega'?'Entregue':'Concluído';}
+    function faseTP(){return ['coleta','coleta_matriz','entrega'].indexOf(estado.etapa)>=0;}
     function fluxoRotulo(){return estado.destino==='total'?'Total por analista':
       estado.destino==='cd'?'Entregas no CD':
       estado.trajeto==='entrada'?'Acabadoras · Entrada':'Acabadoras · Saída para CD';}
@@ -140,7 +140,7 @@
         estado.destino==='acabadora'&&estado.referencia!=='baseline'?
         'Replan':referencias[estado.referencia];
     }
-    function prazoResultado(r){return r.etapa!=='coleta'&&r.etapa!=='entrega'?
+    function prazoResultado(r){return r.etapa!=='coleta'&&r.etapa!=='coleta_matriz'&&r.etapa!=='entrega'?
       (r.referenciaEfetiva==='baseline'?'Baseline da fase':'Replan da fase'):
       r.referenciaEfetiva==='mista'?
       'Meta Armazém (CD) / Replan (Acabadoras)':referencias[r.referenciaEfetiva];}
@@ -369,7 +369,9 @@
       el('raTituloRanking').textContent='Resultado por analista · '+nomeEtapa();
       el('raUniverso').textContent=nomeEtapa()+' · '+fluxoRotulo()+
         ' · referência '+prazoRotulo()+' · realizado por etapa sem compensação entre SKUs.';
-      el('raMetodoPrazo').textContent=faseTP()?
+      el('raMetodoPrazo').textContent=estado.etapa==='coleta_matriz'?
+        'Coleta + Matriz: cada parcela real de Coleta TP é projetada até o destino pela mesma Matriz SLA da visão Armazém, ajustando domingo para segunda. O volume fica dentro do prazo quando a chegada projetada é menor ou igual à meta selecionada. Não usa Entrega TP nem atraso real do transporte. Para CD, Meta Armazém usa a meta aplicada; para Baseline/Replan e acabadoras compara os prazos da etapa acrescidos da mesma matriz. Rotas sem SLA seguro não recebem nota.':
+        faseTP()?
         'Coleta: datas reais de Coleta TP; Entrega: datas reais de Entrega TP. Baseline e Replan utilizam datas específicas; Meta Armazém utiliza meta aplicada ao CD e Replan para acabadoras.':
         'Demais fases: conclusão pelo registro real da etapa. Baseline usa a data da fase quando existir; Replan e Meta Armazém usam a previsão da própria fase. Sem data própria, o item fica sem nota e segue auditável.';
       el('raMetodoDestino').textContent='O seletor altera somente Resultado por analista. Os volumes consolidados respeitam as rotas CD / acabadora sem duplicar transferências nem alterar as demais telas.';
@@ -426,7 +428,9 @@
       base.linhas.forEach(function(l,i){
         var d=r.detalhes[i];
         var parcelas=(d.parcelasColeta||[]).map(function(e){
-          return e.data+': '+e.volume+(e.chave?' ['+e.chave+']':'')+(e.kit?' KIT '+e.kit:'');
+          return e.data+': '+e.volume+
+            (e.projetada?' → matriz '+e.projetada:'')+
+            (e.chave?' ['+e.chave+']':'')+(e.kit?' KIT '+e.kit:'');
         });
         l.push(d.destinoAvaliado,d.percurso,d.destinoFluxo,d.referenciaEfetiva,
           d.idOrigem,d.dataUltimaColeta||'',parcelas.join(' | '));
@@ -467,12 +471,19 @@
         t.linhas.forEach(function(l){l.push(r.nomeEtapa);});
       });
       metodo.linhas.unshift(['Etapa avaliada',r.nomeEtapa]);
+      if(r.etapa==='coleta_matriz')metodo.linhas.push(
+        ['Regra de prazo','Chegada teórica = data real de cada Coleta TP + Matriz SLA por rota. Domingo passa para segunda. Dentro do prazo se chegada teórica <= meta da referência.'],
+        ['Responsabilidade','Não usa data real de Entrega TP. Atrasos posteriores à coleta não penalizam o analista.'],
+        ['Auditoria','Cada parcela mostra a data real da coleta e a data de chegada projetada pela matriz. SLA ausente/divergente fica não conferido.']
+      );
       metodo.linhas.forEach(function(l){
         if(l[0]==='Aderência')l[1]=nome+' no prazo dos itens vencidos e conferidos / tiragem dos itens vencidos. Ponderação por volume.';
-        if(l[0]==='Realizado')l[1]=r.etapa==='coleta'?'Parcelas reais de Coleta TP do mapa.':
+        if(l[0]==='Realizado')l[1]=r.etapa==='coleta_matriz'?
+          'Coleta TP real acrescida do SLA teórico da Matriz da rota, sem considerar a entrega física.':
+          r.etapa==='coleta'?'Parcelas reais de Coleta TP do mapa.':
           r.etapa==='entrega'?'Parcelas reais de Entrega TP do mapa.':
           'Data real de conclusão registrada na etapa, sem extrapolar grupos parcialmente concluídos.';
-        if(l[0]==='Prazo baseline/replan'&&r.etapa!=='coleta'&&r.etapa!=='entrega')
+        if(l[0]==='Prazo baseline/replan'&&r.etapa!=='coleta'&&r.etapa!=='coleta_matriz'&&r.etapa!=='entrega')
           l[1]='Prazo baseline da própria fase (se existir) ou replan da fase. Meta Armazém usa replan para fases sem meta própria. Ausências não geram nota.';
       });
       return [resumo,base,metodo,porGraficaMarca];
