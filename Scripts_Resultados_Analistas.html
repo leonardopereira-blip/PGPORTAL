@@ -8,6 +8,61 @@
   var BASELINE = 'COLETA/INTERNALIZAÇÃO FIM BASELINE';
   var REPLAN = 'Coleta/Internalização de estoque final (re) plan';
 
+  // Somente campos reais e de prazo já existentes no funil. Etapas sem prazo
+  // próprio permanecem sem nota em vez de herdar indevidamente a Meta Armazém.
+  var ETAPAS = [
+    {id:'coleta',nome:'Coleta',tipo:'tp'},
+    {id:'entrega',nome:'Entrega',tipo:'tp'},
+    {id:'env',nome:'Envio de arquivo',plano:'ENV ARQUIVO PLAN',base:'ENV ARQUIVO PLAN',real:'ENV ARQUIVO REAL',pcp:true},
+    {id:'rec',nome:'Recebimento do boneco',plano:'REC BONECO PLAN',base:'REC BONECO PLAN',real:'REC BONECO REAL',pcp:true},
+    {id:'apv',nome:'Aprovação do boneco',plano:'APV BONECO PLAN',base:'APV BONECO PLAN',real:'APV BONECO REAL',pcp:true},
+    {id:'imp',nome:'Impressão',plano:'Impressão Final (re) plan',base:'IMPRESSÃO FIM BASELINE',real:'Impressão Final Real.',realAlt:'Impressão Final Real',pcp:true},
+    {id:'cus',nome:'Validação de custo',plano:'Validação de Custo final (re) plan',base:'Validação de Custo  FIM BASELINE',real:'Validação de Custo Final Real',pcp:true},
+    {id:'oc',nome:'Ordem de compra',plano:'OC final (re) plan',base:'OC FIM BASELINE',real:'OC Final Real',pcp:true},
+    {id:'tra',nome:'Transferência à acabadora',plano:'Coleta/Internalização de estoque final (re) plan',base:'COLETA/INTERNALIZAÇÃO FIM BASELINE',real:'Coleta/Internalização de estoque Final Real',origemAcab:true},
+    {id:'rec_acab',nome:'Recebimento na acabadora',plano:'Recebimento de material final plan',real:'Recebimento de material final real',acab:true},
+    {id:'acab',nome:'Acabamento',plano:'Acbto Final (re) plan',base:'ACABAMENTO FIM BASELINE',real:'Acbto Final Real'},
+    {id:'kit',nome:'Formação de kit',plano:'Formação de kit/Encaixotamento Final (re) plan',base:'FORM DE KIT/ENCAIXOTAMENTO FIM BASELINE',real:'Formação de kit/Encaixotamento Final Real'},
+    {id:'col_pcp',nome:'Coleta PCP',plano:'Coleta/Internalização de estoque final (re) plan',base:'COLETA/INTERNALIZAÇÃO FIM BASELINE',real:'Coleta/Internalização de estoque Final Real',pcp:true},
+    {id:'ent_cd',nome:'Confirmação CD',plano:'META_PCP_POS',base:'META_PCP_POS',real:'_DT_ENTREGUE_CD_REAL',vol:'TIRAGEM CONFIRMADA CD'},
+    {id:'int_cd',nome:'Internalização CD',real:'Data Internalizado',vol:'# Tiragem Internalizada'}
+  ];
+  window.pgRAEtapas = ETAPAS.map(function(e){return {id:e.id,nome:e.nome};});
+  function definicaoEtapa(id) {return ETAPAS.find(function(e){return e.id===id;});}
+  function valorFase(l,c,alternativo) {
+    return data(campo(l,c)) || (alternativo?data(campo(l,alternativo)):null);
+  }
+  function correspondeEtapa(item,e) {
+    if(!e || e.tipo==='tp') return true;
+    var linhas=linhasOrigem(item);
+    if(e.pcp && linhas.every(fonteAcabadora))return false;
+    if(e.acab && linhas.every(function(l){return !fonteAcabadora(l);} ))return false;
+    if(e.origemAcab && linhas.every(function(l){return !entraAcabadora(l);} ))return false;
+    if(typeof window.pgLinhaNaVisaoDaFase === 'function') {
+      var faseId=e.id==='col_pcp'?'col':e.id;
+      // A fonte da fase é apenas um filtro de aplicabilidade; não altera a base.
+      if(linhas.every(function(l){return !window.pgLinhaNaVisaoDaFase(l,faseId);}))return false;
+    }
+    return true;
+  }
+  function eventosMarco(item,e,corte) {
+    var linhas=linhasOrigem(item),datas=linhas.map(function(l){return valorFase(l,e.real,e.realAlt);});
+    if(e.vol){
+      var validos=linhas.map(function(l,i){return {data:datas[i],volume:numero(campo(l,e.vol))};})
+        .filter(function(x){return x.data&&x.data<=corte&&x.volume>0;});
+      // Fontes de volumes parciais reais: nunca substituir pela tiragem integral.
+      return {eventos:validos.map(function(v){return {data:v.data,volume:v.volume};}),motivo:''};
+    }
+    var presentes=datas.filter(Boolean);
+    if(!presentes.length)return {eventos:[],motivo:''};
+    // Marco de conclusão só equivale à tiragem quando TODAS as linhas agrupadas
+    // estão encerradas. Caso contrário, não atribuir porcentagem inventada.
+    if(presentes.length!==linhas.length||datas.some(function(d){return d!==datas[0];}))
+      return {eventos:[],motivo:'fase: conclusao-parcial-ou-divergente-no-grupo'};
+    return {eventos:datas[0]<=corte?[{data:datas[0],volume:numero(item.total)}]:[],motivo:''};
+  }
+
+
   function texto(v) { return String(v == null ? '' : v).trim(); }
   function normal(v) { return texto(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase(); }
   function numero(v) {
@@ -36,7 +91,37 @@
     if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate()+1);
     return d.toISOString().slice(0,10);
   }
-  function prazoItem(item,referencia) {
+  function prazoItem(item,referencia,etapa) {
+    if(etapa!=='coleta'&&etapa!=='entrega') {
+      var e=definicaoEtapa(etapa),ref=(referencia==='baseline'?'base':'plano');
+      if(!e || !e[ref])return {prazo:null,motivo:'Etapa sem prazo '+(referencia==='baseline'?'baseline':'planejado')+' próprio; sem atribuição de atraso.'};
+      var datasFase=linhasOrigem(item).map(function(l){return valorFase(l,e[ref]);});
+      if(datasFase.some(function(d){return !d;}))
+        return {prazo:null,motivo:'Prazo da etapa ausente ou inválido.'};
+      if(datasFase.some(function(d){return d!==datasFase[0];}))
+        return {prazo:null,motivo:'Prazos diferentes entre linhas agrupadas; não ratear sem vínculo.'};
+      return {prazo:datasFase[0],motivo:''};
+    }
+    if(etapa==='entrega') {
+      if(referencia==='armazem' && item.fluxo!=='acabadora') {
+        var m=data(item.metaAplicada);
+        return {prazo:m,motivo:m?'':'Meta Armazém ausente para Entrega.'};
+      }
+      var colunaEnt=referencia==='baseline'?BASELINE:REPLAN;
+      var calculados=linhasOrigem(item).map(function(l){
+        var origem=data(campo(l,colunaEnt));
+        if(!origem)return null;
+        if(item.fluxo==='acabadora')return origem;
+        var valor=typeof window.pgDataPlanoEntregaSLA==='function'?
+          data(window.pgDataPlanoEntregaSLA(l,origem)):null;
+        return valor?domingo(valor):null;
+      });
+      if(calculados.some(function(v){return !v;}))
+        return {prazo:null,motivo:'Prazo de entrega sem data ou Matriz SLA verificável.'};
+      if(calculados.some(function(v){return v!==calculados[0];}))
+        return {prazo:null,motivo:'Prazos de entrega divergentes entre linhas agrupadas.'};
+      return {prazo:calculados[0],motivo:''};
+    }
     if (item.fluxo === 'acabadora') {
       var coluna = referencia === 'baseline' ? BASELINE : REPLAN;
       var nomePrazo = referencia === 'baseline' ? 'Baseline' : 'Replan';
@@ -94,7 +179,7 @@
     if (e.id != null && texto(e.id)) return 'ID:'+e.id;
     return 'LINHA:'+id+':'+i;
   }
-  function criarItemAcabadora(linhas,eventos,diagnosticos,total,trajeto) {
+  function criarItemAcabadora(linhas,eventos,diagnosticos,total,trajeto,etapa) {
     var l=linhas[0];
     var usados=0,parcelas=[];
     eventos.slice().sort(function(a,b){return a.data.localeCompare(b.data);})
@@ -105,7 +190,9 @@
     return {linha:l,total:total,marca:texto(l.MARCA_FINAL||l.UNIDADE||l.MARCA),
       grafica:texto(l.GRAFICA_FINAL||campo(l,'GRÁFICA')||l.GRAFICA),
       serie:texto(l.serie_corrigida||campo(l,'SÉRIE')||l.SERIE),
-      eventosColeta:parcelas,fluxo:'acabadora',trajeto:trajeto,
+      eventosColeta:etapa==='entrega'?[]:parcelas,
+      eventosReal:etapa==='entrega'?parcelas:[],
+      fluxo:'acabadora',trajeto:trajeto,
       destinoFluxo:trajeto==='entrada'
         ? texto(l.CD_MAPA||l['CD DESTINO']) : texto(l['CD DESTINO']||l.CD_FINAL||l.CD),
       conciliacao:{linhas:linhas,agrupado:linhas.length>1,diagnosticos:diagnosticos.slice(),
@@ -113,10 +200,10 @@
   }
   window.pgRAItensAcabadoras=function(base,opcoes) {
     opcoes=opcoes||{};
-    var trajeto=opcoes.trajeto||'entrada',corte=data(opcoes.corte);
+    var trajeto=opcoes.trajeto||'entrada',corte=data(opcoes.corte),etapa=opcoes.etapa||'coleta';
     if(['entrada','saida'].indexOf(trajeto)<0)throw new Error('Etapa de acabadora inválida.');
     if(!corte)throw new Error('Data de corte inválida para acabadoras.');
-    if(typeof window.pgVolumesColetaUnificadosV37!=='function' ||
+    if((['coleta','entrega'].indexOf(etapa)>=0 && typeof window.pgVolumesColetaUnificadosV37!=='function') ||
         typeof window.pgIdentidadeOperacionalTPLinha!=='function')
       throw new Error('Conciliação do mapa TP ainda indisponível.');
     var candidatas=(Array.isArray(base)?base:[]).filter(function(l){
@@ -138,11 +225,13 @@
     grupos.forEach(function(registros){
       var fisicos=new Map(),diagnosticos=[];
       registros.forEach(function(r){
-        var v=window.pgVolumesColetaUnificadosV37(r.linha,corte)||{};
-        var lista=Array.isArray(v.eventosColetaTP)?v.eventosColetaTP:[];
+        var v=etapa==='coleta'||etapa==='entrega'?
+          window.pgVolumesColetaUnificadosV37(r.linha,corte)||{}:{};
+        var fonte=etapa==='entrega'?'eventosEntregaTP':'eventosColetaTP';
+        var lista=Array.isArray(v[fonte])?v[fonte]:[];
         var motivo=lista.conciliacao&&lista.conciliacao.motivo||'';
         if(/indisponivel|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta/.test(motivo))
-          diagnosticos.push('coleta: '+motivo);
+          diagnosticos.push((etapa==='entrega'?'entrega':'coleta')+': '+motivo);
         lista.forEach(function(e,i){
           var dia=data(e.data),volume=quantidade(e.volume);
           if(!dia||dia>corte||!volume)return;
@@ -150,7 +239,7 @@
           if(registros.length>1&&chave.indexOf('LINHA:')===0) {
             // Sem identificador físico, a mesma entrega pode aparecer em múltiplos owners.
             // Não atribuir volume possivelmente duplicado ao desempenho de alguém.
-            diagnosticos.push('coleta: parcelas-sem-identificador-fisico');
+            diagnosticos.push((etapa==='entrega'?'entrega':'coleta')+': parcelas-sem-identificador-fisico');
             return;
           }
           var anterior=fisicos.get(chave);
@@ -182,11 +271,11 @@
           var kit=normal(campo(r.linha,'KIT'));
           var associados=registros.length===1?eventos:!eventos.length?[]:
             eventos.filter(function(e){return normal(e.kit)===kit;});
-          saida.push(criarItemAcabadora([r.linha],associados,diagnosticos,r.total,trajeto));
+          saida.push(criarItemAcabadora([r.linha],associados,diagnosticos,r.total,trajeto,etapa));
         });
       } else {
         saida.push(criarItemAcabadora(linhasGrupo,eventos,diagnosticos,
-          registros.reduce(function(s,r){return s+r.total;},0),trajeto));
+          registros.reduce(function(s,r){return s+r.total;},0),trajeto,etapa));
       }
     });
     return saida;
@@ -203,21 +292,30 @@
   function aderencia(out) {
     return out.metaVencida > 0 ? Math.min(100,out.noPrazoVencido/out.metaVencida*100) : null;
   }
-  function detalheItem(item,referencia,corte) {
+  function detalheItem(item,referencia,corte,etapa) {
+    var definicao=definicaoEtapa(etapa);
+    if(!correspondeEtapa(item,definicao))return null;
     var l = item.linha || {}, grafica = texto(item.grafica || l.GRAFICA_FINAL || campo(l,'GRÁFICA') || l.GRAFICA) || 'Não informada';
     var responsavel = typeof window.pgResponsavelGraficaGiro === 'function' ? window.pgResponsavelGraficaGiro(grafica) : {};
     responsavel = responsavel || {};
-    var prazo = prazoItem(item,referencia), total = numero(item.total), entregue = 0, noPrazo = 0, foraPrazo = 0, parcelasColeta=[];
+    var prazo = prazoItem(item,referencia,etapa), total = numero(item.total),
+      entregue = 0, noPrazo = 0, foraPrazo = 0, parcelasColeta=[];
+    var marco=etapa!=='coleta'&&etapa!=='entrega'?eventosMarco(item,definicao,corte):null;
     var diagnosticos = item.conciliacao && item.conciliacao.diagnosticos;
     diagnosticos = Array.isArray(diagnosticos) ? diagnosticos.map(texto).filter(Boolean) : [];
+    if(marco && marco.motivo)diagnosticos.push(marco.motivo);
+    var fasePrefixo=etapa==='entrega'?'entrega':etapa==='coleta'?'coleta':'fase';
     var falhasColeta = diagnosticos.filter(function(d) {
       var n = normal(d).toLowerCase();
-      return /^coleta\s*:/.test(n) && /indisponivel|indisponiveis|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta|parcelas-sem-identificador-fisico/.test(n);
+      return n.indexOf(fasePrefixo+':')===0 &&
+        /indisponivel|indisponiveis|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta|parcelas-sem-identificador-fisico|conclusao-parcial-ou-divergente/.test(n);
     });
     var apuravel = falhasColeta.length === 0;
     // A nota do analista usa APENAS Coleta TP, nunca Entrega TP ou previsão.
     // Cada parcela tem data real; o volume fica limitado à tiragem da própria etapa.
-    (Array.isArray(item.eventosColeta) ? item.eventosColeta : []).map(function(e) {
+    var eventos=etapa==='coleta'?item.eventosColeta:
+      etapa==='entrega'?item.eventosReal:marco&&marco.eventos;
+    (Array.isArray(eventos) ? eventos : []).map(function(e) {
       return {data:data(e.data),volume:numero(e.volume),
         chave:texto(e.chave||(e.linhaMapa!=null?'MAPA:'+e.linhaMapa:e.id!=null?'ID:'+e.id:'')),
         kit:texto(e.kit)};
@@ -236,6 +334,7 @@
     return {
       analista:texto(responsavel.analista) || 'Sem responsável',
       time:texto(responsavel.time) || 'Não informado',grafica:grafica,
+      etapaAvaliada:definicao.nome,
       destinoAvaliado:item.fluxo==='acabadora'?'Acabadoras':'Entregas no CD',
       percurso:item.fluxo==='acabadora'?(item.trajeto==='entrada'?'Gráfica → acabadora':'Acabadora → CD'):'Entrega ao CD',
       destinoFluxo:texto(item.destinoFluxo||l.CD_FINAL||l.CD_MAPA||l['CD DESTINO']),
@@ -252,7 +351,7 @@
       pendente:pendente,vencido:vencida ? pendente : 0,
       aVencer:apuravel && prazo.prazo && !vencida ? pendente : 0,
       semPrazo:prazo.prazo ? 0 : total,naoApurado:apuravel ? 0 : total,
-      motivo:[prazo.motivo,falhasColeta.length ? 'Coleta não conferida: '+falhasColeta.join(' | ')+'.' : ''].filter(Boolean).join(' '),
+      motivo:[prazo.motivo,falhasColeta.length ? definicao.nome+' não conferida: '+falhasColeta.join(' | ')+'.' : ''].filter(Boolean).join(' '),
       parcelasColeta:parcelasColeta,
       dataUltimaColeta:parcelasColeta.length?parcelasColeta[parcelasColeta.length-1].data:'',
       diagnosticos:diagnosticos,
@@ -264,6 +363,8 @@
   window.pgRAApurar = function(itens,opcoes) {
     opcoes = opcoes || {};
     var referencia = opcoes.referencia || 'armazem';
+    var etapa=opcoes.etapa||'coleta';
+    if(!definicaoEtapa(etapa))throw new Error('Etapa de avaliação inválida.');
     var destino=opcoes.destino||'cd',trajeto=opcoes.trajeto||'entrada';
     if(['total','cd','acabadora'].indexOf(destino)<0)throw new Error('Destino de avaliação inválido.');
     if(destino==='acabadora'&&['entrada','saida'].indexOf(trajeto)<0)
@@ -274,9 +375,9 @@
     if (!corte) throw new Error('Data de corte inválida.');
     if (corte > hoje) throw new Error('A data de corte não pode ser futura.');
     var analista = normal(opcoes.analista), time = normal(opcoes.time), porAnalista = new Map(), resumo = vazio();
-    var detalhes = (Array.isArray(itens) ? itens : []).map(function(item) { return detalheItem(item,referencia,corte); })
+    var detalhes = (Array.isArray(itens) ? itens : []).map(function(item) { return detalheItem(item,referencia,corte,etapa); })
       .filter(function(d) {
-        return d.total > 0 && (!analista || analista === 'TODOS' || normal(d.analista) === analista) &&
+        return d && d.total > 0 && (!analista || analista === 'TODOS' || normal(d.analista) === analista) &&
           (!time || time === 'TODOS' || normal(d.time) === time);
       });
     detalhes.forEach(function(d) {
@@ -313,6 +414,7 @@
     return {referencia:referencia,referenciaEfetiva:destino==='acabadora'?
       (referencia==='baseline'?'baseline':'replan'):
       (destino==='total'&&referencia==='armazem'?'mista':referencia),
+      etapa:etapa,nomeEtapa:definicaoEtapa(etapa).nome,
       destino:destino,trajeto:destino==='acabadora'?trajeto:'',
       corte:corte,resumo:resumo,analistas:analistas,graficasMarcas:graficasMarcas,detalhes:detalhes};
   };
