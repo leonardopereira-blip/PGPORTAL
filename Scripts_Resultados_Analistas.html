@@ -12,6 +12,7 @@
   // próprio permanecem sem nota em vez de herdar indevidamente a Meta Armazém.
   var ETAPAS = [
     {id:'coleta',nome:'Coleta',tipo:'tp'},
+    {id:'coleta_matriz',nome:'Coleta + Matriz',tipo:'tp'},
     {id:'entrega',nome:'Entrega',tipo:'tp'},
     {id:'env',nome:'Envio de arquivo',plano:'ENV ARQUIVO PLAN',base:'ENV ARQUIVO PLAN',real:'ENV ARQUIVO REAL',pcp:true},
     {id:'rec',nome:'Recebimento do boneco',plano:'REC BONECO PLAN',base:'REC BONECO PLAN',real:'REC BONECO REAL',pcp:true},
@@ -93,7 +94,44 @@
     if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate()+1);
     return d.toISOString().slice(0,10);
   }
+  // Mesma função de SLA e o mesmo ajuste de domingo da Meta Armazém.
+  // Usa a coleta REAL como entrada, nunca a entrega real do caminhão.
+  function chegadaMatriz(linhas,diaColeta) {
+    if(!data(diaColeta))return {data:null,motivo:'data-coleta-invalida'};
+    if(typeof window.pgDataPlanoEntregaSLA!=='function')
+      return {data:null,motivo:'sla-indisponivel'};
+    var destinos=(Array.isArray(linhas)?linhas:[]).map(function(l){
+      var previsao=null;
+      try{previsao=data(window.pgDataPlanoEntregaSLA(l,diaColeta));}
+      catch(_erro){previsao=null;}
+      return previsao?domingo(previsao):null;
+    });
+    if(!destinos.length||destinos.some(function(v){return !v;}))
+      return {data:null,motivo:'sla-indisponivel'};
+    if(destinos.some(function(v){return v!==destinos[0];}))
+      return {data:null,motivo:'rotas-divergentes-no-grupo'};
+    return {data:destinos[0],motivo:''};
+  }
   function prazoItem(item,referencia,etapa) {
+    if(etapa==='coleta_matriz') {
+      // Meta Armazém: meta final aplicada do CD. Acabadora: replan da etapa,
+      // convertido na mesma matriz para comparar datas de chegada projetadas.
+      if(referencia==='armazem'&&item.fluxo!=='acabadora'){
+        var armazem=data(item.metaAplicada);
+        return {prazo:armazem,motivo:armazem?'':'Meta Armazém ausente ou inválida.'};
+      }
+      var fonte=referencia==='baseline'?BASELINE:REPLAN;
+      var linhas=linhasOrigem(item);
+      var previstos=linhas.map(function(l){
+        var coleta=data(campo(l,fonte));
+        return coleta?chegadaMatriz([l],coleta):{data:null,motivo:'prazo-coleta-ausente'};
+      });
+      if(previstos.some(function(r){return !r.data;}))
+        return {prazo:null,motivo:'Sem data de referência ou rota válida na Matriz SLA.'};
+      if(previstos.some(function(r){return r.data!==previstos[0].data;}))
+        return {prazo:null,motivo:'Metas/SLA divergentes entre as linhas agrupadas.'};
+      return {prazo:previstos[0].data,motivo:''};
+    }
     if(etapa!=='coleta'&&etapa!=='entrega') {
       var e=definicaoEtapa(etapa),ref=(referencia==='baseline'?'base':'plano');
       if(!e || !e[ref])return {prazo:null,motivo:'Etapa sem prazo '+(referencia==='baseline'?'baseline':'planejado')+' próprio; sem atribuição de atraso.'};
@@ -205,7 +243,7 @@
     var trajeto=opcoes.trajeto||'entrada',corte=data(opcoes.corte),etapa=opcoes.etapa||'coleta';
     if(['entrada','saida'].indexOf(trajeto)<0)throw new Error('Etapa de acabadora inválida.');
     if(!corte)throw new Error('Data de corte inválida para acabadoras.');
-    if((['coleta','entrega'].indexOf(etapa)>=0 && typeof window.pgVolumesColetaUnificadosV37!=='function') ||
+    if((['coleta','coleta_matriz','entrega'].indexOf(etapa)>=0 && typeof window.pgVolumesColetaUnificadosV37!=='function') ||
         typeof window.pgIdentidadeOperacionalTPLinha!=='function')
       throw new Error('Conciliação do mapa TP ainda indisponível.');
     var candidatas=(Array.isArray(base)?base:[]).filter(function(l){
@@ -227,7 +265,7 @@
     grupos.forEach(function(registros){
       var fisicos=new Map(),diagnosticos=[];
       registros.forEach(function(r){
-        var v=etapa==='coleta'||etapa==='entrega'?
+        var v=etapa==='coleta'||etapa==='coleta_matriz'||etapa==='entrega'?
           window.pgVolumesColetaUnificadosV37(r.linha,corte)||{}:{};
         var fonte=etapa==='entrega'?'eventosEntregaTP':'eventosColetaTP';
         var lista=Array.isArray(v[fonte])?v[fonte]:[];
@@ -302,23 +340,40 @@
     responsavel = responsavel || {};
     var prazo = prazoItem(item,referencia,etapa), total = numero(item.total),
       entregue = 0, noPrazo = 0, foraPrazo = 0, parcelasColeta=[];
-    var marco=etapa!=='coleta'&&etapa!=='entrega'?eventosMarco(item,definicao,corte):null;
+    var marco=etapa!=='coleta'&&etapa!=='coleta_matriz'&&etapa!=='entrega'?eventosMarco(item,definicao,corte):null;
     var diagnosticos = item.conciliacao && item.conciliacao.diagnosticos;
     diagnosticos = Array.isArray(diagnosticos) ? diagnosticos.map(texto).filter(Boolean) : [];
     if(marco && marco.motivo)diagnosticos.push(marco.motivo);
+    var calculosMatriz=new Map();
+    function projecao(dia) {
+      if(!calculosMatriz.has(dia))
+        calculosMatriz.set(dia,chegadaMatriz(linhasOrigem(item),dia));
+      return calculosMatriz.get(dia);
+    }
+    if(etapa==='coleta_matriz') {
+      (Array.isArray(item.eventosColeta)?item.eventosColeta:[])
+        .forEach(function(e){
+          var dia=data(e.data);
+          if(!dia||dia>corte||!numero(e.volume))return;
+          var projeto=projecao(dia);
+          if(!projeto.data)diagnosticos.push('matriz: '+projeto.motivo);
+        });
+    }
     var fasePrefixo=etapa==='entrega'?'entrega':etapa==='coleta'?'coleta':'fase';
     var falhasColeta = diagnosticos.filter(function(d) {
       var n = normal(d).toLowerCase();
-      return n.indexOf(fasePrefixo+':')===0 &&
-        /indisponivel|indisponiveis|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta|parcelas-sem-identificador-fisico|conclusao-parcial-ou-divergente/.test(n);
+      return (n.indexOf(fasePrefixo+':')===0||
+        etapa==='coleta_matriz'&&n.indexOf('matriz:')===0) &&
+        /indisponivel|indisponiveis|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta|parcelas-sem-identificador-fisico|conclusao-parcial-ou-divergente|sla-indisponivel|rotas-divergentes|data-coleta-invalida/.test(n);
     });
     var apuravel = falhasColeta.length === 0;
-    // A nota do analista usa APENAS Coleta TP, nunca Entrega TP ou previsão.
+    // Cada etapa usa seu próprio realizado; Coleta + Matriz projeta trânsito a partir da Coleta TP.
     // Cada parcela tem data real; o volume fica limitado à tiragem da própria etapa.
-    var eventos=etapa==='coleta'?item.eventosColeta:
+    var eventos=etapa==='coleta'||etapa==='coleta_matriz'?item.eventosColeta:
       etapa==='entrega'?item.eventosReal:marco&&marco.eventos;
     (Array.isArray(eventos) ? eventos : []).map(function(e) {
       return {data:data(e.data),volume:numero(e.volume),
+        projetada:etapa==='coleta_matriz'?projecao(data(e.data)).data:null,
         chave:texto(e.chave||(e.linhaMapa!=null?'MAPA:'+e.linhaMapa:e.id!=null?'ID:'+e.id:'')),
         kit:texto(e.kit)};
     }).filter(function(e) { return e.data && e.data <= corte && e.volume > 0; })
@@ -326,9 +381,10 @@
       .forEach(function(e) {
         var volume = Math.min(e.volume,Math.max(0,total-entregue));
         entregue += volume;
-        if(volume>0)parcelasColeta.push({data:e.data,volume:volume,chave:e.chave,kit:e.kit});
+        if(volume>0)parcelasColeta.push({data:e.data,projetada:e.projetada,volume:volume,chave:e.chave,kit:e.kit});
         if (prazo.prazo) {
-          if (e.data <= prazo.prazo) noPrazo += volume;
+          if ((etapa==='coleta_matriz'?e.projetada:e.data) &&
+              (etapa==='coleta_matriz'?e.projetada:e.data) <= prazo.prazo) noPrazo += volume;
           else foraPrazo += volume;
         }
       });
@@ -413,7 +469,7 @@
       return g;
     }).sort(function(a,b) { return a.analista.localeCompare(b.analista,'pt-BR'); });
     resumo.aderencia = aderencia(resumo);resumo.analistas = analistas.length;
-    return {referencia:referencia,referenciaEfetiva:etapa!=='coleta'&&etapa!=='entrega'?
+    return {referencia:referencia,referenciaEfetiva:etapa!=='coleta'&&etapa!=='coleta_matriz'&&etapa!=='entrega'?
       (referencia==='baseline'?'baseline':'replan'):
       destino==='acabadora'?(referencia==='baseline'?'baseline':'replan'):
       (destino==='total'&&referencia==='armazem'?'mista':referencia),
