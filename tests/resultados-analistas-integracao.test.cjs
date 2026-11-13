@@ -46,15 +46,15 @@ function portal(rows,events,{today='2026-10-20',sla=2}={}) {
 
 test('parcelas reais da Meta Armazém alimentam os três prazos e o cadastro compartilhado',()=>{
   const rows=[row(101)],before=plain(rows),app=portal(rows,[movement(2,40),
-    movement(3,50,{entregaTP:'2026-10-14'}),movement(4,30,{entregaTP:'2026-10-16'})]);
+    movement(3,50,{coletaTP:'2026-10-14'}),movement(4,30,{coletaTP:'2026-10-16'})]);
   const armazem=app.apurar(),baseline=app.apurar('baseline'),replan=app.apurar('replan');
-  assert.equal(armazem.itens.length,1);assert.equal(armazem.itens[0].eventosReal.length,3);
+  assert.equal(armazem.itens.length,1);assert.equal(armazem.itens[0].eventosColeta.length,3);
   assert.equal(armazem.resultado.detalhes[0].prazo,'2026-10-15');
-  assert.equal(baseline.resultado.detalhes[0].prazo,'2026-10-12','SLA 2 em 09/10 cai no domingo e vai para segunda');
-  assert.equal(replan.resultado.detalhes[0].prazo,'2026-10-16');
+  assert.equal(baseline.resultado.detalhes[0].prazo,'2026-10-09','coleta compara direto ao baseline');
+  assert.equal(replan.resultado.detalhes[0].prazo,'2026-10-14');
   assert.equal(armazem.resultado.resumo.noPrazo,90);assert.equal(armazem.resultado.resumo.aderencia,45);
   assert.equal(baseline.resultado.resumo.noPrazo,40);assert.equal(baseline.resultado.resumo.aderencia,20);
-  assert.equal(replan.resultado.resumo.noPrazo,120);assert.equal(replan.resultado.resumo.aderencia,60);
+  assert.equal(replan.resultado.resumo.noPrazo,90);assert.equal(replan.resultado.resumo.aderencia,45);
   for(const {resultado} of [armazem,baseline,replan]) {
     assert.equal(resultado.resumo.total,200);assert.equal(resultado.resumo.entregue,120);
     assert.equal(resultado.resumo.pendente,80);assert.equal(resultado.resumo.analistas,1);
@@ -64,11 +64,11 @@ test('parcelas reais da Meta Armazém alimentam os três prazos e o cadastro com
 });
 
 test('corte histórico recorta as mesmas parcelas sem transformar previsão da meta futura em realizado',()=>{
-  const app=portal([row(101,{[REPLAN]:'2026-10-12'})],[movement(2,40),movement(3,50,{entregaTP:'2026-10-14'}),
-    movement(4,30,{entregaTP:'2026-10-16'})]);
+  const app=portal([row(101,{[REPLAN]:'2026-10-12'})],[movement(2,40),movement(3,50,{coletaTP:'2026-10-14'}),
+    movement(4,30,{coletaTP:'2026-10-16'})]);
   const historico=app.apurar('armazem','2026-10-13');
-  assert.equal(historico.itens[0].realizado,40);
-  assert(historico.itens[0].previsto>40,'Motor da meta ainda tem previsão futura nesta data');
+  assert.equal(historico.resultado.detalhes[0].parcelasColeta.length,1);
+  assert.equal(historico.resultado.detalhes[0].parcelasColeta[0].volume,40);
   assert.equal(historico.resultado.resumo.entregue,40);assert.equal(historico.resultado.resumo.noPrazo,40);
   assert.equal(historico.resultado.resumo.aVencer,160);assert.equal(historico.resultado.resumo.metaVencida,0);
   assert.equal(historico.resultado.resumo.aderencia,null);
@@ -84,18 +84,18 @@ test('diagnóstico real de identidade incompleta é excluído da nota pessoal, c
     row(102,{SKU_REAL:'SKU-SAUDAVEL',SKU:'SKU-SAUDAVEL',TIRAGEM:100,'TIRAGEM COLETADA':40,Entrega_TP:'2026-10-13'})];
   const app=portal(rows,[movement(2,150)]),{itens,resultado}=app.apurar();
   const problema=itens.find(i=>i.linha.SKU==='SKU-1');
-  assert.equal(problema.realizado,0);assert(problema.conciliacao.diagnosticos.some(d=>d.startsWith('entrega:')));
+  assert.equal(problema.realizado,0);assert(problema.conciliacao.diagnosticos.some(d=>d.startsWith('coleta:')));
   assert.equal(resultado.resumo.total,400);assert.equal(resultado.resumo.entregue,40);
   assert.equal(resultado.resumo.naoApurado,300);assert.equal(resultado.resumo.metaVencida,100);
   assert.equal(resultado.resumo.aderencia,40);assert.equal(resultado.analistas[0].aderencia,40);
   const detalhe=resultado.detalhes.find(i=>i.sku==='SKU-1');
-  assert.match(detalhe.motivo,/Entrega TP não conferida/);assert.equal(detalhe.vencido,0);
+  assert.match(detalhe.motivo,/Coleta não conferida/);assert.equal(detalhe.vencido,0);
 });
 
 test('conciliação real sem KIT preserva volume do grupo e sinaliza divergência de baseline/replan',()=>{
   const rows=[row(101,{TIRAGEM:100,'TIRAGEM COLETADA':250}),
     row(102,{TIRAGEM:200,'TIRAGEM COLETADA':0,[BASELINE]:'2026-10-20',[REPLAN]:'2026-10-20'})];
-  const app=portal(rows,[movement(2,250,{entregaTP:'2026-10-13'})]);
+  const app=portal(rows,[movement(2,250,{coletaTP:'2026-10-13'})]);
   const {itens,resultado}=app.apurar();
   assert.equal(itens.length,1);assert.equal(itens[0].conciliacao.agrupado,true);
   assert.equal(itens[0].conciliacao.linhas.length,2);assert.equal(itens[0].total,300);
