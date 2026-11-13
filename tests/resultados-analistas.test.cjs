@@ -217,3 +217,73 @@ test('Entregas não entram no numerador, parcelas de coleta compõem a auditoria
   assert.equal(r.detalhes[0].parcelasColeta[0].chave,'MAPA:45');
   assert.equal(r.detalhes[0].dataUltimaColeta,'2026-10-14');
 });
+
+
+test('Coleta + Matriz avalia somente coleta real projetada pela SLA contra a meta',()=>{
+  const apurar=app();
+  const r=apurar([item({linha:{sla:2,SKU_REAL:'SKU-1',[BASELINE]:'2026-10-10',[REPLAN]:'2026-10-12'},
+    eventosColeta:[{data:'2026-10-13',volume:65,linhaMapa:21},
+      {data:'2026-10-14',volume:35,linhaMapa:22}],
+    eventosReal:[{data:'2026-10-15',volume:100}]})],{etapa:'coleta_matriz'});
+  assert.equal(r.resumo.entregue,100);
+  assert.equal(r.resumo.noPrazoVencido,65);
+  assert.equal(r.resumo.foraPrazoVencido,35);
+  assert.equal(r.resumo.aderencia,65);
+  assert.equal(r.detalhes[0].parcelasColeta[0].projetada,'2026-10-15');
+  assert.equal(r.detalhes[0].parcelasColeta[1].projetada,'2026-10-16');
+  assert.equal(r.detalhes[0].etapaAvaliada,'Coleta + Matriz');
+});
+
+test('SLA da rota aplica domingo para segunda como na Meta Armazém',()=>{
+  const apurar=app();
+  const r=apurar([item({metaAplicada:'2026-10-19',
+    linha:{sla:1,[BASELINE]:'2026-10-15',[REPLAN]:'2026-10-15'},
+    eventosColeta:[{data:'2026-10-17',volume:100}]})],{etapa:'coleta_matriz'});
+  assert.equal(r.detalhes[0].parcelasColeta[0].projetada,'2026-10-19');
+  assert.equal(r.resumo.aderencia,100);
+});
+
+test('Baseline e Replan da Coleta + Matriz incorporam SLA nos dois lados',()=>{
+  const apurar=app();
+  const pedido=item({metaAplicada:'2026-10-01',
+    linha:{sla:3,[BASELINE]:'2026-10-09',[REPLAN]:'2026-10-10'},
+    eventosColeta:[{data:'2026-10-10',volume:100}]});
+  const b=apurar([pedido],{etapa:'coleta_matriz',referencia:'baseline'}).detalhes[0];
+  const r=apurar([pedido],{etapa:'coleta_matriz',referencia:'replan'}).detalhes[0];
+  assert.equal(b.prazo,'2026-10-12');
+  assert.equal(r.prazo,'2026-10-13');
+  assert.equal(b.parcelasColeta[0].projetada,'2026-10-13');
+  assert.equal(b.noPrazoVencido,0);
+  assert.equal(r.noPrazoVencido,100);
+});
+
+test('SLA ausente ou divergente não vira nota ruim de analista',()=>{
+  const apurar=app();
+  const sem=item({linha:{sla:null,[BASELINE]:'2026-10-10',[REPLAN]:'2026-10-12'},
+    eventosColeta:[{data:'2026-10-13',volume:70}]});
+  const a=apurar([sem],{etapa:'coleta_matriz'});
+  assert.equal(a.resumo.entregue,70);
+  assert.equal(a.resumo.naoApurado,100);
+  assert.equal(a.resumo.aderencia,null);
+  assert.equal(a.resumo.foraPrazo,0);
+  assert.match(a.detalhes[0].motivo,/Matriz/i);
+  const divergente=item({conciliacao:{linhas:[
+    {sla:1,[BASELINE]:'2026-10-10',[REPLAN]:'2026-10-12'},
+    {sla:3,[BASELINE]:'2026-10-10',[REPLAN]:'2026-10-12'}
+  ]},eventosColeta:[{data:'2026-10-13',volume:100}]});
+  const b=apurar([divergente],{etapa:'coleta_matriz'});
+  assert.equal(b.resumo.naoApurado,100);
+  assert.equal(b.resumo.aderencia,null);
+});
+
+test('Excedente de um SKU não cobre pendência de outro em Coleta + Matriz',()=>{
+  const apurar=app();
+  const a=item({total:100,linha:{SKU_REAL:'A',sla:0},
+    eventosColeta:[{data:'2026-10-15',volume:200}]});
+  const b=item({total:100,linha:{SKU_REAL:'B',sla:0},eventosColeta:[]});
+  const r=apurar([a,b],{etapa:'coleta_matriz'});
+  assert.equal(r.resumo.entregue,100);
+  assert.equal(r.resumo.pendente,100);
+  assert.equal(r.resumo.metaVencida,200);
+  assert.equal(r.resumo.aderencia,50);
+});
