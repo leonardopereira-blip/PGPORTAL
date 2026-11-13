@@ -405,7 +405,7 @@
       }catch(erro){invalidar('Não foi possível apurar a visão: '+String(erro&&erro.message||erro));}
     };
     function tabelas(){
-      if(typeof window.pgStatusMapaTP==='function'){var status=window.pgStatusMapaTP();if(!status.disponivel){invalidar(status.aviso);throw new Error(status.aviso);}}
+      if(faseTP()&&typeof window.pgStatusMapaTP==='function'){var status=window.pgStatusMapaTP();if(!status.disponivel){invalidar(status.aviso);throw new Error(status.aviso);}}
       if(!resultadoAtual||!resultadoAtual.detalhes.length)throw new Error('Apure um recorte com dados antes de exportar.');
       var r=resultadoAtual;
       var resumo={nome:'Resultados por analista',cabecalho:['Analista','Time','Gráficas','Referência','Corte','Aderência (%)','Tiragem total','Coletado','Meta vencida','No prazo - meta vencida','Fora do prazo - meta vencida','Pendente vencido','Saldo a vencer','Sem prazo','Coleta não conferida','Itens conciliados'],colunasData:[4],colunasNumero:[6,7,8,9,10,11,12,13,14,15],linhas:ordenar(r.analistas).map(function(a){return [a.analista,a.time,(a.graficas||[]).join(' · '),referencias[r.referencia],r.corte,a.aderencia==null?'':a.aderencia,a.total,a.entregue,a.metaVencida,a.noPrazoVencido,a.foraPrazoVencido,a.vencido,a.aVencer,a.semPrazo,a.naoApurado||0,a.linhas];})};
@@ -449,6 +449,27 @@
             g.total,g.entregue,g.metaVencida,g.noPrazoVencido,g.foraPrazoVencido,g.vencido,
             g.aderencia==null?'':g.aderencia,g.naoApurado];
         })};
+      var nome=participioEtapa(r.etapa);
+      [resumo,base,porGraficaMarca].forEach(function(t){
+        t.cabecalho=t.cabecalho.map(function(c){
+          return c.replace(/Coletado/g,nome)
+            .replace(/Coleta não conferida/g,r.nomeEtapa+' não conferida')
+            .replace(/Meta vencida/g,'Tiragem (vencida)')
+            .replace(/Parcelas de coleta reais/g,'Evidências reais da etapa')
+            .replace(/Última coleta/g,'Último registro real');
+        });
+        t.cabecalho.push('Etapa avaliada');
+        t.linhas.forEach(function(l){l.push(r.nomeEtapa);});
+      });
+      metodo.linhas.unshift(['Etapa avaliada',r.nomeEtapa]);
+      metodo.linhas.forEach(function(l){
+        if(l[0]==='Aderência')l[1]=nome+' no prazo dos itens vencidos e conferidos / tiragem dos itens vencidos. Ponderação por volume.';
+        if(l[0]==='Realizado')l[1]=r.etapa==='coleta'?'Parcelas reais de Coleta TP do mapa.':
+          r.etapa==='entrega'?'Parcelas reais de Entrega TP do mapa.':
+          'Data real de conclusão registrada na etapa, sem extrapolar grupos parcialmente concluídos.';
+        if(l[0]==='Prazo baseline/replan'&&r.etapa!=='coleta'&&r.etapa!=='entrega')
+          l[1]='Prazo baseline da própria fase (se existir) ou replan da fase. Meta Armazém usa replan para fases sem meta própria. Ausências não geram nota.';
+      });
       return [resumo,base,metodo,porGraficaMarca];
     }
     function baixar(blob,nome){var url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);}
@@ -460,10 +481,10 @@
         baixar(new Blob([conteudo],{type:'text/csv;charset=utf-8;'}),
           'Resultados_Analistas_'+cab+resultadoAtual.destino+'_'+
           (resultadoAtual.destino==='acabadora'?resultadoAtual.trajeto+'_':'')+
-          resultadoAtual.referencia+'_'+resultadoAtual.corte+'.csv');
+          resultadoAtual.etapa+'_'+resultadoAtual.referencia+'_'+resultadoAtual.corte+'.csv');
       }catch(e){aviso('CSV não concluído: '+String(e.message||e),true);}};
     window.pgRAExportarExcel=function(){try{if(typeof window.pgGerarExcelAbas!=='function'){aviso('O gerador de Excel não está disponível. Use os botões CSV para baixar os resultados e a base auditável.',false);return;}var abas=tabelas();abas[0].colunasPercentual=[5];abas[0].linhas.forEach(function(l){if(typeof l[5]==='number')l[5]/=100;});
-        abas[3].colunasPercentual=[13];abas[3].linhas.forEach(function(l){if(typeof l[13]==='number')l[13]/=100;});var arquivo=window.pgGerarExcelAbas(abas);if(!(arquivo instanceof Blob)||!arquivo.size)throw new Error('Não foi possível gerar o Excel. Use os botões CSV.');baixar(arquivo,'Resultados_Analistas_'+resultadoAtual.destino+'_'+(resultadoAtual.destino==='acabadora'?resultadoAtual.trajeto+'_':'')+resultadoAtual.referencia+'_'+resultadoAtual.corte+'.xlsx');}catch(e){aviso('Exportação não concluída: '+String(e.message||e),true);}};
+        abas[3].colunasPercentual=[13];abas[3].linhas.forEach(function(l){if(typeof l[13]==='number')l[13]/=100;});var arquivo=window.pgGerarExcelAbas(abas);if(!(arquivo instanceof Blob)||!arquivo.size)throw new Error('Não foi possível gerar o Excel. Use os botões CSV.');baixar(arquivo,'Resultados_Analistas_'+resultadoAtual.destino+'_'+(resultadoAtual.destino==='acabadora'?resultadoAtual.trajeto+'_':'')+resultadoAtual.etapa+'_'+resultadoAtual.referencia+'_'+resultadoAtual.corte+'.xlsx');}catch(e){aviso('Exportação não concluída: '+String(e.message||e),true);}};
   })();
   </script>
 </section>
