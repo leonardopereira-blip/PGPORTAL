@@ -112,82 +112,43 @@
       return {data:null,motivo:'rotas-divergentes-no-grupo'};
     return {data:destinos[0],motivo:''};
   }
+  function entradaAcabadora(item) {
+    return item.fluxo==='acabadora'&&item.trajeto==='entrada';
+  }
+  // Meta definida pelo destino físico; nunca buscar previsão como substituta
+  // da meta contratada. Os agrupamentos precisam ter a mesma data ou ser
+  // separados por KIT antes da avaliação.
+  function metaDoDestino(item) {
+    if(entradaAcabadora(item)) {
+      var datas=linhasOrigem(item).map(function(l){
+        return data(campo(l,'META DE ENTREGA NO CD'));
+      });
+      if(!datas.length||datas.some(function(v){return !v;}))
+        return {prazo:null,motivo:'META DE ENTREGA NO CD ausente ou inválida no PCP.',fonte:'META DE ENTREGA NO CD'};
+      if(datas.some(function(v){return v!==datas[0];}))
+        return {prazo:null,motivo:'META DE ENTREGA NO CD divergente entre SKUs/KIT do grupo.',fonte:'META DE ENTREGA NO CD'};
+      return {prazo:datas[0],motivo:'',fonte:'META DE ENTREGA NO CD'};
+    }
+    // A meta de CD sempre vem do motor Meta Armazém/combinados do cenário
+    // escolhido. Para saída da acabadora, a visão a vincula por linha física.
+    var armazem=data(item.metaAplicada);
+    return {prazo:armazem,motivo:armazem?'':'Meta Armazém/combinados não conciliada para este item.',
+      fonte:'Meta Armazém / combinados'};
+  }
   function prazoItem(item,referencia,etapa) {
-    if(etapa==='coleta_matriz') {
-      // Meta Armazém: meta final aplicada do CD. Acabadora: replan da etapa,
-      // convertido na mesma matriz para comparar datas de chegada projetadas.
-      if(referencia==='armazem'&&item.fluxo!=='acabadora'){
-        var armazem=data(item.metaAplicada);
-        return {prazo:armazem,motivo:armazem?'':'Meta Armazém ausente ou inválida.'};
-      }
-      var fonte=referencia==='baseline'?BASELINE:REPLAN;
-      var linhas=linhasOrigem(item);
-      var previstos=linhas.map(function(l){
-        var coleta=data(campo(l,fonte));
-        return coleta?chegadaMatriz([l],coleta):{data:null,motivo:'prazo-coleta-ausente'};
-      });
-      if(previstos.some(function(r){return !r.data;}))
-        return {prazo:null,motivo:'Sem data de referência ou rota válida na Matriz SLA.'};
-      if(previstos.some(function(r){return r.data!==previstos[0].data;}))
-        return {prazo:null,motivo:'Metas/SLA divergentes entre as linhas agrupadas.'};
-      return {prazo:previstos[0].data,motivo:''};
-    }
-    if(etapa!=='coleta'&&etapa!=='entrega') {
-      var e=definicaoEtapa(etapa),ref=(referencia==='baseline'?'base':'plano');
-      if(!e || !e[ref])return {prazo:null,motivo:'Etapa sem prazo '+(referencia==='baseline'?'baseline':'planejado')+' próprio; sem atribuição de atraso.'};
-      var datasFase=linhasOrigem(item).map(function(l){return valorFase(l,e[ref]);});
-      if(datasFase.some(function(d){return !d;}))
-        return {prazo:null,motivo:'Prazo da etapa ausente ou inválido.'};
-      if(datasFase.some(function(d){return d!==datasFase[0];}))
-        return {prazo:null,motivo:'Prazos diferentes entre linhas agrupadas; não ratear sem vínculo.'};
-      return {prazo:datasFase[0],motivo:''};
-    }
-    if(etapa==='entrega') {
-      if(referencia==='armazem' && item.fluxo!=='acabadora') {
-        var m=data(item.metaAplicada);
-        return {prazo:m,motivo:m?'':'Meta Armazém ausente para Entrega.'};
-      }
-      var colunaEnt=referencia==='baseline'?BASELINE:REPLAN;
-      var calculados=linhasOrigem(item).map(function(l){
-        var origem=data(campo(l,colunaEnt));
-        if(!origem)return null;
-        if(item.fluxo==='acabadora')return origem;
-        var valor=typeof window.pgDataPlanoEntregaSLA==='function'?
-          data(window.pgDataPlanoEntregaSLA(l,origem)):null;
-        return valor?domingo(valor):null;
-      });
-      if(calculados.some(function(v){return !v;}))
-        return {prazo:null,motivo:'Prazo de entrega sem data ou Matriz SLA verificável.'};
-      if(calculados.some(function(v){return v!==calculados[0];}))
-        return {prazo:null,motivo:'Prazos de entrega divergentes entre linhas agrupadas.'};
-      return {prazo:calculados[0],motivo:''};
-    }
-    if (item.fluxo === 'acabadora') {
-      var coluna = referencia === 'baseline' ? BASELINE : REPLAN;
-      var nomePrazo = referencia === 'baseline' ? 'Baseline' : 'Replan';
-      var datas = linhasOrigem(item).map(function(l){return data(campo(l,coluna));});
-      if (datas.some(function(d){return !d;}))
-        return {prazo:null,motivo:nomePrazo+' ausente ou inválido em uma linha de origem.'};
-      if (datas.some(function(d){return d!==datas[0];}))
-        return {prazo:null,motivo:'Prazos divergentes entre as linhas de origem; identificar parcelas por KIT.'};
-      return {prazo:datas[0],motivo:''};
-    }
-    if (referencia === 'armazem') {
-      var meta = data(item.metaAplicada);
-      return {prazo:meta,motivo:meta ? '' : 'Meta armazém ausente ou inválida.'};
-    }
-    var linhas = linhasOrigem(item);
-    var prazos = [], nome = referencia === 'baseline' ? BASELINE : REPLAN;
-    for (var i=0; i<linhas.length; i++) {
-      var coleta = data(campo(linhas[i],nome));
-      if (!coleta) return {prazo:null,motivo:(referencia === 'baseline' ? 'Baseline' : 'Replan')+' ausente ou inválido em uma linha de origem.'};
-      // O indicador do analista é coleta: baseline/replan já representam a data de coleta.
-      // Não somar o SLA de transporte, que pertence à entrega no CD.
-      prazos.push(coleta);
-    }
-    if (prazos.some(function(p) { return p !== prazos[0]; }))
-      return {prazo:null,motivo:'Prazos divergentes entre as linhas de origem; identificação por KIT necessária.'};
-    return {prazo:prazos[0],motivo:''};
+    if(['coleta','coleta_matriz','entrega'].indexOf(etapa)>=0)
+      return metaDoDestino(item);
+    // Fases anteriores mantêm o prazo próprio já existente no funil, sem
+    // expor opções de Baseline/Replan nesta avaliação.
+    var e=definicaoEtapa(etapa);
+    if(!e||!e.plano)
+      return {prazo:null,motivo:'Etapa sem prazo próprio verificável.',fonte:'Prazo da própria etapa'};
+    var prazos=linhasOrigem(item).map(function(l){return valorFase(l,e.plano);});
+    if(!prazos.length||prazos.some(function(v){return !v;}))
+      return {prazo:null,motivo:'Prazo da etapa ausente ou inválido.',fonte:'Prazo da própria etapa'};
+    if(prazos.some(function(v){return v!==prazos[0];}))
+      return {prazo:null,motivo:'Prazos divergentes em linhas agrupadas; vincular por KIT.',fonte:'Prazo da própria etapa'};
+    return {prazo:prazos[0],motivo:'',fonte:'Prazo da própria etapa'};
   }
 
   // Recorte independente: transferências PCP -> acabadora e saídas PCP_ACABADORAS -> CD.
@@ -397,8 +358,7 @@
       destinoAvaliado:item.fluxo==='acabadora'?'Acabadoras':'Entregas no CD',
       percurso:item.fluxo==='acabadora'?(item.trajeto==='entrada'?'Gráfica → acabadora':'Acabadora → CD'):'Entrega ao CD',
       destinoFluxo:texto(item.destinoFluxo||l.CD_FINAL||l.CD_MAPA||l['CD DESTINO']),
-      referenciaEfetiva:item.fluxo==='acabadora'?(referencia==='baseline'?'Baseline':'Replan'):
-        (referencia==='baseline'?'Baseline':referencia==='replan'?'Replan':'Meta armazém'),
+      referenciaEfetiva:prazo.fonte,
       marca:texto(item.marca || l.MARCA_FINAL || l.UNIDADE || l.MARCA),
       serie:texto(item.serie || l.serie_corrigida || campo(l,'SÉRIE') || l.SERIE),
       sku:texto(l.SKU_REAL || l.SKU),kit:texto(campo(l,'KIT')),
