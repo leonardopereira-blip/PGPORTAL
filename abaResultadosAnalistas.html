@@ -86,7 +86,7 @@
 
   <div class="ra-hero">
     <div class="ra-hero-content">
-      <div><p class="ra-eyebrow">Produção · Avaliação de ciclo</p><h2>Resultados por analista</h2><p class="ra-subtitle">Cada coleta conta. Compare o realizado por analista, gráfica e marca com os prazos escolhidos e consolide o resultado para a avaliação de ciclo.</p></div>
+      <div><p class="ra-eyebrow">Produção · Avaliação de ciclo</p><h2>Resultados por analista</h2><p class="ra-subtitle">Compare o realizado em cada etapa por analista, gráfica e marca com os prazos escolhidos e consolide o resultado para a avaliação de ciclo.</p></div>
       <div class="ra-context"><span id="raContextLabel">Referência da avaliação</span><strong id="raContextValue">Meta armazém</strong></div>
     </div>
   </div>
@@ -96,7 +96,7 @@
       <div class="ra-control ra-destino"><span class="ra-label">Destino da avaliação</span><div class="ra-segment" role="group" aria-label="Destino avaliado"><button type="button" data-ra-destino="total" aria-pressed="true" onclick="pgRAAlterar('destino','total')">Total</button><button type="button" data-ra-destino="cd" aria-pressed="false" onclick="pgRAAlterar('destino','cd')">Entregas no CD</button><button type="button" data-ra-destino="acabadora" aria-pressed="false" onclick="pgRAAlterar('destino','acabadora')">Acabadoras</button></div></div>
       <label class="ra-control ra-etapa"><span class="ra-label">Etapa avaliada</span><select id="raEtapa" onchange="pgRAAlterar('etapa',this.value)"><option value="coleta">Coleta</option><option value="entrega">Entrega</option><option value="env">Envio de arquivo</option><option value="rec">Recebimento do boneco</option><option value="apv">Aprovação do boneco</option><option value="imp">Impressão</option><option value="cus">Validação de custo</option><option value="oc">Ordem de compra</option><option value="tra">Transferência à acabadora</option><option value="rec_acab">Recebimento na acabadora</option><option value="acab">Acabamento</option><option value="kit">Formação de kit</option><option value="col_pcp">Coleta PCP</option><option value="ent_cd">Confirmação CD</option><option value="int_cd">Internalização CD</option></select></label>
       <div class="ra-control ra-route" id="raTrajetoControl" hidden><span class="ra-label">Etapa da acabadora</span><div class="ra-segment" role="group" aria-label="Etapa de entrega da acabadora"><button type="button" data-ra-trajeto="entrada" aria-pressed="true" onclick="pgRAAlterar('trajeto','entrada')">Entrada na acabadora</button><button type="button" data-ra-trajeto="saida" aria-pressed="false" onclick="pgRAAlterar('trajeto','saida')">Saída para o CD</button></div></div>
-      <div class="ra-control ra-reference"><span class="ra-label">Comparar coletas com</span><div class="ra-segment" role="group" aria-label="Referência de prazo da avaliação"><button type="button" data-ra-ref="armazem" aria-pressed="true" onclick="pgRAAlterar('referencia','armazem')">Meta armazém</button><button type="button" data-ra-ref="baseline" aria-pressed="false" onclick="pgRAAlterar('referencia','baseline')">Baseline</button><button type="button" data-ra-ref="replan" aria-pressed="false" onclick="pgRAAlterar('referencia','replan')">Replan</button></div></div>
+      <div class="ra-control ra-reference"><span class="ra-label">Comparar resultados com</span><div class="ra-segment" role="group" aria-label="Referência de prazo da avaliação"><button type="button" data-ra-ref="armazem" aria-pressed="true" onclick="pgRAAlterar('referencia','armazem')">Meta armazém</button><button type="button" data-ra-ref="baseline" aria-pressed="false" onclick="pgRAAlterar('referencia','baseline')">Baseline</button><button type="button" data-ra-ref="replan" aria-pressed="false" onclick="pgRAAlterar('referencia','replan')">Replan</button></div></div>
       <label class="ra-control"><span class="ra-label">Coletas até a data de corte</span><input id="raCorte" type="date" required onchange="pgRAAlterar('corte',this.value)"></label>
       <label class="ra-control"><span class="ra-label">Time</span><select id="raTime" onchange="pgRAAlterar('time',this.value)"><option value="">Todos os times</option></select></label>
       <label class="ra-control"><span class="ra-label">Analista</span><select id="raAnalista" onchange="pgRAAlterar('analista',this.value)"><option value="">Todos os analistas</option></select></label>
@@ -115,11 +115,11 @@
 
   <div class="ra-panel">
     <div class="ra-section-head"><div><h3>Quadro de resultados</h3><p class="ra-note" id="raContagem">Selecione o recorte para apurar.</p></div><div class="ra-actions"><button type="button" id="raExcel" class="ra-btn ra-main" onclick="pgRAExportarExcel()" disabled>Baixar Excel completo</button><button type="button" id="raCSV" class="ra-btn" onclick="pgRAExportarCSV(false)" disabled>CSV resultados</button><button type="button" id="raCSVBase" class="ra-btn" onclick="pgRAExportarCSV(true)" disabled>Baixar CSV base auditável</button><button type="button" class="ra-btn" id="raCSVGraficas" onclick="pgRAExportarCSV('graficas')" disabled>CSV por gráfica e marca</button></div></div>
-    <div class="ra-table-scroll"><table aria-label="Resultado de entregas por analista"><thead><tr><th scope="col">Analista / time</th><th scope="col">Gráficas</th><th scope="col">Aderência</th><th scope="col">Tiragem total</th><th scope="col">Coletado</th><th scope="col">Meta vencida</th><th scope="col">No prazo¹</th><th scope="col">Fora do prazo¹</th><th scope="col">Pendente vencido</th><th scope="col">Saldo a vencer</th><th scope="col">Sem prazo</th><th scope="col">Coleta não conferida</th></tr></thead><tbody id="raTabela"></tbody><tfoot id="raTotal"></tfoot></table></div>
+    <div class="ra-table-scroll"><table aria-label="Resultado de entregas por analista"><thead><tr><th scope="col">Analista / time</th><th scope="col">Gráficas</th><th scope="col">Aderência</th><th scope="col">Tiragem total</th><th scope="col">Realizado</th><th scope="col">Meta vencida</th><th scope="col">No prazo¹</th><th scope="col">Fora do prazo¹</th><th scope="col">Pendente vencido</th><th scope="col">Saldo a vencer</th><th scope="col">Sem prazo</th><th scope="col">Não conferido</th></tr></thead><tbody id="raTabela"></tbody><tfoot id="raTotal"></tfoot></table></div>
     <div class="ra-table-note">¹ As colunas “No prazo” e “Fora do prazo” consideram a Coleta realizada com prazo encerrado e dados conferidos. O volume coletado inclui apenas o realizado até o corte, limitado à tiragem de cada item; entregas posteriores e previsões não contam. Volumes sem prazo seguro ou com coleta não conferida ficam fora da aderência.</div>
   </div>
 
-  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = coleta no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e coleta conferida, o resultado aparece como “—”.</p><p id="raMetodoPrazo">Coleta para CD: Baseline e Replan usam as datas finais de coleta do PCP, sem SLA. Meta Armazém usa a meta aplicada ao CD como prazo de referência.</p><p><strong>Realizado:</strong> somente parcelas de Coleta TP do mapa, com data até o corte, limitadas à tiragem. Entrega TP e previsões não entram na avaliação. O responsável vem do cadastro atual de gráficas; não há reconstrução histórica da carteira. Grupos com prazos divergentes ficam sem nota até conciliação segura. Itens com coleta não conferida ficam fora da aderência. <strong>SAS Adapt:</strong> continua no universo regular; a avaliação isolada do projeto ainda depende de alinhamento com a liderança.</p><p id="raMetodoDestino">Os seletores desta tela são exclusivos da avaliação por analista e não alteram as demais visões.</p><p id="raDiagnosticos"></p></details>
+  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = realizado no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e coleta conferida, o resultado aparece como “—”.</p><p id="raMetodoPrazo">Coleta para CD: Baseline e Replan usam as datas finais de coleta do PCP, sem SLA. Meta Armazém usa a meta aplicada ao CD como prazo de referência.</p><p><strong>Realizado:</strong> coleta e entrega usam eventos reais do mapa; as demais fases usam suas próprias evidências de conclusão, sem previsões como realizado. O responsável vem do cadastro atual de gráficas; não há reconstrução histórica da carteira. Grupos com prazos divergentes ficam sem nota até conciliação segura. Itens com coleta não conferida ficam fora da aderência. <strong>SAS Adapt:</strong> continua no universo regular; a avaliação isolada do projeto ainda depende de alinhamento com a liderança.</p><p id="raMetodoDestino">Os seletores desta tela são exclusivos da avaliação por analista e não alteram as demais visões.</p><p id="raDiagnosticos"></p></details>
 
   <script>
   (function(){
@@ -161,13 +161,14 @@
     }
     function ordenar(analistas){return analistas.slice().sort(function(a,b){return (a.aderencia==null?1:0)-(b.aderencia==null?1:0)||(n(b.aderencia)-n(a.aderencia))||(n(b.metaVencida)-n(a.metaVencida))||String(a.analista).localeCompare(String(b.analista),'pt-BR');});}
     function kpis(r){
-      var s=r.resumo,percentual=s.aderencia==null?0:Math.max(0,Math.min(100,n(s.aderencia)));
+      var nome=participioEtapa(r.etapa),s=r.resumo,percentual=s.aderencia==null?0:Math.max(0,Math.min(100,n(s.aderencia)));
       el('raKPIs').innerHTML='<div class="ra-kpi ra-primary"><div class="ra-ring" style="--ra-pct:'+percentual+'%" aria-hidden="true"><span>↗</span></div><div><p class="ra-kpi-label">Aderência ao prazo</p><div class="ra-kpi-value">'+pct(s.aderencia)+'</div><p class="ra-kpi-note">'+numero(s.noPrazoVencido)+' de '+numero(s.metaVencida)+' exemplares com prazo encerrado</p></div></div>'+
-        '<div class="ra-kpi"><p class="ra-kpi-label">Coletado até o corte</p><div class="ra-kpi-value">'+numero(s.entregue)+'</div><p class="ra-kpi-note">'+pct(s.total?100*n(s.entregue)/n(s.total):null)+' da carteira realizada</p></div>'+
-        '<div class="ra-kpi ra-due"><p class="ra-kpi-label">Pendente vencido</p><div class="ra-kpi-value">'+numero(s.vencido)+'</div><p class="ra-kpi-note">Saldo ainda sem coleta após o prazo</p></div>'+
+        '<div class="ra-kpi"><p class="ra-kpi-label">'+html(nome)+' até o corte</p><div class="ra-kpi-value">'+numero(s.entregue)+'</div><p class="ra-kpi-note">'+pct(s.total?100*n(s.entregue)/n(s.total):null)+' da carteira concluída</p></div>'+
+        '<div class="ra-kpi ra-due"><p class="ra-kpi-label">Pendente vencido</p><div class="ra-kpi-value">'+numero(s.vencido)+'</div><p class="ra-kpi-note">Saldo ainda não concluído após o prazo</p></div>'+
         '<div class="ra-kpi"><p class="ra-kpi-label">Volume da carteira</p><div class="ra-kpi-value">'+numero(s.total)+'</div><p class="ra-kpi-note">'+numero(s.analistas)+' analista(s) · '+numero(s.linhas)+' item(ns) conciliado(s)'+(n(s.naoApurado)?' · Apuração parcial':'')+'</p></div>';
     }
     function cards(analistas,graficasMarcas){
+      var nome=participioEtapa(estado.etapa);
       if(!analistas.length){
         el('raRanking').innerHTML='<div class="ra-empty"><strong>Nenhum resultado neste recorte</strong>Ajuste os filtros gerais, o time ou o analista para consultar a carteira.</div>';
         return;
@@ -205,13 +206,13 @@
           ' recorte(s) de marca/percurso</span></span></summary>'+
           '<div class="ra-person-breakdown"><table aria-label="'+html('Detalhamento por gráfica e marca de '+a.analista)+'">'+
           '<thead><tr><th>Gráfica</th><th>Marca / percurso</th><th>Tiragem total</th>'+
-          '<th>Coletado</th><th>Meta vencida</th><th>No prazo</th><th>Fora do prazo</th>'+
+          '<th>'+html(nome)+'</th><th>Tiragem (vencida)</th><th>No prazo</th><th>Fora do prazo</th>'+
           '<th>Pendente vencido</th><th>Aderência</th></tr></thead><tbody>'+
           (graficaRows||'<tr><td colspan="9">Nenhuma gráfica encontrada no recorte.</td></tr>')+
           '</tbody></table></div></details>';
         return '<article class="ra-person" data-ra-index="'+indice+'"><div class="ra-person-top"><div class="ra-avatar" aria-hidden="true">'+html(iniciais)+'</div><div><div class="ra-person-name">'+html(a.analista)+'</div><div class="ra-person-meta">'+html(a.time)+' · '+graficas.length+' gráfica(s)</div></div><button type="button" class="ra-person-export" onclick="pgRABaixarImagem(this)" title="Salvar resultado e detalhamento completo deste analista em PNG">Baixar PNG</button><div class="ra-person-score"><strong>'+pct(a.aderencia)+'</strong><small>aderência ao prazo</small></div></div>'+
-          '<div class="ra-track" role="img" aria-label="'+html('No prazo: '+numero(a.noPrazoVencido)+'. Coletado fora: '+numero(a.foraPrazoVencido)+'. Pendente vencido: '+numero(a.vencido)+'.')+'"><span class="ra-on" style="width:'+larg(a.noPrazoVencido)+'%"></span><span class="ra-late" style="width:'+larg(a.foraPrazoVencido)+'%"></span><span class="ra-pending" style="width:'+larg(a.vencido)+'%"></span></div>'+
-          '<div class="ra-person-stats"><div><span>Meta vencida</span><b>'+numero(a.metaVencida)+'</b></div><div><span>No prazo</span><b>'+numero(a.noPrazoVencido)+'</b></div><div><span>Coletado fora</span><b>'+numero(a.foraPrazoVencido)+'</b></div><div><span>Pendente vencido</span><b>'+numero(a.vencido)+'</b></div></div>'+menu+'</article>';
+          '<div class="ra-track" role="img" aria-label="'+html('No prazo: '+numero(a.noPrazoVencido)+'. Fora do prazo: '+numero(a.foraPrazoVencido)+'. Pendente vencido: '+numero(a.vencido)+'.')+'"><span class="ra-on" style="width:'+larg(a.noPrazoVencido)+'%"></span><span class="ra-late" style="width:'+larg(a.foraPrazoVencido)+'%"></span><span class="ra-pending" style="width:'+larg(a.vencido)+'%"></span></div>'+
+          '<div class="ra-person-stats"><div><span>Tiragem (vencida)</span><b>'+numero(a.metaVencida)+'</b></div><div><span>No prazo</span><b>'+numero(a.noPrazoVencido)+'</b></div><div><span>Fora do prazo</span><b>'+numero(a.foraPrazoVencido)+'</b></div><div><span>Pendente vencido</span><b>'+numero(a.vencido)+'</b></div></div>'+menu+'</article>';
       }).join('');
     }
 
@@ -262,7 +263,7 @@
       function valor(d,k){return numero(n(d[k]));}
       bloco(0,0,W,H,'#ffffff');
       bloco(0,0,W,8,'#F15B52');
-      escrito('ARCO+  |  RESULTADO POR ANALISTA',38,37,16,'#173D72',true);
+      escrito('ARCO+  |  RESULTADO POR ANALISTA - '+nomeEtapa().toUpperCase(),38,37,16,'#173D72',true);
       escrito(referencias[resultadoAtual.referencia]+'   •   '+dataBR(resultadoAtual.corte),W-40,37,14,'#64748B',false,'right');
       bloco(38,58,W-76,2,'#DFE8F2');
       escrito(a.analista,38,104,32,'#0C2340',true);
@@ -279,8 +280,8 @@
         bloco(x+p1+p2,y,Math.max(0,Math.min(p3,larg-p1-p2)),17,'#C4D3E4');
       }
       var met=[
-        ['META VENCIDA',a.metaVencida],['COLETADO NO PRAZO',a.noPrazoVencido],
-        ['COLETADO FORA',a.foraPrazoVencido],['PENDENTE VENCIDO',a.vencido]
+        ['TIRAGEM (VENCIDA)',a.metaVencida],[nomeEtapa().toUpperCase()+' NO PRAZO',a.noPrazoVencido],
+        ['FORA DO PRAZO',a.foraPrazoVencido],['PENDENTE VENCIDO',a.vencido]
       ];
       met.forEach(function(m,i){
         var xx=38+i*343;
@@ -292,8 +293,8 @@
         {x:42,t:'GRÁFICA',a:'left'},
         {x:218,t:'MARCA / PERCURSO',a:'left'},
         {x:666,t:'TIRAGEM',a:'right'},
-        {x:806,t:'COLETADO',a:'right'},
-        {x:954,t:'META VENCIDA',a:'right'},
+        {x:806,t:'REALIZADO',a:'right'},
+        {x:954,t:'TIRAGEM VENCIDA',a:'right'},
         {x:1087,t:'NO PRAZO',a:'right'},
         {x:1198,t:'FORA',a:'right'},
         {x:1311,t:'PENDENTE',a:'right'},
@@ -317,7 +318,7 @@
       if(!linhas.length)escrito('Sem gráficas nesse recorte.',44,startY+49,16,'#64748B');
       var nome=String(a.analista||'Analista').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
         .replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'')||'Analista';
-      var arquivo='Resultado_'+nome+'_'+resultadoAtual.destino+'_'+
+      var arquivo='Resultado_'+nome+'_'+resultadoAtual.etapa+'_'+resultadoAtual.destino+'_'+
         resultadoAtual.referencia+'_'+resultadoAtual.corte+'.png';
       botao.disabled=true;
       try{
