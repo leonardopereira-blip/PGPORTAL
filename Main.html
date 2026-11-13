@@ -728,6 +728,10 @@ window.exportarSkusFiltradosSheets = function() {
             }
         }
 
+        // Reutiliza o carregamento completo das fontes sem navegar ou recarregar
+        // o iframe do Google Apps Script (que pode ficar em branco no reload).
+        window.pgRecarregarDadosPortal = carregarSistema;
+
         function navegarView(viewId, btnElement) {
             document.querySelectorAll('.view-section').forEach(el => el.classList.remove('view-visible'));
             document.getElementById(viewId).classList.add('view-visible');
@@ -1718,7 +1722,7 @@ window.exportarSkusFiltradosSheets = function() {
           class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
           Ignorar
         </button>
-        <button type="button" onclick="pgAtualizarPortalTudo()"
+        <button type="button" id="pgAvisoPortalBotaoAtualizar" onclick="pgAtualizarPortalTudo()"
           class="rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-blue-800">
           Atualizar tudo
         </button>
@@ -1729,15 +1733,16 @@ window.exportarSkusFiltradosSheets = function() {
 <script>
 (function () {
   'use strict';
-  const abertoEm = Date.now();
+  let atualizadoEm = Date.now();
   const aCadaDuasHoras = 2 * 60 * 60 * 1000;
   let ultimoPeriodoAvisado = 0;
+  let recargaEmAndamento = false;
 
   function conferirTempoPortal() {
     const aviso = document.getElementById('pgAvisoPortalDesatualizado');
     const mensagem = document.getElementById('pgAvisoPortalTempo');
     if (!aviso || !mensagem) return;
-    const decorrido = Math.max(0, Date.now() - abertoEm);
+    const decorrido = Math.max(0, Date.now() - atualizadoEm);
     const periodos = Math.floor(decorrido / aCadaDuasHoras);
     if (periodos < 1) return;
     if (periodos > ultimoPeriodoAvisado) {
@@ -1755,8 +1760,51 @@ window.exportarSkusFiltradosSheets = function() {
     if (aviso) aviso.classList.add('hidden');
     // O proximo aviso sera no proximo periodo de duas horas, nao imediatamente.
   };
-  window.pgAtualizarPortalTudo = function () {
-    window.location.reload();
+  window.pgAtualizarPortalTudo = async function () {
+    if (recargaEmAndamento) return false;
+    const botao = document.getElementById('pgAvisoPortalBotaoAtualizar');
+    const aviso = document.getElementById('pgAvisoPortalDesatualizado');
+    const mensagem = document.getElementById('pgAvisoPortalTempo');
+    const loading = document.getElementById('globalLoading');
+    recargaEmAndamento = true;
+    if (botao) {
+      botao.disabled = true;
+      botao.textContent = 'Atualizando...';
+    }
+    try {
+      // HTML Service serve o portal dentro de um iframe. location.reload()
+      // pode recarregar somente esse iframe e deixá-lo permanentemente branco.
+      if (window.pgCarregamentoInicial) throw new Error('Carregamento já em andamento.');
+      if (typeof window.pgRecarregarDadosPortal !== 'function')
+        throw new Error('Carregador de dados indisponível.');
+      await window.pgRecarregarDadosPortal();
+      // O carregador registra o tempo somente após montar o dashboard.
+      // Ele trata suas falhas internamente; não confundir retorno com sucesso.
+      if (!Number.isFinite(window.PG_PERFORMANCE && window.PG_PERFORMANCE.inicialCompletoMs))
+        throw new Error('O carregamento não foi concluído.');
+      atualizadoEm = Date.now();
+      ultimoPeriodoAvisado = 0;
+      if (aviso) aviso.classList.add('hidden');
+      if (typeof window.showToast === 'function')
+        window.showToast('Dados atualizados sem sair da página.', 'success');
+      return true;
+    } catch (erro) {
+      // Não navegar nem deixar uma tela de carregamento cobrindo o portal.
+      if (loading) loading.classList.add('hidden');
+      if (aviso) aviso.classList.remove('hidden');
+      if (mensagem) mensagem.textContent =
+        'Não foi possível atualizar agora. A tela continua disponível; tente novamente.';
+      console.error('[ATUALIZAR PORTAL]', erro);
+      if (typeof window.showToast === 'function')
+        window.showToast('Atualização não concluída. Tente novamente.', 'error');
+      return false;
+    } finally {
+      recargaEmAndamento = false;
+      if (botao) {
+        botao.disabled = false;
+        botao.textContent = 'Atualizar tudo';
+      }
+    }
   };
 
   document.addEventListener('DOMContentLoaded', function () {
