@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-13T17:52:31.246Z",
+  "lido_em": "2026-11-13T17:53:48.455Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -63,7 +63,7 @@
     "HTML:Scripts_Globais_2": "2ee2c344e94e1fb0f6658d03785344af61efdce5bcb117c7baff86672e735a5f",
     "HTML:Scripts_Historico_PCP2026": "c6238f34d35ffd9c1adcb4435ff737563f806c1f234ee0b58c835bdafdafb8a5",
     "HTML:Scripts_Meta_Armazem_Realizado": "ae22d29077e27b204359486acc6557a4769d2ab99ee5556d65876220f17e51f5",
-    "HTML:Scripts_Resultados_Analistas": "6f52732fe5edf36a61dc0a918862d4fe4ad34447f238295073926b87cb34b0fc",
+    "HTML:Scripts_Resultados_Analistas": "49897935633bb25d138340241192bd556d6c753931175b1aa14a1b81097915be",
     "SERVER_JS:Sem título": "0d554ca9e8b80dd09850906f18cdd0f84d35dd7bbe6abab69ab4ccbada526ef8",
     "SERVER_JS:TempSasAdapt": "e9b99c7fee4be761a5c4f43bb5530afb85da8d45e76e99663ff78f90b40e3fbe"
   }
