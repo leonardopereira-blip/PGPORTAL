@@ -14,6 +14,9 @@
     #abaResultadosAnalistas .ra-context span{display:block;font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:#b6d5f2;margin-bottom:4px}#abaResultadosAnalistas .ra-context strong{font-weight:600;font-size:13px}
     #abaResultadosAnalistas .ra-panel{background:#fff;border:1px solid var(--ra-line);border-radius:18px;box-shadow:0 4px 18px #0c234005;margin-bottom:18px;overflow:hidden}
     #abaResultadosAnalistas .ra-controls{padding:20px 24px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 20px}
+    #abaResultadosAnalistas [hidden]{display:none!important}
+    #abaResultadosAnalistas .ra-control.ra-destino{min-width:275px;flex:1.2}
+    #abaResultadosAnalistas .ra-control.ra-route{min-width:285px;flex:1.25}
     #abaResultadosAnalistas .ra-control{display:flex;flex-direction:column;gap:7px;min-width:155px;flex:1}#abaResultadosAnalistas .ra-control.ra-reference{min-width:340px;flex:1.7}
     #abaResultadosAnalistas .ra-label{font-size:10px;color:var(--ra-muted);font-weight:600;letter-spacing:.035em}
     #abaResultadosAnalistas .ra-segment{display:flex;gap:4px;padding:4px;border-radius:11px;background:#edf3fa;border:1px solid #e5edf6}
@@ -67,20 +70,22 @@
 
   <div class="ra-panel">
     <div class="ra-controls">
+      <div class="ra-control ra-destino"><span class="ra-label">Destino da avaliação</span><div class="ra-segment" role="group" aria-label="Destino avaliado"><button type="button" data-ra-destino="cd" aria-pressed="true" onclick="pgRAAlterar('destino','cd')">Entregas no CD</button><button type="button" data-ra-destino="acabadora" aria-pressed="false" onclick="pgRAAlterar('destino','acabadora')">Acabadoras</button></div></div>
+      <div class="ra-control ra-route" id="raTrajetoControl" hidden><span class="ra-label">Etapa da acabadora</span><div class="ra-segment" role="group" aria-label="Etapa de entrega da acabadora"><button type="button" data-ra-trajeto="entrada" aria-pressed="true" onclick="pgRAAlterar('trajeto','entrada')">Entrada na acabadora</button><button type="button" data-ra-trajeto="saida" aria-pressed="false" onclick="pgRAAlterar('trajeto','saida')">Saída para o CD</button></div></div>
       <div class="ra-control ra-reference"><span class="ra-label">Comparar entregas com</span><div class="ra-segment" role="group" aria-label="Referência de prazo da avaliação"><button type="button" data-ra-ref="armazem" aria-pressed="true" onclick="pgRAAlterar('referencia','armazem')">Meta armazém</button><button type="button" data-ra-ref="baseline" aria-pressed="false" onclick="pgRAAlterar('referencia','baseline')">Baseline</button><button type="button" data-ra-ref="replan" aria-pressed="false" onclick="pgRAAlterar('referencia','replan')">Replan</button></div></div>
       <label class="ra-control"><span class="ra-label">Entregas até a data de corte</span><input id="raCorte" type="date" required onchange="pgRAAlterar('corte',this.value)"></label>
       <label class="ra-control"><span class="ra-label">Time</span><select id="raTime" onchange="pgRAAlterar('time',this.value)"><option value="">Todos os times</option></select></label>
       <label class="ra-control"><span class="ra-label">Analista</span><select id="raAnalista" onchange="pgRAAlterar('analista',this.value)"><option value="">Todos os analistas</option></select></label>
       <label class="ra-control" id="raCenarioControl"><span class="ra-label">Combinado Posigraf</span><select id="raCenario" onchange="pgRAAlterar('cenario',this.value)"><option value="com">Não fere a meta</option><option value="sem">Fere a meta</option></select></label>
     </div>
-    <div class="ra-scope"><span>Segue os filtros gerais de marca, ciclo, envio, gráfica e material. Universo de entregas ao CD da Meta Armazém.</span><span class="ra-badge" id="raScope">Realizado · Entrega TP</span></div>
+    <div class="ra-scope"><span id="raUniverso">Segue os filtros gerais de marca, ciclo, envio, gráfica e material. Universo de entregas ao CD da Meta Armazém.</span><span class="ra-badge" id="raScope">Realizado · Entrega TP</span></div>
   </div>
 
   <div id="raAviso" class="ra-alert" role="status" aria-live="polite" hidden></div>
   <div id="raKPIs" class="ra-kpis"></div>
 
   <div class="ra-panel">
-    <div class="ra-section-head"><div><h3>Entregas no prazo, por analista</h3><p class="ra-note">Aderência ponderada pela tiragem com prazo encerrado até o corte.</p></div><div class="ra-legend"><span><i class="ra-dot ra-on"></i>No prazo</span><span><i class="ra-dot ra-late"></i>Entregue fora</span><span><i class="ra-dot ra-pending"></i>Pendente vencido</span></div></div>
+    <div class="ra-section-head"><div><h3 id="raTituloRanking">Entregas no prazo, por analista</h3><p class="ra-note">Aderência ponderada pela tiragem com prazo encerrado até o corte.</p></div><div class="ra-legend"><span><i class="ra-dot ra-on"></i>No prazo</span><span><i class="ra-dot ra-late"></i>Entregue fora</span><span><i class="ra-dot ra-pending"></i>Pendente vencido</span></div></div>
     <div id="raRanking" class="ra-ranking"></div>
   </div>
 
@@ -90,14 +95,18 @@
     <div class="ra-table-note">¹ As colunas “No prazo” e “Fora do prazo” consideram somente a tiragem com prazo encerrado e entrega conferida. O entregue TP inclui o realizado conhecido até o corte. Volumes sem prazo seguro ou com entrega não conferida ficam fora da aderência; essas duas condições podem se sobrepor.</div>
   </div>
 
-  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = entregue no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e entrega conferida, o resultado aparece como “—”.</p><p><strong>Baseline e replan:</strong> data final de coleta da referência escolhida + SLA da rota, com domingo ajustado para segunda conforme a regra da visão Meta Armazém. Replan vazio não é substituído por baseline. <strong>Meta armazém:</strong> prazo aplicado pela marca e pelas exceções vigentes, incluindo o cenário Posigraf escolhido.</p><p><strong>Realizado:</strong> somente parcelas de Entrega TP com data até o corte, limitadas à tiragem, sem incluir previsões. O responsável vem do cadastro atual de gráficas; a tela não reconstrói mudanças históricas de carteira. Grupos conciliados com prazos divergentes ficam destacados como sem prazo seguro. Itens cuja entrega não foi conferida ficam fora da aderência, preservando o realizado físico conhecido na carteira.</p><p>O cenário Posigraf altera a referência Meta armazém; baseline e replan preservam suas próprias datas. O seletor desta tela é independente da “Base de Prazo” do cabeçalho. Os filtros de origem e destino não mudam o universo CD usado nesta visão.</p></details>
+  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = entregue no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e entrega conferida, o resultado aparece como “—”.</p><p id="raMetodoPrazo">Entregas no CD: Baseline e Replan usam data final + SLA; Meta Armazém usa a meta aplicada.</p><p><strong>Realizado:</strong> somente parcelas de Entrega TP com data até o corte, limitadas à tiragem, sem incluir previsões. O responsável vem do cadastro atual de gráficas; a tela não reconstrói mudanças históricas de carteira. Grupos conciliados com prazos divergentes ficam destacados como sem prazo seguro. Itens cuja entrega não foi conferida ficam fora da aderência, preservando o realizado físico conhecido na carteira.</p><p id="raMetodoDestino">Os seletores desta tela são exclusivos da avaliação por analista e não alteram as demais visões.</p></details>
 
   <script>
   (function(){
     'use strict';
-    var estado=window.pgRAEstado={referencia:'armazem',corte:'',cenario:'com',analista:'',time:''};
+    var estado=window.pgRAEstado={referencia:'armazem',destino:'cd',trajeto:'entrada',corte:'',cenario:'com',analista:'',time:''};
     var resultadoAtual=null;
     var referencias={armazem:'Meta armazém',baseline:'Baseline',replan:'Replan'};
+    function fluxoRotulo(){return estado.destino==='cd'?'Entregas no CD':
+      estado.trajeto==='entrada'?'Acabadoras · Entrada':'Acabadoras · Saída para CD';}
+    function prazoRotulo(){return estado.destino==='acabadora'&&estado.referencia!=='baseline'?
+      'Replan':referencias[estado.referencia];}
     function el(id){return document.getElementById(id);}
     function html(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function n(v){v=Number(v);return Number.isFinite(v)?v:0;}
@@ -142,7 +151,9 @@
     window.pgRAAlterar=function(campo,valor){
       if(campo==='referencia'&&!referencias[valor])return;
       if(campo==='cenario'&&valor!=='com'&&valor!=='sem')return;
-      if(['referencia','corte','cenario','analista','time'].indexOf(campo)<0)return;
+      if(campo==='destino'&&['cd','acabadora'].indexOf(valor)<0)return;
+      if(campo==='trajeto'&&['entrada','saida'].indexOf(valor)<0)return;
+      if(['referencia','destino','trajeto','corte','cenario','analista','time'].indexOf(campo)<0)return;
       estado[campo]=valor;window.processarResultadosAnalistas();
     };
     window.processarResultadosAnalistas=function(){
@@ -152,24 +163,53 @@
       el('raCorte').max=limite;el('raCorte').value=estado.corte;
       if(!corteValido(estado.corte)){invalidar('Informe uma data de corte válida para apurar os resultados.');return;}
       if(estado.corte>limite){estado.corte=limite;el('raCorte').value=limite;}
-      el('raCenario').value=estado.cenario;el('raCenario').disabled=estado.referencia!=='armazem';
+      var ehAcabadora=estado.destino==='acabadora';
+      el('raTrajetoControl').hidden=!ehAcabadora;
+      el('raCenarioControl').hidden=ehAcabadora;
+      el('raCenario').value=estado.cenario;
+      el('raCenario').disabled=ehAcabadora||estado.referencia!=='armazem';
       el('raCenarioControl').style.opacity=estado.referencia==='armazem'?'1':'.55';
-      document.querySelectorAll('#abaResultadosAnalistas [data-ra-ref]').forEach(function(b){b.setAttribute('aria-pressed',String(b.getAttribute('data-ra-ref')===estado.referencia));});
-      el('raContextValue').textContent=referencias[estado.referencia]+' · '+dataBR(estado.corte);
+      [['ref','referencia'],['destino','destino'],['trajeto','trajeto']].forEach(function(par){
+        document.querySelectorAll('#abaResultadosAnalistas [data-ra-'+par[0]+']').forEach(function(b){
+          b.setAttribute('aria-pressed',String(b.getAttribute('data-ra-'+par[0])===estado[par[1]]));
+        });
+      });
+      el('raContextValue').textContent=fluxoRotulo()+' · '+prazoRotulo()+' · '+dataBR(estado.corte);
+      el('raTituloRanking').textContent=ehAcabadora?
+        (estado.trajeto==='entrada'?'Transferências recebidas na acabadora':'Saídas da acabadora para o CD')+' · por analista':
+        'Entregas no prazo, por analista';
+      el('raUniverso').textContent=ehAcabadora?
+        (estado.trajeto==='entrada'?'Transferência da gráfica para a acabadora (PCP).':
+          'Saída da acabadora para o CD (PCP_ACABADORAS).')+
+        ' Respeita os filtros gerais; sem mudar os totais de outras visões.':
+        'Segue os filtros gerais de marca, ciclo, envio, gráfica e material. Universo de entregas ao CD da Meta Armazém.';
+      el('raMetodoPrazo').textContent=ehAcabadora?
+        'Acabadoras: Baseline usa o baseline da etapa; Replan e Meta Armazém usam replan da etapa, diretamente, sem SLA adicional ou preenchimento de datas ausentes.':
+        'CD: Baseline e Replan usam data final + SLA de rota (domingo passa para segunda); Meta armazém usa prazo aplicado pela marca e suas exceções.';
+      el('raMetodoDestino').textContent=ehAcabadora?
+        'Entrada usa transferências PCP para acabadora. Saída usa PCP_ACABADORAS, com tiragem a entregar por CD quando informada. Não some estas etapas nem com a visão CD.':
+        'O cenário Posigraf vale somente para Meta Armazém no CD. Nenhum destes seletores altera o funil ou os filtros de Origem/Destino de outras telas.';
       try{
         if(typeof window.pgMAObterItens!=='function'||typeof window.pgRAApurar!=='function')throw new Error('A base de entregas ainda está carregando. Tente novamente após o carregamento.');
         if(typeof window.pgStatusMapaTP==='function'){var status=window.pgStatusMapaTP();if(!status.disponivel)throw new Error(status.aviso);}
-        var itens=window.pgMAObterItens({corte:estado.corte,cenario:estado.cenario,zerarSemPrevisao:false});
-        var completo=window.pgRAApurar(itens,{referencia:estado.referencia,corte:estado.corte});
+        var itens=ehAcabadora?
+          window.pgRAItensAcabadoras(window.pgBaseGeralReportExecutiva||window.dadosGlobais||[],
+            {corte:estado.corte,trajeto:estado.trajeto}):
+          window.pgMAObterItens({corte:estado.corte,cenario:estado.cenario,zerarSemPrevisao:false});
+        var opcoesApuracao={referencia:estado.referencia,corte:estado.corte,
+          destino:estado.destino,trajeto:estado.trajeto};
+        var completo=window.pgRAApurar(itens,opcoesApuracao);
         opcoes('raTime',completo.analistas.map(function(a){return a.time;}),'Todos os times',estado.time);
         opcoes('raAnalista',completo.analistas.map(function(a){return a.analista;}),'Todos os analistas',estado.analista);
-        var r=(estado.analista||estado.time)?window.pgRAApurar(itens,{referencia:estado.referencia,corte:estado.corte,analista:estado.analista,time:estado.time}):completo;
+        var r=(estado.analista||estado.time)?
+          window.pgRAApurar(itens,Object.assign({},opcoesApuracao,{analista:estado.analista,time:estado.time})):completo;
         resultadoAtual=r;window.pgRAResultadoAtual=r;
         var analistas=ordenar(r.analistas);kpis(r);cards(analistas);
         el('raTabela').innerHTML=analistas.length?analistas.map(function(a){return linhaTabela(a,false);}).join(''):'<tr><td colspan="11" style="text-align:center;padding:28px">Nenhum item para os filtros selecionados.</td></tr>';
         el('raTotal').innerHTML=analistas.length?linhaTabela(r.resumo,true):'';
-        el('raContagem').textContent=numero(r.resumo.analistas)+' analista(s) · '+numero(r.resumo.linhas)+' item(ns) · '+referencias[estado.referencia]+' · Corte em '+dataBR(r.corte||estado.corte);
-        el('raScope').textContent=(n(r.resumo.naoApurado)?'Apuração parcial':'Realizado')+' · Corte '+dataBR(r.corte||estado.corte);
+        el('raContagem').textContent=numero(r.resumo.analistas)+' analista(s) · '+numero(r.resumo.linhas)+' item(ns) · '+fluxoRotulo()+' · '+referencias[estado.referencia]+
+          (ehAcabadora?' (prazo efetivo: '+prazoRotulo()+')':'')+' · Corte em '+dataBR(r.corte||estado.corte);
+        el('raScope').textContent=fluxoRotulo()+' · '+(n(r.resumo.naoApurado)?'Apuração parcial':'Entrega TP')+' · '+dataBR(r.corte||estado.corte);
         var avisos=[];
         if(n(r.resumo.naoApurado))avisos.push('Apuração parcial: '+numero(r.resumo.naoApurado)+' exemplares com entrega não conferida ficam fora da aderência. Consulte os diagnósticos na base auditável.');
         if(n(r.resumo.semPrazo))avisos.push(numero(r.resumo.semPrazo)+' exemplares sem prazo seguro ficam fora da aderência. Consulte o motivo na base auditável.');
