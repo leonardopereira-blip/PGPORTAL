@@ -87,7 +87,7 @@
   <div class="ra-hero">
     <div class="ra-hero-content">
       <div><p class="ra-eyebrow">Produção · Avaliação de ciclo</p><h2>Resultados por analista</h2><p class="ra-subtitle">Compare o realizado em cada etapa por analista, gráfica e marca com os prazos escolhidos e consolide o resultado para a avaliação de ciclo.</p></div>
-      <div class="ra-context"><span id="raContextLabel">Referência da avaliação</span><strong id="raContextValue">Meta armazém</strong></div>
+      <div class="ra-context"><span id="raContextLabel">Meta por destino</span><strong id="raContextValue">Meta armazém</strong></div>
     </div>
   </div>
 
@@ -115,10 +115,10 @@
   <div class="ra-panel">
     <div class="ra-section-head"><div><h3>Quadro de resultados</h3><p class="ra-note" id="raContagem">Selecione o recorte para apurar.</p></div><div class="ra-actions"><button type="button" id="raExcel" class="ra-btn ra-main" onclick="pgRAExportarExcel()" disabled>Baixar Excel completo</button><button type="button" id="raCSV" class="ra-btn" onclick="pgRAExportarCSV(false)" disabled>CSV resultados</button><button type="button" id="raCSVBase" class="ra-btn" onclick="pgRAExportarCSV(true)" disabled>Baixar CSV base auditável</button><button type="button" class="ra-btn" id="raCSVGraficas" onclick="pgRAExportarCSV('graficas')" disabled>CSV por gráfica e marca</button></div></div>
     <div class="ra-table-scroll"><table aria-label="Resultado de entregas por analista"><thead><tr><th scope="col">Analista / time</th><th scope="col">Gráficas</th><th scope="col">Aderência</th><th scope="col">Tiragem total</th><th scope="col">Realizado</th><th scope="col">Meta vencida</th><th scope="col">No prazo¹</th><th scope="col">Fora do prazo¹</th><th scope="col">Pendente vencido</th><th scope="col">Saldo a vencer</th><th scope="col">Sem prazo</th><th scope="col">Não conferido</th></tr></thead><tbody id="raTabela"></tbody><tfoot id="raTotal"></tfoot></table></div>
-    <div class="ra-table-note">¹ As colunas “No prazo” e “Fora do prazo” consideram a Coleta realizada com prazo encerrado e dados conferidos. O volume coletado inclui apenas o realizado até o corte, limitado à tiragem de cada item; entregas posteriores e previsões não contam. Volumes sem prazo seguro ou com coleta não conferida ficam fora da aderência.</div>
+    <div class="ra-table-note">¹ As colunas “No prazo” e “Fora do prazo” consideram a Coleta realizada com prazo encerrado e dados conferidos. O volume realizado considera a etapa selecionada até a data de corte, limitado à tiragem de cada item; previsões não contam como realizado. Volumes sem prazo seguro ou com coleta não conferida ficam fora da aderência.</div>
   </div>
 
-  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = realizado no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e coleta conferida, o resultado aparece como “—”.</p><p id="raMetodoPrazo">O prazo é definido pelo destino: PCP → acabadora utiliza a coluna META DE ENTREGA NO CD; destino CD utiliza a Meta Armazém, incluindo os combinados aplicáveis.</p><p><strong>Realizado:</strong> coleta e entrega usam eventos reais do mapa; as demais fases usam suas próprias evidências de conclusão, sem previsões como realizado. O responsável vem do cadastro atual de gráficas; não há reconstrução histórica da carteira. Grupos com prazos divergentes ficam sem nota até conciliação segura. Itens com coleta não conferida ficam fora da aderência. <strong>SAS Adapt:</strong> continua no universo regular; a avaliação isolada do projeto ainda depende de alinhamento com a liderança.</p><p id="raMetodoDestino">Os seletores desta tela são exclusivos da avaliação por analista e não alteram as demais visões.</p><p id="raDiagnosticos"></p></details>
+  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = realizado no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e realizado conferido, o resultado aparece como “—”.</p><p id="raMetodoPrazo">O prazo é definido pelo destino: PCP → acabadora utiliza a coluna META DE ENTREGA NO CD; destino CD utiliza a Meta Armazém, incluindo os combinados aplicáveis.</p><p><strong>Realizado:</strong> coleta e entrega usam eventos reais do mapa; as demais fases usam suas próprias evidências de conclusão, sem previsões como realizado. O responsável vem do cadastro atual de gráficas; não há reconstrução histórica da carteira. Grupos com prazos divergentes ficam sem nota até conciliação segura. Itens com coleta não conferida ficam fora da aderência. <strong>SAS Adapt:</strong> continua no universo regular; a avaliação isolada do projeto ainda depende de alinhamento com a liderança.</p><p id="raMetodoDestino">Os seletores desta tela são exclusivos da avaliação por analista e não alteram as demais visões.</p><p id="raDiagnosticos"></p></details>
 
   <script>
   (function(){
@@ -470,13 +470,13 @@
       if(faseTP()&&typeof window.pgStatusMapaTP==='function'){var status=window.pgStatusMapaTP();if(!status.disponivel){invalidar(status.aviso);throw new Error(status.aviso);}}
       if(!resultadoAtual||!resultadoAtual.detalhes.length)throw new Error('Apure um recorte com dados antes de exportar.');
       var r=resultadoAtual;
-      var resumo={nome:'Resultados por analista',cabecalho:['Analista','Time','Gráficas','Referência','Corte','Aderência (%)','Tiragem total','Coletado','Meta vencida','No prazo - meta vencida','Fora do prazo - meta vencida','Pendente vencido','Saldo a vencer','Sem prazo','Coleta não conferida','Itens conciliados'],colunasData:[4],colunasNumero:[6,7,8,9,10,11,12,13,14,15],linhas:ordenar(r.analistas).map(function(a){return [a.analista,a.time,(a.graficas||[]).join(' · '),referencias[r.referencia],r.corte,a.aderencia==null?'':a.aderencia,a.total,a.entregue,a.metaVencida,a.noPrazoVencido,a.foraPrazoVencido,a.vencido,a.aVencer,a.semPrazo,a.naoApurado||0,a.linhas];})};
-      resumo.linhas.push(['TOTAL DO RECORTE','','',referencias[r.referencia],r.corte,r.resumo.aderencia==null?'':r.resumo.aderencia,r.resumo.total,r.resumo.entregue,r.resumo.metaVencida,r.resumo.noPrazoVencido,r.resumo.foraPrazoVencido,r.resumo.vencido,r.resumo.aVencer,r.resumo.semPrazo,r.resumo.naoApurado||0,r.resumo.linhas]);
+      var resumo={nome:'Resultados por analista',cabecalho:['Analista','Time','Gráficas','Meta de comparação','Corte','Aderência (%)','Tiragem total','Coletado','Meta vencida','No prazo - meta vencida','Fora do prazo - meta vencida','Pendente vencido','Saldo a vencer','Sem prazo','Coleta não conferida','Itens conciliados'],colunasData:[4],colunasNumero:[6,7,8,9,10,11,12,13,14,15],linhas:ordenar(r.analistas).map(function(a){return [a.analista,a.time,(a.graficas||[]).join(' · '),prazoResultado(r),r.corte,a.aderencia==null?'':a.aderencia,a.total,a.entregue,a.metaVencida,a.noPrazoVencido,a.foraPrazoVencido,a.vencido,a.aVencer,a.semPrazo,a.naoApurado||0,a.linhas];})};
+      resumo.linhas.push(['TOTAL DO RECORTE','','',prazoResultado(r),r.corte,r.resumo.aderencia==null?'':r.resumo.aderencia,r.resumo.total,r.resumo.entregue,r.resumo.metaVencida,r.resumo.noPrazoVencido,r.resumo.foraPrazoVencido,r.resumo.vencido,r.resumo.aVencer,r.resumo.semPrazo,r.resumo.naoApurado||0,r.resumo.linhas]);
       var trajetoResumo=r.destino==='total'?'CD + Gráfica → acabadora':
         r.destino==='cd'?'Entrega ao CD':r.trajeto==='entrada'?'Gráfica → acabadora':'Acabadora → CD';
       resumo.cabecalho.push('Destino avaliado','Percurso','Prazo efetivo');
       resumo.linhas.forEach(function(l){l.push(fluxoRotulo(),trajetoResumo,prazoResultado(r));});
-      var base={nome:'Base auditável',cabecalho:['Analista','Time','Gráfica','Marca','Série','SKU','Kit','Descrição','Ciclo','Envio','Referência','Corte','Prazo de comparação','Tiragem total','Coletado','Coletado no prazo','Coletado fora do prazo','Pendente','Meta vencida','No prazo - meta vencida','Fora do prazo - meta vencida','Pendente vencido','Saldo a vencer','Sem prazo','Coleta não conferida','Motivo','Diagnósticos'],colunasData:[11,12],colunasNumero:[13,14,15,16,17,18,19,20,21,22,23,24],linhas:r.detalhes.map(function(d){return [d.analista,d.time,d.grafica,d.marca,d.serie,d.sku,d.kit,d.descricao,d.ciclo||'',d.envio||'',referencias[r.referencia],r.corte,d.prazo||'',d.total,d.entregue,d.noPrazo,d.foraPrazo,d.pendente,d.metaVencida,d.noPrazoVencido,d.foraPrazoVencido,d.vencido,d.aVencer,d.semPrazo,d.naoApurado||0,d.motivo||'',Array.isArray(d.diagnosticos)?d.diagnosticos.join(' · '):d.diagnosticos||''];})};
+      var base={nome:'Base auditável',cabecalho:['Analista','Time','Gráfica','Marca','Série','SKU','Kit','Descrição','Ciclo','Envio','Fonte da meta','Corte','Prazo de comparação','Tiragem total','Coletado','Coletado no prazo','Coletado fora do prazo','Pendente','Meta vencida','No prazo - meta vencida','Fora do prazo - meta vencida','Pendente vencido','Saldo a vencer','Sem prazo','Coleta não conferida','Motivo','Diagnósticos'],colunasData:[11,12],colunasNumero:[13,14,15,16,17,18,19,20,21,22,23,24],linhas:r.detalhes.map(function(d){return [d.analista,d.time,d.grafica,d.marca,d.serie,d.sku,d.kit,d.descricao,d.ciclo||'',d.envio||'',d.referenciaEfetiva,r.corte,d.prazo||'',d.total,d.entregue,d.noPrazo,d.foraPrazo,d.pendente,d.metaVencida,d.noPrazoVencido,d.foraPrazoVencido,d.vencido,d.aVencer,d.semPrazo,d.naoApurado||0,d.motivo||'',Array.isArray(d.diagnosticos)?d.diagnosticos.join(' · '):d.diagnosticos||''];})};
       base.cabecalho.push('Destino avaliado','Percurso','Destino físico','Prazo efetivo',
         'IDs de origem','Última coleta','Parcelas de coleta reais (data: volume [mapa/ID])');
       base.colunasData.push(base.cabecalho.length-2);
@@ -490,7 +490,7 @@
         l.push(d.destinoAvaliado,d.percurso,d.destinoFluxo,d.referenciaEfetiva,
           d.idOrigem,d.dataUltimaColeta||'',parcelas.join(' | '));
       });
-      var metodo={nome:'Critério da avaliação',cabecalho:['Critério','Valor'],linhas:[['Referência',referencias[r.referencia]],['Data de corte',r.corte],['Cenário Posigraf',estado.cenario==='com'?'Combinado não fere a meta':'Combinado fere a meta'],['Filtro de time',estado.time||'Todos'],['Filtro de analista',estado.analista||'Todos'],['Aderência','Coletado no prazo dos itens com prazo encerrado e coleta conferida / tiragem desses itens. Total ponderado por volume.'],['Realizado','Somente Coleta real do mapa até a data de corte, limitada à tiragem por etapa; sem Entrega ou previsões.'],['Universo','Base canônica de CD da Meta Armazém, respeitando filtros gerais do portal.'],['Prazo baseline/replan','Data final de coleta da referência + SLA de rota. Domingo ajustado para segunda. Replan não usa baseline quando vazio.'],['Sem prazo','Inclui data de coleta ausente e agrupamentos com prazos divergentes. Fora da aderência.'],['Coleta não conferida','Itens com diagnóstico de coleta não conferida ficam fora da aderência, preservando volume conhecido. Pode sobrepor sem prazo.'],['Responsável','Cadastro atual de responsáveis por gráfica, sem reconstrução histórica da carteira.'],['SAS Adapt','Mantido na base geral; tratamento separado aguarda alinhamento com a liderança.']]};
+      var metodo={nome:'Critério da avaliação',cabecalho:['Critério','Valor'],linhas:[['Metas por destino',prazoResultado(r)],['Data de corte',r.corte],['Cenário Posigraf',estado.cenario==='com'?'Combinado não fere a meta':'Combinado fere a meta'],['Filtro de time',estado.time||'Todos'],['Filtro de analista',estado.analista||'Todos'],['Aderência','Coletado no prazo dos itens com prazo encerrado e coleta conferida / tiragem desses itens. Total ponderado por volume.'],['Realizado','Somente Coleta real do mapa até a data de corte, limitada à tiragem por etapa; sem Entrega ou previsões.'],['Universo','Base canônica de CD da Meta Armazém, respeitando filtros gerais do portal.'],['Regra de prazo','Na entrada da acabadora: META DE ENTREGA NO CD do PCP. No CD: Meta Armazém com combinados do cenário. Para Coleta + Matriz, somar o SLA à data real da coleta. Demais etapas: prazo próprio registrado na fase.'],['Sem prazo','Inclui data de coleta ausente e agrupamentos com prazos divergentes. Fora da aderência.'],['Coleta não conferida','Itens com diagnóstico de coleta não conferida ficam fora da aderência, preservando volume conhecido. Pode sobrepor sem prazo.'],['Responsável','Cadastro atual de responsáveis por gráfica, sem reconstrução histórica da carteira.'],['SAS Adapt','Mantido na base geral; tratamento separado aguarda alinhamento com a liderança.']]};
       metodo.linhas.unshift(['Destino avaliado',fluxoRotulo()],['Percurso',trajetoResumo],
         ['Prazo efetivo',prazoResultado(r)]);
       metodo.linhas.forEach(function(l){
@@ -498,18 +498,17 @@
           'CD canônico + entrada na acabadora. A saída para CD já está dentro do CD e não é somada outra vez. Total mede obrigações por etapa.':
           r.destino==='cd'?'Base canônica CD da Meta Armazém, respeitando os filtros gerais.':
           'Etapa própria de acabadora, sem mesclar entrada e saída, respeitando os filtros gerais.';
-        if(l[0]==='Prazo baseline/replan')l[1]=r.destino==='total'?
-          'CD: baseline/replan na data final de coleta, sem SLA adicional; Meta Armazém usa meta do CD como referência sem descontar SLA. Acabadoras: baseline quando Baseline, replan nas demais referências.':
-          r.destino==='cd'?'Data final de coleta baseline/replan, sem SLA adicional; Meta Armazém usa o marco aplicado do CD sem descontar transporte.':
-          'Data final da etapa, sem SLA adicional; Meta Armazém usa Replan. Replan vazio não herda baseline.';
-        if(l[0]==='Cenário Posigraf'&&r.destino==='acabadora')l[1]='Não se aplica';
+        if(l[0]==='Cenário Posigraf'&&r.destino==='acabadora'&&r.trajeto==='entrada')l[1]='Não se aplica';
       });
       var porGraficaMarca={nome:'Por gráfica e marca',
-        cabecalho:['Analista','Time','Gráfica','Marca','Percurso','Referência','Corte',
+        cabecalho:['Analista','Time','Gráfica','Marca','Percurso','Meta de comparação','Corte',
           'Tiragem total','Coletado','Meta vencida','Coletado no prazo','Coletado fora',
           'Pendente vencido','Aderência (%)','Coleta não conferida'],
         colunasData:[6],colunasNumero:[7,8,9,10,11,12,14],linhas:(r.graficasMarcas||[]).map(function(g){
-          return [g.analista,g.time,g.grafica,g.marca,g.percurso,referencias[r.referencia],r.corte,
+          return [g.analista,g.time,g.grafica,g.marca,g.percurso,
+            !faseTP()?'Prazo da própria etapa':
+              g.percurso==='Gráfica → acabadora'?'META DE ENTREGA NO CD (PCP)':
+                'Meta Armazém / combinados',r.corte,
             g.total,g.entregue,g.metaVencida,g.noPrazoVencido,g.foraPrazoVencido,g.vencido,
             g.aderencia==null?'':g.aderencia,g.naoApurado];
         })};
@@ -527,7 +526,7 @@
       });
       metodo.linhas.unshift(['Etapa avaliada',r.nomeEtapa]);
       if(r.etapa==='coleta_matriz')metodo.linhas.push(
-        ['Regra de prazo','Chegada teórica = data real de cada Coleta TP + Matriz SLA por rota. Domingo passa para segunda. Dentro do prazo se chegada teórica <= meta da referência.'],
+        ['Regra de prazo','Chegada teórica = data real de cada Coleta TP + Matriz SLA por rota. Domingo passa para segunda. Dentro do prazo se chegada teórica <= meta do destino (PCP/acabadora ou CD).'],
         ['Responsabilidade','Não usa data real de Entrega TP. Atrasos posteriores à coleta não penalizam o analista.'],
         ['Auditoria','Cada parcela mostra a data real da coleta e a data de chegada projetada pela matriz. SLA ausente/divergente fica não conferido.']
       );
@@ -538,8 +537,8 @@
           r.etapa==='coleta'?'Parcelas reais de Coleta TP do mapa.':
           r.etapa==='entrega'?'Parcelas reais de Entrega TP do mapa.':
           'Data real de conclusão registrada na etapa, sem extrapolar grupos parcialmente concluídos.';
-        if(l[0]==='Prazo baseline/replan'&&r.etapa!=='coleta'&&r.etapa!=='coleta_matriz'&&r.etapa!=='entrega')
-          l[1]='Prazo baseline da própria fase (se existir) ou replan da fase. Meta Armazém usa replan para fases sem meta própria. Ausências não geram nota.';
+        if(l[0]==='Regra de prazo'&&r.etapa!=='coleta'&&r.etapa!=='coleta_matriz'&&r.etapa!=='entrega')
+          l[1]='Etapas anteriores usam sua própria data prevista de conclusão. Ausência de prazo verificável não gera nota.';
       });
       return [resumo,base,metodo,porGraficaMarca];
     }
