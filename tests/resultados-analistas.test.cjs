@@ -287,3 +287,63 @@ test('Excedente de um SKU não cobre pendência de outro em Coleta + Matriz',()=
   assert.equal(r.resumo.metaVencida,200);
   assert.equal(r.resumo.aderencia,50);
 });
+
+
+test('META DE ENTREGA NO CD do PCP governa as coletas para acabadora, sem fallback no replan',()=>{
+  const apurar=app();
+  const linha={SKU_REAL:'SAE1',sla:2,'META DE ENTREGA NO CD':'2026-10-15',
+    [BASELINE]:'2026-10-01',[REPLAN]:'2026-10-01'};
+  const entrada=item({fluxo:'acabadora',trajeto:'entrada',linha,
+    metaAplicada:'2026-10-05',
+    eventosColeta:[{data:'2026-10-13',volume:70},{data:'2026-10-14',volume:30}]});
+  const direto=apurar([entrada],{destino:'acabadora',trajeto:'entrada',etapa:'coleta'}).detalhes[0];
+  assert.equal(direto.prazo,'2026-10-15');
+  assert.equal(direto.noPrazo,100);
+  assert.equal(direto.referenciaEfetiva,'META DE ENTREGA NO CD');
+  const matriz=apurar([entrada],{destino:'acabadora',trajeto:'entrada',etapa:'coleta_matriz'}).detalhes[0];
+  assert.equal(matriz.prazo,'2026-10-15');
+  assert.equal(matriz.noPrazo,70);
+  assert.equal(matriz.foraPrazo,30);
+  assert.equal(matriz.parcelasColeta[0].projetada,'2026-10-15');
+  assert.equal(matriz.parcelasColeta[1].projetada,'2026-10-16');
+});
+
+test('CD direto e saída de acabadora obedecem à Meta Armazém, sem usar data META DE ENTREGA NO CD',()=>{
+  const apurar=app();
+  const linha={SKU_REAL:'SAE1',sla:2,'META DE ENTREGA NO CD':'2026-10-01'};
+  for(const tipo of [
+    item({linha,metaAplicada:'2026-10-15',eventosColeta:[{data:'2026-10-13',volume:100}]}),
+    item({linha,metaAplicada:'2026-10-15',fluxo:'acabadora',trajeto:'saida',
+      eventosColeta:[{data:'2026-10-13',volume:100}]})
+  ]){
+    const r=apurar([tipo],{etapa:'coleta_matriz'});
+    assert.equal(r.detalhes[0].prazo,'2026-10-15');
+    assert.equal(r.detalhes[0].referenciaEfetiva,'Meta Armazém / combinados');
+    assert.equal(r.resumo.aderencia,100);
+  }
+});
+
+test('META DE ENTREGA NO CD ausente ou divergente não gera atraso artificial',()=>{
+  const apurar=app();
+  const comum={fluxo:'acabadora',trajeto:'entrada',
+    eventosColeta:[{data:'2026-10-13',volume:100}],metaAplicada:'2026-10-20'};
+  const ausente=apurar([item({...comum,linha:{SKU_REAL:'SAE1',sla:2,
+    'META DE ENTREGA NO CD':''}})],{etapa:'coleta_matriz'});
+  assert.equal(ausente.resumo.semPrazo,100);
+  assert.equal(ausente.resumo.aderencia,null);
+  assert.equal(ausente.resumo.foraPrazo,0);
+  assert.match(ausente.detalhes[0].motivo,/META DE ENTREGA NO CD/);
+  const divergente=apurar([item({...comum,conciliacao:{linhas:[
+    {SKU_REAL:'SAE1',sla:2,'META DE ENTREGA NO CD':'2026-10-14'},
+    {SKU_REAL:'SAE1',sla:2,'META DE ENTREGA NO CD':'2026-10-15'}]}})],{etapa:'coleta'});
+  assert.equal(divergente.resumo.semPrazo,100);
+  assert.equal(divergente.resumo.aderencia,null);
+});
+
+test('interface de avaliação não mostra mais seletor Baseline/Replan',()=>{
+  const h=fs.readFileSync(path.join(root,'abaResultadosAnalistas.html'),'utf8');
+  assert.doesNotMatch(h,/data-ra-ref="baseline"/);
+  assert.doesNotMatch(h,/data-ra-ref="replan"/);
+  assert.match(h,/etapa:'coleta_matriz'/);
+  assert.match(h,/META DE ENTREGA NO CD/);
+});
