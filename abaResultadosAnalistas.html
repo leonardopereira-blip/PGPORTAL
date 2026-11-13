@@ -42,14 +42,28 @@
     #abaResultadosAnalistas h3{font-weight:700;font-size:15px;margin:0 0 5px;letter-spacing:-.15px}#abaResultadosAnalistas .ra-note{color:var(--ra-muted);font-size:10px;line-height:1.65;margin:0}
     #abaResultadosAnalistas .ra-legend{display:flex;flex-wrap:wrap;gap:13px;font-size:9px;color:var(--ra-muted)}#abaResultadosAnalistas .ra-legend span{display:inline-flex;align-items:center;gap:5px}
     #abaResultadosAnalistas .ra-dot{display:inline-block;width:8px;height:8px;border-radius:3px;flex-shrink:0}#abaResultadosAnalistas .ra-on{background:var(--ra-blue)}#abaResultadosAnalistas .ra-late{background:var(--ra-orange)}#abaResultadosAnalistas .ra-pending{background:#c4d3e4}
-    #abaResultadosAnalistas .ra-ranking{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;padding:0 24px 24px}
-    #abaResultadosAnalistas .ra-person{border:1px solid var(--ra-line);border-radius:13px;padding:17px 18px;background:linear-gradient(150deg,#fff,#f8fbff)}
+    #abaResultadosAnalistas .ra-ranking{display:grid;grid-template-columns:minmax(0,1fr);gap:13px;padding:0 24px 24px}
+    #abaResultadosAnalistas .ra-person{min-width:0;width:100%;border:1px solid var(--ra-line);border-radius:13px;padding:20px 24px;background:linear-gradient(150deg,#fff,#f8fbff)}
     #abaResultadosAnalistas .ra-person-top{display:flex;align-items:center;gap:11px;margin-bottom:14px}#abaResultadosAnalistas .ra-avatar{width:36px;height:36px;border-radius:11px;background:#e7f1fc;color:var(--ra-deep);font-weight:700;font-size:12px;display:grid;place-items:center;flex-shrink:0}
     #abaResultadosAnalistas .ra-person-name{font-weight:600;font-size:12px;overflow-wrap:anywhere}#abaResultadosAnalistas .ra-person-meta{color:var(--ra-muted);font-size:9px;margin-top:3px}
     #abaResultadosAnalistas .ra-person-score{margin-left:auto;text-align:right;flex-shrink:0}#abaResultadosAnalistas .ra-person-score strong{font-size:24px;line-height:1.1;letter-spacing:-.5px;font-weight:700}#abaResultadosAnalistas .ra-person-score small{display:block;font-size:8px;color:var(--ra-muted);margin-top:3px}
     #abaResultadosAnalistas .ra-track{height:10px;background:#edf2f7;border-radius:8px;overflow:hidden;display:flex}#abaResultadosAnalistas .ra-track span{display:block;height:100%}
     #abaResultadosAnalistas .ra-person-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:11px}#abaResultadosAnalistas .ra-person-stats span{display:block;color:var(--ra-muted);font-size:8px;line-height:1.5}#abaResultadosAnalistas .ra-person-stats b{display:block;font-weight:600;font-size:12px;color:var(--ra-navy);font-variant-numeric:tabular-nums}
     #abaResultadosAnalistas .ra-person-foot{margin-top:12px;border-top:1px solid #e6eef7;padding-top:9px;color:var(--ra-muted);font-size:9px;line-height:1.6}
+    #abaResultadosAnalistas .ra-person-details{margin-top:15px;border-top:1px solid #e0eaf5;padding-top:3px}
+    #abaResultadosAnalistas .ra-person-details>summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 4px 7px;cursor:pointer;list-style:none;color:var(--ra-deep);font-weight:700;font-size:11px}
+    #abaResultadosAnalistas .ra-person-details>summary::-webkit-details-marker{display:none}
+    #abaResultadosAnalistas .ra-person-details>summary:after{content:"";width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin-right:6px;transition:transform .18s ease;flex-shrink:0}
+    #abaResultadosAnalistas .ra-person-details[open]>summary:after{transform:rotate(225deg)}
+    #abaResultadosAnalistas .ra-person-details>summary:hover{color:var(--ra-blue)}
+    #abaResultadosAnalistas .ra-person-details-note{font-weight:400;color:var(--ra-muted);font-size:10px}
+    #abaResultadosAnalistas .ra-person-breakdown{overflow-x:auto;margin-top:9px;border:1px solid var(--ra-line);border-radius:11px;background:#fff}
+    #abaResultadosAnalistas .ra-person-breakdown table{min-width:940px;width:100%;font-size:10px}
+    #abaResultadosAnalistas .ra-person-breakdown th:first-child,#abaResultadosAnalistas .ra-person-breakdown td:first-child{text-align:left;min-width:145px;padding-left:17px}
+    #abaResultadosAnalistas .ra-person-breakdown th:nth-child(2),#abaResultadosAnalistas .ra-person-breakdown td:nth-child(2){text-align:left}
+    #abaResultadosAnalistas .ra-person-breakdown .ra-graphic-group td{background:#eaf3fd;font-weight:700;color:var(--ra-navy);border-top:1px solid #d2e2f4}
+    #abaResultadosAnalistas .ra-person-breakdown .ra-graphic-brand td:first-child{padding-left:30px;font-weight:400;color:var(--ra-muted)}
+    #abaResultadosAnalistas .ra-person-breakdown td.ra-score{font-weight:700}
     #abaResultadosAnalistas .ra-actions{display:flex;flex-wrap:wrap;gap:7px}#abaResultadosAnalistas .ra-btn{border:1px solid #c6d6e7;background:#fff;border-radius:9px;padding:9px 12px;color:var(--ra-deep);font-size:10px;font-weight:600;cursor:pointer}#abaResultadosAnalistas .ra-btn:hover{background:#edf5ff}#abaResultadosAnalistas .ra-btn.ra-main{color:#fff;border-color:var(--ra-deep);background:var(--ra-deep)}#abaResultadosAnalistas .ra-btn:disabled{cursor:default;opacity:.45}
     #abaResultadosAnalistas .ra-table-scroll{overflow:auto;max-height:550px}#abaResultadosAnalistas table{border-collapse:separate;border-spacing:0;width:100%;min-width:1120px;font-size:10px;font-variant-numeric:tabular-nums}#abaResultadosAnalistas th,#abaResultadosAnalistas td{padding:13px 12px;text-align:right;border-bottom:1px solid #e7eef6;white-space:nowrap}
     #abaResultadosAnalistas thead th{background:var(--ra-navy);color:#fff;font-weight:600;font-size:9px;position:sticky;top:0;z-index:2}#abaResultadosAnalistas th:first-child,#abaResultadosAnalistas td:first-child{text-align:left;padding-left:24px}#abaResultadosAnalistas tbody td:first-child{position:sticky;left:0;background:#fff;z-index:1;min-width:180px;white-space:normal}#abaResultadosAnalistas tbody tr:nth-child(even) td{background:#f7fafe}#abaResultadosAnalistas tbody tr:hover td{background:#eaf3fd}
@@ -95,12 +109,7 @@
   </div>
 
   <div class="ra-panel">
-    <div class="ra-section-head"><div><h3>Detalhamento · analista, gráfica e marca</h3><p class="ra-note">Volume total, coleta no prazo e aderência ponderada em cada carteira, sem médias simples.</p></div><div class="ra-actions"><button type="button" class="ra-btn" id="raCSVGraficas" onclick="pgRAExportarCSV('graficas')" disabled>Baixar CSV por gráfica e marca</button></div></div>
-    <div class="ra-breakdown"><table aria-label="Resultado por analista, gráfica e marca"><thead><tr><th>Analista / time</th><th>Gráfica</th><th>Marca / percurso</th><th>Tiragem total</th><th>Coletado</th><th>Meta vencida</th><th>No prazo</th><th>Fora do prazo</th><th>Saldo vencido</th><th>Aderência</th></tr></thead><tbody id="raDetalheGraficas"></tbody></table></div>
-  </div>
-
-  <div class="ra-panel">
-    <div class="ra-section-head"><div><h3>Quadro de resultados</h3><p class="ra-note" id="raContagem">Selecione o recorte para apurar.</p></div><div class="ra-actions"><button type="button" id="raExcel" class="ra-btn ra-main" onclick="pgRAExportarExcel()" disabled>Baixar Excel completo</button><button type="button" id="raCSV" class="ra-btn" onclick="pgRAExportarCSV(false)" disabled>CSV resultados</button><button type="button" id="raCSVBase" class="ra-btn" onclick="pgRAExportarCSV(true)" disabled>Baixar CSV base auditável</button></div></div>
+    <div class="ra-section-head"><div><h3>Quadro de resultados</h3><p class="ra-note" id="raContagem">Selecione o recorte para apurar.</p></div><div class="ra-actions"><button type="button" id="raExcel" class="ra-btn ra-main" onclick="pgRAExportarExcel()" disabled>Baixar Excel completo</button><button type="button" id="raCSV" class="ra-btn" onclick="pgRAExportarCSV(false)" disabled>CSV resultados</button><button type="button" id="raCSVBase" class="ra-btn" onclick="pgRAExportarCSV(true)" disabled>Baixar CSV base auditável</button><button type="button" class="ra-btn" id="raCSVGraficas" onclick="pgRAExportarCSV('graficas')" disabled>CSV por gráfica e marca</button></div></div>
     <div class="ra-table-scroll"><table aria-label="Resultado de entregas por analista"><thead><tr><th scope="col">Analista / time</th><th scope="col">Gráficas</th><th scope="col">Aderência</th><th scope="col">Tiragem total</th><th scope="col">Coletado</th><th scope="col">Meta vencida</th><th scope="col">No prazo¹</th><th scope="col">Fora do prazo¹</th><th scope="col">Pendente vencido</th><th scope="col">Saldo a vencer</th><th scope="col">Sem prazo</th><th scope="col">Coleta não conferida</th></tr></thead><tbody id="raTabela"></tbody><tfoot id="raTotal"></tfoot></table></div>
     <div class="ra-table-note">¹ As colunas “No prazo” e “Fora do prazo” consideram a Coleta realizada com prazo encerrado e dados conferidos. O volume coletado inclui apenas o realizado até o corte, limitado à tiragem de cada item; entregas posteriores e previsões não contam. Volumes sem prazo seguro ou com coleta não conferida ficam fora da aderência.</div>
   </div>
@@ -136,7 +145,7 @@
     function corteValido(v){if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;var d=new Date(v+'T12:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v;}
     function exportsAtivos(ativo){['raExcel','raCSV','raCSVBase','raCSVGraficas'].forEach(function(id){var b=el(id);if(b)b.disabled=!ativo;});}
     function aviso(texto,erro){var a=el('raAviso');a.hidden=!texto;a.textContent=texto||'';a.classList.toggle('ra-error',!!erro);}
-    function invalidar(texto){resultadoAtual=null;window.pgRAResultadoAtual=null;exportsAtivos(false);['raKPIs','raRanking','raTabela','raTotal','raDetalheGraficas'].forEach(function(id){el(id).innerHTML='';});el('raContagem').textContent='Apuração indisponível.';aviso(texto,true);}
+    function invalidar(texto){resultadoAtual=null;window.pgRAResultadoAtual=null;exportsAtivos(false);['raKPIs','raRanking','raTabela','raTotal'].forEach(function(id){el(id).innerHTML='';});el('raContagem').textContent='Apuração indisponível.';aviso(texto,true);}
     function opcoes(id,valores,todos,selecionado){
       var lista=Array.from(new Set(valores.filter(Boolean))).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
       if(selecionado&&lista.indexOf(selecionado)<0)lista.unshift(selecionado);
@@ -150,30 +159,55 @@
         '<div class="ra-kpi ra-due"><p class="ra-kpi-label">Pendente vencido</p><div class="ra-kpi-value">'+numero(s.vencido)+'</div><p class="ra-kpi-note">Saldo ainda sem coleta após o prazo</p></div>'+
         '<div class="ra-kpi"><p class="ra-kpi-label">Volume da carteira</p><div class="ra-kpi-value">'+numero(s.total)+'</div><p class="ra-kpi-note">'+numero(s.analistas)+' analista(s) · '+numero(s.linhas)+' item(ns) conciliado(s)'+(n(s.naoApurado)?' · Apuração parcial':'')+'</p></div>';
     }
-    function cards(analistas){
-      if(!analistas.length){el('raRanking').innerHTML='<div class="ra-empty"><strong>Nenhum resultado neste recorte</strong>Ajuste os filtros gerais, o time ou o analista para consultar a carteira.</div>';return;}
+    function cards(analistas,graficasMarcas){
+      if(!analistas.length){
+        el('raRanking').innerHTML='<div class="ra-empty"><strong>Nenhum resultado neste recorte</strong>Ajuste os filtros gerais, o time ou o analista para consultar a carteira.</div>';
+        return;
+      }
+      var todos=Array.isArray(graficasMarcas)?graficasMarcas:[];
       el('raRanking').innerHTML=analistas.map(function(a){
         var base=n(a.metaVencida),larg=function(v){return base?Math.max(0,Math.min(100,100*n(v)/base)):0;};
         var iniciais=String(a.analista).trim().split(/\s+/).filter(Boolean).slice(0,2).map(function(x){return x[0];}).join('').toUpperCase();
         var graficas=Array.isArray(a.graficas)?a.graficas:[];
+        var detalhe=todos.filter(function(g){return g.analista===a.analista&&g.time===a.time;});
+        var nomes=Array.from(new Set(detalhe.map(function(g){return g.grafica;})))
+          .sort(function(x,y){return x.localeCompare(y,'pt-BR');});
+        var celulaNumero=function(v){return '<td>'+numero(v)+'</td>';};
+        var graficaRows=nomes.map(function(nome){
+          var marcas=detalhe.filter(function(g){return g.grafica===nome;});
+          var agregado={total:0,entregue:0,metaVencida:0,noPrazoVencido:0,foraPrazoVencido:0,vencido:0};
+          marcas.forEach(function(g){Object.keys(agregado).forEach(function(k){agregado[k]+=n(g[k]);});});
+          var aderencia=agregado.metaVencida>0?
+            Math.min(100,100*agregado.noPrazoVencido/agregado.metaVencida):null;
+          var grupo='<tr class="ra-graphic-group"><td>'+html(nome)+'</td><td>'+marcas.length+
+            ' marca/percurso(s)</td>'+celulaNumero(agregado.total)+celulaNumero(agregado.entregue)+
+            celulaNumero(agregado.metaVencida)+celulaNumero(agregado.noPrazoVencido)+
+            celulaNumero(agregado.foraPrazoVencido)+celulaNumero(agregado.vencido)+
+            '<td class="ra-score">'+pct(aderencia)+'</td></tr>';
+          return grupo+marcas.map(function(g){
+            return '<tr class="ra-graphic-brand"><td>'+html(nome)+'</td><td>'+html(g.marca)+
+              '<span class="ra-cell-sub">'+html(g.percurso)+'</span></td>'+
+              celulaNumero(g.total)+celulaNumero(g.entregue)+celulaNumero(g.metaVencida)+
+              celulaNumero(g.noPrazoVencido)+celulaNumero(g.foraPrazoVencido)+celulaNumero(g.vencido)+
+              '<td class="ra-score">'+pct(g.aderencia)+'</td></tr>';
+          }).join('');
+        }).join('');
+        var menu='<details class="ra-person-details"><summary><span>Ver desempenho das gráficas'+
+          '<span class="ra-person-details-note"> · '+graficas.length+' gráfica(s) · '+detalhe.length+
+          ' recorte(s) de marca/percurso</span></span></summary>'+
+          '<div class="ra-person-breakdown"><table aria-label="'+html('Detalhamento por gráfica e marca de '+a.analista)+'">'+
+          '<thead><tr><th>Gráfica</th><th>Marca / percurso</th><th>Tiragem total</th>'+
+          '<th>Coletado</th><th>Meta vencida</th><th>No prazo</th><th>Fora do prazo</th>'+
+          '<th>Pendente vencido</th><th>Aderência</th></tr></thead><tbody>'+
+          (graficaRows||'<tr><td colspan="9">Nenhuma gráfica encontrada no recorte.</td></tr>')+
+          '</tbody></table></div></details>';
         return '<article class="ra-person"><div class="ra-person-top"><div class="ra-avatar" aria-hidden="true">'+html(iniciais)+'</div><div><div class="ra-person-name">'+html(a.analista)+'</div><div class="ra-person-meta">'+html(a.time)+' · '+graficas.length+' gráfica(s)</div></div><div class="ra-person-score"><strong>'+pct(a.aderencia)+'</strong><small>aderência ao prazo</small></div></div>'+
           '<div class="ra-track" role="img" aria-label="'+html('No prazo: '+numero(a.noPrazoVencido)+'. Coletado fora: '+numero(a.foraPrazoVencido)+'. Pendente vencido: '+numero(a.vencido)+'.')+'"><span class="ra-on" style="width:'+larg(a.noPrazoVencido)+'%"></span><span class="ra-late" style="width:'+larg(a.foraPrazoVencido)+'%"></span><span class="ra-pending" style="width:'+larg(a.vencido)+'%"></span></div>'+
           '<div class="ra-person-stats"><div><span>No prazo</span><b>'+numero(a.noPrazoVencido)+'</b></div><div><span>Coletado fora</span><b>'+numero(a.foraPrazoVencido)+'</b></div><div><span>Pendente vencido</span><b>'+numero(a.vencido)+'</b></div></div>'+
-          '<div class="ra-person-foot">Meta encerrada: <strong>'+numero(a.metaVencida)+'</strong> · Saldo a vencer: '+numero(a.aVencer)+(n(a.semPrazo)?' · Sem prazo: '+numero(a.semPrazo):'')+(n(a.naoApurado)?' · Coleta não conferida: '+numero(a.naoApurado):'')+'<br><strong>Gráficas:</strong> <span title="'+html(graficas.join(' · '))+'">'+html(graficas.join(' · ')||'Gráfica não informada')+'</span></div></article>';
+          '<div class="ra-person-foot">Meta encerrada: <strong>'+numero(a.metaVencida)+'</strong> · Saldo a vencer: '+numero(a.aVencer)+(n(a.semPrazo)?' · Sem prazo: '+numero(a.semPrazo):'')+(n(a.naoApurado)?' · Coleta não conferida: '+numero(a.naoApurado):'')+'<br><strong>Gráficas:</strong> <span title="'+html(graficas.join(' · '))+'">'+html(graficas.join(' · ')||'Gráfica não informada')+'</span></div>'+menu+'</article>';
       }).join('');
     }
     function linhaTabela(a,total){return '<tr><td>'+(total?'Total do recorte':'<strong>'+html(a.analista)+'</strong><span class="ra-cell-sub">'+html(a.time)+'</span>')+'</td><td>'+html(total?'—':(a.graficas||[]).join(' · '))+'</td><td class="ra-score">'+pct(a.aderencia)+'</td><td>'+numero(a.total)+'</td><td>'+numero(a.entregue)+'</td><td>'+numero(a.metaVencida)+'</td><td>'+numero(a.noPrazoVencido)+'</td><td>'+numero(a.foraPrazoVencido)+'</td><td'+(n(a.vencido)?' class="ra-warn"':'')+'>'+numero(a.vencido)+'</td><td>'+numero(a.aVencer)+'</td><td>'+numero(a.semPrazo)+'</td><td>'+numero(a.naoApurado)+'</td></tr>';}
-    function detalhamentoGraficaMarca(grupos) {
-      var corpo=el('raDetalheGraficas');
-      if(!grupos.length){corpo.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px">Nenhum resultado neste recorte.</td></tr>';return;}
-      corpo.innerHTML=grupos.map(function(g){
-        return '<tr><td><strong>'+html(g.analista)+'</strong><span class="ra-cell-sub">'+html(g.time)+'</span></td>'+
-          '<td>'+html(g.grafica)+'</td><td>'+html(g.marca)+'<span class="ra-cell-sub ra-route-label">'+html(g.percurso)+'</span></td>'+
-          '<td>'+numero(g.total)+'</td><td>'+numero(g.entregue)+'</td><td>'+numero(g.metaVencida)+'</td>'+
-          '<td>'+numero(g.noPrazoVencido)+'</td><td>'+numero(g.foraPrazoVencido)+'</td>'+
-          '<td>'+numero(g.vencido)+'</td><td class="ra-score">'+pct(g.aderencia)+'</td></tr>';
-      }).join('');
-    }
     window.pgRAAlterar=function(campo,valor){
       if(campo==='referencia'&&!referencias[valor])return;
       if(campo==='cenario'&&valor!=='com'&&valor!=='sem')return;
@@ -240,7 +274,7 @@
         var r=(estado.analista||estado.time)?
           window.pgRAApurar(itens,Object.assign({},opcoesApuracao,{analista:estado.analista,time:estado.time})):completo;
         resultadoAtual=r;window.pgRAResultadoAtual=r;
-        var analistas=ordenar(r.analistas);kpis(r);cards(analistas);detalhamentoGraficaMarca(r.graficasMarcas||[]);
+        var analistas=ordenar(r.analistas);kpis(r);cards(analistas,r.graficasMarcas||[]);
         el('raTabela').innerHTML=analistas.length?analistas.map(function(a){return linhaTabela(a,false);}).join(''):'<tr><td colspan="12" style="text-align:center;padding:28px">Nenhum item para os filtros selecionados.</td></tr>';
         el('raTotal').innerHTML=analistas.length?linhaTabela(r.resumo,true):'';
         el('raContagem').textContent=numero(r.resumo.analistas)+' analista(s) · '+numero(r.resumo.linhas)+' item(ns) · '+fluxoRotulo()+' · '+referencias[estado.referencia]+
