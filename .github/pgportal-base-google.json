@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-13T20:25:27.091Z",
+  "lido_em": "2026-11-13T20:29:47.938Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -47,7 +47,7 @@
     "SERVER_JS:HistoricoPCP2026": "444a1c0ceab3c50e257cd0193f0b01dd8e4e0d092ee005c86b1a70390abd16c3",
     "HTML:Index": "e04e44a6c6726ad1b104c81c344efca2e157b1c3305aeb0c83afdb429899f79c",
     "SERVER_JS:LeituraCacheSheets": "459014b75f3ec02905c0712616f348cacd3596819259789154fa04046b337f72",
-    "HTML:Main": "47f38d3b78c495e833a8cc89d5a097898d40606c3a3f9619e39b4d3123f10f36",
+    "HTML:Main": "03ccc631a4acbaca766d712dd39e66585540e022b681f7cb151a95459872cac1",
     "HTML:PreProducao": "0da511380e5f45a042ee1ab028cfc807dd0c8299a53dd77eeec029bcc690e7ba",
     "HTML:Qualidade": "2e7fa50812e55536391ba451dc8ceb68806464644367c84e2ada6a54250843a1",
     "SERVER_JS:RegistroGiroJSON": "def59184ff3c6d9efe2ee13853b47936c97a613de611eb4040fa9aa2d13647bf",
