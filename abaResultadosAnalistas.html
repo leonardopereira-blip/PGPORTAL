@@ -94,6 +94,7 @@
   <div class="ra-panel">
     <div class="ra-controls">
       <div class="ra-control ra-destino"><span class="ra-label">Destino da avaliação</span><div class="ra-segment" role="group" aria-label="Destino avaliado"><button type="button" data-ra-destino="total" aria-pressed="true" onclick="pgRAAlterar('destino','total')">Total</button><button type="button" data-ra-destino="cd" aria-pressed="false" onclick="pgRAAlterar('destino','cd')">Entregas no CD</button><button type="button" data-ra-destino="acabadora" aria-pressed="false" onclick="pgRAAlterar('destino','acabadora')">Acabadoras</button></div></div>
+      <label class="ra-control ra-etapa"><span class="ra-label">Etapa avaliada</span><select id="raEtapa" onchange="pgRAAlterar('etapa',this.value)"><option value="coleta">Coleta</option><option value="entrega">Entrega</option><option value="env">Envio de arquivo</option><option value="rec">Recebimento do boneco</option><option value="apv">Aprovação do boneco</option><option value="imp">Impressão</option><option value="cus">Validação de custo</option><option value="oc">Ordem de compra</option><option value="tra">Transferência à acabadora</option><option value="rec_acab">Recebimento na acabadora</option><option value="acab">Acabamento</option><option value="kit">Formação de kit</option><option value="col_pcp">Coleta PCP</option><option value="ent_cd">Confirmação CD</option><option value="int_cd">Internalização CD</option></select></label>
       <div class="ra-control ra-route" id="raTrajetoControl" hidden><span class="ra-label">Etapa da acabadora</span><div class="ra-segment" role="group" aria-label="Etapa de entrega da acabadora"><button type="button" data-ra-trajeto="entrada" aria-pressed="true" onclick="pgRAAlterar('trajeto','entrada')">Entrada na acabadora</button><button type="button" data-ra-trajeto="saida" aria-pressed="false" onclick="pgRAAlterar('trajeto','saida')">Saída para o CD</button></div></div>
       <div class="ra-control ra-reference"><span class="ra-label">Comparar coletas com</span><div class="ra-segment" role="group" aria-label="Referência de prazo da avaliação"><button type="button" data-ra-ref="armazem" aria-pressed="true" onclick="pgRAAlterar('referencia','armazem')">Meta armazém</button><button type="button" data-ra-ref="baseline" aria-pressed="false" onclick="pgRAAlterar('referencia','baseline')">Baseline</button><button type="button" data-ra-ref="replan" aria-pressed="false" onclick="pgRAAlterar('referencia','replan')">Replan</button></div></div>
       <label class="ra-control"><span class="ra-label">Coletas até a data de corte</span><input id="raCorte" type="date" required onchange="pgRAAlterar('corte',this.value)"></label>
@@ -118,14 +119,17 @@
     <div class="ra-table-note">¹ As colunas “No prazo” e “Fora do prazo” consideram a Coleta realizada com prazo encerrado e dados conferidos. O volume coletado inclui apenas o realizado até o corte, limitado à tiragem de cada item; entregas posteriores e previsões não contam. Volumes sem prazo seguro ou com coleta não conferida ficam fora da aderência.</div>
   </div>
 
-  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = coleta no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e coleta conferida, o resultado aparece como “—”.</p><p id="raMetodoPrazo">Coleta para CD: Baseline e Replan usam as datas finais de coleta do PCP, sem SLA. Meta Armazém usa a meta aplicada ao CD como prazo de referência.</p><p><strong>Realizado:</strong> somente parcelas de Coleta TP do mapa, com data até o corte, limitadas à tiragem. Entrega TP e previsões não entram na avaliação. O responsável vem do cadastro atual de gráficas; não há reconstrução histórica da carteira. Grupos com prazos divergentes ficam sem nota até conciliação segura. Itens com coleta não conferida ficam fora da aderência. <strong>SAS Adapt:</strong> continua no universo regular; a avaliação isolada do projeto ainda depende de alinhamento com a liderança.</p><p id="raMetodoDestino">Os seletores desta tela são exclusivos da avaliação por analista e não alteram as demais visões.</p></details>
+  <details class="ra-method"><summary>Como o resultado é calculado</summary><p><strong>Aderência = coleta no prazo dos itens vencidos ÷ tiragem dos itens com prazo até o corte.</strong> O total é calculado pela soma dos volumes; não é a média dos percentuais dos analistas. Sem prazo encerrado e coleta conferida, o resultado aparece como “—”.</p><p id="raMetodoPrazo">Coleta para CD: Baseline e Replan usam as datas finais de coleta do PCP, sem SLA. Meta Armazém usa a meta aplicada ao CD como prazo de referência.</p><p><strong>Realizado:</strong> somente parcelas de Coleta TP do mapa, com data até o corte, limitadas à tiragem. Entrega TP e previsões não entram na avaliação. O responsável vem do cadastro atual de gráficas; não há reconstrução histórica da carteira. Grupos com prazos divergentes ficam sem nota até conciliação segura. Itens com coleta não conferida ficam fora da aderência. <strong>SAS Adapt:</strong> continua no universo regular; a avaliação isolada do projeto ainda depende de alinhamento com a liderança.</p><p id="raMetodoDestino">Os seletores desta tela são exclusivos da avaliação por analista e não alteram as demais visões.</p><p id="raDiagnosticos"></p></details>
 
   <script>
   (function(){
     'use strict';
-    var estado=window.pgRAEstado={referencia:'armazem',destino:'total',trajeto:'entrada',corte:'',cenario:'com',analista:'',time:''};
+    var estado=window.pgRAEstado={referencia:'armazem',destino:'total',trajeto:'entrada',etapa:'coleta',corte:'',cenario:'com',analista:'',time:''};
     var resultadoAtual=null;
     var referencias={armazem:'Meta armazém',baseline:'Baseline',replan:'Replan'};
+    function nomeEtapa(){var e=(window.pgRAEtapas||[]).find(function(v){return v.id===estado.etapa;});return e?e.nome:'Coleta';}
+    function participioEtapa(etapa){return etapa==='coleta'?'Coletado':etapa==='entrega'?'Entregue':'Concluído';}
+    function faseTP(){return estado.etapa==='coleta'||estado.etapa==='entrega';}
     function fluxoRotulo(){return estado.destino==='total'?'Total por analista':
       estado.destino==='cd'?'Entregas no CD':
       estado.trajeto==='entrada'?'Acabadoras · Entrada':'Acabadoras · Saída para CD';}
@@ -330,7 +334,8 @@
       if(campo==='cenario'&&valor!=='com'&&valor!=='sem')return;
       if(campo==='destino'&&['total','cd','acabadora'].indexOf(valor)<0)return;
       if(campo==='trajeto'&&['entrada','saida'].indexOf(valor)<0)return;
-      if(['referencia','destino','trajeto','corte','cenario','analista','time'].indexOf(campo)<0)return;
+      if(campo==='etapa'&&!(window.pgRAEtapas||[]).some(function(v){return v.id===valor;}))return;
+      if(['referencia','destino','trajeto','etapa','corte','cenario','analista','time'].indexOf(campo)<0)return;
       estado[campo]=valor;window.processarResultadosAnalistas();
     };
     window.processarResultadosAnalistas=function(){
@@ -341,8 +346,11 @@
       if(!corteValido(estado.corte)){invalidar('Informe uma data de corte válida para apurar os resultados.');return;}
       if(estado.corte>limite){estado.corte=limite;el('raCorte').value=limite;}
       var ehAcabadora=estado.destino==='acabadora';
+      el('raEtapa').value=estado.etapa;
+      el('raCorte').parentNode.querySelector('.ra-label').textContent=
+        participioEtapa(estado.etapa)+' até a data de corte';
       el('raTrajetoControl').hidden=!ehAcabadora;
-      el('raCenarioControl').hidden=ehAcabadora;
+      el('raCenarioControl').hidden=ehAcabadora||!faseTP();
       el('raCenario').value=estado.cenario;
       el('raCenario').disabled=ehAcabadora||estado.referencia!=='armazem';
       el('raCenarioControl').style.opacity=estado.referencia==='armazem'?'1':'.55';
@@ -351,40 +359,27 @@
           b.setAttribute('aria-pressed',String(b.getAttribute('data-ra-'+par[0])===estado[par[1]]));
         });
       });
-      el('raContextValue').textContent=fluxoRotulo()+' · '+prazoRotulo()+' · '+dataBR(estado.corte);
-      el('raTituloRanking').textContent=estado.destino==='total'?
-        'Resultado consolidado por analista':
-        ehAcabadora?(estado.trajeto==='entrada'?'Transferências recebidas na acabadora':
-          'Saídas da acabadora para o CD')+' · por analista':
-        'Coletas no prazo, por analista';
-      el('raUniverso').textContent=estado.destino==='total'?
-        'Total da avaliação: coletas para o CD + transferências da gráfica para a acabadora. A saída da acabadora para o CD já integra a visão CD e não é somada novamente. Coletas reais por analista e prazo de cada etapa.':
-        ehAcabadora?(estado.trajeto==='entrada'?'Coleta da gráfica para a acabadora (PCP).':
-          'Coleta da acabadora para o CD (PCP_ACABADORAS).')+
-        ' Respeita os filtros gerais; sem mudar os totais de outras visões.':
-        'Segue os filtros gerais de marca, ciclo, envio, gráfica e material. Universo de entregas ao CD da Meta Armazém.';
-      el('raMetodoPrazo').textContent=estado.destino==='total'?
-        'Total: analisa somente Coleta real. Para CD, Baseline/Replan são datas de coleta (sem somar SLA de transporte); Meta Armazém usa o marco aplicado do armazém como referência, sem descontar SLA. Para acabadoras, Baseline usa baseline e Replan/Meta Armazém usam replan. Total ponderado pelo volume com prazo vencido, não pela média de notas.':
-        ehAcabadora?
-        'Acabadoras: coleta real contra data final baseline da etapa quando Baseline; Replan e Meta Armazém usam replan da etapa, diretamente. Datas ausentes ficam sem nota.':
-        'CD: Coleta real comparada com data final baseline/replan diretamente, sem somar SLA. Na opção Meta Armazém, a data aplicada ao CD é usada como referência sem descontar SLA; exceções da marca e cenário Posigraf permanecem.';
-      el('raMetodoDestino').textContent=estado.destino==='total'?
-        'O Total mede compromissos de coleta de duas etapas: direta ao CD e transferência PCP para acabadora. A coleta da PCP_ACABADORAS em direção ao CD já está na base canônica do CD e não é somada outra vez. Um material pode aparecer em etapas diferentes; não é volume físico único. Somente esta visão é afetada.':
-        ehAcabadora?
-        'Entrada usa transferências PCP para acabadora. Saída usa PCP_ACABADORAS, com tiragem a entregar por CD quando informada. Não some estas etapas nem com a visão CD.':
-        'O cenário Posigraf vale somente para Meta Armazém no CD. Nenhum destes seletores altera o funil ou os filtros de Origem/Destino de outras telas.';
+      el('raContextValue').textContent=nomeEtapa()+' · '+fluxoRotulo()+' · '+prazoRotulo()+' · '+dataBR(estado.corte);
+      el('raTituloRanking').textContent='Resultado por analista · '+nomeEtapa();
+      el('raUniverso').textContent=nomeEtapa()+' · '+fluxoRotulo()+
+        ' · referência '+prazoRotulo()+' · realizado por etapa sem compensação entre SKUs.';
+      el('raMetodoPrazo').textContent=faseTP()?
+        'Coleta: datas reais de Coleta TP; Entrega: datas reais de Entrega TP. Baseline e Replan utilizam datas específicas; Meta Armazém utiliza meta aplicada ao CD e Replan para acabadoras.':
+        'Demais fases: conclusão pelo registro real da etapa. Baseline usa a data da fase quando existir; Replan e Meta Armazém usam a previsão da própria fase. Sem data própria, o item fica sem nota e segue auditável.';
+      el('raMetodoDestino').textContent='O seletor altera somente Resultado por analista. Os volumes consolidados respeitam as rotas CD / acabadora sem duplicar transferências nem alterar as demais telas.';
+      var diag=el('raDiagnosticos');if(diag)diag.textContent='';
       try{
         if(typeof window.pgMAObterItens!=='function'||typeof window.pgRAApurar!=='function')throw new Error('A base de entregas ainda está carregando. Tente novamente após o carregamento.');
-        if(typeof window.pgStatusMapaTP==='function'){var status=window.pgStatusMapaTP();if(!status.disponivel)throw new Error(status.aviso);}
+        if(faseTP()&&typeof window.pgStatusMapaTP==='function'){var status=window.pgStatusMapaTP();if(!status.disponivel)throw new Error(status.aviso);}
         var baseAvaliacao=window.pgBaseGeralReportExecutiva||window.dadosGlobais||[];
         var itensCD=ehAcabadora?[]:window.pgMAObterItens({
           corte:estado.corte,cenario:estado.cenario,zerarSemPrevisao:false});
         var itensAcabadora=estado.destino==='cd'?[]:window.pgRAItensAcabadoras(baseAvaliacao,{
-          corte:estado.corte,trajeto:estado.destino==='total'?'entrada':estado.trajeto});
+          corte:estado.corte,trajeto:estado.destino==='total'?'entrada':estado.trajeto,etapa:estado.etapa});
         // A saída da acabadora já pertence ao CD canônico; não entra duas vezes no Total.
         var itens=itensCD.concat(itensAcabadora);
         var opcoesApuracao={referencia:estado.referencia,corte:estado.corte,
-          destino:estado.destino,trajeto:estado.trajeto};
+          destino:estado.destino,trajeto:estado.trajeto,etapa:estado.etapa};
         var completo=window.pgRAApurar(itens,opcoesApuracao);
         opcoes('raTime',completo.analistas.map(function(a){return a.time;}),'Todos os times',estado.time);
         opcoes('raAnalista',completo.analistas.map(function(a){return a.analista;}),'Todos os analistas',estado.analista);
@@ -396,16 +391,16 @@
         el('raTotal').innerHTML=analistas.length?linhaTabela(r.resumo,true):'';
         el('raContagem').textContent=numero(r.resumo.analistas)+' analista(s) · '+numero(r.resumo.linhas)+' item(ns) · '+fluxoRotulo()+' · '+referencias[estado.referencia]+
           (estado.destino!=='cd'?' (prazo efetivo: '+prazoRotulo()+')':'')+' · Corte em '+dataBR(r.corte||estado.corte);
-        el('raScope').textContent=fluxoRotulo()+' · '+(n(r.resumo.naoApurado)?'Apuração parcial':'Coleta')+' · '+dataBR(r.corte||estado.corte);
-        var avisos=[];
-        if(n(r.resumo.naoApurado))avisos.push('Apuração parcial: '+numero(r.resumo.naoApurado)+' exemplares com coleta não conferida ficam fora da aderência. Consulte os diagnósticos na base auditável.');
-        if(n(r.resumo.semPrazo))avisos.push(numero(r.resumo.semPrazo)+' exemplares sem prazo seguro ficam fora da aderência. Consulte o motivo na base auditável.');
-        var parciais=itens.filter(function(i){return i.conciliacao&&i.conciliacao.filtroParcial;}).length;
-        if(parciais)avisos.push(parciais+' grupo(s) sem vínculo por KIT mantêm o volume integral após os filtros para evitar rateio sem evidência. Confira a composição na base da Meta Armazém.');
-        var semResponsavel=r.detalhes.filter(function(d){return d.analista==='Sem responsável';}).reduce(function(s,d){return s+n(d.total);},0);
-        if(semResponsavel)avisos.push(numero(semResponsavel)+' exemplares estão sem responsável inequívoco no cadastro de gráficas.');
-        if(!n(r.resumo.metaVencida)&&r.detalhes.length)avisos.push('Não há prazo encerrado neste recorte até a data de corte. A aderência será exibida como “—”.');
-        aviso(avisos.join(' '),false);exportsAtivos(r.detalhes.length>0);
+        el('raScope').textContent=nomeEtapa()+' · '+fluxoRotulo()+' · '+dataBR(r.corte||estado.corte);
+        // Avisos de qualidade ficam na metodologia e na base auditável, nunca
+        // na faixa laranja durante a troca de etapas.
+        var pendencias=[];
+        if(n(r.resumo.naoApurado))pendencias.push(numero(r.resumo.naoApurado)+' exemplares não conferidos');
+        if(n(r.resumo.semPrazo))pendencias.push(numero(r.resumo.semPrazo)+' exemplares sem prazo verificável');
+        if(el('raDiagnosticos'))el('raDiagnosticos').textContent=
+          pendencias.length?'Registros para conferir na base auditável: '+pendencias.join(' · ')+'.':'Sem ressalvas adicionais neste recorte.';
+        aviso('',false);
+        exportsAtivos(r.detalhes.length>0);
       }catch(erro){invalidar('Não foi possível apurar a visão: '+String(erro&&erro.message||erro));}
     };
     function tabelas(){
