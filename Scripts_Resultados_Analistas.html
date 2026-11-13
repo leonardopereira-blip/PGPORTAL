@@ -56,9 +56,9 @@
     for (var i=0; i<linhas.length; i++) {
       var coleta = data(campo(linhas[i],nome));
       if (!coleta) return {prazo:null,motivo:(referencia === 'baseline' ? 'Baseline' : 'Replan')+' ausente ou inválido em uma linha de origem.'};
-      var entrega = typeof window.pgDataPlanoEntregaSLA === 'function' ? data(window.pgDataPlanoEntregaSLA(linhas[i],coleta)) : null;
-      if (!entrega) return {prazo:null,motivo:'Rota sem SLA válido na Matriz_SLA.'};
-      prazos.push(domingo(entrega));
+      // O indicador do analista é coleta: baseline/replan já representam a data de coleta.
+      // Não somar o SLA de transporte, que pertence à entrega no CD.
+      prazos.push(coleta);
     }
     if (prazos.some(function(p) { return p !== prazos[0]; }))
       return {prazo:null,motivo:'Prazos divergentes entre as linhas de origem; identificação por KIT necessária.'};
@@ -100,12 +100,12 @@
     eventos.slice().sort(function(a,b){return a.data.localeCompare(b.data);})
       .forEach(function(e){
         var v=Math.min(e.volume,Math.max(0,total-usados));
-        if(v>0){parcelas.push({data:e.data,volume:v});usados+=v;}
+        if(v>0){parcelas.push({data:e.data,volume:v,chave:e.chave||'',kit:e.kit||''});usados+=v;}
       });
     return {linha:l,total:total,marca:texto(l.MARCA_FINAL||l.UNIDADE||l.MARCA),
       grafica:texto(l.GRAFICA_FINAL||campo(l,'GRÁFICA')||l.GRAFICA),
       serie:texto(l.serie_corrigida||campo(l,'SÉRIE')||l.SERIE),
-      eventosReal:parcelas,fluxo:'acabadora',trajeto:trajeto,
+      eventosColeta:parcelas,fluxo:'acabadora',trajeto:trajeto,
       destinoFluxo:trajeto==='entrada'
         ? texto(l.CD_MAPA||l['CD DESTINO']) : texto(l['CD DESTINO']||l.CD_FINAL||l.CD),
       conciliacao:{linhas:linhas,agrupado:linhas.length>1,diagnosticos:diagnosticos.slice(),
@@ -139,10 +139,10 @@
       var fisicos=new Map(),diagnosticos=[];
       registros.forEach(function(r){
         var v=window.pgVolumesColetaUnificadosV37(r.linha,corte)||{};
-        var lista=Array.isArray(v.eventosEntregaTP)?v.eventosEntregaTP:[];
+        var lista=Array.isArray(v.eventosColetaTP)?v.eventosColetaTP:[];
         var motivo=lista.conciliacao&&lista.conciliacao.motivo||'';
         if(/indisponivel|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta/.test(motivo))
-          diagnosticos.push('entrega: '+motivo);
+          diagnosticos.push('coleta: '+motivo);
         lista.forEach(function(e,i){
           var dia=data(e.data),volume=quantidade(e.volume);
           if(!dia||dia>corte||!volume)return;
@@ -150,16 +150,16 @@
           if(registros.length>1&&chave.indexOf('LINHA:')===0) {
             // Sem identificador físico, a mesma entrega pode aparecer em múltiplos owners.
             // Não atribuir volume possivelmente duplicado ao desempenho de alguém.
-            diagnosticos.push('entrega: parcelas-sem-identificador-fisico');
+            diagnosticos.push('coleta: parcelas-sem-identificador-fisico');
             return;
           }
           var anterior=fisicos.get(chave);
           if(anterior){
             if(anterior.data!==dia||anterior.volume!==volume||normal(anterior.kit)!==normal(e.kit))
-              throw new Error('Parcela TP divergente na acabadora: '+chave);
+              throw new Error('Parcela de coleta divergente na acabadora: '+chave);
             return;
           }
-          fisicos.set(chave,{data:dia,volume:volume,kit:texto(e.kit)});
+          fisicos.set(chave,{data:dia,volume:volume,kit:texto(e.kit),chave:chave});
         });
       });
       diagnosticos=Array.from(new Set(diagnosticos));
@@ -207,23 +207,26 @@
     var l = item.linha || {}, grafica = texto(item.grafica || l.GRAFICA_FINAL || campo(l,'GRÁFICA') || l.GRAFICA) || 'Não informada';
     var responsavel = typeof window.pgResponsavelGraficaGiro === 'function' ? window.pgResponsavelGraficaGiro(grafica) : {};
     responsavel = responsavel || {};
-    var prazo = prazoItem(item,referencia), total = numero(item.total), entregue = 0, noPrazo = 0, foraPrazo = 0;
+    var prazo = prazoItem(item,referencia), total = numero(item.total), entregue = 0, noPrazo = 0, foraPrazo = 0, parcelasColeta=[];
     var diagnosticos = item.conciliacao && item.conciliacao.diagnosticos;
     diagnosticos = Array.isArray(diagnosticos) ? diagnosticos.map(texto).filter(Boolean) : [];
-    var falhasEntrega = diagnosticos.filter(function(d) {
+    var falhasColeta = diagnosticos.filter(function(d) {
       var n = normal(d).toLowerCase();
-      return /^entrega\s*:/.test(n) && /indisponivel|indisponiveis|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta|parcelas-sem-identificador-fisico/.test(n);
+      return /^coleta\s*:/.test(n) && /indisponivel|indisponiveis|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta|parcelas-sem-identificador-fisico/.test(n);
     });
-    var apuravel = falhasEntrega.length === 0;
-    // O teto é aplicado em ordem cronológica. Previsões, coletas e datas sem
-    // parcela real não participam do resultado do ciclo.
-    (Array.isArray(item.eventosReal) ? item.eventosReal : []).map(function(e) {
-      return {data:data(e.data),volume:numero(e.volume)};
+    var apuravel = falhasColeta.length === 0;
+    // A nota do analista usa APENAS Coleta TP, nunca Entrega TP ou previsão.
+    // Cada parcela tem data real; o volume fica limitado à tiragem da própria etapa.
+    (Array.isArray(item.eventosColeta) ? item.eventosColeta : []).map(function(e) {
+      return {data:data(e.data),volume:numero(e.volume),
+        chave:texto(e.chave||(e.linhaMapa!=null?'MAPA:'+e.linhaMapa:e.id!=null?'ID:'+e.id:'')),
+        kit:texto(e.kit)};
     }).filter(function(e) { return e.data && e.data <= corte && e.volume > 0; })
       .sort(function(a,b) { return a.data.localeCompare(b.data); })
       .forEach(function(e) {
         var volume = Math.min(e.volume,Math.max(0,total-entregue));
         entregue += volume;
+        if(volume>0)parcelasColeta.push({data:e.data,volume:volume,chave:e.chave,kit:e.kit});
         if (prazo.prazo) {
           if (e.data <= prazo.prazo) noPrazo += volume;
           else foraPrazo += volume;
@@ -249,7 +252,9 @@
       pendente:pendente,vencido:vencida ? pendente : 0,
       aVencer:apuravel && prazo.prazo && !vencida ? pendente : 0,
       semPrazo:prazo.prazo ? 0 : total,naoApurado:apuravel ? 0 : total,
-      motivo:[prazo.motivo,falhasEntrega.length ? 'Entrega TP não conferida: '+falhasEntrega.join(' | ')+'.' : ''].filter(Boolean).join(' '),
+      motivo:[prazo.motivo,falhasColeta.length ? 'Coleta não conferida: '+falhasColeta.join(' | ')+'.' : ''].filter(Boolean).join(' '),
+      parcelasColeta:parcelasColeta,
+      dataUltimaColeta:parcelasColeta.length?parcelasColeta[parcelasColeta.length-1].data:'',
       diagnosticos:diagnosticos,
       metaVencida:vencida ? total : 0,noPrazoVencido:vencida ? noPrazo : 0,
       foraPrazoVencido:vencida ? foraPrazo : 0,linhas:1
@@ -283,6 +288,22 @@
       if (grupo.graficas.indexOf(d.grafica) < 0) grupo.graficas.push(d.grafica);
       somar(grupo,d);somar(resumo,d);
     });
+    var porGraficaMarca=new Map();
+    detalhes.forEach(function(d){
+      var key=JSON.stringify([d.analista,d.time,d.grafica,d.marca,d.percurso]);
+      var g=porGraficaMarca.get(key);
+      if(!g){g=Object.assign(vazio(),{analista:d.analista,time:d.time,grafica:d.grafica,
+          marca:d.marca,percurso:d.percurso});porGraficaMarca.set(key,g);}
+      somar(g,d);
+    });
+    var graficasMarcas=Array.from(porGraficaMarca.values()).map(function(g){
+      g.aderencia=aderencia(g);return g;
+    }).sort(function(a,b){
+      return a.analista.localeCompare(b.analista,'pt-BR')||
+        a.grafica.localeCompare(b.grafica,'pt-BR')||
+        a.marca.localeCompare(b.marca,'pt-BR')||
+        a.percurso.localeCompare(b.percurso,'pt-BR');
+    });
     var analistas = Array.from(porAnalista.values()).map(function(g) {
       g.graficas.sort(function(a,b) { return a.localeCompare(b,'pt-BR'); });
       g.aderencia = aderencia(g);
@@ -293,7 +314,7 @@
       (referencia==='baseline'?'baseline':'replan'):
       (destino==='total'&&referencia==='armazem'?'mista':referencia),
       destino:destino,trajeto:destino==='acabadora'?trajeto:'',
-      corte:corte,resumo:resumo,analistas:analistas,detalhes:detalhes};
+      corte:corte,resumo:resumo,analistas:analistas,graficasMarcas:graficasMarcas,detalhes:detalhes};
   };
 })();
 </script>
