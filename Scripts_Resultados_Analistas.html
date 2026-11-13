@@ -413,8 +413,9 @@
       return g;
     }).sort(function(a,b) { return a.analista.localeCompare(b.analista,'pt-BR'); });
     resumo.aderencia = aderencia(resumo);resumo.analistas = analistas.length;
-    return {referencia:referencia,referenciaEfetiva:destino==='acabadora'?
+    return {referencia:referencia,referenciaEfetiva:etapa!=='coleta'&&etapa!=='entrega'?
       (referencia==='baseline'?'baseline':'replan'):
+      destino==='acabadora'?(referencia==='baseline'?'baseline':'replan'):
       (destino==='total'&&referencia==='armazem'?'mista':referencia),
       etapa:etapa,nomeEtapa:definicaoEtapa(etapa).nome,
       destino:destino,trajeto:destino==='acabadora'?trajeto:'',
