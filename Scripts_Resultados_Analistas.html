@@ -37,6 +37,16 @@
     return d.toISOString().slice(0,10);
   }
   function prazoItem(item,referencia) {
+    if (item.fluxo === 'acabadora') {
+      var coluna = referencia === 'baseline' ? BASELINE : REPLAN;
+      var nomePrazo = referencia === 'baseline' ? 'Baseline' : 'Replan';
+      var datas = linhasOrigem(item).map(function(l){return data(campo(l,coluna));});
+      if (datas.some(function(d){return !d;}))
+        return {prazo:null,motivo:nomePrazo+' ausente ou inválido em uma linha de origem.'};
+      if (datas.some(function(d){return d!==datas[0];}))
+        return {prazo:null,motivo:'Prazos divergentes entre as linhas de origem; identificar parcelas por KIT.'};
+      return {prazo:datas[0],motivo:''};
+    }
     if (referencia === 'armazem') {
       var meta = data(item.metaAplicada);
       return {prazo:meta,motivo:meta ? '' : 'Meta armazém ausente ou inválida.'};
@@ -54,6 +64,130 @@
       return {prazo:null,motivo:'Prazos divergentes entre as linhas de origem; identificação por KIT necessária.'};
     return {prazo:prazos[0],motivo:''};
   }
+
+  // Recorte independente: transferências PCP -> acabadora e saídas PCP_ACABADORAS -> CD.
+  // Não usa a união canônica da Meta Armazém, que excluiria as entradas em acabadoras.
+  // Não escreve nos dados de origem nem altera as regras compartilhadas de coleta/funil.
+  function quantidade(v) {
+    return Math.round(typeof window.pgNumeroPrazoV35 === 'function'
+      ? Math.max(0,window.pgNumeroPrazoV35(v) || 0) : numero(v));
+  }
+  function fonteAcabadora(l) {
+    return typeof window.pgEhFonteAcabadora === 'function' ? !!window.pgEhFonteAcabadora(l)
+      : [l._SOURCE,l.BASE,l._base].some(function(v){ return normal(v).indexOf('ACAB') >= 0; });
+  }
+  function entraAcabadora(l) {
+    if (fonteAcabadora(l)) return false;
+    var resolver = window.pgEhDestinoAcabadoraGraficaFiltro || window.pgEhDestinoAcabadora;
+    return typeof resolver === 'function' && !!resolver(l);
+  }
+  function totalAcabadora(l,trajeto) {
+    if (trajeto === 'saida') {
+      var v = campo(l,'TIRAGEM A ENTREGAR (total por CD)');
+      if (v !== undefined && v !== null && texto(v) !== '') return quantidade(v);
+    }
+    return quantidade(campo(l,'TIRAGEM'));
+  }
+  function idFisico(e,id,i) {
+    if (Number.isInteger(Number(e.linhaMapa)) && Number(e.linhaMapa) >= 2)
+      return 'MAPA:'+e.linhaMapa;
+    if (e.id != null && texto(e.id)) return 'ID:'+e.id;
+    return 'LINHA:'+id+':'+i;
+  }
+  function criarItemAcabadora(linhas,eventos,diagnosticos,total,trajeto) {
+    var l=linhas[0];
+    var usados=0,parcelas=[];
+    eventos.slice().sort(function(a,b){return a.data.localeCompare(b.data);})
+      .forEach(function(e){
+        var v=Math.min(e.volume,Math.max(0,total-usados));
+        if(v>0){parcelas.push({data:e.data,volume:v});usados+=v;}
+      });
+    return {linha:l,total:total,marca:texto(l.MARCA_FINAL||l.UNIDADE||l.MARCA),
+      grafica:texto(l.GRAFICA_FINAL||campo(l,'GRÁFICA')||l.GRAFICA),
+      serie:texto(l.serie_corrigida||campo(l,'SÉRIE')||l.SERIE),
+      eventosReal:parcelas,fluxo:'acabadora',trajeto:trajeto,
+      destinoFluxo:trajeto==='entrada'
+        ? texto(l.CD_MAPA||l['CD DESTINO']) : texto(l['CD DESTINO']||l.CD_FINAL||l.CD),
+      conciliacao:{linhas:linhas,agrupado:linhas.length>1,diagnosticos:diagnosticos.slice(),
+        filtroParcial:false}};
+  }
+  window.pgRAItensAcabadoras=function(base,opcoes) {
+    opcoes=opcoes||{};
+    var trajeto=opcoes.trajeto||'entrada',corte=data(opcoes.corte);
+    if(['entrada','saida'].indexOf(trajeto)<0)throw new Error('Etapa de acabadora inválida.');
+    if(!corte)throw new Error('Data de corte inválida para acabadoras.');
+    if(typeof window.pgVolumesColetaUnificadosV37!=='function' ||
+        typeof window.pgIdentidadeOperacionalTPLinha!=='function')
+      throw new Error('Conciliação do mapa TP ainda indisponível.');
+    var candidatas=(Array.isArray(base)?base:[]).filter(function(l){
+      return l && !(window.pgSolicitacaoCancelada&&window.pgSolicitacaoCancelada(l)) &&
+        (trajeto==='entrada'?entraAcabadora(l):fonteAcabadora(l));
+    });
+    var linhas=typeof window.pgLinhasUnicas==='function'?window.pgLinhasUnicas(candidatas):Array.from(new Set(candidatas));
+    var grupos=new Map();
+    linhas.forEach(function(l,i){
+      var total=totalAcabadora(l,trajeto);
+      if(!total)return;
+      var identidade=window.pgIdentidadeOperacionalTPLinha(l)||{};
+      var chave=identidade.chave || (typeof window.pgMAIdLinhaRealizado==='function'
+        ? window.pgMAIdLinhaRealizado(l) : 'ORIGEM:'+i);
+      if(!grupos.has(chave))grupos.set(chave,[]);
+      grupos.get(chave).push({linha:l,total:total,id:String(l._ROW_ID||l._PG_TP_LINHA||l.ID||i)});
+    });
+    var saida=[];
+    grupos.forEach(function(registros){
+      var fisicos=new Map(),diagnosticos=[];
+      registros.forEach(function(r){
+        var v=window.pgVolumesColetaUnificadosV37(r.linha,corte)||{};
+        var lista=Array.isArray(v.eventosEntregaTP)?v.eventosEntregaTP:[];
+        var motivo=lista.conciliacao&&lista.conciliacao.motivo||'';
+        if(/indisponivel|cache-sem-contrato|forecast-nao-conferido|nao-concilia|identidade-da-linha-incompleta/.test(motivo))
+          diagnosticos.push('entrega: '+motivo);
+        lista.forEach(function(e,i){
+          var dia=data(e.data),volume=quantidade(e.volume);
+          if(!dia||dia>corte||!volume)return;
+          var chave=idFisico(e,r.id,i);
+          if(registros.length>1&&chave.indexOf('LINHA:')===0)
+            diagnosticos.push('entrega: parcelas-sem-identificador-fisico');
+          var anterior=fisicos.get(chave);
+          if(anterior){
+            if(anterior.data!==dia||anterior.volume!==volume||normal(anterior.kit)!==normal(e.kit))
+              throw new Error('Parcela TP divergente na acabadora: '+chave);
+            return;
+          }
+          fisicos.set(chave,{data:dia,volume:volume,kit:texto(e.kit)});
+        });
+      });
+      diagnosticos=Array.from(new Set(diagnosticos));
+      var eventos=Array.from(fisicos.values()),linhasGrupo=registros.map(function(r){return r.linha;});
+      var porKit=new Map();
+      registros.forEach(function(r){
+        var kit=normal(campo(r.linha,'KIT'));
+        if(!porKit.has(kit))porKit.set(kit,[]);
+        porKit.get(kit).push(r);
+      });
+      var kitSeguro=eventos.length>0&&eventos.every(function(e){
+        return normal(e.kit)&&(porKit.get(normal(e.kit))||[]).length===1;
+      })&&registros.every(function(r){
+        var kit=normal(campo(r.linha,'KIT'));
+        return eventos.filter(function(e){return normal(e.kit)===kit;})
+          .reduce(function(s,e){return s+e.volume;},0)<=r.total;
+      });
+      if(registros.length===1||!eventos.length||kitSeguro){
+        registros.forEach(function(r){
+          var kit=normal(campo(r.linha,'KIT'));
+          var associados=registros.length===1?eventos:!eventos.length?[]:
+            eventos.filter(function(e){return normal(e.kit)===kit;});
+          saida.push(criarItemAcabadora([r.linha],associados,diagnosticos,r.total,trajeto));
+        });
+      } else {
+        saida.push(criarItemAcabadora(linhasGrupo,eventos,diagnosticos,
+          registros.reduce(function(s,r){return s+r.total;},0),trajeto));
+      }
+    });
+    return saida;
+  };
+
   function vazio() {
     var out = {};
     CAMPOS.forEach(function(c) { out[c] = 0; });
@@ -95,6 +229,11 @@
     return {
       analista:texto(responsavel.analista) || 'Sem responsável',
       time:texto(responsavel.time) || 'Não informado',grafica:grafica,
+      destinoAvaliado:item.fluxo==='acabadora'?'Acabadoras':'Entregas no CD',
+      percurso:item.fluxo==='acabadora'?(item.trajeto==='entrada'?'Gráfica → acabadora':'Acabadora → CD'):'Entrega ao CD',
+      destinoFluxo:texto(item.destinoFluxo||l.CD_FINAL||l.CD_MAPA||l['CD DESTINO']),
+      referenciaEfetiva:item.fluxo==='acabadora'?(referencia==='baseline'?'Baseline':'Replan'):
+        (referencia==='baseline'?'Baseline':referencia==='replan'?'Replan':'Meta armazém'),
       marca:texto(item.marca || l.MARCA_FINAL || l.UNIDADE || l.MARCA),
       serie:texto(item.serie || l.serie_corrigida || campo(l,'SÉRIE') || l.SERIE),
       sku:texto(l.SKU_REAL || l.SKU),kit:texto(campo(l,'KIT')),
@@ -116,6 +255,10 @@
   window.pgRAApurar = function(itens,opcoes) {
     opcoes = opcoes || {};
     var referencia = opcoes.referencia || 'armazem';
+    var destino=opcoes.destino||'cd',trajeto=opcoes.trajeto||'entrada';
+    if(['cd','acabadora'].indexOf(destino)<0)throw new Error('Destino de avaliação inválido.');
+    if(destino==='acabadora'&&['entrada','saida'].indexOf(trajeto)<0)
+      throw new Error('Etapa de acabadora inválida.');
     if (['armazem','baseline','replan'].indexOf(referencia) < 0) throw new Error('Referência de prazo inválida.');
     var hoje = typeof dtHojeISO !== 'undefined' ? dtHojeISO : new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});
     var corte = data(opcoes.corte || hoje);
@@ -142,7 +285,10 @@
       return g;
     }).sort(function(a,b) { return a.analista.localeCompare(b.analista,'pt-BR'); });
     resumo.aderencia = aderencia(resumo);resumo.analistas = analistas.length;
-    return {referencia:referencia,corte:corte,resumo:resumo,analistas:analistas,detalhes:detalhes};
+    return {referencia:referencia,referenciaEfetiva:destino==='acabadora'?
+      (referencia==='baseline'?'baseline':'replan'):referencia,
+      destino:destino,trajeto:destino==='acabadora'?trajeto:'',
+      corte:corte,resumo:resumo,analistas:analistas,detalhes:detalhes};
   };
 })();
 </script>
