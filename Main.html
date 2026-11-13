@@ -1777,10 +1777,13 @@ window.exportarSkusFiltradosSheets = function() {
       if (window.pgCarregamentoInicial) throw new Error('Carregamento já em andamento.');
       if (typeof window.pgRecarregarDadosPortal !== 'function')
         throw new Error('Carregador de dados indisponível.');
+      const performanceAnterior = window.PG_PERFORMANCE;
       await window.pgRecarregarDadosPortal();
       // O carregador registra o tempo somente após montar o dashboard.
-      // Ele trata suas falhas internamente; não confundir retorno com sucesso.
-      if (!Number.isFinite(window.PG_PERFORMANCE && window.PG_PERFORMANCE.inicialCompletoMs))
+      // Ele trata suas falhas internamente; não confundir retorno com sucesso
+      // nem reaproveitar o resultado de um carregamento anterior.
+      if (window.PG_PERFORMANCE === performanceAnterior ||
+          !Number.isFinite(window.PG_PERFORMANCE && window.PG_PERFORMANCE.inicialCompletoMs))
         throw new Error('O carregamento não foi concluído.');
       atualizadoEm = Date.now();
       ultimoPeriodoAvisado = 0;
