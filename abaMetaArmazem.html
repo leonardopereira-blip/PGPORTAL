@@ -574,6 +574,20 @@
     marcos.forEach(function(m){m.pct=Math.max(anterior,m.pct);anterior=m.pct;});
     return marcos;
   }
+  // Leitura pública e sem efeito colateral dos combinados oficiais.
+  // Reutilizada exclusivamente na avaliação SIP de SPE/CQT por destino CD Posigraf.
+  window.pgMAMarcosSIPPosigraf=function(marca,segmento,serieSIP,tipo){
+    var origem={MARCA_FINAL:marca,UNIDADE:marca,GRAFICA_FINAL:'POSIGRAF',
+      CD_FINAL:'POSIGRAF',SEGMENTO:segmento,'SÉRIE':serieSIP,TIPO:tipo};
+    var regras=posiRegra(origem)||[];
+    if(regras.length===1){
+      var marcos=marcosPosi(regras[0]);
+      return marcos.map(function(m){return {data:m.data,pct:m.pct,fonte:'Combinado Posigraf'};});
+    }
+    // Igual ao motor Meta Armazém: sem combinado específico, meta original.
+    return [{data:ajustarDomingoPrevisto(metaOriginal(normal(marca))),pct:1,
+      fonte:regras.length?'Combinados ambíguos: meta original':'Meta Armazém original'}];
+  };
   function coortePosi(l){
     var origens=l._PG_MA&&l._PG_MA.agrupado?l._PG_MA.linhas:[l],base=null;
     for(var i=0;i<origens.length;i++){
