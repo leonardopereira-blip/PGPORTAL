@@ -468,6 +468,10 @@
           pgRAVincularMetaCD(itensAcabadora,itensCD);
         // A saída da acabadora já pertence ao CD canônico; não entra duas vezes no Total.
         var itens=(ehAcabadora?[]:itensCD).concat(itensAcabadora);
+        if(typeof window.pgRAComplementarWalprint==='function')
+          itens=window.pgRAComplementarWalprint(itens,{
+            etapa:estado.etapa,destino:estado.destino,trajeto:estado.trajeto,corte:estado.corte
+          });
         var opcoesApuracao={referencia:estado.referencia,corte:estado.corte,
           destino:estado.destino,trajeto:estado.trajeto,etapa:estado.etapa};
         // O motor aplica a identidade da sessão ANTES de gerar resumo,
@@ -554,6 +558,16 @@
         t.cabecalho.push('Etapa avaliada');
         t.linhas.forEach(function(l){l.push(r.nomeEtapa);});
       });
+      var ajWal=(r.detalhes||[]).filter(function(d){
+        return Array.isArray(d.diagnosticos)&&d.diagnosticos.some(function(x){
+          return String(x).indexOf('fonte PCP+SPG SAS V1-27')===0;
+        });
+      });
+      if(ajWal.length)metodo.linhas.push(
+        ['Correção Walprint','Exceção gerencial: itens SAS V1-27 zerados no PCP (montagens HR/Oceano), cruzados com SPG. Priorizado KIT+SKU; na ausência, saldo residual por SKU contado uma única vez. Apenas ausência no recorte é acrescentada.'],
+        ['Volume Walprint fora de prazo',ajWal.reduce(function(s,x){return s+x.foraPrazoVencido;},0)],
+        ['Limitação do ajuste','Fonte não possui datas individuais de coleta/internalização. Correção aplicável somente a cortes a partir de 16/11/2026 e classificada como fora do prazo conforme pedido; a base auditável identifica cada linha.']
+      );
       metodo.linhas.unshift(['Etapa avaliada',r.nomeEtapa]);
       if(r.etapa==='coleta_matriz')metodo.linhas.push(
         ['Regra de prazo','Chegada teórica = data real de cada Coleta TP + Matriz SLA por rota. Domingo passa para segunda. Dentro do prazo se chegada teórica <= meta do destino (PCP/acabadora ou CD).'],
