@@ -375,7 +375,99 @@
       return 'Coleta não conciliada: movimento do mapa sem identificador físico';
     return d;
   }
+
+  // Complemento gerencial Walprint / SAS V1-27. Fonte: lista PCP (montagem
+  // HR/Oceano) cruzada com SPG, extração de 16/11/2026.
+  // Chave prioritária KIT+SKU; sem match, SKU agregado UMA única vez, com
+  // desconto dos kits já encontrados e volumes presentes no PCP canônico.
+  // Não altera PCP, SPG, funil, entregas no CD ou origem das linhas.
+  var WALPRINT_FONTE='PCP+SPG SAS V1-27 / 16-11-2026';
+  var WALPRINT_EXATOS=[["SAS27CA51SD1BRMER00","SAS27LSAAR43101BRPDR00",200,"MONTAGEM HR"],["SAS27CA51SD1BRMER00","SAS27LSAFS43101BRPDR00",200,"MONTAGEM HR"],["SAS27CA51SD1BRMER00","SAS27LSAME43101BRPDR00",200,"MONTAGEM HR"],["SAS27CA51SD1BRMFA00","SAS27LPAIN51101BRPDR00",70,"MONTAGEM HR"],["SAS27CA51SD1BRMFA00","SAS27LPAIN51102BRPDR00",70,"MONTAGEM HR"],["SAS27CA51SD1BRMFS00","SAS27LSAAR43101BRPDR00",160,"MONTAGEM HR"],["SAS27CA51SD1BRMFS00","SAS27LSAFS43101BRPDR00",160,"MONTAGEM HR"],["SAS27CA51SD1BRMFS00","SAS27LSAME43101BRPDR00",160,"MONTAGEM HR"],["SAS27CA51SD1BRNSF00","SAS27LSAAR43101BRPDR00",130,"MONTAGEM HR"],["SAS27CA51SD1BRNSF00","SAS27LSAFS43101BRPDR00",130,"MONTAGEM HR"],["SAS27CA51SD1BRNSF00","SAS27LSAME43101BRPDR00",130,"MONTAGEM HR"],["SAS27CA51SD1BRPAR00","SAS27LSAAR43101BRPDR00",80,"MONTAGEM HR"],["SAS27CA51SD1BRPAR00","SAS27LSAFS43101BRPDR00",80,"MONTAGEM HR"],["SAS27CA51SD1BRPAR00","SAS27LSAME43101BRPDR00",80,"MONTAGEM HR"],["SAS27CA51SD1BRPDR00","SAS27LPAIN51101BRPDR00",31000,"MONTAGEM OCEANO"],["SAS27CA51SD1BRPDR00","SAS27LPAIN51102BRPDR00",31000,"MONTAGEM OCEANO"],["SAS27CA51SD1BRPDR00","SAS27LSAAR43101BRPDR00",31000,"MONTAGEM OCEANO"],["SAS27CA51SD1BRPDR00","SAS27LSAFS43101BRPDR00",31000,"MONTAGEM OCEANO"],["SAS27CA51SD1BRPDR00","SAS27LSAME43101BRPDR00",31000,"MONTAGEM OCEANO"],["SAS27CA51SD1BRPNT00","SAS27LSAAR43101BRPDR00",110,"MONTAGEM HR"],["SAS27CA51SD1BRPNT00","SAS27LSAFS43101BRPDR00",110,"MONTAGEM HR"],["SAS27CA51SD1BRPNT00","SAS27LSAME43101BRPDR00",110,"MONTAGEM HR"],["SAS27CA51SD1BRRBR00","SAS27LSAAR43101BRPDR00",180,"MONTAGEM HR"],["SAS27CA51SD1BRRBR00","SAS27LSAFS43101BRPDR00",180,"MONTAGEM HR"],["SAS27CA51SD1BRRBR00","SAS27LSAME43101BRPDR00",180,"MONTAGEM HR"],["SAS27CA51SD1BRSAF00","SAS27LPAIN51101BRPDR00",900,"MONTAGEM HR"],["SAS27CA51SD1BRSAF00","SAS27LPAIN51102BRPDR00",900,"MONTAGEM HR"],["SAS27CA51SD1BRSAF00","SAS27LSAME43101BRPDR00",900,"MONTAGEM HR"],["SAS27CA51SD1BRSDG00","SAS27LSAAR43101BRPDR00",90,"MONTAGEM HR"],["SAS27CA51SD1BRSDG00","SAS27LSAFS43101BRPDR00",90,"MONTAGEM HR"],["SAS27CA51SD1BRSDG00","SAS27LSAME43101BRPDR00",90,"MONTAGEM HR"],["SAS27CA51SD1BRSER00","SAS27LSAAR43101BRPDR00",30,"MONTAGEM HR"],["SAS27CA51SD1BRSER00","SAS27LSAFS43101BRPDR00",30,"MONTAGEM HR"],["SAS27CA51SD1BRSER00","SAS27LSAME43101BRPDR00",30,"MONTAGEM HR"],["SAS27CA51SD1BRSJE00","SAS27LSAAR43101BRPDR00",110,"MONTAGEM HR"],["SAS27CA51SD1BRSJE00","SAS27LSAFS43101BRPDR00",110,"MONTAGEM HR"],["SAS27CA51SD1BRSJE00","SAS27LSAME43101BRPDR00",110,"MONTAGEM HR"],["SAS27CC51SD1BRPDR00","SAS27LPAIN51101BRPDR00",750,"MONTAGEM HR"],["SAS27CC51SD1BRPDR00","SAS27LPAIN51102BRPDR00",750,"MONTAGEM HR"],["SAS27CC51SD1BRPDR00","SAS27LSAAR43101BRPDR00",750,"MONTAGEM HR"],["SAS27CC51SD1BRPDR00","SAS27LSAFS43101BRPDR00",750,"MONTAGEM HR"],["SAS27CC51SD1BRPDR00","SAS27LSAME43101BRPDR00",750,"MONTAGEM HR"]];
+  var WALPRINT_POR_SKU=[["SAS27LSAAR43101BRPDR00",49342,32840,"SAS27CA51SD1BRARB00|SAS27CA51SD1BRBAH00|SAS27CA51SD1BRFOR00"],["SAS27LSAFS43101BRPDR00",52957,32840,"SAS27CA51SD1BRARB00|SAS27CA51SD1BRBAH00|SAS27CA51SD1BRFOR00"],["SAS27LSAME43101BRPDR00",58715,33740,"SAS27CA51SD1BRARB00|SAS27CA51SD1BRBAH00|SAS27CA51SD1BRFOR00"]];
+  var WALPRINT_CHAVES=new Set(WALPRINT_EXATOS.map(function(r){return r[0]+'|'+r[1];}));
+  function walprintOrigem(item) {
+    var l=item.linha||{};
+    var grafica=normal(item.grafica||l.GRAFICA_FINAL||campo(l,'GRÁFICA'));
+    var marca=normal(item.marca||l.MARCA_FINAL||l.UNIDADE||l.MARCA);
+    if(grafica!=='WALPRINT'||marca!=='SAS')return null;
+    var sku=normal(l.SKU_REAL||campo(l,'SKU')||l.SKU);
+    var kit=normal(campo(l,'KIT')||l.KIT);
+    if(!sku)return null;
+    return {sku:sku,kit:kit,total:numero(item.total)};
+  }
+  window.pgRAComplementarWalprint=function(itens,opcoes){
+    opcoes=opcoes||{};
+    var originais=Array.isArray(itens)?itens:[];
+    var etapa=opcoes.etapa||'coleta_matriz';
+    if(['coleta','coleta_matriz','entrega'].indexOf(etapa)<0 ||
+      opcoes.destino==='cd'||opcoes.destino==='acabadora'&&opcoes.trajeto==='saida')
+      return originais;
+    // Sem datas de movimentos confiáveis para retroagir o ajuste a cortes
+    // anteriores à extração. Nada é retroprojetado em períodos passados.
+    if(String(opcoes.corte||'')<'2026-11-16')return originais;
+    var presentes=new Map(),porSku=new Map();
+    originais.forEach(function(item){
+      var x=walprintOrigem(item);
+      if(!x)return;
+      var id=x.kit+'|'+x.sku;
+      presentes.set(id,(presentes.get(id)||0)+x.total);
+      if(!WALPRINT_CHAVES.has(id)){
+        porSku.set(x.sku,(porSku.get(x.sku)||0)+x.total);
+      }
+    });
+    var extras=[];
+    function adicionar(kit,sku,volume,metodo,sub,kitsSemMatch) {
+      volume=Math.max(0,Math.round(numero(volume)));
+      if(!volume)return;
+      var l={KIT:kit,SKU:sku,CICLO:2027,ENVIO:'V1',
+        GRAFICA_FINAL:'WALPRINT',MARCA_FINAL:'SAS',UNIDADE:'SAS'};
+      var info={fonte:WALPRINT_FONTE,metodo:metodo,
+        sku:sku,kit:kit,sub:sub||'Realocação de montagem',origemKits:kitsSemMatch||''};
+      extras.push({linha:l,total:volume,grafica:'WALPRINT',marca:'SAS',fluxo:'acabadora',
+        trajeto:'entrada',destinoFluxo:sub&&sub.includes('OCEANO')?'OCEANO':'HR',
+        ajusteWalprint:info,
+        conciliacao:{linhas:[l],diagnosticos:['ajuste-walprint: fora-do-prazo-confirmado-gerencialmente; sem-data-de-movimento']}});
+    }
+    WALPRINT_EXATOS.forEach(function(r){
+      var k=r[0]+'|'+r[1],faltante=r[2]-(presentes.get(k)||0);
+      adicionar(r[0],r[1],faltante,'Kit + SKU (SPG quantidade)',r[3],'');
+    });
+    WALPRINT_POR_SKU.forEach(function(r){
+      // SPG SKU somado sobre todos os kits; os kits exatos já são retirados
+      // para não multiplicar um SKU pelos três kits sem correspondência.
+      var saldo=r[1]-r[2]-(porSku.get(r[0])||0);
+      adicionar('',r[0],saldo,'SKU isolado (saldo não duplicado)',
+        'MONTAGEM HR',r[3]);
+    });
+    return originais.concat(extras);
+  };
+  function detalheExcecaoWalprint(item,etapa) {
+    var info=item.ajusteWalprint,total=numero(item.total);
+    var responsavel=typeof window.pgResponsavelGraficaGiro==='function'?
+      window.pgResponsavelGraficaGiro('WALPRINT')||{}:{};
+    return {analista:texto(responsavel.analista)||'Sem responsável',
+      time:texto(responsavel.time)||'Não informado',grafica:'WALPRINT',
+      marca:'SAS',serie:'',sku:info.sku,kit:info.kit,
+      descricao:'Volume realocado para montagem '+(item.destinoFluxo||'')+
+        ' — ajuste gerencial Walprint',ciclo:'2027',envio:'V1',
+      etapaAvaliada:definicaoEtapa(etapa).nome,
+      destinoAvaliado:'Acabadoras',percurso:'Gráfica → acabadora',
+      destinoFluxo:item.destinoFluxo,referenciaEfetiva:'Ajuste gerencial Walprint (fora do prazo)',
+      idOrigem:WALPRINT_FONTE+' | '+info.metodo+
+        (info.origemKits?' | Kits sem combinação: '+info.origemKits:''),
+      prazo:null,total:total,entregue:total,noPrazo:0,foraPrazo:total,
+      pendente:0,vencido:0,aVencer:0,semPrazo:0,naoApurado:0,
+      metaVencida:total,noPrazoVencido:0,foraPrazoVencido:total,linhas:1,
+      motivo:'Exceção Walprint: volume não representado na base PCP, realocado à montagem '+
+        (item.destinoFluxo||'')+' e classificado como fora do prazo conforme alinhamento com a liderança. '+
+        'Não há data individual de movimento nesta fonte. Cruzamento: '+info.metodo+'.',
+      diagnosticos:['fonte '+WALPRINT_FONTE,'origem '+info.metodo,
+        'sem data individual de internalização; ajuste atribuído ao corte da extração'],
+      parcelasColeta:[],dataUltimaColeta:''};
+  }
+
   function detalheItem(item,referencia,corte,etapa) {
+    if(item.ajusteWalprint)return detalheExcecaoWalprint(item,etapa);
     var definicao=definicaoEtapa(etapa);
     if(!correspondeEtapa(item,definicao))return null;
     var l = item.linha || {}, grafica = texto(item.grafica || l.GRAFICA_FINAL || campo(l,'GRÁFICA') || l.GRAFICA) || 'Não informada';
