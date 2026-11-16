@@ -348,3 +348,68 @@ test('interface de avaliação não mostra mais seletor Baseline/Replan',()=>{
   assert.match(h,/etapa:'coleta_matriz'/);
   assert.match(h,/META DE ENTREGA NO CD/);
 });
+
+
+function appWalprint() {
+  const w={
+    pgCampoColeta:(l,n)=>l[n],
+    pgNormalizarDataColeta:v=>/^\d{4}-\d\d-\d\d$/.test(String(v||''))?v:null,
+    pgResponsavelGraficaGiro:g=>String(g).toUpperCase()==='WALPRINT'?
+      {analista:'João Alberti',time:'Camila'}:{analista:'Outro',time:'Camila'}
+  };
+  vm.runInNewContext(script,{window:w,Date,dtHojeISO:'2026-11-16'});
+  return w;
+}
+const walprintOpts={etapa:'coleta_matriz',destino:'total',trajeto:'entrada',corte:'2026-11-16'};
+test('Walprint PCP + SPG: prioriza 42 KIT+SKU; 3 SKUs isolados não triplicam os kits ausentes',()=>{
+  const w=appWalprint(),itens=w.pgRAComplementarWalprint([],walprintOpts);
+  const exatos=itens.filter(i=>i.ajusteWalprint.metodo.startsWith('Kit + SKU'));
+  const soSku=itens.filter(i=>i.ajusteWalprint.metodo.startsWith('SKU isolado'));
+  assert.equal(exatos.length,42);
+  assert.equal(soSku.length,3);
+  assert.equal(exatos.reduce((s,i)=>s+i.total,0),164860);
+  assert.equal(soSku.reduce((s,i)=>s+i.total,0),61594);
+  assert.equal(new Set(soSku.map(i=>i.ajusteWalprint.sku)).size,3);
+  const r=w.pgRAApurar(itens,{etapa:'coleta_matriz',destino:'total',corte:'2026-11-16'});
+  assert.equal(r.resumo.metaVencida,226454);
+  assert.equal(r.resumo.foraPrazoVencido,226454);
+  assert.equal(r.resumo.noPrazoVencido,0);
+  assert.equal(r.resumo.aderencia,0);
+  assert.equal(r.analistas[0].analista,'João Alberti');
+  assert.equal(r.graficasMarcas[0].grafica,'WALPRINT');
+  assert.ok(r.detalhes.every(i=>i.motivo.includes('Exceção Walprint')));
+  assert.ok(r.detalhes.every(i=>i.idOrigem.includes('PCP+SPG')));
+});
+test('Walprint: volume presente no portal é descontado; SKU residual só cobre saldo físico',()=>{
+  const w=appWalprint();
+  const exact={linha:{KIT:'SAS27CA51SD1BRPDR00',
+    SKU_REAL:'SAS27LSAAR43101BRPDR00',MARCA_FINAL:'SAS'},
+    grafica:'WALPRINT',marca:'SAS',total:31000};
+  const outro={linha:{KIT:'SAS27CA62SD1BRPDR00',
+    SKU_REAL:'SAS27LSAAR43101BRPDR00',MARCA_FINAL:'SAS'},
+    grafica:'WALPRINT',marca:'SAS',total:10300};
+  const r=w.pgRAComplementarWalprint([exact,outro],walprintOpts);
+  const ajustes=r.filter(i=>i.ajusteWalprint);
+  assert.ok(!ajustes.some(i=>i.ajusteWalprint.kit==='SAS27CA51SD1BRPDR00'&&
+    i.ajusteWalprint.sku==='SAS27LSAAR43101BRPDR00'));
+  const saldo=ajustes.find(i=>i.ajusteWalprint.metodo.startsWith('SKU isolado')&&
+    i.ajusteWalprint.sku==='SAS27LSAAR43101BRPDR00');
+  assert.equal(saldo.total,6202);
+  const segunda=w.pgRAComplementarWalprint([exact,outro],walprintOpts);
+  assert.equal(segunda.length,r.length,'não mutar fonte nem acumular correções entre consultas');
+});
+test('Walprint: somente no Total/entrada acabadora e a partir da data da extração',()=>{
+  const w=appWalprint();
+  assert.equal(w.pgRAComplementarWalprint([],{...walprintOpts,corte:'2026-11-15'}).length,0);
+  assert.equal(w.pgRAComplementarWalprint([],{...walprintOpts,destino:'cd'}).length,0);
+  assert.equal(w.pgRAComplementarWalprint([],{...walprintOpts,destino:'acabadora',trajeto:'saida'}).length,0);
+  assert.equal(w.pgRAComplementarWalprint([],{...walprintOpts,etapa:'imp'}).length,0);
+  assert.equal(w.pgRAComplementarWalprint([],{...walprintOpts,destino:'acabadora',trajeto:'entrada'}).length,45);
+});
+test('Walprint: escopo do analista impede visualizar ajustes de outra pessoa',()=>{
+  const w=appWalprint(),itens=w.pgRAComplementarWalprint([],walprintOpts);
+  w.pgRAEscopoUsuario=()=>({tipo:'PROPRIO',analista:'Outro',time:'Camila'});
+  assert.equal(w.pgRAApurar(itens,{etapa:'coleta_matriz',corte:'2026-11-16'}).resumo.linhas,0);
+  w.pgRAEscopoUsuario=()=>({tipo:'PROPRIO',analista:'João Alberti',time:'Camila'});
+  assert.equal(w.pgRAApurar(itens,{etapa:'coleta_matriz',corte:'2026-11-16'}).resumo.linhas,45);
+});
