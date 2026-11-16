@@ -186,7 +186,7 @@
   }
   function entraAcabadora(l) {
     if (fonteAcabadora(l)) return false;
-    var resolver = window.pgEhDestinoAcabadoraGraficaFiltro || window.pgEhDestinoAcabadora;
+    var resolver = window.pgEhDestinoAcabadora;
     return typeof resolver === 'function' && !!resolver(l);
   }
   function totalAcabadora(l,trajeto) {
