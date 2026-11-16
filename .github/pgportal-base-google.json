@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-16T10:22:49.843Z",
+  "lido_em": "2026-11-16T11:04:42.199Z",
   "files": {
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
@@ -24,7 +24,7 @@
     "HTML:abaReentradasGerencial": "68869cc3347fd307bbc0fdf5d75952b78ba9508e51800f57f0cad4d2936bc018",
     "HTML:abaReentradasProducao": "12998876d02407bf1f2dbcb130963ad60779e6e536e6880048e313f43bead263",
     "HTML:abaReportExecutiva": "ed7f076084b1d95a74bab64a61f29b5ef4bc8ba6e504d54ac1815d7724a3d9bf",
-    "HTML:abaResultadosAnalistas": "f6dfae489c873317b5a42491652928730302e8ecb66d97a1def079b3be1eec2a",
+    "HTML:abaResultadosAnalistas": "9175af90d207d9c760dcf37aa479e35e8fe982d5110fe701dd8f32427d37a45b",
     "HTML:abaTempSasAdapt": "1e549e3b22990c6d856054a08538b1846f7311f7ab500b8d27febecae9817441",
     "SERVER_JS:AcompanhamentoMapa": "9d8c41d5bda2f03f70196b5ea8da262932e745b0eaff7910ceb619995715bc2a",
     "SERVER_JS:AlertasMapa": "d418b14431a0381e48d18516afb43a0b5417278a833a531c7655aba886ff9f2c",
@@ -60,10 +60,10 @@
     "HTML:Scripts_EntregasCD_Modelo": "6af7811b9a34bfd4fb7dfde821815b7a80cd93b35efcbc3da97da0958c4d5de2",
     "HTML:Scripts_Eventos_TP": "1af211c0bbd5d29719193587a169fcb7c7b423070d38cd8cbb6c189416736322",
     "HTML:Scripts_Giro_Registro": "495aa98b40c761371ab340e5d194770bb3d17aa7ee5c6db9220cef47b15da719",
-    "HTML:Scripts_Globais_2": "2ee2c344e94e1fb0f6658d03785344af61efdce5bcb117c7baff86672e735a5f",
+    "HTML:Scripts_Globais_2": "01039bbffebe9af962c9ef739c7227ec6ab3d219b2dd1e36960b675acc894365",
     "HTML:Scripts_Historico_PCP2026": "c6238f34d35ffd9c1adcb4435ff737563f806c1f234ee0b58c835bdafdafb8a5",
     "HTML:Scripts_Meta_Armazem_Realizado": "ae22d29077e27b204359486acc6557a4769d2ab99ee5556d65876220f17e51f5",
-    "HTML:Scripts_Resultados_Analistas": "05e333bf9e5ca403be43e4b1643567ec86f3521888755219eda52baab293330e",
+    "HTML:Scripts_Resultados_Analistas": "812231efb0f37585c5e83972824bc4a253e9b01872bf41ef2431e8c81c31f7f1",
     "SERVER_JS:Sem título": "0d554ca9e8b80dd09850906f18cdd0f84d35dd7bbe6abab69ab4ccbada526ef8",
     "SERVER_JS:TempSasAdapt": "e9b99c7fee4be761a5c4f43bb5530afb85da8d45e76e99663ff78f90b40e3fbe"
   }
