@@ -452,7 +452,7 @@
         estado.etapa==='entrega'?
         'Entrega: parcelas reais da Entrega TP comparadas à mesma meta de destino. Entrada na acabadora utiliza META DE ENTREGA NO CD; CD utiliza Meta Armazém/combinados.':
         'Outras etapas: realizado da própria fase contra o seu prazo específico registrado no funil; etapas sem prazo seguro não recebem nota.';
-      el('raMetodoDestino').textContent='O Total combina as coletas ao CD e as transferências para acabadoras, cada uma com sua meta física. A saída da acabadora para CD utiliza Meta Armazém/combinados, sem duplicar a entrada.';
+      el('raMetodoDestino').textContent='O Total combina as coletas ao CD e as transferências para acabadoras, cada uma com sua meta física. A saída da acabadora para CD utiliza Meta Armazém/combinados, sem duplicar a entrada. Exceção SPE/CQT V1 Posigraf: internalização SIP datada, integralmente no CD POSIGRAF, com marcos oficiais.';
       var diag=el('raDiagnosticos');if(diag)diag.textContent='';
       try{
         if(typeof window.pgMAObterItens!=='function'||typeof window.pgRAApurar!=='function')throw new Error('A base de entregas ainda está carregando. Tente novamente após o carregamento.');
@@ -470,6 +470,13 @@
         var itens=(ehAcabadora?[]:itensCD).concat(itensAcabadora);
         if(typeof window.pgRAComplementarWalprint==='function')
           itens=window.pgRAComplementarWalprint(itens,{
+            etapa:estado.etapa,destino:estado.destino,trajeto:estado.trajeto,corte:estado.corte
+          });
+        // SPE/CQT V1 da Posigraf têm exceção de aferição por SIP:
+        // todos os registros SIP são do CD POSIGRAF, mesmo sem vínculo PCP.
+        // Remove o conjunto PCP dessa avaliação para não somar duas vezes.
+        if(typeof window.pgRAAplicarPosigrafSIP==='function')
+          itens=window.pgRAAplicarPosigrafSIP(itens,baseAvaliacao,{
             etapa:estado.etapa,destino:estado.destino,trajeto:estado.trajeto,corte:estado.corte
           });
         var opcoesApuracao={referencia:estado.referencia,corte:estado.corte,
@@ -567,6 +574,15 @@
         ['Correção Walprint','Exceção gerencial: itens SAS V1-27 zerados no PCP (montagens HR/Oceano), cruzados com SPG. Priorizado KIT+SKU; na ausência, saldo residual por SKU contado uma única vez. Apenas ausência no recorte é acrescentada.'],
         ['Volume Walprint fora de prazo',ajWal.reduce(function(s,x){return s+x.foraPrazoVencido;},0)],
         ['Limitação do ajuste','Fonte não possui datas individuais de coleta/internalização. Correção aplicável somente a cortes a partir de 16/11/2026 e classificada como fora do prazo conforme pedido; a base auditável identifica cada linha.']
+      );
+      var ajustesSIP=(r.detalhes||[]).filter(function(d){
+        return String(d.referenciaEfetiva).indexOf('Combinados Meta Armazém / SIP')===0;
+      });
+      if(ajustesSIP.length)metodo.linhas.push(
+        ['Posigraf SPE/CQT V1','Exceção SIP: 100% dos registros são atribuídos ao CD POSIGRAF, inclusive sem correspondente PCP. Chave normalizada por letras/dígitos, conferindo SKU e KIT do PCP. Não classificar como acabadora.'],
+        ['Fonte do realizado','Relatórios datados da SIP, reconciliados ao saldo internalizado da Base SIP V1.27. As mesmas metas graduais da Meta Armazém são usadas para determinar o volume devido.'],
+        ['Internalização sem data',ajustesSIP.reduce(function(s,d){return s+d.naoApurado;},0)],
+        ['Extração SIP','CQT em 12/11/2026; SPE em 11/11/2026. Valores não se atualizam automaticamente após esta extração.']
       );
       metodo.linhas.unshift(['Etapa avaliada',r.nomeEtapa]);
       if(r.etapa==='coleta_matriz')metodo.linhas.push(
