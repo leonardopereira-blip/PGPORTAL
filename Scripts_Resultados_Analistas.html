@@ -526,6 +526,10 @@
   };
   function detalheSIPPosigraf(item,etapa,corte) {
     var a=item.ajustePosigrafSIP,total=a.total,
+      // Não apurar marcos posteriores ao retrato SIP como se o saldo já
+      // estivesse atrasado. A base SPE está atualizada em 11/11, CQT 12/11.
+      ultimoRetrato=item.marca==='SPE'?'2026-11-11':'2026-11-12',
+      corteConfiavel=corte<ultimoRetrato?corte:ultimoRetrato,
       marcos=window.pgMAMarcosSIPPosigraf(item.marca,a.segmento,a.serie,a.tipo);
     if(!Array.isArray(marcos)||!marcos.length)
       throw new Error('Sem marcos Posigraf para SIP '+a.codigo);
@@ -535,7 +539,7 @@
     (a.eventos||[]).slice().sort(function(x,y){return String(x[0]).localeCompare(String(y[0]));})
       .forEach(function(e){
         var dataReal=data(e[0]),v=numero(e[1]);
-        if(!dataReal||dataReal>corte||!v)return;
+        if(!dataReal||dataReal>corteConfiavel||!v)return;
         v=Math.min(v,Math.max(0,a.internal-validado));
         if(v>0){parcelas.push({data:dataReal,volume:v,chave:'SIP:'+a.codigo,kit:a.codigo});validado+=v;}
       });
@@ -544,7 +548,7 @@
       var acumulado=Math.min(total,Math.max(0,Math.round(total*m.pct)));
       var anterior=Math.min(total,Math.max(0,Math.round(total*percentualAnterior)));
       percentualAnterior=Math.max(percentualAnterior,m.pct);
-      if(m.data>corte)return;
+      if(m.data>corteConfiavel)return;
       var parcela=Math.max(0,acumulado-anterior);
       metaVencida+=parcela;
       var ate=parcelas.reduce(function(s,e){return s+(e.data<=m.data?e.volume:0);},0);
@@ -576,9 +580,10 @@
       metaVencida:vencidaVerificada,noPrazoVencido:noPrazo,
       foraPrazoVencido:foraPrazo,linhas:1,
       motivo:'SIP CD POSIGRAF. Correspondência: '+a.identificacao+
-        '. Meta por marcos acumulados da visão Armazém; realizado pela internalização datada.',
+        '. Meta por marcos acumulados da visão Armazém até a data do retrato '+ultimoRetrato+
+        '; realizado pela internalização datada.',
       diagnosticos:['SIP CD POSIGRAF','PCP: '+a.identificacao,
-        'Fonte: '+SIP_POSI_ORIGEM].concat(indeterminado?
+        'Fonte: '+SIP_POSI_ORIGEM,'Última data apurada: '+corteConfiavel].concat(indeterminado?
           ['Internalização informada pela SIP, mas sem data conciliada: '+indeterminado]:[]),
       parcelasColeta:parcelas,
       dataUltimaColeta:parcelas.length?parcelas[parcelas.length-1].data:''
