@@ -96,6 +96,28 @@
   }
   // Mesma função de SLA e o mesmo ajuste de domingo da Meta Armazém.
   // Usa a coleta REAL como entrada, nunca a entrega real do caminhão.
+  // SLAs informados para rotas PCP -> acabadora ainda sem valor na Matriz_SLA.
+  // Somente a visão por analista utiliza esse complemento, e apenas se a Matriz
+  // não possuir um prazo para a rota. Zero dia é um SLA explícito, não ausência.
+  var SLA_ACABADORA_COMPLEMENTAR = new Map([
+    ['FORMA CERTA|ANTILHAS',0],
+    ['IMOS|ANTILHAS',0],
+    ['IPSIS|ANTILHAS',0],
+    ['LOGPRINT|EMBALARTE',0],
+    ['MAXI|ANTILHAS',1],
+    ['META|ANTILHAS',0],
+    ['PIFFER|ANTILHAS',0],
+    ['POSIGRAF|ANTILHAS',1],
+    ['RONA|ANTILHAS',0],
+    ['SAO FRANCISCO|HR',0],
+    ['WALPRINT|ANTILHAS',2],
+    ['WALPRINT|HR',2]
+  ]);
+  function slaComplementarAcabadora(l) {
+    var origem=normal(l.GRAFICA_FINAL||campo(l,'GRÁFICA')||l.GRAFICA);
+    var destino=normal(campo(l,'CD_MAPA'));
+    return SLA_ACABADORA_COMPLEMENTAR.get(origem+'|'+destino);
+  }
   function chegadaMatriz(linhas,diaColeta,rotaAcabadora) {
     if(!data(diaColeta))return {data:null,motivo:'data-coleta-invalida'};
     if(typeof window.pgDataPlanoEntregaSLA!=='function')
@@ -109,6 +131,18 @@
         var rota=rotaAcabadora
           ? (destino?Object.assign({},l,{CD_FINAL:destino,'CD DESTINO':destino}):null) : l;
         previsao=rota?data(window.pgDataPlanoEntregaSLA(rota,diaColeta)):null;
+        // Só preencher lacunas reais: SLA já cadastrado na Matriz tem prioridade.
+        // Nunca usar o complemento para CD direto ou para outra rota não fornecida.
+        if(rotaAcabadora&&rota&&!previsao) {
+          var diasComplementares=slaComplementarAcabadora(l);
+          var slaOriginal=typeof window.pgDiasSLALinha==='function'
+            ? window.pgDiasSLALinha(rota):null;
+          if(diasComplementares!==undefined&&slaOriginal===null) {
+            var chegada=new Date(diaColeta+'T12:00:00Z');
+            chegada.setUTCDate(chegada.getUTCDate()+diasComplementares);
+            previsao=chegada.toISOString().slice(0,10);
+          }
+        }
       }
       catch(_erro){previsao=null;}
       return previsao?domingo(previsao):null;
