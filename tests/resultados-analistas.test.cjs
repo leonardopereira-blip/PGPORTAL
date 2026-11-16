@@ -336,8 +336,9 @@ test('META DE ENTREGA NO CD ausente ou divergente não gera atraso artificial',(
   const divergente=apurar([item({...comum,conciliacao:{linhas:[
     {SKU_REAL:'SAE1',sla:2,'META DE ENTREGA NO CD':'2026-10-14'},
     {SKU_REAL:'SAE1',sla:2,'META DE ENTREGA NO CD':'2026-10-15'}]}})],{etapa:'coleta'});
-  assert.equal(divergente.resumo.semPrazo,100);
-  assert.equal(divergente.resumo.aderencia,null);
+  assert.equal(divergente.resumo.semPrazo,0);
+  assert.equal(divergente.detalhes[0].prazo,'2026-10-15');
+  assert.equal(divergente.resumo.aderencia,100);
 });
 
 test('interface de avaliação não mostra mais seletor Baseline/Replan',()=>{

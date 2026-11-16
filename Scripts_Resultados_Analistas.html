@@ -96,13 +96,20 @@
   }
   // Mesma função de SLA e o mesmo ajuste de domingo da Meta Armazém.
   // Usa a coleta REAL como entrada, nunca a entrega real do caminhão.
-  function chegadaMatriz(linhas,diaColeta) {
+  function chegadaMatriz(linhas,diaColeta,rotaAcabadora) {
     if(!data(diaColeta))return {data:null,motivo:'data-coleta-invalida'};
     if(typeof window.pgDataPlanoEntregaSLA!=='function')
       return {data:null,motivo:'sla-indisponivel'};
     var destinos=(Array.isArray(linhas)?linhas:[]).map(function(l){
       var previsao=null;
-      try{previsao=data(window.pgDataPlanoEntregaSLA(l,diaColeta));}
+      try{
+        // A Matriz lê CD_FINAL/CD DESTINO. Na transferência da PCP para a acabadora,
+        // o percurso físico é CD_MAPA, sem alterar a linha nem a regra global.
+        var destino=texto(campo(l,'CD_MAPA'));
+        var rota=rotaAcabadora
+          ? (destino?Object.assign({},l,{CD_FINAL:destino,'CD DESTINO':destino}):null) : l;
+        previsao=rota?data(window.pgDataPlanoEntregaSLA(rota,diaColeta)):null;
+      }
       catch(_erro){previsao=null;}
       return previsao?domingo(previsao):null;
     });
@@ -116,18 +123,20 @@
     return item.fluxo==='acabadora'&&item.trajeto==='entrada';
   }
   // Meta definida pelo destino físico; nunca buscar previsão como substituta
-  // da meta contratada. Os agrupamentos precisam ter a mesma data ou ser
-  // separados por KIT antes da avaliação.
+  // da meta contratada. Na entrada da acabadora, adota a maior meta válida
+  // das linhas do grupo, sem descartar o grupo por datas distintas.
   function metaDoDestino(item) {
     if(entradaAcabadora(item)) {
       var datas=linhasOrigem(item).map(function(l){
         return data(campo(l,'META DE ENTREGA NO CD'));
       });
-      if(!datas.length||datas.some(function(v){return !v;}))
-        return {prazo:null,motivo:'META DE ENTREGA NO CD ausente ou inválida no PCP.',fonte:'META DE ENTREGA NO CD'};
-      if(datas.some(function(v){return v!==datas[0];}))
-        return {prazo:null,motivo:'META DE ENTREGA NO CD divergente entre SKUs/KIT do grupo.',fonte:'META DE ENTREGA NO CD'};
-      return {prazo:datas[0],motivo:'',fonte:'META DE ENTREGA NO CD'};
+      var validas=datas.filter(Boolean).sort();
+      if(!validas.length)
+        return {prazo:null,motivo:'META DE ENTREGA NO CD ausente ou inválida em todas as linhas do grupo.',fonte:'META DE ENTREGA NO CD'};
+      return {prazo:validas[validas.length-1],
+        motivo:validas.length<datas.length
+          ? 'Meta calculada pela maior data válida do grupo; '+(datas.length-validas.length)+' linha(s) sem data válida.':'',
+        fonte:'META DE ENTREGA NO CD'};
     }
     // A meta de CD sempre vem do motor Meta Armazém/combinados do cenário
     // escolhido. Para saída da acabadora, a visão a vincula por linha física.
@@ -144,7 +153,7 @@
       if(!d)return null;
       if(etapa==='coleta')return d;
       if(item.fluxo==='acabadora'&&etapa==='entrega')return d;
-      var projetada=chegadaMatriz([l],d);
+      var projetada=chegadaMatriz([l],d,entradaAcabadora(item));
       return projetada.data;
     });
     var fonte=referencia==='baseline'?'Baseline':'Replan';
@@ -217,7 +226,7 @@
       eventosReal:etapa==='entrega'?parcelas:[],
       fluxo:'acabadora',trajeto:trajeto,
       destinoFluxo:trajeto==='entrada'
-        ? texto(l.CD_MAPA||l['CD DESTINO']) : texto(l['CD DESTINO']||l.CD_FINAL||l.CD),
+        ? texto(l.CD_MAPA) : texto(l['CD DESTINO']||l.CD_FINAL||l.CD),
       conciliacao:{linhas:linhas,agrupado:linhas.length>1,diagnosticos:diagnosticos.slice(),
         filtroParcial:false}};
   }
@@ -315,6 +324,23 @@
   function aderencia(out) {
     return out.metaVencida > 0 ? Math.min(100,out.noPrazoVencido/out.metaVencida*100) : null;
   }
+  function explicarDiagnostico(d,item) {
+    if(d==='matriz: sla-indisponivel') {
+      var origem=texto(item.grafica||item.linha&&item.linha.GRAFICA_FINAL)||'Gráfica não identificada';
+      var destinos=valoresOrigem(item,function(l) {
+        return entradaAcabadora(item)?campo(l,'CD_MAPA'):
+          l.CD_FINAL||campo(l,'CD DESTINO')||l.CD;
+      });
+      return 'Matriz SLA: prazo de transporte indisponível para '+origem+' → '+(destinos||'destino não informado');
+    }
+    if(d==='matriz: rotas-divergentes-no-grupo')
+      return 'Matriz SLA: diferentes prazos de transporte no mesmo agrupamento';
+    if(d==='coleta: identidade-da-linha-incompleta')
+      return 'Coleta não conciliada: identificação incompleta (marca, gráfica, SKU, destino ou envio)';
+    if(d==='coleta: parcelas-sem-identificador-fisico')
+      return 'Coleta não conciliada: movimento do mapa sem identificador físico';
+    return d;
+  }
   function detalheItem(item,referencia,corte,etapa) {
     var definicao=definicaoEtapa(etapa);
     if(!correspondeEtapa(item,definicao))return null;
@@ -330,7 +356,7 @@
     var calculosMatriz=new Map();
     function projecao(dia) {
       if(!calculosMatriz.has(dia))
-        calculosMatriz.set(dia,chegadaMatriz(linhasOrigem(item),dia));
+        calculosMatriz.set(dia,chegadaMatriz(linhasOrigem(item),dia,entradaAcabadora(item)));
       return calculosMatriz.get(dia);
     }
     if(etapa==='coleta_matriz') {
@@ -342,6 +368,7 @@
           if(!projeto.data)diagnosticos.push('matriz: '+projeto.motivo);
         });
     }
+    diagnosticos=Array.from(new Set(diagnosticos));
     var fasePrefixo=etapa==='entrega'?'entrega':etapa==='coleta'?'coleta':'fase';
     var falhasColeta = diagnosticos.filter(function(d) {
       var n = normal(d).toLowerCase();
@@ -392,10 +419,11 @@
       pendente:pendente,vencido:vencida ? pendente : 0,
       aVencer:apuravel && prazo.prazo && !vencida ? pendente : 0,
       semPrazo:prazo.prazo ? 0 : total,naoApurado:apuravel ? 0 : total,
-      motivo:[prazo.motivo,falhasColeta.length ? definicao.nome+' não conferida: '+falhasColeta.join(' | ')+'.' : ''].filter(Boolean).join(' '),
+      motivo:[prazo.motivo,falhasColeta.length ? definicao.nome+' não conferida: '+
+        falhasColeta.map(function(d){return explicarDiagnostico(d,item);}).join('; ')+'.' : ''].filter(Boolean).join(' '),
       parcelasColeta:parcelasColeta,
       dataUltimaColeta:parcelasColeta.length?parcelasColeta[parcelasColeta.length-1].data:'',
-      diagnosticos:diagnosticos,
+      diagnosticos:diagnosticos.map(function(d){return explicarDiagnostico(d,item);}),
       metaVencida:vencida ? total : 0,noPrazoVencido:vencida ? noPrazo : 0,
       foraPrazoVencido:vencida ? foraPrazo : 0,linhas:1
     };
