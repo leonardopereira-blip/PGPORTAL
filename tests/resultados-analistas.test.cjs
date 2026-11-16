@@ -413,3 +413,91 @@ test('Walprint: escopo do analista impede visualizar ajustes de outra pessoa',()
   w.pgRAEscopoUsuario=()=>({tipo:'PROPRIO',analista:'João Alberti',time:'Camila'});
   assert.equal(w.pgRAApurar(itens,{etapa:'coleta_matriz',corte:'2026-11-16'}).resumo.linhas,45);
 });
+
+
+function appSIP() {
+  const w={
+    pgCampoColeta:(l,k)=>l[k],
+    pgNormalizarDataColeta:v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))?v:null,
+    pgResponsavelGraficaGiro:()=>({analista:'João Alberti',time:'Camila'}),
+    pgMAMarcosSIPPosigraf:(marca,segmento,serie,tipo)=>{
+      if(marca==='CQT')return [{data:'2026-10-16',pct:.5},{data:'2026-11-10',pct:1}];
+      return [{data:'2026-10-26',pct:.3},{data:'2026-11-16',pct:1}];
+    }
+  };
+  vm.runInNewContext(script,{window:w,Date,dtHojeISO:'2026-11-16'});
+  return w;
+}
+const sipOpts={etapa:'coleta_matriz',destino:'total',trajeto:'entrada',corte:'2026-11-16'};
+test('SIP SPE/CQT: registros são todos CD Posigraf, inclusive os não localizados no PCP',()=>{
+  const w=appSIP(),a=w.pgRAAplicarPosigrafSIP([],[],sipOpts);
+  assert.equal(a.length,299);
+  assert.equal(a.filter(x=>x.marca==='CQT').length,80);
+  assert.equal(a.filter(x=>x.marca==='SPE').length,219);
+  assert.ok(a.every(x=>x.destinoFluxo==='POSIGRAF'&&x.linha.CD_FINAL==='POSIGRAF'&&x.fluxo==='cd'));
+  assert.ok(a.every(x=>x.ajustePosigrafSIP.identificacao==='Sem correspondência PCP'));
+  const sem=a.find(x=>x.ajustePosigrafSIP.codigo==='200719595');
+  assert.equal(sem.ajustePosigrafSIP.identificacao,'Sem correspondência PCP');
+  assert.equal(sem.destinoFluxo,'POSIGRAF');
+});
+test('SIP 200719316 como KIT cruza com SKU do PCP e ignora divergência de CD anterior',()=>{
+  const w=appSIP();
+  const pcp={_ROW_ID:5197,GRAFICA_FINAL:'POSIGRAF',MARCA_FINAL:'CQT - 26',ENVIO:'V1',
+    SKU:'200.719.316',KIT:'200719696',CD_FINAL:'REPROSET',CD_MAPA:''};
+  const canonico={linha:pcp,conciliacao:{linhas:[pcp]},total:66,
+    grafica:'POSIGRAF',marca:'CQT',fluxo:'cd'};
+  const itens=w.pgRAAplicarPosigrafSIP([canonico],[pcp],sipOpts);
+  assert.equal(itens.length,299,'item PCP substituído, nunca duplicado');
+  const r=itens.find(x=>x.ajustePosigrafSIP.codigo==='200719316');
+  assert.equal(r.ajustePosigrafSIP.identificacao,'SKU PCP');
+  assert.equal(r.destinoFluxo,'POSIGRAF');
+  assert.match(w.pgRAApurar([r],{etapa:'coleta_matriz',destino:'cd',corte:'2026-11-16'})
+    .detalhes[0].idOrigem,/SKU PCP/);
+  const alt={...pcp,SKU:'200719316.0'};
+  assert.equal(w.pgRAAplicarPosigrafSIP([],[alt],sipOpts).find(x=>
+    x.ajustePosigrafSIP.codigo==='200719316').ajustePosigrafSIP.identificacao,'SKU PCP');
+  const scientific={...pcp,SKU:'2.00719316E8'};
+  assert.equal(w.pgRAAplicarPosigrafSIP([],[scientific],sipOpts).find(x=>
+    x.ajustePosigrafSIP.codigo==='200719316').ajustePosigrafSIP.identificacao,'SKU PCP');
+});
+test('SIP também cruza com KIT do PCP e preserva zeros de agrupamento numérico',()=>{
+  const w=appSIP();
+  const pcp={GRAFICA_FINAL:'POSIGRAF',MARCA_FINAL:'CQT',ENVIO:'V1',
+    SKU:'999999999',KIT:'200719316',CD_FINAL:'SEM CD'};
+  const r=w.pgRAAplicarPosigrafSIP([],[pcp],sipOpts).find(x=>x.ajustePosigrafSIP.codigo==='200719316');
+  assert.equal(r.ajustePosigrafSIP.identificacao,'KIT PCP');
+  assert.equal(r.destinoFluxo,'POSIGRAF');
+});
+test('SIP não é injetada nas acabadoras ou em outras fases e não antecipa snapshot',()=>{
+  const w=appSIP();
+  for(const op of [{...sipOpts,destino:'acabadora',trajeto:'entrada'},
+    {...sipOpts,etapa:'imp'}, {...sipOpts,corte:'2026-11-11'}]){
+    assert.equal(w.pgRAAplicarPosigrafSIP([],[],op).length,0);
+  }
+  const r=w.pgRAAplicarPosigrafSIP([],[],sipOpts);
+  assert.ok(r.every(x=>x.trajeto===''));
+});
+test('SIP usa marcos graduais e não vence 16/11 com dados SPE de 11/11',()=>{
+  const w=appSIP();
+  const r=w.pgRAAplicarPosigrafSIP([],[],sipOpts);
+  const resultado=w.pgRAApurar(r,{etapa:'coleta_matriz',destino:'cd',corte:'2026-11-16'});
+  const spe=resultado.detalhes.filter(x=>x.marca==='SPE');
+  const cqt=resultado.detalhes.filter(x=>x.marca==='CQT');
+  assert.equal(spe.length,219);
+  assert.equal(cqt.length,80);
+  const exemplo=spe.find(x=>x.sku==='200721585'); // SPE EF1 1º ano 32960
+  assert.ok(exemplo);
+  assert.ok(exemplo.metaVencida<=Math.round(exemplo.total*.3),
+    'meta de 16/11 não entra no retrato de 11/11');
+  assert.ok(spe.every(x=>x.destinoFluxo==='POSIGRAF'&&x.percurso==='Entrega ao CD'));
+  const semData=cqt.reduce((sum,x)=>sum+x.naoApurado,0);
+  assert.ok(semData>0,'sem datas físicas não pode virar atraso presumido');
+  assert.ok(resultado.resumo.noPrazoVencido<=resultado.resumo.metaVencida);
+});
+test('SIP respeita escopo pessoal na tela de analista',()=>{
+  const w=appSIP(),itens=w.pgRAAplicarPosigrafSIP([],[],sipOpts);
+  w.pgRAEscopoUsuario=()=>({tipo:'PROPRIO',analista:'Outro',time:'Camila'});
+  assert.equal(w.pgRAApurar(itens,{etapa:'coleta_matriz',corte:'2026-11-16'}).resumo.linhas,0);
+  w.pgRAEscopoUsuario=()=>({tipo:'PROPRIO',analista:'João Alberti',time:'Camila'});
+  assert.equal(w.pgRAApurar(itens,{etapa:'coleta_matriz',corte:'2026-11-16'}).resumo.linhas,299);
+});
