@@ -463,6 +463,22 @@
     };
   }
 
+  // Proteção no motor da avaliação, não só nos seletores da interface.
+  // Os demais motores e filtros globais continuam inalterados.
+  function escopoUsuarioRA() {
+    return typeof window.pgRAEscopoUsuario === 'function'
+      ? window.pgRAEscopoUsuario() : {tipo:'TODOS'}; // compatibilidade com testes isolados
+  }
+  function itemVisivelAoUsuario(item,escopo) {
+    if(escopo.tipo==='TODOS')return true;
+    if(escopo.tipo!=='PROPRIO'||!escopo.analista||!escopo.time||!item)return false;
+    var l=item.linha||{};
+    var grafica=texto(item.grafica||l.GRAFICA_FINAL||campo(l,'GRÁFICA')||l.GRAFICA);
+    var dono=typeof window.pgResponsavelGraficaGiro==='function'
+      ? window.pgResponsavelGraficaGiro(grafica):null;
+    return !!dono&&normal(dono.analista)===normal(escopo.analista)&&
+      normal(dono.time)===normal(escopo.time);
+  }
   window.pgRAApurar = function(itens,opcoes) {
     opcoes = opcoes || {};
     var referencia = opcoes.referencia || 'armazem';
@@ -477,8 +493,14 @@
     var corte = data(opcoes.corte || hoje);
     if (!corte) throw new Error('Data de corte inválida.');
     if (corte > hoje) throw new Error('A data de corte não pode ser futura.');
-    var analista = normal(opcoes.analista), time = normal(opcoes.time), porAnalista = new Map(), resumo = vazio();
-    var detalhes = (Array.isArray(itens) ? itens : []).map(function(item) { return detalheItem(item,referencia,corte,etapa); })
+    var escopo=escopoUsuarioRA();
+    var analista = normal(escopo.tipo==='PROPRIO'?escopo.analista:opcoes.analista);
+    var time = normal(escopo.tipo==='PROPRIO'?escopo.time:opcoes.time);
+    var porAnalista = new Map(), resumo = vazio();
+    var itensPermitidos=(Array.isArray(itens)?itens:[]).filter(function(item){
+      return itemVisivelAoUsuario(item,escopo);
+    });
+    var detalhes = itensPermitidos.map(function(item) { return detalheItem(item,referencia,corte,etapa); })
       .filter(function(d) {
         return d && d.total > 0 && (!analista || analista === 'TODOS' || normal(d.analista) === analista) &&
           (!time || time === 'TODOS' || normal(d.time) === time);

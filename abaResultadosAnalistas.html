@@ -164,6 +164,20 @@
     function exportsAtivos(ativo){['raExcel','raCSV','raCSVBase','raCSVGraficas'].forEach(function(id){var b=el(id);if(b)b.disabled=!ativo;});}
     function aviso(texto,erro){var a=el('raAviso');a.hidden=!texto;a.textContent=texto||'';a.classList.toggle('ra-error',!!erro);}
     function invalidar(texto){resultadoAtual=null;window.pgRAResultadoAtual=null;exportsAtivos(false);['raKPIs','raRanking','raTabela','raTotal'].forEach(function(id){el(id).innerHTML='';});el('raContagem').textContent='Apuração indisponível.';aviso(texto,true);}
+    function escopoRA(){
+      return typeof window.pgRAEscopoUsuario==='function'
+        ? window.pgRAEscopoUsuario():{tipo:'NEGADO'};
+    }
+    function resultadoAutorizado(){
+      if(!resultadoAtual)return false;
+      var escopo=escopoRA();
+      if(escopo.tipo==='TODOS')return true;
+      if(escopo.tipo!=='PROPRIO'||!escopo.analista||!escopo.time)return false;
+      function proprio(a){return !!a&&a.analista===escopo.analista&&a.time===escopo.time;}
+      return (resultadoAtual.analistas||[]).every(proprio)&&
+        (resultadoAtual.graficasMarcas||[]).every(proprio)&&
+        (resultadoAtual.detalhes||[]).every(proprio);
+    }
     function opcoes(id,valores,todos,selecionado){
       var lista=Array.from(new Set(valores.filter(Boolean))).sort(function(a,b){return a.localeCompare(b,'pt-BR');});
       if(selecionado&&lista.indexOf(selecionado)<0)lista.unshift(selecionado);
@@ -229,6 +243,7 @@
     // PNG da avaliação individual, com as gráficas completas mesmo com o menu fechado.
     // Renderiza diretamente os números já apurados; não consulta nem altera o motor.
     window.pgRABaixarImagem=function(botao){
+      if(!resultadoAutorizado()){invalidar('Acesso à avaliação individual não autorizado para esta conta.');return;}
       var card=botao&&typeof botao.closest==='function'?botao.closest('.ra-person'):null;
       var indice=card?Number(card.getAttribute('data-ra-index')):-1;
       var analistas=resultadoAtual?ordenar(resultadoAtual.analistas||[]):[];
@@ -335,6 +350,7 @@
         canvas.toBlob(function(blob){
           botao.disabled=false;
           if(!blob){aviso('Não foi possível gerar o PNG deste analista.',true);return;}
+          if(!resultadoAutorizado()){invalidar('O usuário conectado mudou; atualize a avaliação antes de baixar.');return;}
           try{baixar(blob,arquivo);}catch(e){aviso('Download do PNG não concluído: '+String(e.message||e),true);}
         },'image/png');
       }catch(e){botao.disabled=false;aviso('Captura não concluída: '+String(e.message||e),true);}
@@ -396,6 +412,17 @@
     window.processarResultadosAnalistas=function(){
       if(!el('raCorte'))return;
       resultadoAtual=null;window.pgRAResultadoAtual=null;exportsAtivos(false);
+      var escopo=escopoRA();
+      if(escopo.tipo!=='TODOS'&&escopo.tipo!=='PROPRIO'){
+        el('raTime').parentNode.hidden=true;
+        el('raAnalista').parentNode.hidden=true;
+        invalidar('Conta não identificada como analista ou liderança. Não é possível exibir esta avaliação.');
+        return;
+      }
+      var propria=escopo.tipo==='PROPRIO';
+      el('raTime').parentNode.hidden=propria;
+      el('raAnalista').parentNode.hidden=propria;
+      if(propria){estado.analista=escopo.analista;estado.time=escopo.time;}
       var limite=hoje();if(!estado.corte)estado.corte=limite;
       el('raCorte').max=limite;el('raCorte').value=estado.corte;
       if(!corteValido(estado.corte)){invalidar('Informe uma data de corte válida para apurar os resultados.');return;}
@@ -415,7 +442,7 @@
         });
       });
       el('raContextValue').textContent=nomeEtapa()+' · '+fluxoRotulo()+' · '+prazoRotulo()+' · '+dataBR(estado.corte);
-      el('raTituloRanking').textContent='Resultado por analista · '+nomeEtapa();
+      el('raTituloRanking').textContent=(propria?'Meu resultado':'Resultado por analista')+' · '+nomeEtapa();
       el('raUniverso').textContent=nomeEtapa()+' · '+fluxoRotulo()+
         ' · referência '+prazoRotulo()+' · realizado por etapa sem compensação entre SKUs.';
       el('raMetodoPrazo').textContent=estado.etapa==='coleta_matriz'?
@@ -443,6 +470,8 @@
         var itens=(ehAcabadora?[]:itensCD).concat(itensAcabadora);
         var opcoesApuracao={referencia:estado.referencia,corte:estado.corte,
           destino:estado.destino,trajeto:estado.trajeto,etapa:estado.etapa};
+        // O motor aplica a identidade da sessão ANTES de gerar resumo,
+        // ranking, detalhes e base auditável; filtros de tela não elevam acesso.
         var completo=window.pgRAApurar(itens,opcoesApuracao);
         opcoes('raTime',completo.analistas.map(function(a){return a.time;}),'Todos os times',estado.time);
         opcoes('raAnalista',completo.analistas.map(function(a){return a.analista;}),'Todos os analistas',estado.analista);
@@ -467,6 +496,7 @@
       }catch(erro){invalidar('Não foi possível apurar a visão: '+String(erro&&erro.message||erro));}
     };
     function tabelas(){
+      if(!resultadoAutorizado())throw new Error('Acesso à avaliação não autorizado para esta conta. Recarregue o recorte.');
       if(faseTP()&&typeof window.pgStatusMapaTP==='function'){var status=window.pgStatusMapaTP();if(!status.disponivel){invalidar(status.aviso);throw new Error(status.aviso);}}
       if(!resultadoAtual||!resultadoAtual.detalhes.length)throw new Error('Apure um recorte com dados antes de exportar.');
       var r=resultadoAtual;

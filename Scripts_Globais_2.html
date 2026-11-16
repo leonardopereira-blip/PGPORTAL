@@ -9627,6 +9627,21 @@ let arrGrupos = Object.values(grupos);
         return 'PADRAO';
     }
 
+    // Escopo EXCLUSIVO de "Resultados por analista". Não altera nenhum
+    // filtro ou permissão das demais abas, inclusive Funil e Giro Diário.
+    window.pgRAEscopoUsuario = function() {
+        const email = pgEmailAtual();
+        const papel = pgRole(email);
+        if (papel === 'LIDERANCA' || papel === 'GESTOR')
+            return {tipo:'TODOS'};
+        if (papel === 'ANALISTA' && PG_PESSOAS[email]) {
+            const pessoa = PG_PESSOAS[email];
+            return {tipo:'PROPRIO',analista:pessoa.nome,time:pessoa.time};
+        }
+        // Sem identidade válida, nunca expor resultado nominal de outra pessoa.
+        return {tipo:'NEGADO'};
+    };
+
     function pgSelect(id, label, options, onChange) {
         return `
             <div class="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2 py-1.5 shadow-sm">
