@@ -151,7 +151,7 @@
             <button type="button" onclick="window.pgExportarTempSasAdapt('athos')" class="pg-sas-export" aria-label="Baixar CSV das entregas por SKU e CD"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
           </div>
           <div class="pg-sas-filterbar">
-            <input id="pgTempFiltroSku" type="search" aria-label="Filtrar kit ou SKU" placeholder="Buscar janela, CD, kit, SKU, mapa ou NF…" oninput="window.pgFiltrarTempSasAdapt()" class="pg-sas-search">
+            <textarea id="pgTempFiltroSku" rows="2" aria-label="Buscar vários SKUs, kits, mapas ou NFs" placeholder="Cole SKUs, kits, mapas ou NFs (espaços, vírgulas ou linhas)" oninput="window.pgFiltrarTempSasAdapt()" class="pg-sas-search" style="resize:vertical"></textarea>
             <p id="pgTempQtdSku" class="pg-sas-count" aria-live="polite"></p>
           </div>
           <div class="pg-sas-table-wrap pg-sas-table-wrap--sku">
@@ -227,11 +227,29 @@
     return '<td>' + (volume == null ? '—' : '<strong>' + fmt(volume) + '</strong>' +
       '<span class="pg-sas-pct">' + pct(volume, total) + '</span>') + '</td>';
   }
-  function skusVisiveis() {
-    var busca = (el('pgTempFiltroSku').value || '').trim().toUpperCase();
-    return (ultimo.athosPorSku || []).filter(function(s) {
-      return !busca || ['janela','destino','sku','kit','mapas','nfs','status'].some(function(k){return String(s[k]||'').toUpperCase().indexOf(busca)>=0;});
+  function filtrarBuscaSkus(linhas, valor) {
+    var busca = String(valor || '').trim().toUpperCase();
+    if (!busca) return linhas;
+    var campos = ['janela','destino','sku','kit','mapas','nfs','status'];
+    var camposDescritivos = ['janela','destino','status'];
+    var termos = Array.from(new Set(busca.split(/[\s,;|\/\\()[\]{}"'<>]+/).filter(Boolean)));
+    if (!termos.length) return linhas;
+    // Mantém a busca por descrições compostas (por exemplo, "CD JDI" e "Sem mapa").
+    if (termos.length > 1 && !/[,;|\t\r\n\/\\()[\]{}"'<>]/.test(busca) &&
+        linhas.some(function(s) {
+          return camposDescritivos.some(function(k) {
+            return String(s[k] || '').toUpperCase().indexOf(busca) >= 0;
+          });
+        })) termos = [busca];
+    return linhas.filter(function(s) {
+      return campos.some(function(k) {
+        var campo = String(s[k] || '').toUpperCase();
+        return termos.some(function(termo) { return campo.indexOf(termo) >= 0; });
+      });
     });
+  }
+  function skusVisiveis() {
+    return filtrarBuscaSkus(ultimo.athosPorSku || [], el('pgTempFiltroSku').value);
   }
   window.pgFiltrarTempSasAdapt = function() {
     if (!ultimo) return;
