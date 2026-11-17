@@ -717,10 +717,11 @@ function pgTempSasAdaptConciliarJanelas_(janelas, saidasMapa, internalizado) {
     var parcelas=Array.from(g.parcelas.values()).sort(function(a,b){
       return (a.coletado>0?0:1)-(b.coletado>0?0:1)||ordem(a).localeCompare(ordem(b))||Math.min.apply(null,Array.from(a.linhas).concat([Infinity]))-Math.min.apply(null,Array.from(b.linhas).concat([Infinity]))||a.mapa.localeCompare(b.mapa);
     });
-    parcelas.forEach(function(p){
-      var sol=p.solicitado,col=p.coletado,ent=p.entregue,cap=Math.max(sol,col,ent);
+    // Primeiro distribua as coletas físicas; somente depois reserve mapa ainda não coletado.
+    // Assim, uma solicitação parcial não empurra outra coleta real para uma janela posterior.
+    function distribuir(p,sol,col,ent,cap){
       function evidencia(janela,s,c,e,q,origens,status){
-        return {janela:janela,kit:g.kit,sku:g.sku,destino:g.destino,mapa:p.mapa,nfs:Array.from(p.nfs).join(' | '),linhasMapa:Array.from(p.linhas).join(' | '),dataColeta:p.dataColeta||'',dataEntrega:p.dataEntrega||'',mapaSolicitado:s,coletado:c,entregue:e,volumeAlocado:q,origens:origens,status:status};
+        return {janela:janela,kit:g.kit,sku:g.sku,destino:g.destino,mapa:p.mapa,nfs:Array.from(p.nfs).join(' | '),linhasMapa:Array.from(p.linhas).join(' | '),dataColeta:c>0?(p.dataColeta||''):'',dataEntrega:e>0?(p.dataEntrega||''):'',mapaSolicitado:s,coletado:c,entregue:e,volumeAlocado:q,origens:origens,status:status};
       }
       linhas.forEach(function(r){
         var q=Math.min(r.total-r.ocupado,cap);if(q<=0)return;
@@ -733,7 +734,9 @@ function pgTempSasAdaptConciliarJanelas_(janelas, saidasMapa, internalizado) {
         var ev=evidencia('Sem janela',sol,col,ent,cap,linhas.map(function(r){return r.origens;}).join(' | '),demand?'Excedente do mesmo kit/SKU/CD':'Sem vínculo na base de janelas');
         divergencias.push(ev);trilha.push(ev);cd.coletaFora+=col;cd.entregaFora+=ent;
       }
-    });
+    }
+    parcelas.forEach(function(p){var col=p.coletado;if(col>0)distribuir(p,Math.min(p.solicitado,col),col,p.entregue,col);});
+    parcelas.forEach(function(p){var saldo=Math.max(0,p.solicitado-p.coletado);if(saldo>0)distribuir(p,saldo,0,0,saldo);});
     linhas.forEach(function(r){
       if(recebido!==null){r.internalizado=Math.min(r.total,recebido);recebido-=r.internalizado;}
       r.saldo=r.total-r.coletado;

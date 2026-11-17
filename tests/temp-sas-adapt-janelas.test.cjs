@@ -104,3 +104,11 @@ test('caso real Fortaleza: 58 entregues à janela 1, 50 pendentes na janela 3',(
  const ms=[mapa('SAS27DA36SD1BRPDR00','MS26LS26101SP',58,{destino:'CD FOR',tiragem:58,codigoMapa:'MP-047579-SAD-V1-ATHOS',dataColeta:'2026-10-01',dataEntrega:'2026-10-07',nfVenda:'1234',linhaMapa:3839})];
  const r=contexto.pgTempSasAdaptConciliarJanelas_(js,ms,{});assert.deepEqual(Array.from(r.athosPorSku,x=>[x.janela,x.total,x.coletado,x.entregue,x.nfs]),[['Janela 1',58,58,58,'1234'],['Janela 3',50,0,0,'']]);assert.equal(r.trilhaMapa.length,1);assert.equal(r.trilhaMapa[0].linhasMapa,'3839');assert.equal(r.divergenciasMapa.length,0);
 });
+
+test('coleta parcial não reserva volume de outra coleta física na janela anterior',()=>{
+ const js=[janela('0',[linha('P','K','S',100)]),janela('1546857491',[linha('Q','K','S',100)])];
+ const ms=[mapa('K','S',20,{tiragem:100,codigoMapa:'MP1',dataColeta:'2026-10-01',dataEntrega:'2026-10-01'}),mapa('K','S',80,{tiragem:80,codigoMapa:'MP2',dataColeta:'2026-10-02',dataEntrega:'2026-10-02'})];
+ const r=contexto.pgTempSasAdaptConciliarJanelas_(js,ms,{});
+ assert.deepEqual(Array.from(r.athosPorSku,x=>[x.janela,x.total,x.mapaSolicitado,x.coletado,x.entregue]),[['Janela 1',100,100,100,100],['Janela 2',100,80,0,0]]);
+ assert.equal(r.trilhaMapa.reduce((s,x)=>s+x.mapaSolicitado,0),180);assert.equal(r.trilhaMapa.reduce((s,x)=>s+x.coletado,0),100);
+});
