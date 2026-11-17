@@ -251,6 +251,21 @@ test('Giro pesquisa KIT parcialmente sem diferenciar maiúsculas e exporta só S
   assert.equal(w.pgGiroGruposExportar[0].tiragemPrevistaTotal,200);
 });
 
+test('Giro pesquisa múltiplos SKUs e KITs misturados, sem duplicar linhas e respeitando os filtros',()=>{
+  const materiais=[
+    {SKU:'SKU-10',KIT:'KIT-AAA','TIRAGEM TOTAL':100},
+    {SKU:'SKU-20',KIT:'KIT-BBB','TIRAGEM TOTAL':200},
+    {SKU:'SKU-30',KIT:'KIT-CCC','TIRAGEM TOTAL':300},
+    {SKU:'SKU-ZERO',KIT:'KIT-ZERO','TIRAGEM TOTAL':0}
+  ];
+  for (const busca of ['sku-10, KIT-BBB; SKU-10|SKU-ZERO','SKU-10 KIT-BBB SKU-ZERO','sku-10\tKIT-BBB\nSKU-ZERO','"SKU-10" / (KIT-BBB) | SKU-ZERO']) {
+    const {w}=executarGiro({retornarContexto:true,busca,materiais,
+      estado:{pendente:true,saldo:50},eventos:[{categoria:'Vencida',volume:50,dias:0}]});
+    assert.deepEqual(w.pgGiroLinhasExportar.map(l=>l.sku).sort(),['SKU-10','SKU-20']);
+    assert.equal(w.pgGiroGruposExportar[0].tiragemPrevistaTotal,300);
+  }
+});
+
 test('pesquisa por SKU nao reintroduz item cuja TIRAGEM TOTAL e zero',()=>{
   const linhas=executarGiro({busca:'SKU-ZERO',
     estado:{pendente:true,saldo:50},eventos:[{categoria:'Vencida',volume:50,dias:0}],

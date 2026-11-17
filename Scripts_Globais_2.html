@@ -8588,14 +8588,15 @@ window.reFiltrarTabelaGiro = function() {
 
     const normalizarBuscaGiro = valor => String(valor ?? '').normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
-    const buscaSkuKit = normalizarBuscaGiro(document.getElementById('filtroSkuKitGiro')?.value);
+    const buscaSkuKit = Array.from(new Set(normalizarBuscaGiro(document.getElementById('filtroSkuKitGiro')?.value)
+        .split(/[\s,;|\/\\()[\]{}"'<>]+/).filter(Boolean)));
     const kitPcpGiro = linha => ['KIT', 'COD KIT', 'CÓDIGO KIT', 'COD_KIT']
         .map(nome => String(window.pgCampoColeta(linha, nome) ?? '').trim()).find(Boolean) || '';
-    const linhasGiroFiltradas = buscaSkuKit
+    const linhasGiroFiltradas = buscaSkuKit.length
         ? window.GIRO_DADOS_RAW.filter(l => {
             const sku = normalizarBuscaGiro(l['SKU_REAL'] || l['SKU']);
             const kit = normalizarBuscaGiro(kitPcpGiro(l));
-            return sku.includes(buscaSkuKit) || kit.includes(buscaSkuKit);
+            return buscaSkuKit.some(termo => sku.includes(termo) || kit.includes(termo));
         })
         : window.GIRO_DADOS_RAW;
 
