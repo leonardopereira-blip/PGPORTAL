@@ -110,14 +110,16 @@
       </div>
       <section class="pg-sas-panel pg-sas-janelas" aria-labelledby="pgTempTituloJanelas">
         <div class="pg-sas-panel-header">
-          <div><h3 id="pgTempTituloJanelas">Entregas por janela</h3><p class="pg-sas-panel-caption">Exemplares (coluna K) · A conferir: parcela potencial sem janela inequívoca, incluída no saldo e não somável entre janelas.</p></div>
+          <div><h3 id="pgTempTituloJanelas">Entregas por janela</h3><p class="pg-sas-panel-caption">Exemplares da coluna K · apenas saídas ATHOS / V1 para CD. A conferir: coleta real sem janela inequívoca (potencial por janela, não somável).</p></div>
           <button id="pgTempExportarJanelas" type="button" onclick="window.pgExportarTempSasAdapt('janelas')" class="pg-sas-export" aria-label="Baixar CSV das entregas por janela"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
         </div>
         <div class="pg-sas-table-wrap">
           <table aria-label="Entregas por janela"><thead><tr>
-            <th scope="col">Janela</th><th scope="col">Tiragem</th><th scope="col">Coleta confirmada</th><th scope="col">A conferir</th><th scope="col">Saldo</th><th scope="col">% coletado</th>
-          </tr></thead><tbody id="pgTempTabelaJanelas"><tr><td colspan="6">Atualize a visão para acompanhar as entregas por janela.</td></tr></tbody></table>
+            <th scope="col">Janela</th><th scope="col">Tiragem</th><th scope="col">Coleta confirmada</th><th scope="col">Entrega confirmada</th><th scope="col">A conferir</th><th scope="col">Saldo</th><th scope="col">% coletado</th>
+          </tr></thead><tbody id="pgTempTabelaJanelas"><tr><td colspan="7">Atualize a visão para acompanhar as entregas por janela.</td></tr></tbody></table>
         </div>
+        <div class="pg-sas-panel-header"><div><h3>Janela × CD</h3><p class="pg-sas-panel-caption">A conferir e fora da tiragem aparecem separadamente, sem duplicar volumes.</p></div><button type="button" onclick="window.pgExportarTempSasAdapt('janelaCD')" class="pg-sas-export">Baixar CSV</button></div>
+        <div class="pg-sas-table-wrap"><table><thead><tr><th>Janela</th><th>CD</th><th>Tiragem</th><th>Mapa solicitado</th><th>Coletado</th><th>Entregue</th><th>% entregue</th></tr></thead><tbody id="pgTempTabelaJanelaCD"></tbody></table></div>
       </section>
       <div class="pg-sas-panels">
         <section class="pg-sas-panel" aria-labelledby="pgTempTituloGraficas">
@@ -133,27 +135,27 @@
         </section>
         <section class="pg-sas-panel" aria-labelledby="pgTempTituloExpedicoes">
           <div class="pg-sas-panel-header">
-            <div><h3 id="pgTempTituloExpedicoes">Entregas por CD</h3><p class="pg-sas-panel-caption">Tiragem total conforme Previsão do CD. Etapas sobre esse total.</p></div>
+            <div><h3 id="pgTempTituloExpedicoes">Entregas por CD</h3><p class="pg-sas-panel-caption">Tiragem da coluna K das janelas. Coletas e entregas ATHOS/V1 vinculadas, incluindo volumes sem janela inequívoca; excedentes à parte.</p></div>
             <button type="button" onclick="window.pgExportarTempSasAdapt('expedicoesAthos')" class="pg-sas-export" aria-label="Baixar CSV das entregas por CD"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
           </div>
           <div class="pg-sas-table-wrap">
             <table aria-label="Entregas por CD"><thead><tr>
-              <th scope="col">CD destino</th><th scope="col">Tiragem total</th><th scope="col">Mapa solicitado</th><th scope="col">Coletado</th><th scope="col">Entrega</th><th scope="col">Internalizado</th>
+              <th scope="col">CD destino</th><th scope="col">Tiragem total</th><th scope="col">Mapa solicitado</th><th scope="col">Coletado</th><th scope="col">Entrega</th><th scope="col">Internalizado</th><th scope="col">Coleta fora da tiragem</th><th scope="col">Entrega fora da tiragem</th>
             </tr></thead><tbody id="pgTempTabelaExpedicoesAthos"></tbody></table>
           </div>
         </section>
         <section class="pg-sas-panel pg-sas-panel--wide" aria-labelledby="pgTempTituloSku">
           <div class="pg-sas-panel-header">
-            <div><h3 id="pgTempTituloSku">Entregas no CD · SKUs</h3><p class="pg-sas-panel-caption">Percentuais sobre a tiragem total. Traço indica dado indisponível no CD.</p></div>
+            <div><h3 id="pgTempTituloSku">Entregas no CD · SKUs</h3><p class="pg-sas-panel-caption">Base auditável de todas as janelas · Kit + SKU + CD · Mapas/NFs candidatos quando o vínculo é compartilhado. CSV editável.</p></div>
             <button type="button" onclick="window.pgExportarTempSasAdapt('athos')" class="pg-sas-export" aria-label="Baixar CSV das entregas por SKU e CD"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
           </div>
           <div class="pg-sas-filterbar">
-            <input id="pgTempFiltroSku" type="search" aria-label="Filtrar kit ou SKU" placeholder="Buscar por kit ou SKU…" oninput="window.pgFiltrarTempSasAdapt()" class="pg-sas-search">
+            <input id="pgTempFiltroSku" type="search" aria-label="Filtrar kit ou SKU" placeholder="Buscar janela, CD, kit, SKU, mapa ou NF…" oninput="window.pgFiltrarTempSasAdapt()" class="pg-sas-search">
             <p id="pgTempQtdSku" class="pg-sas-count" aria-live="polite"></p>
           </div>
           <div class="pg-sas-table-wrap pg-sas-table-wrap--sku">
             <table aria-label="Entregas por SKU e CD"><thead><tr>
-              <th scope="col">Kit</th><th scope="col">SKU</th><th scope="col">CD destino</th><th scope="col">Tiragem total</th><th scope="col">Mapa solicitado</th><th scope="col">Coletado</th><th scope="col">Entrega</th><th scope="col">Internalizado</th>
+              <th scope="col">Janela</th><th scope="col">Kit</th><th scope="col">SKU</th><th scope="col">CD destino</th><th scope="col">Tiragem total</th><th scope="col">Mapa solicitado</th><th scope="col">Coletado</th><th scope="col">Entrega</th><th scope="col">Internalizado</th><th scope="col">Mapas</th><th scope="col">NFs</th><th scope="col">Status</th>
             </tr></thead><tbody id="pgTempTabelaAthos"></tbody></table>
           </div>
         </section>
@@ -190,14 +192,18 @@
     var botao = el('pgTempExportarJanelas');
     if (botao) botao.disabled = Boolean(d.erroEntregasPorJanela) || !linhas.length;
     if (d.erroEntregasPorJanela) {
-      el('pgTempTabelaJanelas').innerHTML = '<tr><td colspan="6" role="status">Não foi possível carregar as entregas por janela. Tente atualizar a visão.</td></tr>';
+      el('pgTempTabelaJanelas').innerHTML = '<tr><td colspan="7" role="status">Não foi possível carregar as entregas por janela. Tente atualizar a visão.</td></tr>';
       return;
     }
     el('pgTempTabelaJanelas').innerHTML = linhas.map(function(l) {
       return '<tr><td>' + esc(tituloJanela(l.titulo)) + '</td><td>' + fmt(l.total) +
-        '</td><td>' + fmt(l.entregue) + '</td><td><span' + (Number(l.aConferir) > 0 ? ' class="pg-sas-review"' : '') + '>' +
-        fmt(l.aConferir) + '</span></td><td>' + fmt(l.saldo) + '</td><td>' + pct(l.entregue, l.total) + '</td></tr>';
-    }).join('') || '<tr><td colspan="6">Nenhuma entrega por janela disponível.</td></tr>';
+        '</td><td>' + fmt(l.coletado == null ? l.entregue : l.coletado) + '</td><td>' + (l.coletado == null ? '—' : fmt(l.entregue)) + '</td><td><span' + (Number(l.aConferir) > 0 ? ' class="pg-sas-review"' : '') + '>' +
+        fmt(l.aConferir) + '</span></td><td>' + fmt(l.saldo) + '</td><td>' + pct(l.coletado == null ? l.entregue : l.coletado, l.total) + '</td></tr>';
+    }).join('') || '<tr><td colspan="7">Nenhuma entrega por janela disponível.</td></tr>';
+  }
+  function janelasCD(linhas) {
+    var t=el('pgTempTabelaJanelaCD'); if(!t)return;
+    t.innerHTML=(linhas||[]).map(function(l){return '<tr><td>'+esc(l.titulo)+'</td><td>'+esc(l.destino)+'</td><td>'+fmt(l.total)+'</td><td>'+fmt(l.mapaSolicitado)+'</td><td>'+fmt(l.coletado)+'</td><td>'+fmt(l.entregue)+'</td><td>'+pct(l.entregue,l.total)+'</td></tr>';}).join('')||'<tr><td colspan="7">Sem dados</td></tr>';
   }
   function graficas(linhas) {
     el('pgTempTabelaGraficas').innerHTML = linhas.map(function(l) {
@@ -212,7 +218,7 @@
       return '<tr class="border-t border-slate-100"><td class="p-2 text-slate-700">' + esc(l.destino) +
         '</td>' + volumeComPct(l.total, l.total) + volumeComPct(l.mapaSolicitado, l.total) +
         volumeComPct(l.coletado, l.total) + volumeComPct(l.entregue, l.total) +
-        volumeComPct(l.internalizado, l.total) + '</tr>';
+        volumeComPct(l.internalizado, l.total) + '<td>'+fmt(l.coletaFora)+'</td><td>'+fmt(l.entregaFora)+'</td></tr>';
     }).join('') || '<tr><td colspan="6" class="p-4 text-center text-slate-500">Nenhum registro encontrado</td></tr>';
   }
   function volumeComPct(volume, total) {
@@ -222,8 +228,7 @@
   function skusVisiveis() {
     var busca = (el('pgTempFiltroSku').value || '').trim().toUpperCase();
     return (ultimo.athosPorSku || []).filter(function(s) {
-      return !busca || String(s.sku).toUpperCase().indexOf(busca) >= 0 ||
-        String(s.kit).toUpperCase().indexOf(busca) >= 0;
+      return !busca || ['janela','destino','sku','kit','mapas','nfs','status'].some(function(k){return String(s[k]||'').toUpperCase().indexOf(busca)>=0;});
     });
   }
   window.pgFiltrarTempSasAdapt = function() {
@@ -234,12 +239,12 @@
       ' · ' + fmt(totalSkus) + (totalSkus === 1 ? ' SKU' : ' SKUs');
     el('pgTempTabelaAthos').innerHTML = filtradas.map(function(s) {
       return '<tr class="border-t border-slate-100 hover:bg-slate-50">' +
-        '<td>' + esc(s.kit || '—') + '</td>' +
+        '<td>' + esc(s.janela || '—') + '</td>' + '<td>' + esc(s.kit || '—') + '</td>' +
         '<td class="p-2 font-semibold">' + esc(s.sku) + '</td>' +
         '<td>' + esc(s.destino) + '</td>' + volumeComPct(s.total, s.total) +
         volumeComPct(s.mapaSolicitado, s.total) + volumeComPct(s.coletado, s.total) +
-        volumeComPct(s.entregue, s.total) + volumeComPct(s.internalizado, s.total) + '</tr>';
-    }).join('') || '<tr><td colspan="8" class="p-5 text-center text-slate-500">Sem SKUs para o filtro</td></tr>';
+        volumeComPct(s.entregue, s.total) + volumeComPct(s.internalizado, s.total) + '<td>'+esc(s.mapas||'—')+'</td><td>'+esc(s.nfs||'—')+'</td><td>'+esc(s.status||'—')+'</td></tr>';
+    }).join('') || '<tr><td colspan="12" class="p-5 text-center text-slate-500">Sem SKUs para o filtro</td></tr>';
   };
   function csvValor(valor) {
     var texto = String(valor == null ? '' : valor);
@@ -252,11 +257,12 @@
       'entregue','pctEntregue','internalizado','pctInternalizado'];
     var definicoes = {
       graficas: {nome:'SAS_ADAPT_GRAFICAS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','tiragemRaw','saiuBruto','saiuReconhecido','operacao','totalOperacao','saiuBrutoOperacao','excedenteOperacao','linhasAgrupadas','dataColeta','dataColetaRaw','entregaTP','entregaTPRaw'], linhas:ultimo.linhasGraficas},
-      athos: {nome:'SAS_ADAPT_ENTREGAS_CD_SKU', colunas:['kit','sku','destino'].concat(volumesAthos), linhas:skusVisiveis()},
-      expedicoesAthos: {nome:'SAS_ADAPT_ENTREGAS_CD', colunas:['destino'].concat(volumesAthos), linhas:ultimo.expedicoesAthos},
-      janelas: {nome:'SAS_ADAPT_ENTREGAS_POR_JANELA', colunas:['titulo','total','entregue','aConferir','saldo','pctColetado','pedidos','fonte','id','fonteUrl'], linhas:ultimo.erroEntregasPorJanela ? [] : (ultimo.entregasPorJanela || []).map(function(r) {
-        return {titulo:r.titulo,total:r.total,entregue:r.entregue,aConferir:r.aConferir,saldo:r.saldo,pedidos:r.pedidos,
-          pctColetado:pct(r.entregue,r.total),fonte:'Janelas_SAS ADAPT',id:(r.fonteIds || []).join(' | '),fonteUrl:(r.fonteIds || []).map(function(id){return 'https://docs.google.com/spreadsheets/d/1vBqSFyKqv8Ttco5LkfQm4SBLOU2EX7FWkOw3maBndIQ/edit#gid=' + encodeURIComponent(id);}).join(' | ')};
+      athos: {nome:'SAS_ADAPT_ENTREGAS_CD_SKU', colunas:(ultimo.tiragemJanelas!=null?['janela','kit','sku','destino'].concat(volumesAthos,['mapas','nfs','status','linhasMapa','evidenciasMapa','origens','aConferir','saldo']):['kit','sku','destino'].concat(volumesAthos)), linhas:skusVisiveis()},
+      expedicoesAthos: {nome:'SAS_ADAPT_ENTREGAS_CD', colunas:['destino'].concat(volumesAthos,['coletaSemJanela','entregaSemJanela','coletaFora','entregaFora']), linhas:ultimo.expedicoesAthos},
+      janelaCD:{nome:'SAS_ADAPT_JANELA_CD',colunas:['titulo','destino','total','mapaSolicitado','coletado','entregue','pctEntregue'],linhas:(ultimo.janelasPorCD||[]).map(function(r){return Object.assign({},r,{pctEntregue:pct(r.entregue,r.total)});})},
+      janelas: {nome:'SAS_ADAPT_ENTREGAS_POR_JANELA', colunas:['titulo','total','coletado','entregue','aConferir','saldo','pctColetado','pedidos','fonte','id','fonteUrl'], linhas:ultimo.erroEntregasPorJanela ? [] : (ultimo.entregasPorJanela || []).map(function(r) {
+        return {titulo:r.titulo,total:r.total,coletado:r.coletado==null?r.entregue:r.coletado,entregue:r.coletado==null?'':r.entregue,aConferir:r.aConferir,saldo:r.saldo,pedidos:r.pedidos,
+          pctColetado:pct(r.coletado==null?r.entregue:r.coletado,r.total),fonte:'Janelas_SAS ADAPT',id:(r.fonteIds || []).join(' | '),fonteUrl:(r.fonteIds || []).map(function(id){return 'https://docs.google.com/spreadsheets/d/1vBqSFyKqv8Ttco5LkfQm4SBLOU2EX7FWkOw3maBndIQ/edit#gid=' + encodeURIComponent(id);}).join(' | ')};
       })}
     };
     var spec = definicoes[tipo];
@@ -275,7 +281,8 @@
       dataColeta:'DATA COLETA',dataColetaRaw:'DATA COLETA ORIGINAL',entregaTP:'ENTREGA TP',entregaTPRaw:'ENTREGA TP ORIGINAL'
     };
     if (tipo === 'janelas') cabecalho.id = 'ABAS NA FONTE (GID)';
-    if (tipo === 'janelas') cabecalho.entregue = 'COLETA CONFIRMADA';
+    if (tipo === 'janelas') {cabecalho.coletado = 'COLETA CONFIRMADA'; cabecalho.entregue = 'ENTREGA CONFIRMADA';}
+    Object.assign(cabecalho,{janela:'JANELA',mapas:'MAPAS',nfs:'NFS',status:'STATUS DO VÍNCULO',linhasMapa:'LINHAS NO MAPA',evidenciasMapa:'MAPA / SOLICITADO / COLETADO / ENTREGUE / NF',origens:'ABAS E LINHAS QTDE',coletaSemJanela:'COLETA SEM JANELA',entregaSemJanela:'ENTREGA SEM JANELA',coletaFora:'COLETA FORA DA TIRAGEM',entregaFora:'ENTREGA FORA DA TIRAGEM'});
     var linhas = [spec.colunas.map(function(k) { return csvValor(cabecalho[k] || k); }).join(';')];
     spec.linhas.forEach(function(r) {
       var linha = tipo === 'athos' || tipo === 'expedicoesAthos' ? Object.assign({}, r, {
@@ -296,19 +303,20 @@
   };
   function mostrar(d) {
     ultimo = d;
-    entregasPorJanela(d);
-    el('pgTempTotalVolume').textContent = fmt(d.pcpTotal);
-    el('pgTempTotalPct').textContent = pct(d.pcpTotal, d.pcpTotal);
+    entregasPorJanela(d); janelasCD(d.janelasPorCD);
+    var baseTiragem=d.tiragemJanelas==null?d.pcpTotal:d.tiragemJanelas;
+    el('pgTempTotalVolume').textContent = fmt(baseTiragem);
+    el('pgTempTotalPct').textContent = pct(baseTiragem, baseTiragem);
     el('pgTempAthosProgramado').textContent = fmt(d.mapaSolicitado);
-    el('pgTempAthosTotalPct').textContent = pct(d.mapaSolicitado, d.pcpTotal);
+    el('pgTempAthosTotalPct').textContent = pct(d.mapaSolicitado, baseTiragem);
     el('pgTempColetadoVolume').textContent = fmt(d.coletadoAthos);
-    el('pgTempColetadoPct').textContent = pct(d.coletadoAthos, d.pcpTotal);
+    el('pgTempColetadoPct').textContent = pct(d.coletadoAthos, baseTiragem);
     el('pgTempEntregueVolume').textContent = fmt(d.entregueAthos);
-    el('pgTempEntreguePct').textContent = pct(d.entregueAthos, d.pcpTotal);
+    el('pgTempEntreguePct').textContent = pct(d.entregueAthos, baseTiragem);
     var indisponiveis = d.internalizacaoIndisponivel || [];
     el('pgTempInternalizadoVolume').textContent = d.internalizadoAthos == null ? '—' : fmt(d.internalizadoAthos);
     el('pgTempInternalizadoPct').textContent = indisponiveis.length ? '—' :
-      pct(d.internalizadoAthos, d.pcpTotal);
+      pct(d.internalizadoAthos, baseTiragem);
     graficas(d.graficas);
     expedicoesAthos(d.expedicoesAthos);
     window.pgFiltrarTempSasAdapt();

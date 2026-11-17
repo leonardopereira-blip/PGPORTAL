@@ -85,3 +85,16 @@ test('leitor mantém sheetId, títulos com espaço final e linhas físicas em in
   assert.equal(rs[0].valores[1].length, 0, 'linha física vazia permanece no índice original');
   assert.equal(rs[0].valores[2][0], 'P-3');
 });
+
+
+test('conciliação por janela e CD mantém tiragem K, volumes reais e notas sem duplicar',()=>{
+ const js=[janela('1',[linha('P','K','S',100),linha('P','K','T',50)]),janela('2',[linha('Q','K','S',40)])];
+ const ms=[mapa('K','S',110,{tiragem:110,dataColeta:'2026-10-15',dataEntrega:'2026-10-16',nfVenda:'123'}),mapa('K','T',60,{destino:'CD FOR',tiragem:60,dataColeta:'2026-10-15',codigoMapa:'MP2'})];
+ const r=contexto.pgTempSasAdaptConciliarJanelas_(js,ms,{});
+ assert.equal(r.tiragemJanelas,190);assert.equal(r.coletadoAthos,110);assert.equal(r.entregueAthos,110);
+ assert.equal(r.entregasPorJanela[0].coletado,70);assert.equal(r.entregasPorJanela[1].coletado,10);
+ assert.equal(r.expedicoesAthos.find(x=>x.destino==='CD JDI').coletaSemJanela,30);
+ assert.equal(r.expedicoesAthos.find(x=>x.destino==='CD FOR').coletaFora,60);
+ assert.equal(r.athosPorSku.find(x=>x.janela==='A conferir').nfs,'123');
+ assert.equal(r.athosPorSku.filter(x=>x.total>0).reduce((s,x)=>s+x.total,0),190);
+});

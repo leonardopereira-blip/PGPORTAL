@@ -146,7 +146,7 @@ function pgTempSasAdaptLerSaidasMapa_() {
   var prefixo = "'" + aba.replace(/'/g, "''") + "'!";
   // C=GRAFICA PCP; E=mapa; G=CD original; H=envio original;
   // K=kit; L=SKU; O=mapa solicitado; AN=coletado; AT=Coleta TP; AU=Entrega TP.
-  var letras = ['C','E','G','H','K','L','O','AN','AT','AU'];
+  var letras = ['C','E','G','H','K','L','O','AN','AT','AU','U','W'];
   var retorno = Sheets.Spreadsheets.Values.batchGet(meta.id, {
     ranges: letras.map(function(col) { return prefixo + col + '2:' + col + grade.rowCount; }),
     valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER'
@@ -167,7 +167,7 @@ function pgTempSasAdaptLerSaidasMapa_() {
     saidas.push({sku: sku, destino: destino, codigoMapa: pgTempSasAdaptNormalizar_(v[1]),
       kit: pgTempSasAdaptNormalizar_(v[4]), tiragem: tiragem, coletado: coletado,
       dataColeta: pgTempSasAdaptDiaISO_(v[8]), dataEntrega: pgTempSasAdaptDiaISO_(v[9]),
-      linhaMapa: i + 2});
+      nfVenda: v[10], nfRemessa: v[11], linhaMapa: i + 2});
   }
   return saidas;
 }
@@ -651,6 +651,110 @@ function pgTempSasAdaptEntregasJanelas_(janelas, saidasMapa) {
   });
 }
 
+function pgTempSasAdaptConciliarJanelas_(janelas, saidasMapa, internalizado) {
+  var abas={'0':1,'676724057':1,'1073453236':1,'1744242808':1,'1214924467':2,'1546857491':2,'1758854262':3};
+  var chaves=new Map(), detalhes=[], resumoJanela=new Map(), resumoCD=new Map(), resumoJanelaCD=new Map();
+  function grupo(kit,sku,cd) {
+    var k=JSON.stringify([kit,sku,cd]);
+    if(!chaves.has(k))chaves.set(k,{kit:kit,sku:sku,destino:cd,demandas:new Map(),parcelas:new Map()});
+    return chaves.get(k);
+  }
+  function resumo(map,k,campos) {
+    if(!map.has(k))map.set(k,Object.assign({total:0,mapaSolicitado:0,coletado:0,entregue:0,internalizado:null,aConferir:0,saldo:0,coletaSemJanela:0,entregaSemJanela:0,coletaFora:0,entregaFora:0},campos));
+    return map.get(k);
+  }
+  function normal(v){return pgTempSasAdaptNormalizar_(v);}
+  function numero(v){return Math.max(0,pgTempSasAdaptNumero_(v));}
+  function adicionar(r,d) {
+    ['total','mapaSolicitado','coletado','entregue','aConferir','saldo'].forEach(function(k){r[k]+=d[k]||0;});
+    if(d.internalizado!=null)r.internalizado=(r.internalizado||0)+d.internalizado;
+  }
+  (janelas||[]).forEach(function(aba){
+    var id=String(aba.id), m=/^JANELA[\s_-]*([123])(?:\b|$)/.exec(normal(aba.titulo)), n=abas[id]||(m&&Number(m[1]));
+    var v=aba.valores||[], h=(v[0]||[]).map(normal);
+    var c={kit:h.indexOf('COD KIT'),sku:h.indexOf('COMPONENTE'),cd:h.indexOf('CD'),pedido:h.indexOf('PEDIDO')};
+    if(!n||h[10]!=='QTDE'||Object.keys(c).some(function(k){return c[k]<0;}))throw new Error('Referência inválida: '+aba.titulo);
+    var r=resumo(resumoJanela,n,{id:String(n),titulo:'Janela '+n,fonteIds:[],pedidos:0});
+    r.fonteIds.push(id);
+    var pedidos=new Set();
+    v.slice(1).forEach(function(l,i){
+      l=l||[];var q=numero(l[10]);if(!q)return;
+      var kit=normal(l[c.kit]),sku=normal(l[c.sku]),cd=pgTempSasAdaptDestino_(l[c.cd]),pedido=normal(l[c.pedido]);
+      if(!kit||!sku||!cd||!pedido)throw new Error('Referência incompleta: '+aba.titulo+' linha '+(i+2));
+      pedidos.add(JSON.stringify([pedido,kit,cd]));
+      var g=grupo(kit,sku,cd);
+      if(!g.demandas.has(n))g.demandas.set(n,{total:0,origens:[]});
+      var d=g.demandas.get(n);d.total+=q;d.origens.push(aba.titulo.trim()+'!K'+(i+2));
+    });
+    r.pedidos+=pedidos.size;
+  });
+  // Somente o leitor do Mapa, previamente filtrado para ATHOS + V1, alimenta esta conciliação.
+  (saidasMapa||[]).forEach(function(m){
+    var cd=pgTempSasAdaptDestino_(m.destino);
+    if(cd!=='CD JDI'&&cd!=='CD FOR')return;
+    var g=grupo(normal(m.kit),normal(m.sku),cd);
+    var mp=normal(m.codigoMapa),k=mp||'LINHA '+m.linhaMapa;
+    if(!g.parcelas.has(k))g.parcelas.set(k,{mapa:mp,solicitado:0,coletado:0,entregue:0,nfs:new Set(),linhas:new Set()});
+    var p=g.parcelas.get(k),v=numero(m.coletado);
+    p.solicitado=Math.max(p.solicitado,numero(m.tiragem));
+    if(m.dataColeta)p.coletado=Math.max(p.coletado,v);
+    if(m.dataEntrega){p.entregue=Math.max(p.entregue,v);p.coletado=Math.max(p.coletado,v);}
+    [m.nfVenda,m.nfRemessa].forEach(function(nf){var s=String(nf==null?'':nf).trim();if(s&&s!=='-'&&s!=='0')p.nfs.add(s);});
+    if(m.linhaMapa)p.linhas.add(m.linhaMapa);
+  });
+  chaves.forEach(function(g){
+    var demand=0,raw={mapaSolicitado:0,coletado:0,entregue:0},mapas=[],nfs=new Set(),linhas=new Set(),evidencias=[];
+    g.demandas.forEach(function(d){demand+=d.total;});
+    g.parcelas.forEach(function(p){
+      raw.mapaSolicitado+=p.solicitado;raw.coletado+=p.coletado;raw.entregue+=p.entregue;
+      if(p.mapa)mapas.push(p.mapa);p.nfs.forEach(function(x){nfs.add(x);});p.linhas.forEach(function(x){linhas.add(x);});
+      evidencias.push((p.mapa||'sem código')+' [sol '+p.solicitado+'; col '+p.coletado+'; ent '+p.entregue+'; NF '+Array.from(p.nfs).join(', ')+']');
+    });
+    var campos=['mapaSolicitado','coletado','entregue'];
+    var reconhecido={};campos.forEach(function(k){reconhecido[k]=Math.min(demand,raw[k]);});
+    var recebidos=(internalizado&&internalizado.porCD||{})[g.destino]||{};
+    var ki=JSON.stringify([g.sku,g.kit]);
+    var recebido=Object.prototype.hasOwnProperty.call(recebidos,ki)?Math.min(demand,numero(recebidos[ki])):null;
+    var soma={mapaSolicitado:0,coletado:0,entregue:0,internalizado:0};
+    function registro(janela, total, status, origens) {
+      return {janela:janela,kit:g.kit,sku:g.sku,destino:g.destino,total:total,mapaSolicitado:0,coletado:0,entregue:0,internalizado:null,aConferir:0,saldo:0,status:status,
+        mapas:mapas.join(' | '),nfs:Array.from(nfs).join(' | '),linhasMapa:Array.from(linhas).join(' | '),evidenciasMapa:evidencias.join(' | '),origens:(origens||[]).join(' | ')};
+    }
+    function minimo(v,q){return Math.min(q,Math.max(0,v-(demand-q)));}
+    var cd=resumo(resumoCD,g.destino,{destino:g.destino});
+    g.demandas.forEach(function(d,n){
+      var r=registro('Janela '+n,d.total,g.demandas.size>1?'Vínculo compartilhado; mapas candidatos':'Vínculo único',d.origens);
+      campos.forEach(function(k){r[k]=minimo(reconhecido[k],d.total);soma[k]+=r[k];});
+      if(recebido!==null){r.internalizado=minimo(recebido,d.total);soma.internalizado+=r.internalizado;}
+      r.aConferir=Math.max(0,Math.min(d.total,reconhecido.coletado)-r.coletado);
+      r.saldo=d.total-r.coletado;
+      detalhes.push(r);adicionar(resumoJanela.get(n),r);
+      adicionar(resumo(resumoJanelaCD,n+'|'+g.destino,{titulo:'Janela '+n,destino:g.destino}),r);
+      adicionar(cd,r);
+    });
+    var pend=registro('A conferir',0,'Volume real sem atribuição inequívoca à janela');
+    campos.forEach(function(k){pend[k]=reconhecido[k]-soma[k];});
+    if(recebido!==null)pend.internalizado=recebido-soma.internalizado;
+    if(campos.some(function(k){return pend[k]>0;})||pend.internalizado>0){
+      detalhes.push(pend);adicionar(cd,pend);cd.coletaSemJanela+=pend.coletado;cd.entregaSemJanela+=pend.entregue;
+      adicionar(resumo(resumoJanelaCD,'9|'+g.destino,{titulo:'A conferir',destino:g.destino}),pend);
+    }
+    var fora=registro('Fora da tiragem',0,demand?'Excedente do mesmo kit/SKU/CD':'Mapa sem vínculo na base de janelas');
+    campos.forEach(function(k){fora[k]=raw[k]-reconhecido[k];});
+    if(campos.some(function(k){return fora[k]>0;})){
+      detalhes.push(fora);cd.coletaFora+=fora.coletado;cd.entregaFora+=fora.entregue;
+      adicionar(resumo(resumoJanelaCD,'10|'+g.destino,{titulo:'Fora da tiragem',destino:g.destino}),fora);
+    }
+  });
+  var j=Array.from(resumoJanela.values()).sort(function(a,b){return Number(a.id)-Number(b.id);});
+  var cds=Array.from(resumoCD.values()).sort(function(a,b){return a.destino.localeCompare(b.destino);});
+  cds.forEach(function(r){r.saldo=r.total-r.coletado;r.aConferir=r.coletaSemJanela;});
+  var somaCD=function(k){return cds.reduce(function(s,r){return s+(r[k]||0);},0);};
+  return {entregasPorJanela:j,janelasPorCD:Array.from(resumoJanelaCD.entries()).sort(function(a,b){return Number(a[0].split('|')[0])-Number(b[0].split('|')[0])||a[1].destino.localeCompare(b[1].destino);}).map(function(x){return x[1];}),
+    athosPorSku:detalhes.sort(function(a,b){return a.janela.localeCompare(b.janela)||a.destino.localeCompare(b.destino)||a.kit.localeCompare(b.kit)||a.sku.localeCompare(b.sku);}),
+    expedicoesAthos:cds,tiragemJanelas:somaCD('total'),mapaSolicitado:somaCD('mapaSolicitado'),coletadoAthos:somaCD('coletado'),entregueAthos:somaCD('entregue'),internalizadoAthos:cds.some(function(r){return r.internalizado===null;})?null:somaCD('internalizado')};
+}
+
 function getTempSasAdapt() {
   var pcp = pgTempSasAdaptLerColunas_('PCP', PG_TEMP_SAS_ADAPT_CAMPOS_PCP);
   var resumo = pgTempSasAdaptResumoGraficas_(pcp);
@@ -660,16 +764,13 @@ function getTempSasAdapt() {
   var planoAthos = pgTempSasAdaptTiragemAcabadoras_(acabadoras);
   resumo.pcpTotal = planoAthos.total;
   var saidasMapa = pgTempSasAdaptLerSaidasMapa_();
-  var coletasMapa = saidasMapa.filter(function(saida) {
-    return saida.coletado > 0 && !!saida.dataColeta;
-  });
-  Object.assign(resumo, pgTempSasAdaptSaidaPorSkuCD_(saidasMapa,
-    pgTempSasAdaptLerInternalizado_(), planoAthos.skus));
+  var internalizado = pgTempSasAdaptLerInternalizado_();
+  Object.assign(resumo, pgTempSasAdaptSaidaPorSkuCD_(saidasMapa, internalizado, planoAthos.skus));
   // Falha da nova referencia nao interrompe a visao nem muda seus totais.
   try {
-    resumo.entregasPorJanela = pgTempSasAdaptEntregasJanelas_(pgTempSasAdaptLerJanelas_(), coletasMapa);
+    Object.assign(resumo, pgTempSasAdaptConciliarJanelas_(pgTempSasAdaptLerJanelas_(), saidasMapa, internalizado));
   } catch (e) {
-    resumo.entregasPorJanela = [];
+    resumo.entregasPorJanela = []; resumo.janelasPorCD = []; resumo.athosPorSku = []; resumo.expedicoesAthos = [];
     resumo.erroEntregasPorJanela = 'Não foi possível atualizar as entregas por janela. Tente atualizar a visão.';
   }
   resumo.atualizadoEm = new Date().toISOString();
