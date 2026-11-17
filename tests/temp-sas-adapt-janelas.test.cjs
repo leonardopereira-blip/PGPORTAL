@@ -92,9 +92,15 @@ test('conciliação por janela e CD mantém tiragem K, volumes reais e notas sem
  const ms=[mapa('K','S',110,{tiragem:110,dataColeta:'2026-10-15',dataEntrega:'2026-10-16',nfVenda:'123'}),mapa('K','T',60,{destino:'CD FOR',tiragem:60,dataColeta:'2026-10-15',codigoMapa:'MP2'})];
  const r=contexto.pgTempSasAdaptConciliarJanelas_(js,ms,{});
  assert.equal(r.tiragemJanelas,190);assert.equal(r.coletadoAthos,110);assert.equal(r.entregueAthos,110);
- assert.equal(r.entregasPorJanela[0].coletado,70);assert.equal(r.entregasPorJanela[1].coletado,10);
- assert.equal(r.expedicoesAthos.find(x=>x.destino==='CD JDI').coletaSemJanela,30);
+ assert.equal(r.entregasPorJanela[0].coletado,100);assert.equal(r.entregasPorJanela[1].coletado,10);
+ assert.equal(r.expedicoesAthos.find(x=>x.destino==='CD JDI').coletaSemJanela,0);
  assert.equal(r.expedicoesAthos.find(x=>x.destino==='CD FOR').coletaFora,60);
- assert.equal(r.athosPorSku.find(x=>x.janela==='A conferir').nfs,'123');
+ assert.equal(r.athosPorSku.find(x=>x.janela==='Janela 1'&&x.sku==='S').nfs,'123');assert.ok(r.athosPorSku.every(x=>x.total>0));assert.equal(r.divergenciasMapa[0].coletado,60);
  assert.equal(r.athosPorSku.filter(x=>x.total>0).reduce((s,x)=>s+x.total,0),190);
+});
+
+test('caso real Fortaleza: 58 entregues à janela 1, 50 pendentes na janela 3',()=>{
+ const js=[janela('0',[linha('P','SAS27DA36SD1BRPDR00','MS26LS26101SP',58,'Fortaleza - CE')]),janela('1758854262',[linha('Q','SAS27DA36SD1BRPDR00','MS26LS26101SP',50,'Fortaleza - CE')])];
+ const ms=[mapa('SAS27DA36SD1BRPDR00','MS26LS26101SP',58,{destino:'CD FOR',tiragem:58,codigoMapa:'MP-047579-SAD-V1-ATHOS',dataColeta:'2026-10-01',dataEntrega:'2026-10-07',nfVenda:'1234',linhaMapa:3839})];
+ const r=contexto.pgTempSasAdaptConciliarJanelas_(js,ms,{});assert.deepEqual(Array.from(r.athosPorSku,x=>[x.janela,x.total,x.coletado,x.entregue,x.nfs]),[['Janela 1',58,58,58,'1234'],['Janela 3',50,0,0,'']]);assert.equal(r.trilhaMapa.length,1);assert.equal(r.trilhaMapa[0].linhasMapa,'3839');assert.equal(r.divergenciasMapa.length,0);
 });

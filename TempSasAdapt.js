@@ -653,7 +653,7 @@ function pgTempSasAdaptEntregasJanelas_(janelas, saidasMapa) {
 
 function pgTempSasAdaptConciliarJanelas_(janelas, saidasMapa, internalizado) {
   var abas={'0':1,'676724057':1,'1073453236':1,'1744242808':1,'1214924467':2,'1546857491':2,'1758854262':3};
-  var chaves=new Map(), detalhes=[], resumoJanela=new Map(), resumoCD=new Map(), resumoJanelaCD=new Map();
+  var chaves=new Map(), detalhes=[], divergencias=[], trilha=[], resumoJanela=new Map(), resumoCD=new Map(), resumoJanelaCD=new Map();
   function grupo(kit,sku,cd) {
     var k=JSON.stringify([kit,sku,cd]);
     if(!chaves.has(k))chaves.set(k,{kit:kit,sku:sku,destino:cd,demandas:new Map(),parcelas:new Map()});
@@ -697,61 +697,61 @@ function pgTempSasAdaptConciliarJanelas_(janelas, saidasMapa, internalizado) {
     if(!g.parcelas.has(k))g.parcelas.set(k,{mapa:mp,solicitado:0,coletado:0,entregue:0,nfs:new Set(),linhas:new Set()});
     var p=g.parcelas.get(k),v=numero(m.coletado);
     p.solicitado=Math.max(p.solicitado,numero(m.tiragem));
+    var dc=pgTempSasAdaptDiaISO_(m.dataColeta),de=pgTempSasAdaptDiaISO_(m.dataEntrega);
+    if(dc&&(!p.dataColeta||dc<p.dataColeta))p.dataColeta=dc;
+    if(de&&(!p.dataEntrega||de<p.dataEntrega))p.dataEntrega=de;
     if(m.dataColeta)p.coletado=Math.max(p.coletado,v);
     if(m.dataEntrega){p.entregue=Math.max(p.entregue,v);p.coletado=Math.max(p.coletado,v);}
     [m.nfVenda,m.nfRemessa].forEach(function(nf){var s=String(nf==null?'':nf).trim();if(s&&s!=='-'&&s!=='0')p.nfs.add(s);});
     if(m.linhaMapa)p.linhas.add(m.linhaMapa);
   });
   chaves.forEach(function(g){
-    var demand=0,raw={mapaSolicitado:0,coletado:0,entregue:0},mapas=[],nfs=new Set(),linhas=new Set(),evidencias=[];
-    g.demandas.forEach(function(d){demand+=d.total;});
-    g.parcelas.forEach(function(p){
-      raw.mapaSolicitado+=p.solicitado;raw.coletado+=p.coletado;raw.entregue+=p.entregue;
-      if(p.mapa)mapas.push(p.mapa);p.nfs.forEach(function(x){nfs.add(x);});p.linhas.forEach(function(x){linhas.add(x);});
-      evidencias.push((p.mapa||'sem código')+' [sol '+p.solicitado+'; col '+p.coletado+'; ent '+p.entregue+'; NF '+Array.from(p.nfs).join(', ')+']');
+    var demand=0, linhas=[], cd=resumo(resumoCD,g.destino,{destino:g.destino});
+    var recebidos=(internalizado&&internalizado.porCD||{})[g.destino]||{},ki=JSON.stringify([g.sku,g.kit]);
+    var recebido=Object.prototype.hasOwnProperty.call(recebidos,ki)?numero(recebidos[ki]):null;
+    Array.from(g.demandas.keys()).sort(function(a,b){return a-b;}).forEach(function(n){
+      var d=g.demandas.get(n);demand+=d.total;
+      linhas.push({janela:'Janela '+n,kit:g.kit,sku:g.sku,destino:g.destino,total:d.total,mapaSolicitado:0,coletado:0,entregue:0,internalizado:null,aConferir:0,saldo:0,status:'Sem mapa',origens:d.origens.join(' | '),refs:[],ocupado:0});
     });
-    var campos=['mapaSolicitado','coletado','entregue'];
-    var reconhecido={};campos.forEach(function(k){reconhecido[k]=Math.min(demand,raw[k]);});
-    var recebidos=(internalizado&&internalizado.porCD||{})[g.destino]||{};
-    var ki=JSON.stringify([g.sku,g.kit]);
-    var recebido=Object.prototype.hasOwnProperty.call(recebidos,ki)?Math.min(demand,numero(recebidos[ki])):null;
-    var soma={mapaSolicitado:0,coletado:0,entregue:0,internalizado:0};
-    function registro(janela, total, status, origens) {
-      return {janela:janela,kit:g.kit,sku:g.sku,destino:g.destino,total:total,mapaSolicitado:0,coletado:0,entregue:0,internalizado:null,aConferir:0,saldo:0,status:status,
-        mapas:mapas.join(' | '),nfs:Array.from(nfs).join(' | '),linhasMapa:Array.from(linhas).join(' | '),evidenciasMapa:evidencias.join(' | '),origens:(origens||[]).join(' | ')};
-    }
-    function minimo(v,q){return Math.min(q,Math.max(0,v-(demand-q)));}
-    var cd=resumo(resumoCD,g.destino,{destino:g.destino});
-    g.demandas.forEach(function(d,n){
-      var r=registro('Janela '+n,d.total,g.demandas.size>1?'Vínculo compartilhado; mapas candidatos':'Vínculo único',d.origens);
-      campos.forEach(function(k){r[k]=minimo(reconhecido[k],d.total);soma[k]+=r[k];});
-      if(recebido!==null){r.internalizado=minimo(recebido,d.total);soma.internalizado+=r.internalizado;}
-      r.aConferir=Math.max(0,Math.min(d.total,reconhecido.coletado)-r.coletado);
-      r.saldo=d.total-r.coletado;
-      detalhes.push(r);adicionar(resumoJanela.get(n),r);
-      adicionar(resumo(resumoJanelaCD,n+'|'+g.destino,{titulo:'Janela '+n,destino:g.destino}),r);
-      adicionar(cd,r);
+    function ordem(p){return p.dataColeta||p.dataEntrega||'9999-12-31';}
+    var parcelas=Array.from(g.parcelas.values()).sort(function(a,b){
+      return (a.coletado>0?0:1)-(b.coletado>0?0:1)||ordem(a).localeCompare(ordem(b))||Math.min.apply(null,Array.from(a.linhas).concat([Infinity]))-Math.min.apply(null,Array.from(b.linhas).concat([Infinity]))||a.mapa.localeCompare(b.mapa);
     });
-    var pend=registro('A conferir',0,'Volume real sem atribuição inequívoca à janela');
-    campos.forEach(function(k){pend[k]=reconhecido[k]-soma[k];});
-    if(recebido!==null)pend.internalizado=recebido-soma.internalizado;
-    if(campos.some(function(k){return pend[k]>0;})||pend.internalizado>0){
-      detalhes.push(pend);adicionar(cd,pend);cd.coletaSemJanela+=pend.coletado;cd.entregaSemJanela+=pend.entregue;
-      adicionar(resumo(resumoJanelaCD,'9|'+g.destino,{titulo:'A conferir',destino:g.destino}),pend);
-    }
-    var fora=registro('Fora da tiragem',0,demand?'Excedente do mesmo kit/SKU/CD':'Mapa sem vínculo na base de janelas');
-    campos.forEach(function(k){fora[k]=raw[k]-reconhecido[k];});
-    if(campos.some(function(k){return fora[k]>0;})){
-      detalhes.push(fora);cd.coletaFora+=fora.coletado;cd.entregaFora+=fora.entregue;
-      adicionar(resumo(resumoJanelaCD,'10|'+g.destino,{titulo:'Fora da tiragem',destino:g.destino}),fora);
-    }
+    parcelas.forEach(function(p){
+      var sol=p.solicitado,col=p.coletado,ent=p.entregue,cap=Math.max(sol,col,ent);
+      function evidencia(janela,s,c,e,q,origens,status){
+        return {janela:janela,kit:g.kit,sku:g.sku,destino:g.destino,mapa:p.mapa,nfs:Array.from(p.nfs).join(' | '),linhasMapa:Array.from(p.linhas).join(' | '),dataColeta:p.dataColeta||'',dataEntrega:p.dataEntrega||'',mapaSolicitado:s,coletado:c,entregue:e,volumeAlocado:q,origens:origens,status:status};
+      }
+      linhas.forEach(function(r){
+        var q=Math.min(r.total-r.ocupado,cap);if(q<=0)return;
+        var s=Math.min(q,sol),c=Math.min(q,col),e=Math.min(c,ent);
+        sol-=s;col-=c;ent-=e;cap-=q;r.ocupado+=q;r.mapaSolicitado+=s;r.coletado+=c;r.entregue+=e;
+        var ev=evidencia(r.janela,s,c,e,q,r.origens,g.demandas.size>1?'Ordem cronológica (FIFO)':'Vínculo único');
+        trilha.push(ev);r.refs.push(ev);
+      });
+      if(cap>0){
+        var ev=evidencia('Sem janela',sol,col,ent,cap,linhas.map(function(r){return r.origens;}).join(' | '),demand?'Excedente do mesmo kit/SKU/CD':'Sem vínculo na base de janelas');
+        divergencias.push(ev);trilha.push(ev);cd.coletaFora+=col;cd.entregaFora+=ent;
+      }
+    });
+    linhas.forEach(function(r){
+      if(recebido!==null){r.internalizado=Math.min(r.total,recebido);recebido-=r.internalizado;}
+      r.saldo=r.total-r.coletado;
+      function unicos(k){return Array.from(new Set(r.refs.map(function(x){return x[k];}).filter(Boolean))).join(' | ');}
+      r.mapas=unicos('mapa');r.nfs=unicos('nfs');r.linhasMapa=unicos('linhasMapa');r.dataColeta=unicos('dataColeta');r.dataEntrega=unicos('dataEntrega');
+      r.evidenciasMapa=r.refs.map(function(x){return (x.mapa||'sem código')+' [linha '+x.linhasMapa+'; NF '+x.nfs+'; coleta '+x.dataColeta+'; entrega '+x.dataEntrega+'; sol '+x.mapaSolicitado+'; col '+x.coletado+'; ent '+x.entregue+']';}).join(' | ');
+      if(r.refs.length)r.status=g.demandas.size>1?'Alocado por ordem das janelas (FIFO)':'Vínculo único';
+      delete r.refs;delete r.ocupado;detalhes.push(r);
+      var n=Number(r.janela.slice(7));adicionar(resumoJanela.get(n),r);
+      adicionar(resumo(resumoJanelaCD,n+'|'+g.destino,{titulo:r.janela,destino:g.destino}),r);adicionar(cd,r);
+    });
   });
   var j=Array.from(resumoJanela.values()).sort(function(a,b){return Number(a.id)-Number(b.id);});
   var cds=Array.from(resumoCD.values()).sort(function(a,b){return a.destino.localeCompare(b.destino);});
   cds.forEach(function(r){r.saldo=r.total-r.coletado;r.aConferir=r.coletaSemJanela;});
   var somaCD=function(k){return cds.reduce(function(s,r){return s+(r[k]||0);},0);};
   return {entregasPorJanela:j,janelasPorCD:Array.from(resumoJanelaCD.entries()).sort(function(a,b){return Number(a[0].split('|')[0])-Number(b[0].split('|')[0])||a[1].destino.localeCompare(b[1].destino);}).map(function(x){return x[1];}),
-    athosPorSku:detalhes.sort(function(a,b){return a.janela.localeCompare(b.janela)||a.destino.localeCompare(b.destino)||a.kit.localeCompare(b.kit)||a.sku.localeCompare(b.sku);}),
+    divergenciasMapa:divergencias,trilhaMapa:trilha,athosPorSku:detalhes.sort(function(a,b){return a.janela.localeCompare(b.janela)||a.destino.localeCompare(b.destino)||a.kit.localeCompare(b.kit)||a.sku.localeCompare(b.sku);}),
     expedicoesAthos:cds,tiragemJanelas:somaCD('total'),mapaSolicitado:somaCD('mapaSolicitado'),coletadoAthos:somaCD('coletado'),entregueAthos:somaCD('entregue'),internalizadoAthos:cds.some(function(r){return r.internalizado===null;})?null:somaCD('internalizado')};
 }
 
@@ -770,7 +770,7 @@ function getTempSasAdapt() {
   try {
     Object.assign(resumo, pgTempSasAdaptConciliarJanelas_(pgTempSasAdaptLerJanelas_(), saidasMapa, internalizado));
   } catch (e) {
-    resumo.entregasPorJanela = []; resumo.janelasPorCD = []; resumo.athosPorSku = []; resumo.expedicoesAthos = [];
+    resumo.entregasPorJanela = []; resumo.janelasPorCD = []; resumo.athosPorSku = []; resumo.expedicoesAthos = []; resumo.divergenciasMapa=[]; resumo.trilhaMapa=[];
     resumo.erroEntregasPorJanela = 'Não foi possível atualizar as entregas por janela. Tente atualizar a visão.';
   }
   resumo.atualizadoEm = new Date().toISOString();
