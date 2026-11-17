@@ -579,89 +579,76 @@ function pgTempSasAdaptLerJanelas_() {
 }
 
 function pgTempSasAdaptEntregasJanelas_(janelas, saidasMapa) {
-  var vinculos = Object.create(null), pedidos = [], resultados = [];
+  // Uma unidade aqui é um exemplar da coluna K, não um kit finalizado.
+  var grupos = Object.create(null), demandas = Object.create(null), parcelas = Object.create(null), volumes = Object.create(null);
+  var grupoPorAba = {'0':1,'676724057':1,'1073453236':1,'1744242808':1,
+    '1214924467':2,'1546857491':2,'1758854262':3};
   function chave(kit, sku, destino) {
-    return JSON.stringify([pgTempSasAdaptNormalizar_(kit), pgTempSasAdaptNormalizar_(sku),
-      pgTempSasAdaptDestino_(destino)]);
+    return JSON.stringify([pgTempSasAdaptNormalizar_(kit), pgTempSasAdaptNormalizar_(sku), pgTempSasAdaptDestino_(destino)]);
   }
   (janelas || []).forEach(function(janela) {
+    var titulo = pgTempSasAdaptNormalizar_(janela.titulo), id = String(janela.id);
+    var match = /^JANELA[\s_-]*([123])(?:\b|$)/.exec(titulo);
+    var numero = grupoPorAba[id] || (match && Number(match[1]));
+    if (!numero) throw new Error('Janela sem classificação: ' + janela.titulo);
     var valores = janela.valores || [], cab = (valores[0] || []).map(pgTempSasAdaptNormalizar_);
     function coluna(nome) {
       var i = cab.indexOf(pgTempSasAdaptNormalizar_(nome));
       if (i < 0) throw new Error('Coluna ' + nome + ' ausente em ' + janela.titulo + '.');
       return i;
     }
-    var c = {pedido:coluna('Pedido'), kit:coluna('Cod Kit'), sku:coluna('Componente'),
-      quantidade:coluna('Qtde'), destino:coluna('CD')};
-    var res = {id:String(janela.id), titulo:janela.titulo, total:0, entregue:0,
-      saldo:0, aConferir:0, pedidos:0, aConferirPedidos:0};
-    resultados.push(res);
-    var porPedido = Object.create(null);
-    for (var i = 1; i < valores.length; i++) {
-      var linha = valores[i] || [], pedido = pgTempSasAdaptNormalizar_(linha[c.pedido]);
-      if (!pedido) continue;
-      var kit = pgTempSasAdaptNormalizar_(linha[c.kit]);
-      var sku = pgTempSasAdaptNormalizar_(linha[c.sku]);
-      var cd = pgTempSasAdaptDestino_(linha[c.destino]);
-      var qtdRaw = linha[c.quantidade], qtd = pgTempSasAdaptNumero_(qtdRaw);
-      if (!kit || !sku || !cd || qtdRaw == null || qtdRaw === '' || qtd < 0 ||
-          !isFinite(typeof qtdRaw === 'number' ? qtdRaw : Number(String(qtdRaw).replace(/\./g, '').replace(',', '.')))) {
-        throw new Error('Pedido incompleto em ' + janela.titulo + ', linha ' + (i + 1) + '.');
-      }
-      // A referência reutiliza o mesmo Pedido para kits e destinos diferentes.
-      var chavePedido = JSON.stringify([pedido, kit, cd]);
-      var item = porPedido[chavePedido];
-      if (!item) {
-        item = porPedido[chavePedido] = {kit:kit, destino:cd, total:qtd, componentes:Object.create(null), resumo:res};
-        pedidos.push(item);
-        res.total += qtd;
-        res.pedidos++;
-      } else if (item.total !== qtd) {
-        throw new Error('Dados divergentes do pedido em ' + janela.titulo + ', linha ' + (i + 1) + '.');
-      }
-      var k = chave(kit, sku, cd);
-      if (!item.componentes[k]) {
-        item.componentes[k] = true;
-        if (!vinculos[k]) vinculos[k] = [];
-        vinculos[k].push(item);
-      }
+    if (cab[10] !== 'QTDE') throw new Error('Coluna K (Qtde) ausente em ' + janela.titulo + '.');
+    var c = {pedido:coluna('Pedido'),kit:coluna('Cod Kit'),sku:coluna('Componente'),destino:coluna('CD')};
+    var res = grupos[numero] || (grupos[numero] = {id:String(numero),titulo:'Janela '+numero,
+      total:0,entregue:0,saldo:0,aConferir:0,pedidos:0,fonteIds:[],fonteTitulos:[]});
+    res.fonteIds.push(id);
+    res.fonteTitulos.push(janela.titulo);
+    var pedidos = Object.create(null);
+    for (var i=1;i<valores.length;i++) {
+      var linha=valores[i] || [], raw=linha[10];
+      if (raw == null || raw === '') continue;
+      var q=pgTempSasAdaptNumero_(raw);
+      if (!isFinite(q) || q < 0 || !isFinite(typeof raw === 'number' ? raw : Number(String(raw).replace(/\./g,'').replace(',','.'))))
+        throw new Error('Qtde inválida em '+janela.titulo+', linha '+(i+1)+'.');
+      if (!q) continue;
+      var pedido=pgTempSasAdaptNormalizar_(linha[c.pedido]),kit=pgTempSasAdaptNormalizar_(linha[c.kit]),
+        sku=pgTempSasAdaptNormalizar_(linha[c.sku]),cd=pgTempSasAdaptDestino_(linha[c.destino]);
+      if (!pedido || !kit || !sku || !cd) throw new Error('Referência incompleta em '+janela.titulo+', linha '+(i+1)+'.');
+      var kp=JSON.stringify([pedido,kit,cd]);
+      if (!pedidos[kp]) { pedidos[kp]=true; res.pedidos++; }
+      var k=chave(kit,sku,cd), d=demandas[k] || (demandas[k]=Object.create(null));
+      d[numero]=(d[numero]||0)+q;
+      res.total+=q;
     }
   });
-  // A mesma parcela fisica do Mapa e considerada uma vez, usando a mesma
-  // identidade mapa/kit/SKU/CD da leitura atual, sem rateio entre janelas.
-  var parcelas = Object.create(null), volumes = Object.create(null);
+  // As parcelas do mesmo mapa/kit/componente/CD são contadas somente uma vez.
   (saidasMapa || []).forEach(function(m) {
-    var k = chave(m.kit, m.sku, m.destino);
-    if (!vinculos[k]) return;
-    var codigo = pgTempSasAdaptNormalizar_(m.codigoMapa);
-    var id = JSON.stringify([k, codigo || 'LINHA ' + m.linhaMapa]);
-    var volume = Math.max(0, pgTempSasAdaptNumero_(m.coletado));
-    if (!parcelas[id] || parcelas[id].volume < volume) parcelas[id] = {chave:k, volume:volume};
+    var k=chave(m.kit,m.sku,m.destino);
+    if (!demandas[k]) return;
+    var volume=Math.max(0,pgTempSasAdaptNumero_(m.coletado)), mp=pgTempSasAdaptNormalizar_(m.codigoMapa);
+    var id=JSON.stringify([k,mp||'LINHA '+m.linhaMapa]);
+    if (!parcelas[id] || parcelas[id].volume<volume) parcelas[id]={chave:k,volume:volume};
   });
   Object.keys(parcelas).forEach(function(id) {
-    var p = parcelas[id];
-    volumes[p.chave] = (volumes[p.chave] || 0) + p.volume;
+    var p=parcelas[id]; volumes[p.chave]=(volumes[p.chave]||0)+p.volume;
   });
-  pedidos.forEach(function(item) {
-    var entregue = item.total, ambiguo = false;
-    Object.keys(item.componentes).forEach(function(k) {
-      var volume = volumes[k] || 0;
-      if (vinculos[k].length > 1) {
-        if (volume > 0) ambiguo = true;
-        volume = 0;
-      }
-      // Um kit exige todos os seus componentes, nao a soma dos impressos.
-      entregue = Math.min(entregue, volume);
+  Object.keys(demandas).forEach(function(k) {
+    var d=demandas[k], ns=Object.keys(d), total=ns.reduce(function(s,n){return s+d[n];},0);
+    var coleta=Math.min(total,volumes[k]||0);
+    ns.forEach(function(n) {
+      var q=d[n];
+      // Quando a mesma chave aparece em diferentes janelas, só reconhece o
+      // mínimo inequivocamente atribuível. O intervalo restante é potencial
+      // (não aditivo entre janelas) e permanece dentro do saldo.
+      var confirmado=Math.min(q,Math.max(0,coleta-(total-q)));
+      var possivel=Math.min(q,coleta);
+      grupos[n].entregue+=confirmado;
+      grupos[n].aConferir+=Math.max(0,possivel-confirmado);
     });
-    var saldo = Math.max(0, item.total - entregue);
-    item.resumo.entregue += entregue;
-    item.resumo.saldo += saldo;
-    if (ambiguo && saldo > 0) {
-      item.resumo.aConferir += saldo;
-      item.resumo.aConferirPedidos++;
-    }
   });
-  return resultados;
+  return Object.keys(grupos).sort(function(a,b){return Number(a)-Number(b);}).map(function(n) {
+    var r=grupos[n];r.saldo=r.total-r.entregue;return r;
+  });
 }
 
 function getTempSasAdapt() {
@@ -674,7 +661,7 @@ function getTempSasAdapt() {
   resumo.pcpTotal = planoAthos.total;
   var saidasMapa = pgTempSasAdaptLerSaidasMapa_();
   var coletasMapa = saidasMapa.filter(function(saida) {
-    return saida.coletado > 0 && !!saida.dataColeta && planoAthos.skus.indexOf(saida.sku) >= 0;
+    return saida.coletado > 0 && !!saida.dataColeta;
   });
   Object.assign(resumo, pgTempSasAdaptSaidaPorSkuCD_(saidasMapa,
     pgTempSasAdaptLerInternalizado_(), planoAthos.skus));

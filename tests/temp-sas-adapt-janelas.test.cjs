@@ -8,123 +8,50 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'TempSasAdapt.js'), 'u
 const contexto = vm.createContext({ Date });
 vm.runInContext(source, contexto);
 
-const header = ['Pedido', 'Cod Kit', 'Componente', 'Qtde', 'CD'];
-const linha = (pedido, kit, componente, qtde, cd = 'Jundiaí - SP') => [pedido, kit, componente, qtde, cd];
-const janela = (id, rows, titulo = 'Janela ' + id) => ({ id, titulo, valores: [header.slice(), ...rows] });
-const mapa = (kit, sku, coletado, overrides = {}) => ({ kit, sku, coletado,
-  destino: 'CD JDI', codigoMapa: 'MP-1', linhaMapa: 2, ...overrides });
-const calcular = (janelas, saidas = []) => contexto.pgTempSasAdaptEntregasJanelas_(janelas, saidas);
 
-test('meta conta cada pedido uma vez e entrega exige todos os componentes do kit', () => {
-  const j = janela('1', [linha('P-1', 'KIT-1', 'SKU-A', 100),
-    linha('P-1', 'KIT-1', 'SKU-B', 100), linha('P-1', 'KIT-1', 'SKU-A', 100)]);
-  const [r] = calcular([j], [mapa('KIT-1', 'SKU-A', 90), mapa('KIT-1', 'SKU-B', 65)]);
-  assert.equal(r.total, 100, 'não soma meta repetida nas linhas de componentes');
-  assert.equal(r.entregue, 65, 'kits confirmados são o mínimo entre os componentes necessários');
-  assert.equal(r.saldo, 35);
-  assert.equal(r.aConferir, 0);
-  const [incompleto] = calcular([j], [mapa('KIT-1', 'SKU-A', 100)]);
-  assert.equal(incompleto.entregue, 0, 'um componente ausente impede confirmar kit completo');
+const header=['Pedido','Cod Kit','Descricao Kit','Série','Segmento','Componente','Descrição componente','Sub-componente','Descrição','LA X LP','Qtde','SISTEMA','Manuseio','LOCAL MANUSEIO','CAIXA KIT','CÓDIGO CAIXA DE CONTENÇÃO','DESCRIÇÃO CAIXA DE CONTENÇÃO','FATOR CAIXA DE CONTENÇÃO','LOTE','ENVIO','OBSERVAÇÃO','INSTRUÇÕES','CD'];
+const linha=(p,k,s,q,d='Jundiaí - SP')=>{const a=Array(23).fill('');a[0]=p;a[1]=k;a[5]=s;a[10]=q;a[22]=d;return a;};
+const janela=(id,rows,titulo='Janela '+id)=>({id,titulo,valores:[header.slice(),...rows]});
+const mapa=(kit,sku,coletado,rest={})=>({kit,sku,coletado,destino:'CD JDI',codigoMapa:'MP1',linhaMapa:2,...rest});
+const calcular=(janelas,saidas=[])=>contexto.pgTempSasAdaptEntregasJanelas_(janelas,saidas);
+const resumo=rs=>Array.from(rs,r=>[r.titulo,r.total,r.entregue,r.aConferir,r.saldo]);
+
+test('soma coluna K por linha, não por pedido nem por kit finalizado',()=>{
+  const [r]=calcular([janela('1',[linha('A','K','S',100),linha('A','K','T',100),linha('A','K','S',40)])],[mapa('K','S',120)]);
+  assert.deepEqual([r.total,r.entregue,r.saldo,r.aConferir],[240,120,120,0]);
 });
-
-test('a mesma referência de Pedido pode conter kits e CDs diferentes', () => {
-  const j = janela('3', [
-    linha('PEDIDO-REUTILIZADO', 'KIT-1', 'SKU-A', 40),
-    linha('PEDIDO-REUTILIZADO', 'KIT-2', 'SKU-A', 50, 'Fortaleza - CE'),
-    linha('PEDIDO-REUTILIZADO', 'KIT-2', 'SKU-B', 50, 'Fortaleza - CE')
-  ]);
-  const [r] = calcular([j], [mapa('KIT-1', 'SKU-A', 40),
-    mapa('KIT-2', 'SKU-A', 50, { destino: 'CD FOR' }),
-    mapa('KIT-2', 'SKU-B', 35, { destino: 'CD FOR' })]);
-  assert.deepEqual([r.pedidos, r.total, r.entregue, r.saldo], [2, 90, 75, 15]);
-
-  j.valores.push(linha('PEDIDO-REUTILIZADO', 'KIT-2', 'SKU-C', 51, 'Fortaleza - CE'));
-  assert.throws(() => calcular([j]), /Dados divergentes do pedido em Janela 3, linha 5/);
+test('classifica as sete abas físicas em três janelas, com 13/10 em duas abas distintas',()=>{
+  const ids=['0','676724057','1073453236','1744242808','1214924467','1546857491','1758854262'];
+  const titles=['Janela_1 - 25-08','Janela_1 - 29-09','Janela_1 - 13-10 ','Janela-1 - 15-10','Janela_1 - 29-10','Janela_2 - 13-10 ','Janela_3 - 28-10'];
+  const r=calcular(ids.map((id,i)=>janela(id,[linha('P'+i,'KIT'+i,'SKU',10*(i+1))],titles[i])));
+  assert.deepEqual(resumo(r),[['Janela 1',100,0,0,100],['Janela 2',110,0,0,110],['Janela 3',70,0,0,70]]);
+  assert.deepEqual(Array.from(r[0].fonteIds),ids.slice(0,4));
+  assert.deepEqual(Array.from(r[1].fonteIds),ids.slice(4,6));
 });
-
-test('parcelas repetidas usam máximo por mapa, kit, componente e CD; kits distintos somam', () => {
-  const j = janela('1', [linha('P-1', 'KIT-1', 'SKU', 100), linha('P-2', 'KIT-2', 'SKU', 100)]);
-  const [r] = calcular([j], [mapa('KIT-1', 'SKU', 20), mapa('KIT-1', 'SKU', 25),
-    mapa('KIT-1', 'SKU', 25), mapa('KIT-2', 'SKU', 40),
-    mapa('KIT-1', 'SKU', 5, { codigoMapa: 'MP-2' })]);
-  assert.equal(r.total, 200);
-  assert.equal(r.entregue, 70, 'KIT-1 = máximo 25 + outra parcela 5; KIT-2 = 40');
-  assert.equal(r.saldo, 130);
+test('mesma chave em pedidos e abas da mesma janela não zera coleta',()=>{
+  const [r]=calcular([janela('0',[linha('A','K','S',100),linha('B','K','S',50)],'Janela_1 - 25-08'),janela('676724057',[linha('C','K','S',20)],'Janela_1 - 29-09')],[mapa('K','S',90),mapa('K','S',95),mapa('K','S',20,{codigoMapa:'MP2'})]);
+  assert.deepEqual([r.total,r.entregue,r.saldo,r.aConferir],[170,115,55,0]);
 });
-
-test('sem código de mapa a linha física identifica a parcela e não duplica a repetição', () => {
-  const [r] = calcular([janela('1', [linha('P-1', 'KIT-1', 'SKU', 100)])], [
-    mapa('KIT-1', 'SKU', 12, { codigoMapa: '', linhaMapa: 30 }),
-    mapa('KIT-1', 'SKU', 15, { codigoMapa: '', linhaMapa: 30 }),
-    mapa('KIT-1', 'SKU', 7, { codigoMapa: '', linhaMapa: 31 })
-  ]);
-  assert.equal(r.entregue, 22);
+test('confirma mínimo comprovável em janela compartilhada e conserva saldo potencial',()=>{
+  const js=[janela('1',[linha('A','K','S',100)]),janela('2',[linha('B','K','S',40)])];
+  assert.deepEqual(resumo(calcular(js,[mapa('K','S',110)])),[['Janela 1',100,70,30,30],['Janela 2',40,10,30,30]]);
+  assert.deepEqual(resumo(calcular(js,[mapa('K','S',150)])),[['Janela 1',100,100,0,0],['Janela 2',40,40,0,0]]);
+  assert.deepEqual(resumo(calcular(js)),[['Janela 1',100,0,0,100],['Janela 2',40,0,0,40]]);
 });
-
-test('coleta com identidade presente em duas janelas fica a conferir sem rateio ou dupla contagem', () => {
-  const js = [janela('1', [linha('MESMO-PEDIDO', 'KIT-1', 'SKU', 100)]),
-    janela('2', [linha('MESMO-PEDIDO', 'KIT-1', 'SKU', 40)])];
-  const rs = calcular(js, [mapa('KIT-1', 'SKU', 30)]);
-  assert.deepEqual(Array.from(rs, r => [r.total, r.entregue, r.saldo, r.aConferir]),
-    [[100, 0, 100, 100], [40, 0, 40, 40]]);
-  assert.equal(rs.reduce((sum, r) => sum + r.entregue, 0), 0);
-  const semColeta = calcular(js, []);
-  assert.ok(Array.from(semColeta).every(r => r.aConferir === 0),
-    'compartilhar cadastro sem parcela física não cria entrega a conferir');
+test('não compensa SKU, kit ou CD; excedente não ultrapassa tiragem',()=>{
+  const [r]=calcular([janela('1',[linha('A','K','S',100),linha('A','K','T',50)])],[mapa('K','S',150),mapa('K','T',50,{destino:'CD FOR'}),mapa('K2','T',50),mapa('K','T',-10)]);
+  assert.deepEqual([r.total,r.entregue,r.saldo,r.aConferir],[150,100,50,0]);
 });
-
-test('dois pedidos da mesma janela não consomem a mesma parcela física', () => {
-  const [r] = calcular([janela('1', [linha('P-1', 'KIT-1', 'SKU', 100),
-    linha('P-2', 'KIT-1', 'SKU', 50)])], [mapa('KIT-1', 'SKU', 40)]);
-  assert.equal(r.total, 150);
-  assert.equal(r.entregue, 0);
-  assert.equal(r.aConferir, 150);
+test('sem mapa usa linha física para deduplicar a parcela',()=>{
+  const [r]=calcular([janela('1',[linha('A','K','S',100)])],[mapa('K','S',12,{codigoMapa:'',linhaMapa:30}),mapa('K','S',15,{codigoMapa:'',linhaMapa:30}),mapa('K','S',7,{codigoMapa:'',linhaMapa:31})]);
+  assert.equal(r.entregue,22);
 });
-
-test('componente igual em outro kit ou CD não atende o pedido', () => {
-  const [r] = calcular([janela('1', [linha('P-1', 'KIT-1', 'SKU', 100)])], [
-    mapa('KIT-2', 'SKU', 100), mapa('KIT-1', 'SKU', 100, { destino: 'Fortaleza - CE' }),
-    mapa('KIT-1', 'OUTRO-SKU', 100)
-  ]);
-  assert.equal(r.entregue, 0);
-  assert.equal(r.saldo, 100);
-  assert.equal(r.aConferir, 0);
-});
-
-test('quantidade confirmada respeita a meta e ignora valores físicos negativos', () => {
-  const [r] = calcular([janela('1', [linha('P-1', 'KIT-1', 'SKU', '100')])], [
-    mapa('KIT-1', 'SKU', '150,00'), mapa('KIT-1', 'SKU', -10, { codigoMapa: 'MP-2' })
-  ]);
-  assert.equal(r.entregue, 100);
-  assert.equal(r.saldo, 0);
-  assert.equal(r.aConferir, 0);
-});
-
-test('resolve cabeçalhos pelo nome e normaliza os CDs originais, kit e SKU', () => {
-  const j = { id: '1', titulo: 'Janela de referência', valores: [
-    ['CD', 'Qtde', 'Pedido', 'Componente', 'Cod Kit'],
-    ['Jundiaí - SP', 20, 'P-JDI', ' sku-a ', ' kit-a '],
-    ['Itaitinga - CE', 30, 'P-FOR', 'SKU-B', 'KIT-B'],
-    ['Ribeirão Preto - SP', 40, 'P-RP', 'SKU-C', 'KIT-C']
-  ] };
-  const [r] = calcular([j], [mapa('KIT-A', 'SKU-A', 10),
-    mapa('KIT-B', 'SKU-B', 20, { destino: 'CD FOR' }),
-    mapa('KIT-C', 'SKU-C', 30, { destino: 'CD RP' })]);
-  assert.equal(r.id, '1');
-  assert.equal(r.titulo, 'Janela de referência');
-  assert.equal(r.total, 90);
-  assert.equal(r.entregue, 60);
-  assert.equal(r.saldo, 30);
-});
-
-test('cálculo isolado preserva dados e linhas vazias da fonte recebida', () => {
-  const j = janela('1', [[], linha('P-3', 'KIT-1', 'SKU', 10), []]);
-  const saidas = [mapa('KIT-1', 'SKU', 5, { linhaMapa: 47 })];
-  const antes = JSON.stringify({ j, saidas });
-  const [r] = calcular([j], saidas);
-  assert.equal(r.total, 10);
-  assert.equal(r.entregue, 5);
-  assert.equal(JSON.stringify({ j, saidas }), antes, 'não reordena nem reescreve as fontes compartilhadas');
+test('valida coluna K e referências sem alterar dados da fonte',()=>{
+  const j=janela('1',[[],linha('A','K','S',10),[]]);
+  const saidas=[mapa('K','S',5)];
+  const antes=JSON.stringify({j,saidas});assert.equal(calcular([j],saidas)[0].entregue,5);
+  assert.equal(JSON.stringify({j,saidas}),antes);
+  j.valores[0][10]='Outro';assert.throws(()=>calcular([j]),/Coluna K/);
 });
 
 test('leitor mantém sheetId, títulos com espaço final e linhas físicas em intervalos limitados', () => {

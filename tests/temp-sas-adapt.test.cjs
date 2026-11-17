@@ -580,12 +580,13 @@ test('quando PCP_ACABADORAS não informa CD, expedição tem CD real do mapa e s
 
 test('entregas por janela aparece na mesma visão e exporta o resumo com a fonte', () => {
   const data = dadosVisaoAthos();
-  data.entregasPorJanela = [{id:'676724057',titulo:'Janela_1 - 29-09',total:100,
+  data.entregasPorJanela = [{id:'1',titulo:'Janela 1',fonteIds:['0','676724057'],total:100,
     entregue:40,saldo:60,aConferir:20,pedidos:2}];
   const h = frontHarness(data);
   h.context.window.pgCarregarTempSasAdapt(true);
   const table = h.elements.get('pgTempTabelaJanelas').innerHTML;
-  assert.match(table, /Janela 1 - 29\/09/);
+  assert.match(table, /Janela 1<\/td>/);
+  assert.doesNotMatch(table, /29\/09/);
   assert.match(table, /40%/);
   assert.match(table, /pg-sas-review/);
   assert.doesNotMatch(h.html, /role="tab(?:list)?"|pgSelecionarJanelaTempSasAdapt/);
@@ -593,8 +594,10 @@ test('entregas por janela aparece na mesma visão e exporta o resumo com a fonte
   h.context.window.pgExportarTempSasAdapt('janelas');
   assert.match(h.downloads[0].download, /ENTREGAS_POR_JANELA/);
   const csv = h.blobs[0].parts.join('');
-  assert.match(csv, /"PROGRAMADO \(KITS\)"/);
-  assert.match(csv, /"COLETA CONFIRMADA \(KITS\)"/);
+  assert.match(csv, /"TIRAGEM"/);
+  assert.match(csv, /"COLETA CONFIRMADA"/);
+  assert.match(csv, /"% COLETADO"/);
+  assert.match(csv, /gid=0/);
   assert.match(csv, /"A CONFERIR \(INCLUÍDO NO SALDO\)"/);
   assert.match(csv, /gid=676724057/);
 });

@@ -110,12 +110,12 @@
       </div>
       <section class="pg-sas-panel pg-sas-janelas" aria-labelledby="pgTempTituloJanelas">
         <div class="pg-sas-panel-header">
-          <div><h3 id="pgTempTituloJanelas">Entregas por janela</h3><p class="pg-sas-panel-caption">Kits · Coletas sem janela definida ficam em A conferir, dentro do saldo.</p></div>
+          <div><h3 id="pgTempTituloJanelas">Entregas por janela</h3><p class="pg-sas-panel-caption">Exemplares (coluna K) · A conferir: parcela potencial sem janela inequívoca, incluída no saldo e não somável entre janelas.</p></div>
           <button id="pgTempExportarJanelas" type="button" onclick="window.pgExportarTempSasAdapt('janelas')" class="pg-sas-export" aria-label="Baixar CSV das entregas por janela"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Baixar CSV</button>
         </div>
         <div class="pg-sas-table-wrap">
           <table aria-label="Entregas por janela"><thead><tr>
-            <th scope="col">Janela</th><th scope="col">Programado</th><th scope="col">Coleta confirmada</th><th scope="col">A conferir</th><th scope="col">Saldo</th><th scope="col">% coletado</th>
+            <th scope="col">Janela</th><th scope="col">Tiragem</th><th scope="col">Coleta confirmada</th><th scope="col">A conferir</th><th scope="col">Saldo</th><th scope="col">% coletado</th>
           </tr></thead><tbody id="pgTempTabelaJanelas"><tr><td colspan="6">Atualize a visão para acompanhar as entregas por janela.</td></tr></tbody></table>
         </div>
       </section>
@@ -183,7 +183,7 @@
   }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function tituloJanela(valor) {
-    return String(valor == null ? '' : valor).trim().replace(/^Janela[_-](\d)/i, 'Janela $1').replace(/(\d{2})-(\d{2})$/, '$1/$2');
+    return String(valor == null ? '' : valor).trim();
   }
   function entregasPorJanela(d) {
     var linhas = Array.isArray(d.entregasPorJanela) ? d.entregasPorJanela : [];
@@ -254,9 +254,9 @@
       graficas: {nome:'SAS_ADAPT_GRAFICAS', colunas:['fonte','linha','id','sku','grafica','destino','rawUnit','envio','caracteristica','total','tiragemRaw','saiuBruto','saiuReconhecido','operacao','totalOperacao','saiuBrutoOperacao','excedenteOperacao','linhasAgrupadas','dataColeta','dataColetaRaw','entregaTP','entregaTPRaw'], linhas:ultimo.linhasGraficas},
       athos: {nome:'SAS_ADAPT_ENTREGAS_CD_SKU', colunas:['kit','sku','destino'].concat(volumesAthos), linhas:skusVisiveis()},
       expedicoesAthos: {nome:'SAS_ADAPT_ENTREGAS_CD', colunas:['destino'].concat(volumesAthos), linhas:ultimo.expedicoesAthos},
-      janelas: {nome:'SAS_ADAPT_ENTREGAS_POR_JANELA', colunas:['titulo','total','entregue','aConferir','saldo','pedidos','fonte','id','fonteUrl'], linhas:ultimo.erroEntregasPorJanela ? [] : (ultimo.entregasPorJanela || []).map(function(r) {
+      janelas: {nome:'SAS_ADAPT_ENTREGAS_POR_JANELA', colunas:['titulo','total','entregue','aConferir','saldo','pctColetado','pedidos','fonte','id','fonteUrl'], linhas:ultimo.erroEntregasPorJanela ? [] : (ultimo.entregasPorJanela || []).map(function(r) {
         return {titulo:r.titulo,total:r.total,entregue:r.entregue,aConferir:r.aConferir,saldo:r.saldo,pedidos:r.pedidos,
-          fonte:'Janelas_SAS ADAPT',id:r.id,fonteUrl:'https://docs.google.com/spreadsheets/d/1vBqSFyKqv8Ttco5LkfQm4SBLOU2EX7FWkOw3maBndIQ/edit#gid=' + encodeURIComponent(r.id)};
+          pctColetado:pct(r.entregue,r.total),fonte:'Janelas_SAS ADAPT',id:(r.fonteIds || []).join(' | '),fonteUrl:(r.fonteIds || []).map(function(id){return 'https://docs.google.com/spreadsheets/d/1vBqSFyKqv8Ttco5LkfQm4SBLOU2EX7FWkOw3maBndIQ/edit#gid=' + encodeURIComponent(id);}).join(' | ')};
       })}
     };
     var spec = definicoes[tipo];
@@ -264,18 +264,18 @@
     var cabecalho = {
       fonte:'FONTE',linha:'LINHA NA FONTE',id:'ID',sku:'SKU',grafica:'GRÁFICA',destino:'CD DESTINO',
       rawUnit:'UNIDADE ORIGINAL',envio:'ENVIO',caracteristica:'CARACTERÍSTICA DA SOLICITAÇÃO',
-      total:tipo === 'janelas' ? 'PROGRAMADO (KITS)' : 'TIRAGEM TOTAL',
+      total:tipo === 'janelas' ? 'TIRAGEM' : 'TIRAGEM TOTAL',
       kit:'KIT',mapaSolicitado:'MAPA SOLICITADO',coletado:'COLETADO',entregue:'ENTREGA',internalizado:'INTERNALIZADO',
       pctTotal:'% TOTAL',pctMapa:'% MAPA SOLICITADO',pctColetado:'% COLETADO',
       pctEntregue:'% ENTREGA',pctInternalizado:'% INTERNALIZADO',
-      titulo:'JANELA',aConferir:'A CONFERIR (INCLUÍDO NO SALDO)',saldo:'SALDO (KITS)',pedidos:'PEDIDOS',fonteUrl:'LINK NA FONTE',
+      titulo:'JANELA',aConferir:'A CONFERIR (INCLUÍDO NO SALDO)',saldo:'SALDO',pedidos:'PEDIDOS',fonteUrl:'LINK NA FONTE',
       tiragemRaw:'TIRAGEM ORIGINAL',saiuBruto:'COLETADO INFORMADO',saiuReconhecido:'COLETADO RECONHECIDO (uma vez por operação)',
       operacao:'OPERAÇÃO',totalOperacao:'TOTAL DA OPERAÇÃO',saiuBrutoOperacao:'COLETADO DA OPERAÇÃO',
       excedenteOperacao:'EXCEDENTE DA OPERAÇÃO',linhasAgrupadas:'LINHAS AGRUPADAS NA FONTE',
       dataColeta:'DATA COLETA',dataColetaRaw:'DATA COLETA ORIGINAL',entregaTP:'ENTREGA TP',entregaTPRaw:'ENTREGA TP ORIGINAL'
     };
-    if (tipo === 'janelas') cabecalho.id = 'ABA NA FONTE (GID)';
-    if (tipo === 'janelas') cabecalho.entregue = 'COLETA CONFIRMADA (KITS)';
+    if (tipo === 'janelas') cabecalho.id = 'ABAS NA FONTE (GID)';
+    if (tipo === 'janelas') cabecalho.entregue = 'COLETA CONFIRMADA';
     var linhas = [spec.colunas.map(function(k) { return csvValor(cabecalho[k] || k); }).join(';')];
     spec.linhas.forEach(function(r) {
       var linha = tipo === 'athos' || tipo === 'expedicoesAthos' ? Object.assign({}, r, {
