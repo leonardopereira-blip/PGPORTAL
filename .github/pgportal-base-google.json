@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-18T18:36:41.558Z",
+  "lido_em": "2026-11-18T18:48:21.974Z",
   "files": {
     "HTML:abaCentralChamados": "758b15be64949b4fb4438753effe5e9ac2efc633a5239a123bb8e729533eb603",
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
@@ -38,8 +38,8 @@
     "SERVER_JS:ChamadosFinanceiro": "5cd84908ce01d2e34ce1e3540ad8f54dd6e58f8d677442ec0d87df96e6eb09a5",
     "SERVER_JS:ChamadosFontes": "54db7bcc534cbe5df68f5d3c2798319bda473fbdc088b17ea7cdef41de4315ae",
     "SERVER_JS:ChamadosIndicadores": "529b00839c5c1a9626a1fbac4ecabe195cec249e46e5ed6669fac68b1c633852",
-    "SERVER_JS:ChamadosModelo": "e189e998262eb1252598a86ca5ea9720ff3be6fab5a5bae21a51e672b1488095",
-    "SERVER_JS:ChamadosPortal": "b9ca22ceec3ada8811eb61fdd81559a29ece8b60ca9646479b1234b1a9a914cd",
+    "SERVER_JS:ChamadosModelo": "742a8bdf59f458cb16ccb9fdf014ea7ceaee49885924f9203b0d2820809f6b38",
+    "SERVER_JS:ChamadosPortal": "ce8643be6eda43e2e2fa76cbc8eb62254210b6fa0e8ff079b66b90e7e955b591",
     "HTML:Cockpit": "c5b213863fd0f600de42e17ecf0d2c1c17633ed99ff5fbfa4164ab0d451add61",
     "SERVER_JS:Code": "eeff0452e61f917cf2427e718e766ad3a3169900263c09dbad4afdf12f8d5d80",
     "SERVER_JS:Código": "74cbcdb7ae26466a909fa5fa6deba2d3c41a24bb9a5972f71d5f46afa67fb0f8",
