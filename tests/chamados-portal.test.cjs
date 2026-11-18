@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const ctx=vm.createContext({});
-for(const name of ['ChamadosModelo','ChamadosFinanceiro','ChamadosPortal']){
+for(const name of ['ChamadosModelo','ChamadosIndicadores','ChamadosFinanceiro','ChamadosPortal']){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'..',name+'.js'),'utf8'),ctx);
 }
 const a={n:'101',id:'74b79202-798e-4b12-b7da-b7dffa1e01f1',sku:'A',kit:'K',cat:'REENTRADA',brand:'SAS',printer:'Alpha',cd:'CJUN',qty:'100',

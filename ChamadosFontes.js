@@ -1,4 +1,28 @@
 const PG_CH_FONTES = {
+  "spec": {
+    "file": "EXTRAÇÃO - SPG - COL.27",
+    "sheet": "Especificação Técnica",
+    "gid": 877471595,
+    "header": 1,
+    "fields": {
+      "sku": "SKU",
+      "brand": "Marca",
+      "series": "Série",
+      "material": "Tipo Material",
+      "cover": "Capa Tipo",
+      "description": "Descricao",
+      "finish": "Acabamento",
+      "custom": "Personalizado",
+      "cut": "Tem Corte Vinco",
+      "cut0": "Miolo 1 Tem Corte Vinco",
+      "cut1": "Miolo 2 Tem Corte Vinco",
+      "cut2": "Miolo 3 Tem Corte Vinco",
+      "cut3": "Encarte 1 Tem Corte Vinco",
+      "cut4": "Encarte 2 Tem Corte Vinco",
+      "cut5": "Adesivo 1 Tem Corte Vinco",
+      "cut6": "Adesivo 2 Tem Corte Vinco"
+    }
+  },
   "spg": {
     "file": "EXTRAÇÃO - SPG - COL.27",
     "sheet": "Reentradas e chamados",

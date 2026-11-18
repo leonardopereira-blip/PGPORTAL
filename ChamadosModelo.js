@@ -203,6 +203,7 @@ function pgChModelo_(dados) {
       !real && rows.some(x=>pgChData_(x[r]))?'Parcial':'');
   }
   pgChFinanceiro_(dados,tickets,numeros);
+  const specIdx=pgChIndiceEspec_(dados.spec||[]);
   const summaries=[];
   for(const t of tickets.values()) {
     delete t._groups;
@@ -268,12 +269,14 @@ function pgChModelo_(dados) {
         pgChUltima_(it.maps.filter(m=>m.pick).map(m=>m.pick))),log(it.delivered,it.eta,pgChUltima_(it.maps.filter(m=>m.delivered>0).map(m=>m.delivery))));
       totals.qty+=it.qty;totals.balance+=saldo;
       for(const k of ['mapped','picked','delivered']) totals[k]+=Math.min(it.qty,it[k]);
-      it.stages.forEach((s,i)=>{totals.coverage[i]+=i>=9?Math.min(it.qty,[it.mapped,it.picked,it.delivered][i-9]):s.units!=null?s.units:s.r?it.qty:0;});
+      it.coverage=it.stages.map((s,i)=>i>=9?Math.min(it.qty,[it.mapped,it.picked,it.delivered][i-9]):s.units!=null?s.units:s.r?it.qty:0);
+      it.coverage.forEach((v,i)=>{totals.coverage[i]+=v;});
       if(saldo){if(it.eta)pendingEtas.push(it.eta);if(!it.eta||it.etaPartial)missingEta=true;}
     }
     t.totals=totals;
     summaries.push({id:t.id,n:t.n,cat:t.cat,brand:t.brand,shipment:t.shipment,status:t.status,priority:t.priority,created:t.created,
-      goal:t.goal,desired:t.desired,eta:pgChUltima_(pendingEtas),partial:missingEta,issues:t.alerts.length,items:t.items.length,totals});
+      goal:t.goal,desired:t.desired,eta:pgChUltima_(pendingEtas),partial:missingEta,issues:t.alerts.length,items:t.items.length,totals,
+      ...pgChMetricaChamado_(t,specIdx)});
   }
   return {summaries,tickets};
 }
