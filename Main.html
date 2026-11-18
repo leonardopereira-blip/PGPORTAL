@@ -282,10 +282,12 @@ window.exportarSkusFiltradosSheets = function() {
 
         <div class="px-2 pb-4">
             <button onclick="toggleSubmenuMenu('sub-reen', 'ic-reen')" class="w-full flex items-center justify-between px-2 py-2 text-neutral-400 hover:text-white transition-colors group">
-                <span class="text-[10px] font-bold uppercase tracking-widest">Reentradas</span>
+                <span class="text-[10px] font-bold uppercase tracking-widest">Chamados e reentradas</span>
                 <svg id="ic-reen" class="w-4 h-4 transition-transform duration-200 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
             <div id="sub-reen" class="hidden flex-col gap-1 pl-3 ml-2 border-l border-neutral-800 mt-1 pb-2">
+                <button onclick="navegarView('viewChamados', this); pgAbrirChamados('carteira');" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">Central de chamados</button>
+                <button onclick="navegarView('viewChamados', this); pgAbrirChamados('okr');" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">OKR</button>
                 <button onclick="abrirGrafico('abaReentradasGerencial', this); window.iniciarAbaReentradasGerencial();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">📊 Painel Gerencial</button>
                 <button onclick="abrirGrafico('abaReentradasAlocacao', this); iniciarAbaReentradas();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">🔄 Alocações de Reentradas</button>
                 <button onclick="abrirGrafico('abaReentradasProducao', this); window.iniciarAbaReentradasProducao();" class="menu-btn w-full flex items-center gap-3 px-2 py-2 rounded text-xs text-left">🏭 Acomp. Produção</button>
@@ -309,6 +311,9 @@ window.exportarSkusFiltradosSheets = function() {
             </div>
             <div id="viewCockpit" class="view-section absolute inset-0 z-10 flex-col">
                 <?!= include('Cockpit'); ?>
+            </div>
+            <div id="viewChamados" class="view-section absolute inset-0 z-10 flex-col">
+                <?!= include('abaCentralChamados'); ?>
             </div>
             <div id="viewPreProd" class="view-section absolute inset-0 z-10 flex-col">
                 <?!= include('PreProducao'); ?>
