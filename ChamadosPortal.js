@@ -133,7 +133,7 @@ function pgChJsonBuild_(before){
   console.log('[CH JSON] mapa validado: '+counts.map+' registros; duas leituras consistentes.');
   datasets.sla=getMatrizSLAPortal();
   const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString();
-  const result={gen,now,links,counts,mapPartial,rows:model.summaries,phases:PG_CH_ETAPAS};
+  const result={gen,now,links,counts,mapPartial,calculationVersion:3,rows:model.summaries,phases:PG_CH_ETAPAS};
   if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');
   return {result,tickets:model.tickets};
 }

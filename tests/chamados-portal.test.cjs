@@ -86,3 +86,16 @@ test('de-para permite cruzamento exato de chamado, SKU, marca, gráfica e CD sem
  const t=build({spg:[base,other],map:[{...map,brand:'MAR',printer:'MAXI',cd:'CD FOR',n:'101',qty:'150',received:'100'}]}).tickets.get(a.id);
  assert.equal(t.brand,'MAR');assert.equal(t.items.find(x=>x.cd==='CD FOR').printer,'MAXI');assert.equal(t.items.find(x=>x.cd==='CD FOR').coverage[3],100);assert.equal(t.items.find(x=>x.cd==='CD JDI').coverage[3],0);assert.equal(t.totals.balance,100);
 });
+
+test('estoque ou subcontratação não quebra a sequência física nem confirma custo ou OC',()=>{
+ const x=build({spg:[{...a,stock:'100'}],map:[{...map,picked:'',qty:'60',received:'40'}]}).tickets.get(a.id);
+ assert.equal(x.totals.picked,40);assert.equal(x.totals.delivered,40);assert.equal(x.totals.coverage[3],40);assert.equal(x.totals.coverage[7],0);assert.equal(x.totals.coverage[8],0);assert.equal(x.totals.balance,60);
+});
+test('produção concluída de SKU sem gráfica não cria buraco no funil nem vira coleta',()=>{
+ const x=build({spg:[{...a,printer:'',produced:'2026-10-03'}]}).tickets.get(a.id);
+ assert.equal(x.totals.coverage[3],100);assert.equal(x.totals.coverage[6],100);assert.equal(x.totals.picked,0);
+});
+test('cada rota é monotônica mesmo com excedente de outro SKU',()=>{
+ const x=build({spg:[a,{...a,sku:'C',qty:'75'}],map:[{...map,qty:'300',received:'300'}]}).tickets.get(a.id);
+ assert.equal(x.totals.coverage[3],100);assert.equal(x.totals.picked,100);assert.equal(x.totals.delivered,100);assert.equal(x.totals.balance,75);
+});

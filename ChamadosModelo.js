@@ -334,7 +334,7 @@ function pgChModelo_(dados) {
         if(!it.stages[6].p && prod.p) it.stages[6].p=prod.p;
       }
       const sum=fn=>it.maps.reduce((n,m)=>n+fn(m),0);
-      it.mapped=sum(m=>m.qty);it.picked=sum(m=>m.pick?m.qty:Math.min(m.qty,m.delivered));it.delivered=sum(m=>m.delivered);
+      it.mapped=sum(m=>Math.max(0,m.qty));it.delivered=sum(m=>Math.max(0,Math.min(m.qty,m.delivered)));it.picked=sum(m=>Math.max(0,m.pick?m.qty:Math.min(m.qty,m.delivered)));
       const spgForecast=pgChUltima_(it.spg.map(s=>s.deliveryP));
       const days=sla.get(pgChGraf_(it.printer)+'|'+pgChCD_(it.cd));
       function transporte(coleta){
@@ -372,11 +372,11 @@ function pgChModelo_(dados) {
       }
       it.stages.push(costStage,ocStage);
       // Realizado progressivo da própria rota; não propaga saldo, estoque ou OC.
-      if(it.qty>0 && it.sku && it.printer && it.cd && it.spg.every(s=>!s.stock&&!s.sub)){
+      if(it.qty>0){
         let confirmed=Math.min(it.qty,it.picked);
         for(let k=6;k>=0;k--){
           const s=it.stages[k],own=Math.min(it.qty,s.units!=null?s.units:s.r?it.qty:0);
-          if(confirmed>own){s.units=confirmed;if(!s.r){s.a=confirmed===it.qty?'Realizado por etapa posterior':'Realizado parcial por etapa posterior';s.f='Produção / mapa';}}
+          if(confirmed>own){s.units=confirmed;if(!s.r){s.a=it.spg.some(r=>r.stock||r.sub)?'Etapa atendida pela rota (estoque/subcontratação)':confirmed===it.qty?'Realizado por etapa posterior':'Realizado parcial por etapa posterior';s.f='Produção / mapa';}}
           confirmed=Math.max(confirmed,own);
         }
       }
@@ -386,6 +386,7 @@ function pgChModelo_(dados) {
       totals.qty+=it.qty;totals.balance+=saldo;
       for(const k of ['mapped','picked','delivered']) totals[k]+=Math.min(it.qty,it[k]);
       it.coverage=it.stages.map((s,i)=>Math.max(0,Math.min(it.qty,i>=9?[it.mapped,it.picked,it.delivered][i-9]:s.units!=null?s.units:s.r?it.qty:0)));
+      pgChValidarFunilRota_(t,it);
       it.productionStatus=pgChStatusRota_(t,it,painel);
       it.coverage.forEach((v,i)=>{totals.coverage[i]+=v;});
       if(saldo){if(it.eta)pendingEtas.push(it.eta);if(!it.eta||it.etaPartial)missingEta=true;}
@@ -396,4 +397,12 @@ function pgChModelo_(dados) {
       ...pgChMetricaChamado_(t,specIdx)});
   }
   return {summaries,tickets};
+}
+
+function pgChValidarFunilRota_(t,it){
+  const c=it.coverage,q=it.qty,seq=[0,1,2,3,4,5,6,10,11];
+  const fail=()=>{throw new Error('Funil inconsistente: chamado '+t.n+' SKU '+it.sku+' / '+it.printer+' / '+it.cd);};
+  if(c.some(v=>!Number.isFinite(v)||v<0||v>q))fail();
+  let prior=q;for(const k of seq){if(c[k]>prior)fail();prior=c[k];}
+  if(c[11]>c[10]||c[10]>c[9])fail();
 }
