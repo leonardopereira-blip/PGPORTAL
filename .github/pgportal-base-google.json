@@ -1,8 +1,8 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-18T18:03:51.505Z",
+  "lido_em": "2026-11-18T18:18:58.950Z",
   "files": {
-    "HTML:abaCentralChamados": "99f5b52c1011c8eb642b7795c272086ca558903a1e1de60fec2c2725dd04a7ad",
+    "HTML:abaCentralChamados": "a0f2a7874c5bccabfe719b9709f719e64a78e5390fc1019c40954f3368309a5c",
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
     "HTML:abaEficiencia": "a5df9b99b8e577f4a2d6e1cef61c2cdeec41dc4e4a6e24e88337103a3795ad95",
     "HTML:abaEntregasCD": "206136bbbca698c81af3a6fff65687fa3cbc2513f8ccbc80770535819601e623",
@@ -11,7 +11,7 @@
     "HTML:abaGeral": "1597a7f868729d9c03bdb9e8131e2f61ab984be90ce7b861f6d1b960f5c6eecb",
     "HTML:abaGiroSemanal_1": "054fe08055926b3026201f846e3746b43a8ca385b7775178fd1a854d2cf87a95",
     "HTML:abaGiroSemanal": "73fe70461ab8683885c24e9ebd44a250ba43d9f2bd3c91559e21631b10a7375f",
-    "HTML:abaHome": "53fff740423103fd46d6016294a8048317c6265acc206c03f62f9de5d6eb07cf",
+    "HTML:abaHome": "46e1c9bd28c31ec69914323bae62b732dfcd5184c045d941ae9e523f8ff81156",
     "HTML:abaMatriz": "aed5df252805154154f05235beff2ba39453cbc00e3f3260cb211474f136671b",
     "HTML:abaMetaArmazem": "b40e9a74325127985e59f6868a80b236d4caac90c9e553c718449877cedecd9f",
     "HTML:abaMetaCD": "b074724da9daf081118dea54dc7a173eafd350c3173d65323161504f5cdce7cd",
@@ -53,7 +53,7 @@
     "SERVER_JS:HistoricoPCP2026": "444a1c0ceab3c50e257cd0193f0b01dd8e4e0d092ee005c86b1a70390abd16c3",
     "HTML:Index": "e04e44a6c6726ad1b104c81c344efca2e157b1c3305aeb0c83afdb429899f79c",
     "SERVER_JS:LeituraCacheSheets": "459014b75f3ec02905c0712616f348cacd3596819259789154fa04046b337f72",
-    "HTML:Main": "01609560025a460788edff1e9a8c97c521e3b020743b94a62bab5427397fdcf2",
+    "HTML:Main": "3cc1ab95f0e889d22f53aa60f24b480b6a5ebb3a00f50dbd619ec1dbd1d27e1c",
     "HTML:PreProducao": "0da511380e5f45a042ee1ab028cfc807dd0c8299a53dd77eeec029bcc690e7ba",
     "HTML:Qualidade": "2e7fa50812e55536391ba451dc8ceb68806464644367c84e2ada6a54250843a1",
     "SERVER_JS:RegistroGiroJSON": "def59184ff3c6d9efe2ee13853b47936c97a613de611eb4040fa9aa2d13647bf",
