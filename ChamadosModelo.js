@@ -146,7 +146,7 @@ function pgChModelo_(dados) {
   dados.panel.forEach(r=>{
     const ts=numeros.get(String(r.n))||[];
     if (ts.length!==1 || !comp(r.brand,ts[0].brand,pgChMarca_) || !comp(r.shipment,ts[0].shipment,envio)) return;
-    ts[0].panel.push({row:r.row,cd:r.cd,printer:r.printer,status:r.status,note:r.note,
+    ts[0].panel.push({row:r.row,cd:r.cd,printer:r.printer,status:r.status,note:r.note,responsible:r.responsible,criticality:r.criticality,risk:r.risk,cause:r.cause,
       startP:pgChData_(r.startP),startR:pgChData_(r.startR),endP:pgChData_(r.endP),endR:pgChData_(r.endR)});
   });
   const seen=new Map();
@@ -161,8 +161,7 @@ function pgChModelo_(dados) {
     const dtOrig=pgChData_(m.created)||pgChData_(m.picked);
     let opts=porSKU.get(pgChNormal_(m.sku))||[];
     if (raw.length || named.length) {
-      opts=opts.filter(it=>named.includes(tickets.get(it.id)) && comp(it.brand,m.brand,pgChMarca_) &&
-        comp(it.printer,printer,graf) && comp(it.cd,cd,pgChCD_));
+      opts=opts.filter(it=>named.includes(tickets.get(it.id)) && it.sku && it.printer && it.cd && printer && cd && comp(it.brand,m.brand,pgChMarca_) && graf(it.printer)===graf(printer) && pgChCD_(it.cd)===pgChCD_(cd));
     } else {
       if (!m.brand || !printer || !cd) return;
       opts=opts.filter(it=>it.printer && it.cd && it.brand && graf(it.printer)===graf(printer) &&
@@ -215,16 +214,16 @@ function pgChModelo_(dados) {
         stage(it.pcp,'finishP','finishR','PCP'),stage(it.pcp,'kitP','kitR','PCP'), stage(it.spg,'','produced','SPG')];
       const painel=t.panel.filter(p=>p.printer && p.cd && graf(p.printer)===graf(it.printer) && pgChCD_(p.cd)===pgChCD_(it.cd));
       if (painel.length) {
-        for(const [i,label] of [[3,'IMPRESSAO'],[4,'ACABAMENTO']]){
+        for(const [i,label] of [[3,'IMPRESSAO'],[4,'ACABAMENTO'],[5,'FORMACAO DE KIT']]){
           if (!it.stages[i].r && painel.some(p=>pgChNormal_(p.status).includes('EM PRODUCAO') && pgChNormal_(p.status).includes(label))){
             it.stages[i].a='Em andamento';it.stages[i].f='Painel de produção';
           }
         }
         const prod=stage(painel,'endP','endR','Painel de produção');
-        if(!it.stages[6].r && (prod.p||prod.r)) it.stages[6]=prod;
+        if(!it.stages[6].p && prod.p) it.stages[6].p=prod.p;
       }
       const sum=fn=>it.maps.reduce((n,m)=>n+fn(m),0);
-      it.mapped=sum(m=>m.qty);it.picked=sum(m=>m.pick?m.qty:0);it.delivered=sum(m=>m.delivered);
+      it.mapped=sum(m=>m.qty);it.picked=sum(m=>m.pick?m.qty:Math.min(m.qty,m.delivered));it.delivered=sum(m=>m.delivered);
       const spgForecast=pgChUltima_(it.spg.map(s=>s.deliveryP));
       const days=sla.get(pgChGraf_(it.printer)+'|'+pgChCD_(it.cd));
       function transporte(coleta){
@@ -261,21 +260,28 @@ function pgChModelo_(dados) {
         if(qtyOC>=it.qty)ocStage.r=pgChUltima_(orders.filter(o=>matchedCost.some(c=>pgChNormal_(c.lot)===pgChNormal_(o.id)||c.oc===o.oc)||spgOcs.some(s=>s.oc===o.oc)).map(o=>o.sent));
       }
       it.stages.push(costStage,ocStage);
-      if(it.qty>0 && it.picked>=it.qty && t.cat==='REENTRADA' && it.printer && it.cd && it.spg.every(s=>!s.stock&&!s.sub)){
-        it.stages.slice(0,7).forEach(s=>{if(!s.r){s.units=it.qty;s.a='Confirmado pela coleta integral';s.f='Mapa';}});
+      // Realizado progressivo da própria rota; não propaga saldo, estoque ou OC.
+      if(it.qty>0 && it.sku && it.printer && it.cd && it.spg.every(s=>!s.stock&&!s.sub)){
+        let confirmed=Math.min(it.qty,it.picked);
+        for(let k=6;k>=0;k--){
+          const s=it.stages[k],own=Math.min(it.qty,s.units!=null?s.units:s.r?it.qty:0);
+          if(confirmed>own){s.units=confirmed;if(!s.r){s.a=confirmed===it.qty?'Realizado por etapa posterior':'Realizado parcial por etapa posterior';s.f='Produção / mapa';}}
+          confirmed=Math.max(confirmed,own);
+        }
       }
       const log=(q,p,r)=>pgChEtapa_(p,it.qty>0 && q>=it.qty?r:'','Mapa',q>0 && q<it.qty?'Parcial':'');
       it.stages.push(log(it.mapped,'',pgChUltima_(it.maps.map(m=>m.created))),log(it.picked,pgChUltima_(it.spg.map(s=>s.pickP)),
         pgChUltima_(it.maps.filter(m=>m.pick).map(m=>m.pick))),log(it.delivered,it.eta,pgChUltima_(it.maps.filter(m=>m.delivered>0).map(m=>m.delivery))));
       totals.qty+=it.qty;totals.balance+=saldo;
       for(const k of ['mapped','picked','delivered']) totals[k]+=Math.min(it.qty,it[k]);
-      it.coverage=it.stages.map((s,i)=>i>=9?Math.min(it.qty,[it.mapped,it.picked,it.delivered][i-9]):s.units!=null?s.units:s.r?it.qty:0);
+      it.coverage=it.stages.map((s,i)=>Math.max(0,Math.min(it.qty,i>=9?[it.mapped,it.picked,it.delivered][i-9]:s.units!=null?s.units:s.r?it.qty:0)));
+      it.productionStatus=pgChStatusRota_(t,it,painel);
       it.coverage.forEach((v,i)=>{totals.coverage[i]+=v;});
       if(saldo){if(it.eta)pendingEtas.push(it.eta);if(!it.eta||it.etaPartial)missingEta=true;}
     }
-    t.totals=totals;
+    t.totals=totals;t.production=pgChResumoStatus_(t.items);
     summaries.push({id:t.id,n:t.n,cat:t.cat,brand:t.brand,shipment:t.shipment,status:t.status,priority:t.priority,created:t.created,
-      goal:t.goal,desired:t.desired,eta:pgChUltima_(pendingEtas),partial:missingEta,issues:t.alerts.length,items:t.items.length,totals,
+      goal:t.goal,desired:t.desired,eta:pgChUltima_(pendingEtas),partial:missingEta,issues:t.alerts.length,items:t.items.length,totals,production:t.production,
       ...pgChMetricaChamado_(t,specIdx)});
   }
   return {summaries,tickets};

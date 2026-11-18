@@ -58,3 +58,20 @@ test('registro manual mantém histórico, reenvio idempotente e proteção contr
   assert.equal(rows.length,1);assert.equal(save('','evento-002','outra').conflict,true);
   assert.equal(save('evento-001','evento-002','outra').ok,true);assert.equal(rows.length,2);
 });
+
+test('coleta parcial propaga somente a própria quantidade e SKU',()=>{
+ const t=build({spg:[a,{...a,sku:'C',qty:'60'}],map:[map]}).tickets.get(a.id);assert.equal(t.totals.coverage[0],40);assert.equal(t.totals.coverage[3],40);assert.equal(t.totals.coverage[6],40);assert.equal(t.totals.coverage[7],0);assert.equal(t.items.find(x=>x.sku==='C').coverage[3],0);assert.equal(t.totals.balance,130);
+});
+test('entrega sem coleta datada confirma apenas unidades recebidas',()=>{
+ const t=build({spg:[a],map:[{...map,picked:'',received:'30'}]}).tickets.get(a.id);assert.equal(t.totals.picked,30);assert.equal(t.totals.delivered,30);assert.equal(t.totals.coverage[3],30);
+});
+test('mapa com número explícito não cobre SKU sem gráfica ou CD divergente',()=>{
+ assert.equal(build({spg:[{...a,printer:''}],map:[map]}).tickets.get(a.id).totals.picked,0);
+ assert.equal(build({spg:[a],map:[{...map,cd:'Fortaleza'}]}).tickets.get(a.id).totals.picked,0);
+});
+test('status por SKU preserva saldo e rotas divergentes',()=>{
+ const t=build({spg:[a,{...a,sku:'C',printer:'',qty:'25'}],map:[{...map,qty:'100',received:'100'}]}).tickets.get(a.id);assert.equal(t.production.find(p=>p.label==='Entregue integralmente').qty,100);assert.equal(t.production.find(p=>p.label==='Em alocação').qty,25);
+});
+test('PCP posterior confirma etapas anteriores sem inventar datas',()=>{
+ const t=build({spg:[a],pcp:[{...a,finishR:'2026-10-02'}]}).tickets.get(a.id);assert.equal(t.totals.coverage[0],100);assert.equal(t.totals.coverage[3],100);assert.equal(t.totals.coverage[4],100);assert.equal(t.totals.coverage[5],0);
+});

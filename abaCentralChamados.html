@@ -65,7 +65,10 @@
   #ch-central tbody tr:hover{background:#eaf3fd}
   #ch-central tbody tr:last-child td{border-bottom:0}
   #ch-central .ch-num{font-variant-numeric:tabular-nums;white-space:nowrap}
-  #ch-central .ch-funnel{display:flex;flex-direction:column;gap:4px;margin:10px 0 14px}
+  #ch-central .ch-funnel{display:flex;flex-direction:column;align-items:center;gap:3px;margin:10px 0 14px}
+  #ch-central .ch-portal-layer{min-width:160px;max-width:100%;padding:7px 10px;font-size:11px;font-weight:600;box-sizing:border-box;text-align:center;line-height:1.35;color:white;overflow-wrap:anywhere;border-radius:3px;box-shadow:0 1px 3px #0c23401a}
+  #ch-central .ch-status-chip{display:inline-block;white-space:normal;max-width:210px;border-radius:5px;padding:4px 7px;background:#eaf2fc;color:#284081;font-size:10px;font-weight:600;margin:1px}
+  #ch-central #ch-parallel{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}#ch-central #ch-parallel .ch-card{padding:10px}#ch-central #ch-parallel .ch-card small{min-height:0}
   #ch-central .ch-funnel-stage{display:grid;grid-template-columns:minmax(118px,0.84fr) minmax(100px,2fr) minmax(104px,.72fr);gap:10px;align-items:center;min-height:30px}
   #ch-central .ch-stage-label{font-size:10px;font-weight:600;color:var(--ch-navy);line-height:1.3}
   #ch-central .ch-stage-label small{font-size:9px;margin-right:5px;color:#64748b}
@@ -99,12 +102,12 @@
   <div id="ch-list" hidden>
     <div class="ch-filter-panel"><div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span><label>Chamado<input id="ch-query" type="search" placeholder="Número do chamado"></label>
       <label>Categoria<select id="ch-cat"></select></label><label>Envio<select id="ch-shipment"></select></label>
-      <label>Marca<select id="ch-brand"></select></label><label>Situação<select id="ch-scope"><option value="ativos">Exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option><option value="cancelados">Cancelados</option><option value="todos">Todos</option></select></label>
+      <label>Marca<select id="ch-brand"></select></label><label>Status de produção<select id="ch-production"><option value="">Todos</option></select></label><label>Situação<select id="ch-scope"><option value="ativos">Exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option><option value="cancelados">Cancelados</option><option value="todos">Todos</option></select></label>
       <button id="ch-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div>
     <div id="ch-routefilters" class="ch-filterline"></div></div><div id="ch-kpis" class="ch-grid"></div>
     <div class="ch-flex"><section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="4" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="10" width="8" height="10" rx="1"/></svg> Distribuição</h2>
       <select id="ch-by" aria-label="Agrupar por"><option value="cat">Categoria</option><option value="shipment">Envio</option><option value="brand">Marca</option></select></div><div id="ch-dist"></div></section>
-      <section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg> Funil de etapas</h2><div id="ch-funnel" class="ch-funnel"></div><small>Tiragem com registro em cada etapa. Coleta e entrega usam as quantidades do mapa.</small></section></div>
+      <section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg> Funil de etapas</h2><div id="ch-funnel" class="ch-funnel"></div><small>Produção e logística por chamado, SKU e rota. Custos, OC e mapa solicitado: marcos independentes.</small><div id="ch-parallel" class="ch-grid" style="margin-top:12px"></div></section></div>
     <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Chamados</h2><small id="ch-count"></small></div><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
   </div>
   <div id="ch-detail" hidden></div>
@@ -117,7 +120,9 @@
   const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const dt=x=>/^\d{4}-\d{2}-\d{2}/.test(x||'')?x.slice(0,10).split('-').reverse().join('/'):'—';
   const stamp=x=>new Date(x).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'});
-  const opt=x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>';
+  const cdLabel=x=>({JDI:'CD JDI',FOR:'CD FOR',CWB:'CD CWB',SJR:'CD SJR',LOV:'CD LOV',RP:'CD RP',CJUN:'CD JDI',CITA:'CD FOR',CCWB:'CD CWB',CSJR:'CD SJR',CLOV:'CD LOV',CRPR:'CD RP'})[String(x||'').toUpperCase()]||x;
+  const opt=(x,label=x)=>'<option value="'+esc(x)+'">'+esc(label)+'</option>';
+  const productionCell=t=>(t.production||[]).length?(t.production||[]).map(p=>'<span class="ch-status-chip" title="'+num(p.qty)+' unidades">'+esc(p.label)+'</span>').join(' '):'Atualização da base necessária';
   const cell=x=>x==null||x===''?'—':esc(x);
   const table=(headers,rows,empty='Sem registros vinculados.')=>rows.length?'<div class="ch-frame"><table><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>':'<p class="ch-muted">'+esc(empty)+'</p>';
   const rpc=(name,...args)=>new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args));
@@ -140,7 +145,8 @@
       for(const k of ['qty','mapped','picked','delivered','balance'])totals[k]+=g[k]||0;
       g.coverage.forEach((v,i)=>totals.coverage[i]+=v);
     }
-    return {...t,totals,eta:groups.map(g=>g.eta).filter(Boolean).sort().pop()||'',partial:groups.some(g=>g.partial)};
+    const by=new Map();groups.forEach(g=>(g.production||[]).forEach(p=>by.set(p.label,(by.get(p.label)||0)+p.qty)));
+    return {...t,groups,totals,production:Array.from(by,([label,qty])=>({label,qty})).sort((a,b)=>b.qty-a.qty),eta:groups.map(g=>g.eta).filter(Boolean).sort().pop()||'',partial:groups.some(g=>g.partial)};
   }
   function chAging(t,asof){
     const delivered=t.delivered&&t.delivered<=asof?t.delivered:'';
@@ -222,7 +228,7 @@
     for(const k of chDimensions){
       const target=el(prefix+k);if(!target)continue;
       const old=target.value, values=[...new Set(rows.flatMap(t=>(t.groups||[]).flatMap(g=>Array.isArray(g[k])?g[k]:[g[k]])).filter(Boolean))].sort();
-      target.innerHTML='<option value="">Todos</option>'+values.map(opt).join('');
+      target.innerHTML='<option value="">Todos</option>'+values.map(v=>opt(v,k==='cd'?cdLabel(v):v)).join('');
       if(values.includes(old))target.value=old;
     }
   }
@@ -251,7 +257,7 @@
     const re=state.data.rows.filter(t=>t.cat==='REENTRADA');
     for(const k of ['brand','shipment']){
       const target=el('okr-'+k),old=target.value,values=[...new Set(re.map(t=>t[k]).filter(Boolean))].sort();
-      target.innerHTML='<option value="">Todos</option>'+values.map(opt).join('');if(values.includes(old))target.value=old;
+      target.innerHTML='<option value="">Todos</option>'+values.map(v=>opt(v)).join('');if(values.includes(old))target.value=old;
     }
     dimOptions('okr-',re);styleFilters();
     const f={...readFilters('okr-'),...Object.fromEntries(['rule','basis','start','end','asof','brand','shipment','scope'].map(k=>[k,el('okr-'+k).value]))};
@@ -271,10 +277,10 @@
       state.data=d;state.detail=null;state.detailLoad++;state.page=1;
       for(const key of ['cat','shipment','brand']){
         const old=el(key).value,options=[...new Set(d.rows.map(r=>r[key]).filter(Boolean))].sort();
-        el(key).innerHTML='<option value="">Todos</option>'+options.map(opt).join('');
+        el(key).innerHTML='<option value="">Todos</option>'+options.map(v=>opt(v)).join('');
         if(options.includes(old))el(key).value=old;
       }
-      dimOptions('route-',d.rows);styleFilters();el('updated').textContent='Leitura em '+stamp(d.now);el('notice').textContent=d.notice||'';el('notice').hidden=!d.notice;message('');render();show();
+      dimOptions('route-',d.rows);const prod=el('production'),oldProd=prod.value,labels=[...new Set(d.rows.flatMap(t=>(t.production||[]).map(p=>p.label)))].sort();prod.innerHTML='<option value="">Todos</option>'+labels.map(v=>opt(v)).join('');if(labels.includes(oldProd))prod.value=oldProd;styleFilters();el('updated').textContent='Leitura em '+stamp(d.now);el('notice').textContent=d.notice||'';el('notice').hidden=!d.notice;message('');render();show();
     }catch(err){message('Falha ao atualizar. '+(err.message||err),true);}finally{state.loading=false;el('refresh').disabled=false;}
   }
   window.pgAbrirChamados=function(view){if(state.view!==view){state.detail=null;state.detailLoad++;}state.view=view;show();if(!state.data && !state.loading )load(false);};
@@ -286,7 +292,7 @@
       return (scope==='todos'||(scope==='cancelados'?canceled:scope==='concluidos'?closed:scope==='abertos'?!canceled&&!closed:!canceled))
         && chMatches(t,f,dayNow())
         && (!el('query').value.trim() || (q.length===1?String(t.n).includes(q[0]):q.includes(String(t.n))));
-    }).map(t=>chFilteredTotals(t,f)).filter(Boolean).sort((a,b)=>Number(b.n)-Number(a.n));
+    }).map(t=>chFilteredTotals(t,f)).filter(t=>t&&(!el('production').value||(t.production||[]).some(p=>p.label===el('production').value))).sort((a,b)=>Number(b.n)-Number(a.n));
   }
   function pager(where,page,n,size,type){
     const max=Math.max(1,Math.ceil(n/size));
@@ -298,11 +304,14 @@
     el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado no mapa',total('picked')],['Entregue no CD',total('delivered')],['Saldo a entregar',total('balance')],['Aging médio de entrega',agingMarkup(rows,dayNow())]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Saldo a entregar'?'orange':k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
     const groups=new Map();rows.forEach(t=>{const k=t[by]||'Sem informação',g=groups.get(k)||[0,0,0];g[0]++;g[1]+=t.totals.qty;g[2]+=t.totals.balance;groups.set(k,g);});
     el('dist').innerHTML=table([el('by').selectedOptions[0].text,'Chamados','Tiragem','Saldo'],[...groups].sort((a,b)=>b[1][2]-a[1][2]).map(([k,g])=>['<button class="ch-link" data-filter="'+esc(k)+'">'+esc(k)+'</button>',...g.map(num)]));
-    const qty=total('qty'),colors=['#284081','#418EDE','#418EDE','#284081','#284081','#284081','#0C2340','#FCB04E','#FA4616','#418EDE','#049FEC','#284081'];
-    const layer=(label,v,pct,color,idx)=>'<div class="ch-funnel-stage'+(idx===0?' ch-stage-base':'')+'"><div class="ch-stage-label"><small>'+String(idx).padStart(2,'0')+'</small>'+esc(label)+'</div><div class="ch-stage-track"><div class="ch-stage-shape" style="width:'+Math.max(0,Math.min(100,pct))+'%;background:'+color+'" title="'+esc(label)+' · '+num(v)+' · '+num(Math.round(pct*10)/10)+'%"></div></div><div class="ch-stage-values">'+num(v)+'<span>'+num(Math.round(pct*10)/10)+'%</span></div></div>';
-    el('funnel').innerHTML=layer('Tiragem total',qty,qty?100:0,'#0C2340',0)+state.data.phases.map((label,i)=>{const v=rows.reduce((s,t)=>s+t.totals.coverage[i],0),pct=qty?100*v/qty:0;return layer(label,v,pct,colors[i%colors.length],i+1);}).join('');
-    el('table').innerHTML=table(['Chamado','Categoria','Envio','Marca','Status SPG','Tratativa','Meta de entrega','Previsão vigente','Saldo','Conferir'],rows.slice((state.page-1)*30,state.page*30).map(t=>[
-      '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(t.status),cell(state.data.manual[t.id]),dt(t.goal),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),num(t.totals.balance),num(t.issues)]),'Nenhum chamado corresponde aos filtros.');
+    const qty=total('qty'),colors=['#284081','#418EDE','#284081','#418EDE','#284081','#418EDE','#0C2340','#049FEC','#284081'];
+    const values=state.data.phases.map((label,i)=>({label,v:rows.reduce((s,t)=>s+t.totals.coverage[i],0)}));
+    const layer=(label,v,pct,color,idx)=>'<div class="funnel-layer ch-portal-layer text-white text-center" style="width:'+Math.min(100,Math.max(pct,25))+'%;background:'+color+'" title="'+esc(label)+' · '+num(v)+'">'+String(idx).padStart(2,'0')+' - '+esc(label)+' ('+num(v)+' | '+num(Math.round(pct*10)/10)+'%)</div>';
+    const physical=[0,1,2,3,4,5,6,10,11];
+    el('funnel').innerHTML=layer('Tiragem total',qty,qty?100:0,'#0C2340',0)+physical.map((k,i)=>layer(values[k].label,values[k].v,qty?100*values[k].v/qty:0,colors[i],i+1)).join('');
+    el('parallel').innerHTML=[7,8,9].map(k=>'<div class="ch-card"><small>'+esc(values[k].label)+'</small><b>'+num(values[k].v)+'</b><small>'+num(qty?Math.round(1000*values[k].v/qty)/10:0)+'%</small></div>').join('');
+    el('table').innerHTML=table(['Chamado','Categoria','Envio','Marca','Responsável PG','Gráfica','CD','Status de produção','Tiragem','Saldo','Meta de entrega','Previsão de entrega','Tratativa'],rows.slice((state.page-1)*30,state.page*30).map(t=>[
+      '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(t.owner),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),num(t.totals.balance),dt(t.goal),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),cell(state.data.manual[t.id])]),'Nenhum chamado corresponde aos filtros.');
     el('count').textContent=num(rows.length)+' chamados';pager(el('pages'),state.page,rows.length,30,'page');
   }
   async function openTicket(id){
@@ -313,14 +322,14 @@
   }
   function renderDetail(){
     const t=state.detail;
-    el('detail').innerHTML='<button class="ch-link" id="ch-back">Voltar à visão</button><section class="ch-box"><div class="ch-between"><h2>Chamado #'+esc(t.n)+'</h2><span class="ch-sub">'+cell(t.status)+'</span></div>'+fields({'Categoria':t.cat,'Envio':t.shipment,'Marca':t.brand,'Prioridade SPG':t.priority,'Responsável PG':t.owner,'OP':t.op,'Data desejada':dt(t.desired),'Meta de entrega':dt(t.goal)})+'<h3>Solicitação</h3><p>'+cell(t.why)+'</p>'+(t.obs?'<p>'+esc(t.obs)+'</p>':'')+(t.reason?'<p>Cancelamento · '+esc(t.reason)+'</p>':'')+(t.issues.length?'<p class="ch-alert">'+t.issues.map(esc).join('<br>')+'</p>':'')+'</section>'+
-      '<section class="ch-box"><h2>Tratativa do time</h2><div class="ch-tools"><label>Status da tratativa<select id="ch-manual-state"><option value="">Selecionar</option>'+state.data.states.map(opt).join('')+'</select></label><label style="flex:1;min-width:200px">Observação opcional<input id="ch-note" maxlength="1500"></label><button id="ch-save" class="ch-btn ch-primary">Salvar</button></div><p id="ch-save-msg" role="status"></p><div id="ch-history"></div></section>'+
+    el('detail').innerHTML='<button class="ch-link" id="ch-back">Voltar à visão</button><section class="ch-box"><div class="ch-between"><h2>Chamado #'+esc(t.n)+'</h2><span class="ch-sub">'+productionCell(t)+'</span></div>'+fields({'Categoria':t.cat,'Envio':t.shipment,'Marca':t.brand,'Prioridade SPG':t.priority,'Responsável PG':t.owner,'OP':t.op,'Data desejada':dt(t.desired),'Meta de entrega':dt(t.goal)})+'<h3>Solicitação</h3><p>'+cell(t.why)+'</p>'+(t.obs?'<p>'+esc(t.obs)+'</p>':'')+(t.reason?'<p>Cancelamento · '+esc(t.reason)+'</p>':'')+'</section>'+
+      '<section class="ch-box"><h2>Tratativa do time</h2><div class="ch-tools"><label>Status da tratativa<select id="ch-manual-state"><option value="">Selecionar</option>'+state.data.states.map(v=>opt(v)).join('')+'</select></label><label style="flex:1;min-width:200px">Observação opcional<input id="ch-note" maxlength="1500"></label><button id="ch-save" class="ch-btn ch-primary">Salvar</button></div><p id="ch-save-msg" role="status"></p><div id="ch-history"></div></section>'+
       '<section class="ch-box"><h2>Marcos do chamado</h2>'+table(['Etapa','Planejado','Realizado','Fonte'],Object.entries(t.steps).map(([k,s])=>[esc(k),dt(s.p),dt(s.r),'SPG']))+
-      detailBox('Registros do painel de produção ('+t.panel.length+')',table(['Gráfica / CD','Status','Andamento','Início plan. / real','Fim plan. / real','Origem'],t.panel.map(p=>[cell(p.printer)+' / '+cell(p.cd),cell(p.status),cell(p.note),dt(p.startP)+' / '+dt(p.startR),dt(p.endP)+' / '+dt(p.endR),source('panel',p.row)])))+'</section>'+
-      '<section class="ch-box"><h2>Validação de custos e ordens de compra</h2>'+detailBox('Validação de custos · '+t.costs.length+' linhas de SKU',table(['Lote','SKU','Gráfica / CD','Tiragem','Valor','Status','Fim','Enviado a Pós','OC','Origem'],t.costs.map(c=>[cell(c.lot),cell(c.sku),cell(c.printer)+' / '+cell(c.cd),cell(c.qty),cell(c.value),cell(c.status),dt(c.date),dt(c.sent),cell(c.oc),source('cost',c.row)])))+
-      detailBox('Solicitações de OC · '+t.orders.length+' registros',table(['Sistema','Requisição','OC','OC triangulação','Fornecedor / CD','Status / aprovação','Valor','Abertura / envio','Vínculo','Origem'],t.orders.map(o=>[cell(o.system),cell(o.req),cell(o.oc),cell(o.tri),cell(o.printer)+' / '+cell(o.cd),cell(o.status)+' / '+cell(o.approval),cell(o.value),dt(o.opened)+' / '+dt(o.sent),cell(o.method),source('oc',o.row)])))+'</section>'+
+      detailBox('Registros do painel de produção ('+t.panel.length+')',table(['Gráfica / CD','Status','Andamento','Início plan. / real','Fim plan. / real','Origem'],t.panel.map(p=>[cell(p.printer)+' / '+cell(cdLabel(p.cd)),cell(p.status),cell([p.note,p.cause].filter(Boolean).join(' | ')),dt(p.startP)+' / '+dt(p.startR),dt(p.endP)+' / '+dt(p.endR),source('panel',p.row)])))+'</section>'+
+      '<section class="ch-box"><h2>Validação de custos e ordens de compra</h2>'+detailBox('Validação de custos · '+t.costs.length+' linhas de SKU',table(['Lote','SKU','Gráfica / CD','Tiragem','Valor','Status','Fim','Enviado a Pós','OC','Origem'],t.costs.map(c=>[cell(c.lot),cell(c.sku),cell(c.printer)+' / '+cell(cdLabel(c.cd)),cell(c.qty),cell(c.value),cell(c.status),dt(c.date),dt(c.sent),cell(c.oc),source('cost',c.row)])))+
+      detailBox('Solicitações de OC · '+t.orders.length+' registros',table(['Sistema','Requisição','OC','OC triangulação','Fornecedor / CD','Status / aprovação','Valor','Abertura / envio','Vínculo','Origem'],t.orders.map(o=>[cell(o.system),cell(o.req),cell(o.oc),cell(o.tri),cell(o.printer)+' / '+cell(cdLabel(o.cd)),cell(o.status)+' / '+cell(o.approval),cell(o.value),dt(o.opened)+' / '+dt(o.sent),cell(o.method),source('oc',o.row)])))+'</section>'+
       '<section class="ch-box"><h2>Itens e rotas</h2><div id="ch-items"></div><div id="ch-itempages" class="ch-pager"></div></section>'+
-      (t.alerts.length?'<section class="ch-box"><h2>Vínculos a conferir</h2>'+table(['Motivo','SKU','Mapa / OC','Origem'],t.alerts.map(a=>[cell(a.text),cell(a.sku),cell(a.map),source(a.src,a.row)]))+'</section>':'');
+      '';
     const last=state.history.at(-1);el('manual-state').value=last?last.state:'';renderHistory();renderItems();
   }
   function renderHistory(){
@@ -328,10 +337,10 @@
   }
   function renderItems(){
     const its=state.detail.items,base=(state.itemPage-1)*25;
-    el('items').innerHTML=its.slice(base,base+25).map((it,i)=>'<details data-item="'+(base+i)+'"><summary>'+cell(it.sku)+' · '+cell(it.printer)+' → '+cell(it.cd)+' · '+num(it.qty)+' un. · saldo '+num(Math.max(0,it.qty-it.delivered))+'</summary><div></div></details>').join('');pager(el('itempages'),state.itemPage,its.length,25,'itempage');
+    el('items').innerHTML=its.slice(base,base+25).map((it,i)=>'<details data-item="'+(base+i)+'"><summary>'+cell(it.sku)+' · '+cell(it.printer)+' → '+cell(cdLabel(it.cd))+' · '+num(it.qty)+' un. · saldo '+num(Math.max(0,it.qty-it.delivered))+'</summary><div></div></details>').join('');pager(el('itempages'),state.itemPage,its.length,25,'itempage');
   }
   function itemHtml(it){
-    return '<p>'+cell(it.desc)+'</p>'+fields({'Tiragem':num(it.qty),'Mapa solicitado':num(it.mapped),'Coletado no mapa':num(it.picked),'Entregue no CD':num(it.delivered),'Saldo':num(Math.max(0,it.qty-it.delivered)),'Previsão de entrega':dt(it.eta)+(it.etaPartial&&it.eta?' · parcial':''),'Origem da previsão':it.forecastSource})+
+    return '<p>'+cell(it.desc)+'</p>'+fields({'Status de produção':it.productionStatus?.label,'Tiragem':num(it.qty),'Mapa solicitado':num(it.mapped),'Coletado no mapa':num(it.picked),'Entregue no CD':num(it.delivered),'Saldo':num(Math.max(0,it.qty-it.delivered)),'Previsão de entrega':dt(it.eta)+(it.etaPartial&&it.eta?' · parcial':''),'Origem da previsão':it.forecastSource})+
       '<h3>Etapas do SKU</h3>'+table(['Etapa','Planejado','Realizado','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(s.p),dt(s.r),cell(s.a||(s.r?'Realizado':'Sem registro real')),esc(s.f)]))+
       detailBox('Itens no SPG',table(['Kit','Tiragem','Estoque CD','Subcontratada','OC / NF','Coleta formalizada','Coleta prevista / real','Entrega prevista / real','Origem'],it.spg.map(s=>[cell(s.kit),num(s.q),num(s.stock),num(s.sub),cell(s.oc)+' / '+cell(s.nf),dt(s.formal),dt(s.pickP)+' / '+dt(s.pick),dt(s.deliveryP)+' / '+dt(s.delivery),source('spg',s.row)])))+
       detailBox('Calendário e PCP',table(['Fonte','Kit / OP','Status','Observação','Origem'],it.cal.map(c=>['Calendário',cell(c.kit),cell(c.state),cell(c.note),source('cal',c.row)]).concat(it.pcp.map(p=>['PCP',cell(p.op),'—','—',source('pcp',p.row)]))))+
@@ -361,10 +370,10 @@
     if(b.dataset.filter){el(el('by').value).value=b.dataset.filter;state.page=1;render();styleFilters();return;}
     if(b.dataset.page){state.page+=Number(b.dataset.page);render();return;}
     if(b.dataset.itempage){state.itemPage+=Number(b.dataset.itempage);renderItems();return;}
-    if(b.id==='ch-clear'){['query','cat','shipment','brand',...filterKeys.map(k=>'route-'+k)].forEach(k=>el(k).value='');el('scope').value='ativos';state.page=1;render();styleFilters();}
+    if(b.id==='ch-clear'){['query','cat','shipment','brand','production',...filterKeys.map(k=>'route-'+k)].forEach(k=>el(k).value='');el('scope').value='ativos';state.page=1;render();styleFilters();}
   });
   el('routefilters').innerHTML=filterMarkup('route-');
   filterKeys.forEach(k=>el('route-'+k).addEventListener('change',()=>{state.page=1;render();}));
-  ['cat','brand','shipment','scope','by','query'].forEach(k=>el(k).addEventListener(k==='query'?'input':'change',()=>{state.page=1;render();}));
+  ['cat','brand','shipment','scope','production','by','query'].forEach(k=>el(k).addEventListener(k==='query'?'input':'change',()=>{state.page=1;render();}));
 })();
 </script>

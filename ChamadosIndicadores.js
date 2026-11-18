@@ -54,10 +54,10 @@ function pgChMetricaChamado_(t,idx) {
     const {specRows,...dims}=attributes,key=JSON.stringify(dims);
     let g=groups.get(key);
     if(!g){
-      g={...dims,qty:0,mapped:0,picked:0,delivered:0,balance:0,coverage:it.stages.map(()=>0),eta:'',partial:false};
+      g={...dims,qty:0,mapped:0,picked:0,delivered:0,balance:0,coverage:it.stages.map(()=>0),eta:'',partial:false,production:[]};
       groups.set(key,g);
     }
-    g.qty+=it.qty;
+    g.qty+=it.qty;const label=it.productionStatus.label,prev=g.production.find(x=>x.label===label);if(prev)prev.qty+=it.qty;else g.production.push({label,qty:it.qty});
     ['mapped','picked','delivered'].forEach(k=>g[k]+=Math.min(it.qty,it[k]));
     g.balance+=Math.max(0,it.qty-it.delivered);
     for(let i=0;i<it.coverage.length;i++)g.coverage[i]+=it.coverage[i];
@@ -68,4 +68,43 @@ function pgChMetricaChamado_(t,idx) {
     delivered,deliverySource:delivered?pgChUnicos_(routes.map(r=>r.source)).join(' + '):'',
     pickDone:pgChMarcoItens_(routes,'pick'),pickDue:pgChMarcoItens_(routes,'formal'),
     pickLate:routes.some(r=>r.late),pickUnverified:routes.some(r=>r.unverified),owner:t.owner||''};
+}
+
+function pgChStatusRota_(t,it,panel){
+  const q=it.qty,c=it.coverage,st=it.stages,full=k=>q>0&&(c[k]||0)>=q,any=k=>(c[k]||0)>0;
+  const state=pgChNormal_(t.status),notes=pgChUnicos_((panel||[]).map(p=>pgChNormal_(p.status)));
+  const has=s=>notes.some(n=>n.includes(s)),result=(label,source)=>({label,source});
+  if(/CANCEL/.test(state))return result('Cancelado','SPG');
+  if(full(11))return result('Entregue integralmente','Mapa');
+  if(any(11)&&full(10))return result('Entrega parcial · saldo em trânsito','Mapa');
+  if(full(10))return result('Em trânsito','Mapa');
+  if(any(10))return result('Coleta parcial','Mapa');
+  if(!it.printer)return result(/SOLICITADO/.test(state)&&!t.steps?.Liberação?.r?'Aguardando liberação':'Em alocação','SPG');
+  if(full(6)){
+    if(full(9))return result('Aguardando coleta','Mapa');
+    if(has('FATURAMENTO'))return result('Em faturamento','Painel de produção');
+    if(full(7)&&full(8))return result('Pronto para coleta','Produção / custos / OC');
+    if(!full(7))return result('Em validação de custos','Produção / custos');
+    return result('Aguardando OC','Custos / OC');
+  }
+  if(st[5]?.a==='Em andamento'||has('FORMACAO DE KIT'))return result('Em produção · Formação de kit','Painel de produção');
+  if(st[4]?.a==='Em andamento'||has('ACABAMENTO'))return result('Em produção · Acabamento','Painel de produção');
+  if(st[3]?.a==='Em andamento'||has('IMPRESSAO'))return result('Em produção · Impressão','Painel de produção');
+  if(has('GESTAO TIME COMPRAS'))return result('Gestão time Compras','Painel de produção');
+  if(any(5))return result('Formação de kit parcial','PCP');
+  if(full(4))return result('Aguardando formação de kit','PCP');
+  if(any(4))return result('Acabamento parcial','PCP');
+  if(full(3))return result('Aguardando acabamento','PCP');
+  if(any(3))return result('Impressão parcial','PCP');
+  if(full(2))return result('Aguardando entrada em máquina','Calendário');
+  if(full(1))return result('Aguardando aprovação de boneco','Calendário');
+  if(full(0))return result('Aguardando recebimento de boneco','Calendário');
+  if(/CONCLU/.test(state))return result('Encerrado no SPG','SPG');
+  if(/VALIDADO/.test(state))return result('Custos validados · produção pendente','SPG');
+  return result('Aguardando envio de arquivo','Calendário / SPG');
+}
+function pgChResumoStatus_(items){
+  const by=new Map();
+  items.filter(it=>it.qty>0).forEach(it=>{const k=it.productionStatus?.label||'Sem etapa registrada';by.set(k,(by.get(k)||0)+it.qty);});
+  return Array.from(by,([label,qty])=>({label,qty})).sort((a,b)=>b.qty-a.qty);
 }
