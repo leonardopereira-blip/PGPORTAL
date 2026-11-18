@@ -313,7 +313,7 @@ function pgChModelo_(dados) {
       !real && rows.some(x=>pgChData_(x[r]))?'Parcial':'');
   }
   pgChFinanceiro_(dados,tickets,numeros);
-  const specIdx=pgChIndiceEspec_(dados.spec||[]);
+  const specIdx=pgChIndiceEspec_(dados.spec||[]),leadProfile=pgChLeadProfile_(dados.panel||[]);
   const summaries=[];
   for(const t of tickets.values()) {
     delete t._groups;
@@ -387,13 +387,13 @@ function pgChModelo_(dados) {
       for(const k of ['mapped','picked','delivered']) totals[k]+=Math.min(it.qty,it[k]);
       it.coverage=it.stages.map((s,i)=>Math.max(0,Math.min(it.qty,i>=9?[it.mapped,it.picked,it.delivered][i-9]:s.units!=null?s.units:s.r?it.qty:0)));
       pgChValidarFunilRota_(t,it);
-      it.productionStatus=pgChStatusRota_(t,it,painel);
+      it.productionStatus=pgChStatusRota_(t,it,painel);it.target=pgChPrazoRota_(t,it,leadProfile,days);
       it.coverage.forEach((v,i)=>{totals.coverage[i]+=v;});
       if(saldo){if(it.eta)pendingEtas.push(it.eta);if(!it.eta||it.etaPartial)missingEta=true;}
     }
-    t.totals=totals;t.production=pgChResumoStatus_(t.items);
+    t.totals=totals;t.production=pgChResumoStatus_(t.items);t.target=pgChPrazoResumo_(t.items);
     summaries.push({id:t.id,n:t.n,cat:t.cat,brand:t.brand,shipment:t.shipment,status:t.status,priority:t.priority,created:t.created,
-      goal:t.goal,desired:t.desired,eta:pgChUltima_(pendingEtas),partial:missingEta,issues:t.alerts.length,items:t.items.length,totals,production:t.production,
+      goal:t.goal,desired:t.desired,eta:pgChUltima_(pendingEtas),partial:missingEta,issues:t.alerts.length,items:t.items.length,totals,production:t.production,target:t.target,
       ...pgChMetricaChamado_(t,specIdx)});
   }
   return {summaries,tickets};

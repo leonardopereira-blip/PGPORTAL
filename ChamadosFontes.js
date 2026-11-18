@@ -161,7 +161,8 @@ const PG_CH_FONTES = {
       "startP": "Data início produção plan",
       "startR": "Data início produção real",
       "endP": "Data conclusão produção plan",
-      "endR": "Data conclusão produção real"
+      "endR": "Data conclusão produção real",
+      "created": "Data de abertura do chamado", "allocated": "Data alocação", "pickup": "Data de coleta prevista/real", "delivered": "Data de entrega no CD prevista/real", "costDate": "Data validação de custos", "ocRequest": "Data Solicitação de OC", "ocSent": "Data Envio de OC"
     }
   },
   "pcp": {

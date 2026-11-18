@@ -54,17 +54,17 @@ function pgChMetricaChamado_(t,idx) {
     const {specRows,...dims}=attributes,key=JSON.stringify(dims);
     let g=groups.get(key);
     if(!g){
-      g={...dims,qty:0,mapped:0,picked:0,delivered:0,balance:0,coverage:it.stages.map(()=>0),eta:'',partial:false,production:[]};
+      g={...dims,qty:0,mapped:0,picked:0,delivered:0,balance:0,coverage:it.stages.map(()=>0),eta:'',partial:false,production:[],targetItems:[]};
       groups.set(key,g);
     }
     g.qty+=it.qty;const label=it.productionStatus.label,prev=g.production.find(x=>x.label===label);if(prev)prev.qty+=it.qty;else g.production.push({label,qty:it.qty});
     ['mapped','picked','delivered'].forEach(k=>g[k]+=Math.min(it.qty,it[k]));
     g.balance+=Math.max(0,it.qty-it.delivered);
     for(let i=0;i<it.coverage.length;i++)g.coverage[i]+=it.coverage[i];
-    g.eta=pgChUltima_([g.eta,it.eta]);g.partial=g.partial||it.etaPartial;
+    g.targetItems.push({qty:it.qty,target:it.target});g.eta=pgChUltima_([g.eta,it.eta]);g.partial=g.partial||it.etaPartial;
   }
   const delivered=pgChMarcoItens_(routes,'delivery');
-  return {groups:Array.from(groups.values()),closed:t.steps['Conclusão']?.r||'',canceled:t.steps.Cancelamento?.r||'',
+  return {groups:Array.from(groups.values(),g=>{g.target=pgChPrazoResumo_(g.targetItems);delete g.targetItems;return g;}),closed:t.steps['Conclusão']?.r||'',canceled:t.steps.Cancelamento?.r||'',
     delivered,deliverySource:delivered?pgChUnicos_(routes.map(r=>r.source)).join(' + '):'',
     pickDone:pgChMarcoItens_(routes,'pick'),pickDue:pgChMarcoItens_(routes,'formal'),
     pickLate:routes.some(r=>r.late),pickUnverified:routes.some(r=>r.unverified),owner:t.owner||''};
@@ -107,4 +107,37 @@ function pgChResumoStatus_(items){
   const by=new Map();
   items.filter(it=>it.qty>0).forEach(it=>{const k=it.productionStatus?.label||'Sem etapa registrada';by.set(k,(by.get(k)||0)+it.qty);});
   return Array.from(by,([label,qty])=>({label,qty})).sort((a,b)=>b.qty-a.qty);
+}
+
+function pgChLeadDays_(a,b){a=pgChData_(a);b=pgChData_(b);if(!a||!b)return null;const n=Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000);return n>=0&&n<=180?n:null;}
+function pgChLeadAdd_(a,n){return a?new Date(Date.parse(a+'T00:00:00Z')+n*86400000).toISOString().slice(0,10):'';}
+function pgChLeadProfile_(rows){
+ const by=new Map(),dedup=new Map(),base=[2,1,10,3,1,1,1];
+ for(const r of rows||[]){
+  if(!r.n||!/CONCLU|ENTREGUE/.test(pgChNormal_(r.status)))continue;
+  const brand=pgChMarca_(r.brand),printer=pgChGraf_(r.printer),cd=pgChCD_(r.cd),key=[r.n,brand,printer,cd].join('|');
+  const ds=[[r.created,r.allocated],[r.allocated,r.startR],[r.startR,r.endR],[r.endR,r.costDate],[r.ocRequest,r.ocSent],[r.endR,r.pickup],[r.pickup,r.delivered]].map(([a,b])=>pgChLeadDays_(a,b));
+  const prev=dedup.get(key);if(!prev)dedup.set(key,{brand,printer,cd,ds});else ds.forEach((v,k)=>{if(v!==null)prev.ds[k]=prev.ds[k]===null?v:Math.max(v,prev.ds[k]);});
+ }
+ for(const r of dedup.values())for(const key of ['*','M|'+r.brand,'G|'+r.printer,'MG|'+r.brand+'|'+r.printer,'R|'+r.brand+'|'+r.printer+'|'+r.cd]){
+  if(!by.has(key))by.set(key,base.map(()=>[]));r.ds.forEach((v,k)=>{if(v!==null)by.get(key)[k].push(v);});
+ }
+ const stats=new Map();for(const [key,ds] of by)stats.set(key,ds.map(a=>{a.sort((x,y)=>x-y);return {n:a.length,median:a.length?(a[Math.floor((a.length-1)/2)]+a[Math.ceil((a.length-1)/2)])/2:null};}));
+ return {stats,n:dedup.size,base};
+}
+function pgChPrazoRota_(t,it,profile,slaDays){
+ if(!t.created)return null;
+ const brand=pgChMarca_(t.brand),graf=pgChGraf_(it.printer),cd=pgChCD_(it.cd),keys=['R|'+brand+'|'+graf+'|'+cd,'MG|'+brand+'|'+graf,'G|'+graf,'M|'+brand,'*'];
+ const targets=profile.base.map((fallback,k)=>{for(const key of keys){const x=profile.stats.get(key)?.[k];if(x&&x.n>=10)return {v:x.median,n:x.n,key};}return {v:fallback,n:0,key:'META'};});
+ const transit=slaDays!=null&&Number.isFinite(Number(slaDays))?Math.max(0,Number(slaDays)):Math.max(1,Math.ceil(targets[6].v)),available=25-Math.min(25,Math.ceil(transit));
+ const weights=[Math.max(1,targets[0].v),Math.max(1,targets[1].v),Math.max(1,targets[2].v),Math.max(1,targets[5].v)],total=weights.reduce((a,b)=>a+b,0);
+ const budget=weights.map(w=>available*w/total),alloc=Math.round(budget[0]),preEnd=Math.round(budget[0]+budget[1]),prodEnd=Math.round(budget[0]+budget[1]+budget[2]),pre=preEnd-alloc,prod=prodEnd-preEnd;
+ // O painel mede blocos de produção; subdivisões abaixo são metas internas, não tempos observados.
+ const dates=[alloc,alloc+Math.round(pre*.5),preEnd,preEnd+Math.round(prod*.5),preEnd+Math.round(prod*.85),prodEnd,prodEnd,Math.min(available,prodEnd+Math.ceil(targets[3].v)),Math.min(available,prodEnd+Math.ceil(targets[3].v+targets[4].v)),available,available,25].map(n=>pgChLeadAdd_(t.created,Math.min(25,Math.max(0,n))));
+ const pending=[0,1,2,3,4,5,6,7,8,9,10,11].filter(k=>(it.coverage[k]||0)<it.qty).sort((a,b)=>dates[a].localeCompare(dates[b]));const next=pending[0]??-1;
+ return {dates,deadline:dates[11],next:next<0?'':dates[next],nextStage:next,allocation:pgChLeadAdd_(t.created,alloc),transit,compressed:transit>25||total>available,profile:targets};
+}
+function pgChPrazoResumo_(items){
+ const valid=items.filter(it=>it.qty>0&&it.target);if(!valid.length)return null;const pending=valid.filter(it=>it.target.next).sort((a,b)=>a.target.next.localeCompare(b.target.next));
+ return {dates:PG_CH_ETAPAS.map((_,k)=>pgChUltima_(valid.map(it=>it.target.dates[k]))),deadline:pgChUltima_(valid.map(it=>it.target.deadline)),next:pending[0]?.target.next||'',nextStage:pending[0]?.target.nextStage??-1};
 }

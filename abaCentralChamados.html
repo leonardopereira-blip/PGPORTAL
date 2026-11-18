@@ -59,7 +59,7 @@
   #ch-central .ch-card small{display:block;font-size:10px;font-weight:600;line-height:1.45;min-height:29px;color:#5c7088}
   #ch-central .ch-card b{display:block;font-size:clamp(20px,1.9vw,27px);line-height:1.12;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
   #ch-central .ch-box{padding:18px;margin:0 0 16px;min-width:0}
-  #ch-central .ch-flex{display:grid;grid-template-columns:minmax(300px,1fr) minmax(460px,1.5fr);gap:16px;align-items:start}
+  #ch-central .ch-flex{display:grid;grid-template-columns:minmax(0,1fr);gap:0;align-items:start}
   #ch-central .ch-sub{padding:4px 8px;border-radius:5px;background:#e6effa;color:var(--ch-indigo);font-weight:600}
   #ch-central .ch-link,#ch-central a{color:var(--ch-indigo);font-weight:600;text-decoration:underline;text-underline-offset:3px}
   #ch-central .ch-link:hover{color:var(--ch-orange)}
@@ -67,13 +67,14 @@
   #ch-central table{border-collapse:collapse;width:100%;font-size:11px;text-align:left}
   #ch-central th,#ch-central td{padding:9px 10px;border-bottom:1px solid #e8edf3;vertical-align:middle;white-space:nowrap}
   #ch-central th{font-size:10px;font-weight:600;letter-spacing:.025em;text-transform:uppercase;color:var(--ch-indigo);background:#edf3fa}
+  #ch-central #ch-table td{white-space:normal;overflow-wrap:anywhere;min-width:85px}#ch-central #ch-table td:nth-child(7){min-width:120px;max-width:185px}#ch-central #ch-table td:nth-child(8){min-width:195px;max-width:260px}#ch-central #ch-table table{table-layout:auto;min-width:1700px}#ch-central .ch-overdue{color:#be381c;font-weight:600}#ch-central .ch-ontrack{color:#284081;font-weight:600}
   #ch-central tbody tr:nth-child(even){background:#f9fbfd}
   #ch-central tbody tr:hover{background:#eaf3fd}
   #ch-central tbody tr:last-child td{border-bottom:0}
   #ch-central .ch-num{font-variant-numeric:tabular-nums;white-space:nowrap}
   #ch-central .ch-funnel{display:flex;flex-direction:column;align-items:center;gap:0;margin:18px 0 20px;padding:0 10px}
   #ch-central .ch-portal-layer{position:relative;min-width:0;max-width:100%;height:35px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:400;box-sizing:border-box;text-align:center;line-height:1.35;color:white;border-radius:0;box-shadow:none;white-space:nowrap}#ch-central .ch-portal-layer:first-child{border-radius:6px 6px 0 0}#ch-central .ch-portal-layer:last-child{border-radius:0 0 6px 6px}#ch-central .ch-portal-layer span{white-space:nowrap;font-variant-numeric:tabular-nums}#ch-central .ch-narrow span{font-size:11px}
-  #ch-central .ch-status-chip{display:inline-block;white-space:normal;max-width:210px;border-radius:5px;padding:4px 7px;background:#eaf2fc;color:#284081;font-size:10px;font-weight:600;margin:1px}
+  #ch-central .ch-status-chip{display:block;white-space:normal;overflow-wrap:anywhere;max-width:230px;border-radius:5px;padding:4px 7px;background:#eaf2fc;color:#284081;font-size:10px;font-weight:600;margin:1px}
   #ch-central #ch-parallel{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}#ch-central #ch-parallel .ch-card{padding:10px}#ch-central #ch-parallel .ch-card small{min-height:0}
   #ch-central .ch-funnel-stage{display:grid;grid-template-columns:minmax(118px,0.84fr) minmax(100px,2fr) minmax(104px,.72fr);gap:10px;align-items:center;min-height:30px}
   #ch-central .ch-stage-label{font-size:10px;font-weight:600;color:var(--ch-navy);line-height:1.3}
@@ -110,9 +111,9 @@
       <label>Categoria<select id="ch-cat"></select></label><label>Envio<select id="ch-shipment"></select></label>
       <label>Marca<select id="ch-brand"></select></label><label>Status de produção<select id="ch-production"><option value="">Todos</option></select></label><label>Situação<select id="ch-scope"><option value="ativos">Exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option><option value="cancelados">Cancelados</option><option value="todos">Todos</option></select></label>
       <button id="ch-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button><div id="ch-routefilters" class="contents"></div></div></div><div id="ch-kpis" class="ch-grid"></div>
-    <div class="ch-flex"><section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="4" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="10" width="8" height="10" rx="1"/></svg> Distribuição</h2>
-      <select id="ch-by" aria-label="Agrupar por"><option value="cat">Categoria</option><option value="shipment">Envio</option><option value="brand">Marca</option></select></div><div id="ch-dist"></div></section>
-      <section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg> Funil de etapas</h2><div id="ch-funnel" class="ch-funnel"></div><small>Etapas atendidas por chamado, SKU e rota. Estoque e subcontratação não comprovam produção própria. Custos, OC e mapa solicitado: marcos independentes.</small><div id="ch-parallel" class="ch-grid" style="margin-top:12px"></div></section></div>
+    <div class="ch-flex"><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg> Funil de etapas</h2><div class="ch-tools" style="margin-bottom:10px"><button class="ch-btn ch-primary" id="ch-funnel-qty" aria-pressed="true">Tiragem</button><button class="ch-btn" id="ch-funnel-tickets" aria-pressed="false">Chamados</button></div><div id="ch-funnel" class="ch-funnel"></div><small>Etapas atendidas por chamado, SKU e rota. Estoque e subcontratação não comprovam produção própria. Custos, OC e mapa solicitado: marcos independentes.</small><div id="ch-parallel" class="ch-grid" style="margin-top:12px"></div></section>
+<section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="4" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="10" width="8" height="10" rx="1"/></svg> Distribuição</h2>
+      <select id="ch-by" aria-label="Agrupar por"><option value="cat">Categoria</option><option value="shipment">Envio</option><option value="brand">Marca</option></select></div><div id="ch-dist"></div></section></div>
     <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Chamados</h2><small id="ch-count"></small></div><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
   </div>
   <div id="ch-detail" hidden></div>
@@ -120,7 +121,7 @@
 <script>
 (function(){
   const root=document.getElementById('ch-central'), el=id=>document.getElementById('ch-'+id);
-  const state={view:'carteira',data:null,detail:null,history:[],page:1,itemPage:1,load:0,detailLoad:0,loading:false,pending:null};
+  const state={funnelMode:'qty',view:'carteira',data:null,detail:null,history:[],page:1,itemPage:1,load:0,detailLoad:0,loading:false,pending:null};
   const nf=new Intl.NumberFormat('pt-BR'),num=x=>nf.format(Number(x)||0);
   const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const dt=x=>/^\d{4}-\d{2}-\d{2}/.test(x||'')?x.slice(0,10).split('-').reverse().join('/'):'—';
@@ -153,7 +154,8 @@
       g.coverage.forEach((v,i)=>totals.coverage[i]+=v);
     }
     const by=new Map();groups.forEach(g=>(g.production||[]).forEach(p=>by.set(p.label,(by.get(p.label)||0)+p.qty)));
-    return {...t,groups,totals,production:Array.from(by,([label,qty])=>({label,qty})).sort((a,b)=>b.qty-a.qty),eta:groups.map(g=>g.eta).filter(Boolean).sort().pop()||'',partial:groups.some(g=>g.partial)};
+    const targets=groups.filter(g=>g.target).map(g=>g.target),pending=targets.filter(x=>x.next).sort((a,b)=>a.next.localeCompare(b.next));const target=targets.length?{deadline:targets.map(x=>x.deadline).sort().pop(),next:pending[0]?.next||'',nextStage:pending[0]?.nextStage??-1}:t.target;
+    return {...t,groups,totals,target,production:Array.from(by,([label,qty])=>({label,qty})).sort((a,b)=>b.qty-a.qty),eta:groups.map(g=>g.eta).filter(Boolean).sort().pop()||'',partial:groups.some(g=>g.partial)};
   }
   function chAging(t,asof){
     const delivered=t.delivered&&t.delivered<=asof?t.delivered:'';
@@ -307,7 +309,7 @@
     message('Carregando JSON publicado dos chamados…');
     try{
       const started=performance.now(),d=await rpc('getChamadosPortal',false);if(token!==state.load)return;console.info('[CH JSON] abertura ms',Math.round(performance.now()-started));
-      if(d.calculationVersion!==3){state.data=null;state.detail=null;show();message('Atualize o JSON para carregar os indicadores com as regras corrigidas (atualizarCacheChamadosPortal).',true);return;}
+      if(d.calculationVersion!==4){state.data=null;state.detail=null;show();message('Atualize o JSON para carregar os indicadores com as regras corrigidas (atualizarCacheChamadosPortal).',true);return;}
       state.data=d;state.detail=null;state.detailLoad++;state.page=1;
       for(const key of ['cat','shipment','brand']){
         const old=el(key).value,options=[...new Set(d.rows.map(r=>r[key]).filter(Boolean))].sort();
@@ -338,14 +340,14 @@
     el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado no mapa',total('picked')],['Entregue no CD',total('delivered')],['Saldo a entregar',total('balance')],['Aging médio de entrega',agingMarkup(rows,dayNow())]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Saldo a entregar'?'orange':k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
     const groups=new Map();rows.forEach(t=>{const k=t[by]||'Sem informação',g=groups.get(k)||[0,0,0];g[0]++;g[1]+=t.totals.qty;g[2]+=t.totals.balance;groups.set(k,g);});
     el('dist').innerHTML=table([el('by').selectedOptions[0].text,'Chamados','Tiragem','Saldo'],[...groups].sort((a,b)=>b[1][2]-a[1][2]).map(([k,g])=>['<button class="ch-link" data-filter="'+esc(k)+'">'+esc(k)+'</button>',...g.map(num)]));
-    const qty=total('qty'),colors=['#0C2340','#284081','#284081','#418EDE','#418EDE','#FCB04E','#FA4616','#049FEC','#284081'];
-    const values=state.data.phases.map((label,i)=>({label,v:rows.reduce((s,t)=>s+t.totals.coverage[i],0)}));
+    const qty=total('qty'),mode=state.funnelMode,base=mode==='qty'?qty:rows.length,colors=['#0C2340','#284081','#284081','#418EDE','#418EDE','#FCB04E','#FA4616','#049FEC','#284081'];
+    const values=state.data.phases.map((label,i)=>({label,v:rows.reduce((s,t)=>s+t.totals.coverage[i],0),n:rows.filter(t=>t.totals.qty>0&&t.totals.coverage[i]>=t.totals.qty).length}));
     const layer=(label,v,pct,color,idx)=>'<div class="funnel-layer ch-portal-layer text-center'+(pct<35?' ch-narrow':'')+'" style="width:'+Math.min(100,Math.max(pct,32))+'%;background:'+color+';color:'+(color==='#FCB04E'?'#0C2340':'white')+'" title="'+esc(label)+' · '+num(v)+'"><span>'+String(idx).padStart(2,'0')+' - '+esc(label)+' ('+num(v)+' | '+num(Math.round(pct*10)/10)+'%)</span></div>';
     const physical=[0,1,2,3,4,5,6,10,11];
-    el('funnel').innerHTML=layer('Tiragem total',qty,qty?100:0,'#0C2340',0)+physical.map((k,i)=>layer(values[k].label,values[k].v,qty?100*values[k].v/qty:0,colors[i],i+1)).join('');
-    el('parallel').innerHTML=[7,8,9].map(k=>'<div class="ch-card"><small>'+esc(values[k].label)+'</small><b>'+num(values[k].v)+'</b><small>'+num(qty?Math.round(1000*values[k].v/qty)/10:0)+'%</small></div>').join('');
-    el('table').innerHTML=table(['Chamado','Categoria','Envio','Marca','Responsável PG','Gráfica','CD','Status de produção','Tiragem','Saldo','Meta de entrega','Previsão de entrega','Tratativa'],rows.slice((state.page-1)*30,state.page*30).map(t=>[
-      '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(t.owner),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),num(t.totals.balance),dt(t.goal),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),cell(state.data.manual[t.id])]),'Nenhum chamado corresponde aos filtros.');
+    el('funnel').innerHTML=layer(mode==='qty'?'Tiragem total':'Total de chamados',base,base?100:0,'#0C2340',0)+physical.map((k,i)=>{const v=mode==='qty'?values[k].v:values[k].n;return layer(values[k].label,v,base?100*v/base:0,colors[i],i+1);}).join('');for(const [id,v] of [['funnel-qty','qty'],['funnel-tickets','tickets']]){el(id).classList.toggle('ch-primary',mode===v);el(id).setAttribute('aria-pressed',String(mode===v));}
+    el('parallel').innerHTML=[7,8,9].map(k=>'<div class="ch-card"><small>'+esc(values[k].label)+'</small><b>'+num(values[k].v)+'</b><small>'+num(qty?Math.round(1000*values[k].v/qty)/10:0)+'% · '+num(values[k].n)+' chamados</small></div>').join('');
+    el('table').innerHTML=table(['Chamado','Categoria','Envio','Marca','Responsável PG','Gráfica','CD','Status de produção','Tiragem','Saldo','Prazo final (25 dias)','Próxima etapa','Data esperada','Previsão de entrega','Tratativa'],rows.slice((state.page-1)*30,state.page*30).map(t=>[
+      '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(t.owner),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),num(t.totals.balance),dt(t.target?.deadline),cell(state.data.phases[t.target?.nextStage]),'<span class="'+(t.target?.next&&t.target.next<dayNow()?'ch-overdue':'ch-ontrack')+'">'+dt(t.target?.next)+'</span>',dt(t.eta)+(t.partial&&t.eta?' · parcial':''),cell(state.data.manual[t.id])]),'Nenhum chamado corresponde aos filtros.');
     el('count').textContent=num(rows.length)+' chamados';pager(el('pages'),state.page,rows.length,30,'page');
   }
   async function openTicket(id){
@@ -356,7 +358,7 @@
   }
   function renderDetail(){
     const t=state.detail;
-    el('detail').innerHTML='<button class="ch-link" id="ch-back">Voltar à visão</button><section class="ch-box"><div class="ch-between"><h2>Chamado #'+esc(t.n)+'</h2><span class="ch-sub">'+productionCell(t)+'</span></div>'+fields({'Categoria':t.cat,'Envio':t.shipment,'Marca':t.brand,'Prioridade SPG':t.priority,'Responsável PG':t.owner,'OP':t.op,'Data desejada':dt(t.desired),'Meta de entrega':dt(t.goal)})+'<h3>Solicitação</h3><p>'+cell(t.why)+'</p>'+(t.obs?'<p>'+esc(t.obs)+'</p>':'')+(t.reason?'<p>Cancelamento · '+esc(t.reason)+'</p>':'')+'</section>'+
+    el('detail').innerHTML='<button class="ch-link" id="ch-back">Voltar à visão</button><section class="ch-box"><div class="ch-between"><h2>Chamado #'+esc(t.n)+'</h2><span class="ch-sub">'+productionCell(t)+'</span></div>'+fields({'Categoria':t.cat,'Envio':t.shipment,'Marca':t.brand,'Prioridade SPG':t.priority,'Responsável PG':t.owner,'OP':t.op,'Data desejada':dt(t.desired),'Prazo final (25 dias)':dt(t.target?.deadline),'Meta de entrega SPG':dt(t.goal)})+'<h3>Solicitação</h3><p>'+cell(t.why)+'</p>'+(t.obs?'<p>'+esc(t.obs)+'</p>':'')+(t.reason?'<p>Cancelamento · '+esc(t.reason)+'</p>':'')+'</section>'+
       '<section class="ch-box"><h2>Tratativa do time</h2><div class="ch-tools"><label>Status da tratativa<select id="ch-manual-state"><option value="">Selecionar</option>'+state.data.states.map(v=>opt(v)).join('')+'</select></label><label style="flex:1;min-width:200px">Observação opcional<input id="ch-note" maxlength="1500"></label><button id="ch-save" class="ch-btn ch-primary">Salvar</button></div><p id="ch-save-msg" role="status"></p><div id="ch-history"></div></section>'+
       '<section class="ch-box"><h2>Marcos do chamado</h2>'+table(['Etapa','Planejado','Realizado','Fonte'],Object.entries(t.steps).map(([k,s])=>[esc(k),dt(s.p),dt(s.r),'SPG']))+
       detailBox('Registros do painel de produção ('+t.panel.length+')',table(['Gráfica / CD','Status','Andamento','Início plan. / real','Fim plan. / real','Origem'],t.panel.map(p=>[cell(p.printer)+' / '+cell(cdLabel(p.cd)),cell(p.status),cell([p.note,p.cause].filter(Boolean).join(' | ')),dt(p.startP)+' / '+dt(p.startR),dt(p.endP)+' / '+dt(p.endR),source('panel',p.row)])))+'</section>'+
@@ -375,7 +377,7 @@
   }
   function itemHtml(it){
     return '<p>'+cell(it.desc)+'</p>'+fields({'Status de produção':it.productionStatus?.label,'Tiragem':num(it.qty),'Mapa solicitado':num(it.mapped),'Coletado no mapa':num(it.picked),'Entregue no CD':num(it.delivered),'Saldo':num(Math.max(0,it.qty-it.delivered)),'Previsão de entrega':dt(it.eta)+(it.etaPartial&&it.eta?' · parcial':''),'Origem da previsão':it.forecastSource})+
-      '<h3>Etapas do SKU</h3>'+table(['Etapa','Planejado','Realizado','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(s.p),dt(s.r),cell(s.a||(s.r?'Realizado':'Sem registro real')),esc(s.f)]))+
+      '<h3>Etapas do SKU</h3>'+table(['Etapa','Data esperada','Planejado','Realizado','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(it.target?.dates[i]),dt(s.p),dt(s.r),cell(s.a||(s.r?'Realizado':'Sem registro real')),esc(s.f)]))+
       detailBox('Itens no SPG',table(['Kit','Tiragem','Estoque CD','Subcontratada','OC / NF','Coleta formalizada','Coleta prevista / real','Entrega prevista / real','Origem'],it.spg.map(s=>[cell(s.kit),num(s.q),num(s.stock),num(s.sub),cell(s.oc)+' / '+cell(s.nf),dt(s.formal),dt(s.pickP)+' / '+dt(s.pick),dt(s.deliveryP)+' / '+dt(s.delivery),source('spg',s.row)])))+
       detailBox('Calendário e PCP',table(['Fonte','Kit / OP','Status','Observação','Origem'],it.cal.map(c=>['Calendário',cell(c.kit),cell(c.state),cell(c.note),source('cal',c.row)]).concat(it.pcp.map(p=>['PCP',cell(p.op),'—','—',source('pcp',p.row)]))))+
       '<h3>Mapas de saída</h3>'+table(['Mapa / NF','Kit','Vínculo','Tiragem','Agendamento','Coleta real','Previsão CD','Chegada CD','Qtd. entregue','Origem'],it.maps.map(m=>[cell(m.map)+' / '+cell(m.nf),cell(m.kit),cell(m.method),num(m.qty),dt(m.book),dt(m.pick),dt(m.eta),dt(m.delivery),num(m.delivered),source('map',m.row)]));
@@ -398,6 +400,7 @@
   root.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;
     if(b.id==='ch-okr-clear'){[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment'].forEach(k=>setFilterValue(el(k),''));el('okr-scope').value='ativos';renderOKR();return;}
+    if(b.id==='ch-funnel-qty'||b.id==='ch-funnel-tickets'){state.funnelMode=b.id==='ch-funnel-qty'?'qty':'tickets';render();return;}
     if(b.id==='ch-refresh'){load(true);return;}if(b.id==='ch-save'){save();return;}
     if(b.id==='ch-back'){state.detailLoad++;state.detail=null;render();show();return;}
     if(b.dataset.ticket){openTicket(b.dataset.ticket);return;}

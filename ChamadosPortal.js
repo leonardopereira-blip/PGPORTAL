@@ -118,24 +118,31 @@ function pgChMapaValido_(first,second,previous){
     throw new Error('Mapa mudou durante a leitura ('+a.length+' / '+b.length+' registros). Nenhum JSON foi substituído; execute novamente.');
   return b;
 }
+const PG_CH_MAP_STORE='PG_CH_MAP_SOURCE_V1';
+function pgChMapaFonte_(previous){
+ const props=PropertiesService.getScriptProperties(),saved=JSON.parse(props.getProperty(PG_CH_MAP_STORE)||'null');let lastError;
+ for(let attempt=0;attempt<3;attempt++){
+  try{const first=pgChLerFonte_('map');Utilities.sleep(3000);const last=pgChLerFonte_('map'),rows=pgChMapaValido_(first.rows,last.rows,saved?.count||previous);
+   const data={rows,url:last.url,at:new Date().toISOString()},file=pgChJsonWrite_(DriveApp.getFolderById(PASTA_CACHE_ID),'PG_CH_MAP_'+Utilities.getUuid()+'.json',data);
+   props.setProperty(PG_CH_MAP_STORE,JSON.stringify({id:file.id,count:rows.length,at:data.at}));
+   if(saved?.id)try{DriveApp.getFileById(saved.id).setTrashed(true);}catch(e){console.warn('[CH MAP] limpeza '+e);}
+   return {...data,stale:false};
+  }catch(e){lastError=e;console.warn('[CH MAP] tentativa '+(attempt+1)+': '+String(e.message||e));if(attempt<2)Utilities.sleep(5000);}
+ }
+ if(saved?.id)return {...pgChJsonRead_(saved.id),stale:true};
+ const err=new Error('Mapa temporariamente indisponível. Atualização automática pendente. '+String(lastError?.message||lastError));err.pgMapRetry=true;throw err;
+}
+function pgChAgendarRetryMapa_(){
+ const handler='repetirCacheChamadosPortal';if(!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()===handler))ScriptApp.newTrigger(handler).timeBased().after(2*60*1000).create();
+}
+function repetirCacheChamadosPortal(){ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='repetirCacheChamadosPortal').forEach(t=>ScriptApp.deleteTrigger(t));return atualizarCacheChamadosPortal();}
 function pgChJsonBuild_(before){
-  const datasets={},links={},counts={};
-  const initial=pgChLerFonte_('map');
-  Object.keys(PG_CH_FONTES).filter(k=>k!=='map').forEach(k=>{
-    const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;
-    if(k==='spg' && (!counts[k] || (before && counts[k]<before.counts[k]*0.8)))
-      throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização. Tente novamente em instantes.');
-  });
-  const last=pgChLerFonte_('map');
-  datasets.map=pgChMapaValido_(initial.rows,last.rows,before&&before.counts.map);
-  links.map=last.url;counts.map=datasets.map.length;
-  const mapPartial=false;
-  console.log('[CH JSON] mapa validado: '+counts.map+' registros; duas leituras consistentes.');
-  datasets.sla=getMatrizSLAPortal();
-  const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString();
-  const result={gen,now,links,counts,mapPartial,calculationVersion:3,rows:model.summaries,phases:PG_CH_ETAPAS};
-  if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');
-  return {result,tickets:model.tickets};
+ const datasets={},links={},counts={};
+ Object.keys(PG_CH_FONTES).filter(k=>k!=='map').forEach(k=>{const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;if(k==='spg'&&(!counts[k]||(before&&counts[k]<before.counts[k]*0.8)))throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização.');});
+ const map=pgChMapaFonte_(before&&before.counts.map);datasets.map=map.rows;links.map=map.url;counts.map=map.rows.length;datasets.sla=getMatrizSLAPortal();
+ const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:4,rows:model.summaries,phases:PG_CH_ETAPAS};
+ if(map.stale)result.notice='Mapa: última leitura íntegra em '+new Date(map.at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+'. Atualização automática pendente.';
+ if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');return {result,tickets:model.tickets};
 }
 function pgChJsonWrite_(folder,name,obj){
   const raw=JSON.stringify(obj);
@@ -149,7 +156,7 @@ function atualizarCacheChamadosPortal(){
   let folder=null,published=false;
   try{
     const refs=pgChJsonRefs_(),before=refs.length?pgChSnapshot_():null;
-    const {result,tickets}=pgChJsonBuild_(before);
+    let built;try{built=pgChJsonBuild_(before);}catch(e){if(e.pgMapRetry){pgChAgendarRetryMapa_();console.warn(e.message);return {pending:true,reason:'MAPA_EM_ATUALIZACAO'};}throw e;}const {result,tickets}=built;if(result.mapStale)pgChAgendarRetryMapa_();
     folder=DriveApp.getFolderById(PASTA_CACHE_ID).createFolder('PG_CH_JSON_'+result.gen);
     const index={}, entries=Array.from(tickets.entries());
     for(let i=0;i<entries.length;i+=8){
