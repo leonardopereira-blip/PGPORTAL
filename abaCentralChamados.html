@@ -45,7 +45,7 @@
   @media(max-width:550px){#ch-central .ch-filters{grid-template-columns:1fr 1fr}#ch-central .ch-filters label:first-child{grid-column:1/-1}#ch-central .ch-wrap{padding:14px}}
 </style>
 <section id="ch-central"><div class="ch-wrap">
-  <div class="ch-head"><h1>Central de chamados</h1><div class="ch-tools"><small id="ch-updated"></small><button class="ch-btn" id="ch-refresh">Atualizar bases</button></div></div>
+  <div class="ch-head"><h1>Central de chamados</h1><div class="ch-tools"><small id="ch-updated"></small><button class="ch-btn" id="ch-refresh">Recarregar dados</button></div></div>
   <nav class="ch-tabs" aria-label="Visões de chamados"><button data-view="carteira" aria-selected="true">Carteira</button><button data-view="okr" aria-selected="false">OKR</button></nav>
   <div id="ch-msg" role="status" aria-live="polite"></div>
   <div id="ch-notice" class="ch-alert" hidden></div>
@@ -92,9 +92,9 @@
   async function load(force){
     if(state.loading)return;
     state.loading=true;el('refresh').disabled=true;const token=++state.load;
-    message('Carregando chamados e conferindo as fontes…');
+    message('Carregando JSON publicado dos chamados…');
     try{
-      const d=await rpc('getChamadosPortal',!!force);if(token!==state.load)return;
+      const started=performance.now(),d=await rpc('getChamadosPortal',false);if(token!==state.load)return;console.info('[CH JSON] abertura ms',Math.round(performance.now()-started));
       state.data=d;state.detail=null;state.detailLoad++;state.page=1;
       for(const key of ['cat','shipment','brand']){
         const old=el(key).value,options=[...new Set(d.rows.map(r=>r[key]).filter(Boolean))].sort();
@@ -104,7 +104,7 @@
       el('updated').textContent='Leitura em '+stamp(d.now);el('notice').textContent=d.notice||'';el('notice').hidden=!d.notice;message('');render();show();
     }catch(err){message('Falha ao atualizar. '+(err.message||err),true);}finally{state.loading=false;el('refresh').disabled=false;}
   }
-  window.pgAbrirChamados=function(view){state.view=view;show();if(!state.data && !state.loading && view!=='okr')load(false);};
+  window.pgAbrirChamados=function(view){state.view=view;show();if(!state.data && !state.loading )load(false);};
   function selected(){
     const q=el('query').value.trim().replace(/^#/,'').split(/[^0-9]+/).filter(Boolean),scope=el('scope').value;
     return state.data.rows.filter(t=>{

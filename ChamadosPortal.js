@@ -65,24 +65,44 @@ function pgChLerFonte_(key) {
   });
   return {rows,url:'https://docs.google.com/spreadsheets/d/'+id+'/edit#gid='+def.gid};
 }
-// Cada geração é imutável. Um recálculo concorrente não mistura partes de duas leituras.
-function pgChCachePut_(key,obj,pending) {
-  const raw=Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(obj),'application/json')).getBytes());
-  let count=0;
-  for(let i=0;i<raw.length;i+=80000) pending[key+':'+count++]=raw.slice(i,i+80000);
-  pending[key]=String(count);
+// A propriedade contém apenas ponteiros para gerações completas no Drive.
+const PG_CH_JSON_PTR='PG_CH_JSON_GENERATIONS_V2';
+const PG_CH_JSON_LEASE='PG_CH_JSON_LEASE_V2';
+function pgChJsonRefs_(){
+  return JSON.parse(PropertiesService.getScriptProperties().getProperty(PG_CH_JSON_PTR)||'[]');
 }
-function pgChCacheGet_(key) {
-  const cache=CacheService.getScriptCache(), count=Number(cache.get(key));
-  if(!count || count>200) return null;
-  const keys=Array.from({length:count},(_,i)=>key+':'+i), parts=cache.getAll(keys);
-  if(keys.some(k=>!parts[k]))return null;
-  return JSON.parse(Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(keys.map(k=>parts[k]).join('')),'application/x-gzip')).getDataAsString('UTF-8'));
+function pgChJsonRead_(id){
+  return JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8'));
 }
-function pgChSnapshot_(force) {
-  const cache=CacheService.getScriptCache(),ptr='PG_CH_V1_CURRENT',prev=cache.get(ptr);
-  const before=prev?pgChCacheGet_('CH:'+prev):null;
-  if(!force && before)return before;
+function pgChSnapshot_(){
+  const start=Date.now(), refs=pgChJsonRefs_();
+  if(!refs.length)throw new Error('A Central ainda não tem JSON publicado. Execute a primeira carga no Apps Script.');
+  const s=pgChJsonRead_(refs[0].summary);
+  if(s.gen!==refs[0].gen || !Array.isArray(s.rows))throw new Error('Índice de chamados inválido.');
+  console.log('[CH JSON] leitura resumo ms='+ (Date.now()-start));
+  return s;
+}
+function pgChJsonReserve_(){
+  const lock=LockService.getScriptLock();
+  if(!lock.tryLock(1000))throw new Error('Outra atualização está reservando o cache.');
+  try{
+    const props=PropertiesService.getScriptProperties();
+    const old=JSON.parse(props.getProperty(PG_CH_JSON_LEASE)||'null');
+    if(old && old.until>Date.now())throw new Error('Já existe uma geração de chamados em andamento.');
+    const token=Utilities.getUuid();
+    props.setProperty(PG_CH_JSON_LEASE,JSON.stringify({token,until:Date.now()+15*60*1000}));
+    return token;
+  }finally{lock.releaseLock();}
+}
+function pgChJsonRelease_(token){
+  const lock=LockService.getScriptLock();lock.waitLock(5000);
+  try{
+    const props=PropertiesService.getScriptProperties();
+    const lease=JSON.parse(props.getProperty(PG_CH_JSON_LEASE)||'null');
+    if(lease && lease.token===token)props.deleteProperty(PG_CH_JSON_LEASE);
+  }finally{lock.releaseLock();}
+}
+function pgChJsonBuild_(before){
   const datasets={},links={},counts={};
   let mapPartial=false;
   Object.keys(PG_CH_FONTES).forEach(k=>{
@@ -100,21 +120,75 @@ function pgChSnapshot_(force) {
       mapPartial=mapPartial || counts.map<capacity*0.97;
     }
   });
-  if(mapPartial && before && !before.mapPartial) return Object.assign({},before,{notice:'Mapa em atualização. Exibindo a última leitura completa de '+before.now+'.'});
+  if(mapPartial) throw new Error('Mapa em atualização; a geração publicada permanece intacta.');
   datasets.sla=getMatrizSLAPortal();
   const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString();
   const result={gen,now,links,counts,mapPartial,rows:model.summaries,phases:PG_CH_ETAPAS};
-  if(mapPartial)result.notice='O mapa está sendo repovoado. Volumes logísticos, saldos e previsões estão parciais. Atualize para conferir a carga completa.';
-  const pending={};
-  model.tickets.forEach((t,id)=>pgChCachePut_('CH:'+gen+':'+id,t,pending));
-  pgChCachePut_('CH:'+gen,result,pending);
-  let batch={},size=0;
-  Object.entries(pending).forEach(([key,value])=>{
-    if(size+value.length>600000){cache.putAll(batch,1800);batch={};size=0;}
-    batch[key]=value;size+=value.length;
-  });
-  cache.putAll(batch,1800);cache.put(ptr,gen,mapPartial?60:600);
-  return result;
+  if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');
+  return {result,tickets:model.tickets};
+}
+function pgChJsonWrite_(folder,name,obj){
+  const raw=JSON.stringify(obj);
+  const blob=Utilities.newBlob(raw,'application/json',name);
+  return {id:folder.createFile(blob).getId(),bytes:blob.getBytes().length};
+}
+// Esta função não é chamada por getChamadosPortal nem pela abertura do portal.
+function atualizarCacheChamadosPortal(){
+  pgChJsonAdmin_();
+  const token=pgChJsonReserve_(), start=Date.now();
+  let folder=null,published=false;
+  try{
+    const refs=pgChJsonRefs_(),before=refs.length?pgChSnapshot_():null;
+    const {result,tickets}=pgChJsonBuild_(before);
+    folder=DriveApp.getFolderById(PASTA_CACHE_ID).createFolder('PG_CH_JSON_'+result.gen);
+    const index={}, entries=Array.from(tickets.entries());
+    for(let i=0;i<entries.length;i+=8){
+      const batch=entries.slice(i,i+8);
+      const file=pgChJsonWrite_(folder,'detalhe_'+i+'.json',Object.fromEntries(batch));
+      batch.forEach(([id])=>index[id]=file.id);
+    }
+    const details=pgChJsonWrite_(folder,'indice_detalhes.json',index);
+    const summary=pgChJsonWrite_(folder,'resumo.json',result);
+    // Confirma o ponteiro somente depois que todos os arquivos existem.
+    const lock=LockService.getScriptLock();lock.waitLock(5000);
+    let removed=[];
+    try{
+      const props=PropertiesService.getScriptProperties();
+      const lease=JSON.parse(props.getProperty(PG_CH_JSON_LEASE)||'null');
+      if(!lease || lease.token!==token || lease.until<=Date.now())throw new Error('Reserva expirada; publicação interrompida.');
+      const all=[{gen:result.gen,summary:summary.id,details:details.id,folder:folder.getId(),now:result.now},...pgChJsonRefs_()];
+      // Mantém a geração atual, a anterior, e as recentes para fichas ainda abertas.
+      const keep=all.filter((r,i)=>i<2 || Date.now()-Date.parse(r.now)<24*60*60*1000);
+      removed=all.filter(r=>!keep.includes(r));
+      props.setProperty(PG_CH_JSON_PTR,JSON.stringify(keep));published=true;
+    }finally{lock.releaseLock();}
+    removed.forEach(r=>{try{DriveApp.getFolderById(r.folder).setTrashed(true);}catch(e){console.warn('[CH JSON] limpeza: '+e);}});
+    const info={gen:result.gen,now:result.now,chamados:result.rows.length,bytes:summary.bytes,ms:Date.now()-start};
+    console.log('[CH JSON] publicado '+JSON.stringify(info));return info;
+  }finally{
+    if(folder && !published){try{folder.setTrashed(true);}catch(e){console.warn('[CH JSON] descarte: '+e);}}
+    pgChJsonRelease_(token);
+  }
+}
+function pgChJsonAdmin_(){
+  const active=String(Session.getActiveUser().getEmail()||'').toLowerCase();
+  const effective=String(Session.getEffectiveUser().getEmail()||'').toLowerCase();
+  if((active||effective)!=='leonardo.pereira@arcoeducacao.com.br')throw new Error('A geração do JSON é administrada pelo responsável do portal.');
+}
+function instalarAtualizacaoCacheChamadosPortal(){
+  pgChJsonAdmin_();
+  const handler='atualizarCacheChamadosPortal';
+  const existing=ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()===handler);
+  if(existing.length===1)return {ok:true,existing:true};
+  existing.forEach(t=>ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger(handler).timeBased().everyHours(1).create();
+  return {ok:true,period:'1 hora'};
+}
+function conferirCacheChamadosPortal(){
+  pgChJsonAdmin_();
+  const s=pgChSnapshot_();
+  const info={gen:s.gen,now:s.now,chamados:s.rows.length,counts:s.counts};
+  console.log(JSON.stringify(info));return info;
 }
 function pgChEventos_(id) {
   const sheet=pgArquivoObservacoesGiro_().getSheetByName(PG_CH_ABA_EDICAO);
@@ -123,7 +197,7 @@ function pgChEventos_(id) {
     .filter(r=>!id || r[0]===id).map(r=>({ticket:r[0],event:r[1],at:r[2],user:r[3],state:r[4],note:r[5],base:r[6]}));
 }
 function getChamadosPortal(atualizar) {
-  const s=pgChSnapshot_(atualizar===true), latest={};
+  const s=pgChSnapshot_(), latest={};
   pgChEventos_().forEach(e=>{latest[e.ticket]=e.state;});
   return Object.assign({},s,{manual:latest,states:PG_CH_TRATATIVAS});
 }
@@ -133,11 +207,12 @@ function pgChValidaId_(id) {
 function getDetalheChamadoPortal(id,gen) {
   pgChValidaId_(id);
   if(typeof gen!=='string' || !/^[a-f0-9-]{36}$/.test(gen))throw new Error('Atualize a lista de chamados.');
-  let t=pgChCacheGet_('CH:'+gen+':'+id);
-  if(!t){
-    const s=pgChSnapshot_(true);t=pgChCacheGet_('CH:'+s.gen+':'+id);
-    if(!t)throw new Error('O chamado mudou ou saiu da base. Atualize a lista.');
-  }
+  const ref=pgChJsonRefs_().find(r=>r.gen===gen);
+  if(!ref)throw new Error('A geração da lista expirou. Atualize a lista.');
+  const index=pgChJsonRead_(ref.details),file=index[id];
+  if(!file)throw new Error('Chamado não localizado nesta geração.');
+  const t=pgChJsonRead_(file)[id];
+  if(!t || t.id!==id)throw new Error('Detalhe inválido. Atualize a lista.');
   return {ticket:t,history:pgChEventos_(id)};
 }
 function salvarTratativaChamadoPortal(id,state,note,base,event) {
