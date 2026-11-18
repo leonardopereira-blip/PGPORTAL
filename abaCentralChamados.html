@@ -22,7 +22,13 @@
   #ch-central .ch-btn:hover{background:#edf4fc;border-color:var(--ch-blue)}
   #ch-central .ch-primary{background:var(--ch-indigo);color:white;border-color:var(--ch-indigo)}
   #ch-central .ch-primary:hover{background:var(--ch-navy);color:white}
-  #ch-central .ch-filter-panel{background:white;border:1px solid var(--ch-line);border-radius:10px;box-shadow:0 2px 8px #0c234009;padding:12px;margin-bottom:16px}
+  #ch-central .ch-filter-panel{background:white;border:0;border-bottom:1px solid #e5e7eb;border-radius:0;box-shadow:0 1px 3px #0c23400b;padding:16px;margin-bottom:16px;position:relative;z-index:60}
+  #ch-central .ch-pg-filter-host{font-size:12px;color:#1e293b;position:relative}
+  #ch-central .ch-pg-menu{font-size:11px;color:#334155;white-space:normal;position:absolute;z-index:90}
+  #ch-central .ch-filterline .ch-pg-option{display:flex;align-items:flex-start;gap:8px;min-height:0;padding:0;box-shadow:none;border:0;white-space:normal;color:#334155;font-size:11px;letter-spacing:0;text-transform:none;background:transparent}
+  #ch-central .ch-pg-option input{margin-top:2px;accent-color:#284081;cursor:pointer}
+  #ch-central .ch-pg-button{font-weight:900}
+  #ch-central #ch-routefilters{display:contents}
   #ch-central .ch-filterline,#ch-central .ch-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   #ch-central .ch-filterline+.ch-filterline{margin-top:8px}
   #ch-central .ch-filter-caption{display:flex;align-items:center;gap:5px;white-space:nowrap;color:#64748b;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-right:2px}
@@ -65,8 +71,8 @@
   #ch-central tbody tr:hover{background:#eaf3fd}
   #ch-central tbody tr:last-child td{border-bottom:0}
   #ch-central .ch-num{font-variant-numeric:tabular-nums;white-space:nowrap}
-  #ch-central .ch-funnel{display:flex;flex-direction:column;align-items:center;gap:3px;margin:10px 0 14px}
-  #ch-central .ch-portal-layer{min-width:160px;max-width:100%;padding:7px 10px;font-size:11px;font-weight:600;box-sizing:border-box;text-align:center;line-height:1.35;color:white;overflow-wrap:anywhere;border-radius:3px;box-shadow:0 1px 3px #0c23401a}
+  #ch-central .ch-funnel{display:flex;flex-direction:column;align-items:center;gap:0;margin:18px 0 20px;padding:0 10px}
+  #ch-central .ch-portal-layer{position:relative;min-width:0;max-width:100%;height:35px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:400;box-sizing:border-box;text-align:center;line-height:1.35;color:white;border-radius:0;box-shadow:none;white-space:nowrap}#ch-central .ch-portal-layer:first-child{border-radius:6px 6px 0 0}#ch-central .ch-portal-layer:last-child{border-radius:0 0 6px 6px}#ch-central .ch-portal-layer span{white-space:nowrap;font-variant-numeric:tabular-nums}#ch-central .ch-narrow span{font-size:11px}
   #ch-central .ch-status-chip{display:inline-block;white-space:normal;max-width:210px;border-radius:5px;padding:4px 7px;background:#eaf2fc;color:#284081;font-size:10px;font-weight:600;margin:1px}
   #ch-central #ch-parallel{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}#ch-central #ch-parallel .ch-card{padding:10px}#ch-central #ch-parallel .ch-card small{min-height:0}
   #ch-central .ch-funnel-stage{display:grid;grid-template-columns:minmax(118px,0.84fr) minmax(100px,2fr) minmax(104px,.72fr);gap:10px;align-items:center;min-height:30px}
@@ -103,11 +109,10 @@
     <div class="ch-filter-panel"><div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span><label>Chamado<input id="ch-query" type="search" placeholder="Número do chamado"></label>
       <label>Categoria<select id="ch-cat"></select></label><label>Envio<select id="ch-shipment"></select></label>
       <label>Marca<select id="ch-brand"></select></label><label>Status de produção<select id="ch-production"><option value="">Todos</option></select></label><label>Situação<select id="ch-scope"><option value="ativos">Exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option><option value="cancelados">Cancelados</option><option value="todos">Todos</option></select></label>
-      <button id="ch-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div>
-    <div id="ch-routefilters" class="ch-filterline"></div></div><div id="ch-kpis" class="ch-grid"></div>
+      <button id="ch-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button><div id="ch-routefilters" class="contents"></div></div></div><div id="ch-kpis" class="ch-grid"></div>
     <div class="ch-flex"><section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="4" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="10" width="8" height="10" rx="1"/></svg> Distribuição</h2>
       <select id="ch-by" aria-label="Agrupar por"><option value="cat">Categoria</option><option value="shipment">Envio</option><option value="brand">Marca</option></select></div><div id="ch-dist"></div></section>
-      <section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg> Funil de etapas</h2><div id="ch-funnel" class="ch-funnel"></div><small>Produção e logística por chamado, SKU e rota. Custos, OC e mapa solicitado: marcos independentes.</small><div id="ch-parallel" class="ch-grid" style="margin-top:12px"></div></section></div>
+      <section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg> Funil de etapas</h2><div id="ch-funnel" class="ch-funnel"></div><small>Etapas atendidas por chamado, SKU e rota. Estoque e subcontratação não comprovam produção própria. Custos, OC e mapa solicitado: marcos independentes.</small><div id="ch-parallel" class="ch-grid" style="margin-top:12px"></div></section></div>
     <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Chamados</h2><small id="ch-count"></small></div><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
   </div>
   <div id="ch-detail" hidden></div>
@@ -134,8 +139,10 @@
   const chPct=(n,d)=>d?100*n/d:null;
   const chBands=[[0,10],[11,20],[21,25],[26,30],[31,40],[41,60],[61,Infinity]];
   const chDimensions=['printer','cd','series','material','feature','cover','finish'];
+  const chHas=(f,v)=>Array.isArray(f)?f.includes(v):!f||f===v;
+  const chDimMatch=(f,v)=>Array.isArray(v)?(Array.isArray(f)?v.some(x=>f.includes(x)):!f||v.includes(f)):chHas(f,v);
   function chGroups(t,f){
-    return (t.groups||[]).filter(g=>chDimensions.every(k=>!f[k]||(Array.isArray(g[k])?g[k].includes(f[k]):g[k]===f[k])));
+    return (t.groups||[]).filter(g=>chDimensions.every(k=>chDimMatch(f[k],g[k])));
   }
   function chFilteredTotals(t,f){
     if(!chDimensions.some(k=>f[k]))return t;
@@ -153,7 +160,7 @@
     const n=chDays(t.created,delivered);return n!==null&&n>=0?n:null;
   }
   function chMatches(t,f,asof){
-    if(['cat','shipment','brand'].some(k=>f[k]&&f[k]!==t[k]))return false;
+    if(['cat','shipment','brand'].some(k=>!chHas(f[k],t[k])))return false;
     if(f.openStart&&(!t.created||t.created<f.openStart))return false;
     if(f.openEnd&&(!t.created||t.created>f.openEnd))return false;
     if(chDimensions.some(k=>f[k])&&!chGroups(t,f).length)return false;
@@ -211,15 +218,41 @@
   }
   const dimNames={printer:'Gráfica',cd:'CD',series:'Série',material:'Tipo de material',feature:'Característica',cover:'Tipo de capa',finish:'Acabamento'};
   const filterKeys=[...chDimensions,'openStart','openEnd','min','max'];
+  const singleIds=new Set(['ch-scope','ch-okr-scope','ch-okr-basis','ch-okr-rule']);
+  const filterState=new WeakMap();
+  function filterVal(x){if(!x)return '';if(x.tagName!=='SELECT'||singleIds.has(x.id))return x.value||'';const s=filterState.get(x);return !s||s.all?'':Array.from(s.values);}
+  function setFilterValue(x,v){if(!x)return;filterState.delete(x);x.value=v;if(x.tagName==='SELECT'&&!singleIds.has(x.id)&&v)filterState.set(x,{all:false,values:new Set([v])});}
   function styleFilters(){
-    root.querySelectorAll('.ch-filterline input,.ch-filterline select').forEach(x=>{
-      const defaultValue=x.id==='ch-scope'||x.id==='ch-okr-scope'?'ativos':'';
-      x.dataset.active=String(x.value!==defaultValue);
+    root.querySelectorAll('.ch-filterline select').forEach(x=>{
+      let host=x.closest('.ch-pg-filter-host');
+      if(!host){const label=x.closest('label');if(!label)return;const title=Array.from(label.childNodes).filter(n=>n.nodeType===3).map(n=>n.textContent.trim()).join(' ').trim();host=document.createElement('div');host.className='relative filtro-container-geral ch-pg-filter-host';host.dataset.title=title;label.replaceWith(host);host.appendChild(x);x.hidden=true;}
+      const title=host.dataset.title,opts=Array.from(x.options),single=singleIds.has(x.id),vals=opts.filter(o=>single||o.value!=='').map(o=>({v:o.value,label:o.textContent}));
+      let s=filterState.get(x);if(!s){s={all:!x.value,values:new Set(x.value?[x.value]:[])};filterState.set(x,s);}
+      if(!single&&!s.all)s.values=new Set([...s.values].filter(v=>vals.some(o=>o.v===v)));
+      const active=single?x.value!==(x.id.endsWith('scope')?'ativos':opts[0]?.value):!s.all;
+      const wasOpen=!!host.querySelector('.ch-pg-menu:not(.hidden)');
+      host.querySelector('.ch-pg-button')?.remove();host.querySelector('.ch-pg-menu')?.remove();
+      host.insertAdjacentHTML('beforeend','<button type="button" data-ch-dropdown class="ch-pg-button '+(active?'bg-blue-50':'bg-white')+' border-slate-400 text-slate-800 hover:bg-slate-100 shadow-md px-3 py-2 rounded-lg text-xs font-black flex items-center gap-2 uppercase tracking-wide transition-colors" aria-expanded="'+wasOpen+'">'+esc(title)+(single?' · '+esc(x.selectedOptions[0]?.text||''):active?' ('+s.values.size+')':'')+' <span class="text-[10px] opacity-80">▼</span></button><div class="ch-pg-menu '+(wasOpen?'':'hidden')+' absolute left-0 top-[calc(100%+4px)] bg-white border border-slate-300 shadow-xl rounded-xl w-60 p-2 z-[90]">'+
+      (single?'':'<div class="flex justify-between items-center mb-2 pb-2 border-b border-slate-200"><button type="button" data-ch-all="true" class="text-[10px] font-black text-emerald-600 hover:underline px-1 py-0.5">Marcar Todos</button><button type="button" data-ch-all="false" class="text-[10px] font-black text-red-600 hover:underline px-1 py-0.5">Desmarcar</button></div>')+
+      '<div class="max-h-48 overflow-y-auto scroller space-y-1 pr-1">'+vals.map(o=>'<div class="flex justify-between items-center hover:bg-slate-100 p-1 rounded border border-transparent hover:border-slate-200 group/item transition-colors"><label class="ch-pg-option flex items-start gap-2 text-[11px] cursor-pointer font-bold text-slate-700 flex-1"><input type="'+(single?'radio':'checkbox')+'" data-ch-option value="'+esc(o.v)+'" '+((single?x.value===o.v:s.all||s.values.has(o.v))?'checked':'')+'><span class="whitespace-normal leading-tight">'+esc(o.label)+'</span></label>'+(single?'':'<button type="button" data-ch-only="'+esc(o.v)+'" class="hidden group-hover/item:block text-[9px] bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-black border border-indigo-200 hover:bg-indigo-600 hover:text-white transition-colors">Único</button>')+'</div>').join('')+'</div></div>');
     });
   }
-  root.addEventListener('change',styleFilters);root.addEventListener('input',styleFilters);
+  function closeFilterMenus(except){root.querySelectorAll('.ch-pg-filter-host').forEach(host=>{if(host===except)return;host.querySelector('.ch-pg-menu')?.classList.add('hidden');host.querySelector('[data-ch-dropdown]')?.setAttribute('aria-expanded','false');});}
+  root.addEventListener('click',e=>{
+    const host=e.target.closest('.ch-pg-filter-host');if(!host){closeFilterMenus();return;}
+    const x=host.querySelector('select'),b=e.target.closest('button');if(!b)return;
+    if(b.hasAttribute('data-ch-dropdown')){const menu=host.querySelector('.ch-pg-menu'),open=menu.classList.contains('hidden');closeFilterMenus(host);menu.classList.toggle('hidden',!open);b.setAttribute('aria-expanded',String(open));return;}
+    if(b.hasAttribute('data-ch-all')||b.hasAttribute('data-ch-only')){const all=b.dataset.chAll==='true',only=b.dataset.chOnly;filterState.set(x,{all,values:new Set(only!==undefined?[only]:[])});x.value=only||'';x.dispatchEvent(new Event('change',{bubbles:true}));}
+  });
+  root.addEventListener('change',e=>{
+    const input=e.target.closest('[data-ch-option]');if(!input)return;
+    const host=input.closest('.ch-pg-filter-host'),x=host.querySelector('select');e.stopPropagation();
+    if(singleIds.has(x.id)){x.value=input.value;closeFilterMenus();}else{const selected=[...host.querySelectorAll('[data-ch-option]:checked')].map(v=>v.value),all=selected.length===host.querySelectorAll('[data-ch-option]').length;filterState.set(x,{all,values:new Set(selected)});x.value=selected.length===1?selected[0]:'';}
+    x.dispatchEvent(new Event('change',{bubbles:true}));
+  },true);
+  root.addEventListener('change',e=>{if(e.target.tagName==='SELECT')styleFilters();});
   const dayNow=()=>{const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(state.data?.now||Date.now()));const d=Object.fromEntries(parts.map(p=>[p.type,p.value]));return d.year+'-'+d.month+'-'+d.day;};
-  const readFilters=prefix=>Object.fromEntries(filterKeys.map(k=>[k,el(prefix+k)?.value||'']));
+  const readFilters=prefix=>Object.fromEntries(filterKeys.map(k=>[k,filterVal(el(prefix+k))]));
   function filterMarkup(prefix){
     return chDimensions.map(k=>'<label>'+dimNames[k]+'<select id="ch-'+prefix+k+'"><option value="">Todos</option></select></label>').join('')+
       [['openStart','Abertura de','date'],['openEnd','Abertura até','date'],['min','Aging mín.','number'],['max','Aging máx.','number']].map(([k,label,type])=>'<label>'+label+'<input type="'+type+'" id="ch-'+prefix+k+'" '+(type==='number'?'min="0"':'')+'></label>').join('');
@@ -260,7 +293,7 @@
       target.innerHTML='<option value="">Todos</option>'+values.map(v=>opt(v)).join('');if(values.includes(old))target.value=old;
     }
     dimOptions('okr-',re);styleFilters();
-    const f={...readFilters('okr-'),...Object.fromEntries(['rule','basis','start','end','asof','brand','shipment','scope'].map(k=>[k,el('okr-'+k).value]))};
+    const f={...readFilters('okr-'),...Object.fromEntries(['rule','basis','start','end','asof','brand','shipment','scope'].map(k=>[k,filterVal(el('okr-'+k))]))};
     f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
     if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
     const d=chOKR(re,f),pct=v=>v===null?'—':num(Math.round(v*10)/10)+'%';
@@ -274,6 +307,7 @@
     message('Carregando JSON publicado dos chamados…');
     try{
       const started=performance.now(),d=await rpc('getChamadosPortal',false);if(token!==state.load)return;console.info('[CH JSON] abertura ms',Math.round(performance.now()-started));
+      if(d.calculationVersion!==3){state.data=null;state.detail=null;show();message('Atualize o JSON para carregar os indicadores com as regras corrigidas (atualizarCacheChamadosPortal).',true);return;}
       state.data=d;state.detail=null;state.detailLoad++;state.page=1;
       for(const key of ['cat','shipment','brand']){
         const old=el(key).value,options=[...new Set(d.rows.map(r=>r[key]).filter(Boolean))].sort();
@@ -286,13 +320,13 @@
   window.pgAbrirChamados=function(view){if(state.view!==view){state.detail=null;state.detailLoad++;}state.view=view;show();if(!state.data && !state.loading )load(false);};
   function selected(){
     const q=el('query').value.trim().replace(/^#/,'').split(/[^0-9]+/).filter(Boolean),scope=el('scope').value;
-    const f={...readFilters('route-'),cat:el('cat').value,shipment:el('shipment').value,brand:el('brand').value};
+    const f={...readFilters('route-'),cat:filterVal(el('cat')),shipment:filterVal(el('shipment')),brand:filterVal(el('brand'))};
     return state.data.rows.filter(t=>{
       const canceled=/CANCEL/.test(t.status), closed=/CONCLU/.test(t.status);
       return (scope==='todos'||(scope==='cancelados'?canceled:scope==='concluidos'?closed:scope==='abertos'?!canceled&&!closed:!canceled))
         && chMatches(t,f,dayNow())
         && (!el('query').value.trim() || (q.length===1?String(t.n).includes(q[0]):q.includes(String(t.n))));
-    }).map(t=>chFilteredTotals(t,f)).filter(t=>t&&(!el('production').value||(t.production||[]).some(p=>p.label===el('production').value))).sort((a,b)=>Number(b.n)-Number(a.n));
+    }).map(t=>chFilteredTotals(t,f)).filter(t=>t&&(filterVal(el('production'))===''||(t.production||[]).some(p=>chHas(filterVal(el('production')),p.label)))).sort((a,b)=>Number(b.n)-Number(a.n));
   }
   function pager(where,page,n,size,type){
     const max=Math.max(1,Math.ceil(n/size));
@@ -304,9 +338,9 @@
     el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado no mapa',total('picked')],['Entregue no CD',total('delivered')],['Saldo a entregar',total('balance')],['Aging médio de entrega',agingMarkup(rows,dayNow())]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Saldo a entregar'?'orange':k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
     const groups=new Map();rows.forEach(t=>{const k=t[by]||'Sem informação',g=groups.get(k)||[0,0,0];g[0]++;g[1]+=t.totals.qty;g[2]+=t.totals.balance;groups.set(k,g);});
     el('dist').innerHTML=table([el('by').selectedOptions[0].text,'Chamados','Tiragem','Saldo'],[...groups].sort((a,b)=>b[1][2]-a[1][2]).map(([k,g])=>['<button class="ch-link" data-filter="'+esc(k)+'">'+esc(k)+'</button>',...g.map(num)]));
-    const qty=total('qty'),colors=['#284081','#418EDE','#284081','#418EDE','#284081','#418EDE','#0C2340','#049FEC','#284081'];
+    const qty=total('qty'),colors=['#0C2340','#284081','#284081','#418EDE','#418EDE','#FCB04E','#FA4616','#049FEC','#284081'];
     const values=state.data.phases.map((label,i)=>({label,v:rows.reduce((s,t)=>s+t.totals.coverage[i],0)}));
-    const layer=(label,v,pct,color,idx)=>'<div class="funnel-layer ch-portal-layer text-white text-center" style="width:'+Math.min(100,Math.max(pct,25))+'%;background:'+color+'" title="'+esc(label)+' · '+num(v)+'">'+String(idx).padStart(2,'0')+' - '+esc(label)+' ('+num(v)+' | '+num(Math.round(pct*10)/10)+'%)</div>';
+    const layer=(label,v,pct,color,idx)=>'<div class="funnel-layer ch-portal-layer text-center'+(pct<35?' ch-narrow':'')+'" style="width:'+Math.min(100,Math.max(pct,32))+'%;background:'+color+';color:'+(color==='#FCB04E'?'#0C2340':'white')+'" title="'+esc(label)+' · '+num(v)+'"><span>'+String(idx).padStart(2,'0')+' - '+esc(label)+' ('+num(v)+' | '+num(Math.round(pct*10)/10)+'%)</span></div>';
     const physical=[0,1,2,3,4,5,6,10,11];
     el('funnel').innerHTML=layer('Tiragem total',qty,qty?100:0,'#0C2340',0)+physical.map((k,i)=>layer(values[k].label,values[k].v,qty?100*values[k].v/qty:0,colors[i],i+1)).join('');
     el('parallel').innerHTML=[7,8,9].map(k=>'<div class="ch-card"><small>'+esc(values[k].label)+'</small><b>'+num(values[k].v)+'</b><small>'+num(qty?Math.round(1000*values[k].v/qty)/10:0)+'%</small></div>').join('');
@@ -363,17 +397,18 @@
   }
   root.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;
-    if(b.id==='ch-okr-clear'){[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment'].forEach(k=>el(k).value='');el('okr-scope').value='ativos';renderOKR();return;}
+    if(b.id==='ch-okr-clear'){[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment'].forEach(k=>setFilterValue(el(k),''));el('okr-scope').value='ativos';renderOKR();return;}
     if(b.id==='ch-refresh'){load(true);return;}if(b.id==='ch-save'){save();return;}
     if(b.id==='ch-back'){state.detailLoad++;state.detail=null;render();show();return;}
     if(b.dataset.ticket){openTicket(b.dataset.ticket);return;}
-    if(b.dataset.filter){el(el('by').value).value=b.dataset.filter;state.page=1;render();styleFilters();return;}
+    if(b.dataset.filter){setFilterValue(el(el('by').value),b.dataset.filter);state.page=1;render();styleFilters();return;}
     if(b.dataset.page){state.page+=Number(b.dataset.page);render();return;}
     if(b.dataset.itempage){state.itemPage+=Number(b.dataset.itempage);renderItems();return;}
-    if(b.id==='ch-clear'){['query','cat','shipment','brand','production',...filterKeys.map(k=>'route-'+k)].forEach(k=>el(k).value='');el('scope').value='ativos';state.page=1;render();styleFilters();}
+    if(b.id==='ch-clear'){['query','cat','shipment','brand','production',...filterKeys.map(k=>'route-'+k)].forEach(k=>setFilterValue(el(k),''));el('scope').value='ativos';state.page=1;render();styleFilters();}
   });
   el('routefilters').innerHTML=filterMarkup('route-');
   filterKeys.forEach(k=>el('route-'+k).addEventListener('change',()=>{state.page=1;render();}));
+  styleFilters();
   ['cat','brand','shipment','scope','production','by','query'].forEach(k=>el(k).addEventListener(k==='query'?'input':'change',()=>{state.page=1;render();}));
 })();
 </script>
