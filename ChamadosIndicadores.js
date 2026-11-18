@@ -15,7 +15,7 @@ function pgChAtributos_(idx,it) {
   if(cuts.some(v=>['TRUE','SIM','1'].includes(v)))features.push('Corte e vinco');
   if(list('cover').some(v=>pgChNormal_(v)==='DURA'))features.push('Capa dura');
   if([it.desc,...list('description')].some(s=>/\bMONTAVE(?:L|IS)\b/.test(pgChNormal_(s))))features.push('Montável');
-  return {printer:it.printer||'',cd:pgChCD_(it.cd),series:clean(fichas.flatMap(r=>pgChTexto_(r.series).split(/[;|]/))),
+  return {printer:pgChGrafNome_(it.printer),cd:pgChCDNome_(it.cd),series:clean(fichas.flatMap(r=>pgChTexto_(r.series).split(/[;|]/))),
     material:list('material'),feature:features,cover:list('cover'),finish:list('finish'),specRows:fichas.map(r=>r.row)};
 }
 // Data em que a soma da própria rota atinge a tiragem. Um excedente posterior

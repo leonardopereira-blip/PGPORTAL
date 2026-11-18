@@ -120,7 +120,7 @@
   const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const dt=x=>/^\d{4}-\d{2}-\d{2}/.test(x||'')?x.slice(0,10).split('-').reverse().join('/'):'—';
   const stamp=x=>new Date(x).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'});
-  const cdLabel=x=>({JDI:'CD JDI',FOR:'CD FOR',CWB:'CD CWB',SJR:'CD SJR',LOV:'CD LOV',RP:'CD RP',CJUN:'CD JDI',CITA:'CD FOR',CCWB:'CD CWB',CSJR:'CD SJR',CLOV:'CD LOV',CRPR:'CD RP'})[String(x||'').toUpperCase()]||x;
+  const cdLabel=x=>({JDI:'CD JDI',FOR:'CD FOR',CWB:'POSIGRAF',SJR:'RAÍZES',LOV:'KN',RP:'CD RP',CJUN:'CD JDI',CITA:'CD FOR',CCWB:'POSIGRAF',CSJR:'RAÍZES',CLOV:'KN',CRPR:'CD RP',RAIZES:'RAÍZES','TRATTO MANUSEIO':'KN'})[String(x||'').toUpperCase()]||x;
   const opt=(x,label=x)=>'<option value="'+esc(x)+'">'+esc(label)+'</option>';
   const productionCell=t=>(t.production||[]).length?(t.production||[]).map(p=>'<span class="ch-status-chip" title="'+num(p.qty)+' unidades">'+esc(p.label)+'</span>').join(' '):'Atualização da base necessária';
   const cell=x=>x==null||x===''?'—':esc(x);

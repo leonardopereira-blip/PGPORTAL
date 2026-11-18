@@ -22,7 +22,7 @@ function pgChFinanceiro_(dados,tickets,numeros) {
     const valid=candidates.filter(t=>rota(t,r,r.sku).length===1 && (!r.cycle || pgChNormal_(t.edition).startsWith(pgChNormal_(r.cycle))));
     if(valid.length!==1){alerta(candidates,r,'cost','Lote de custo citado; conferir SKU, marca, gráfica, ciclo e CD');continue;}
     const t=valid[0], key=pgChNormal_(r.lotId);
-    const detail={row:r.row,lot:r.lotId,sku:r.sku,printer:r.printer,cd:r.cd,qty:r.qty,value:r.value,
+    const detail={row:r.row,lot:r.lotId,sku:r.sku,printer:pgChGrafNome_(r.printer),cd:pgChCDNome_(r.cd),qty:r.qty,value:r.value,
       status:r.status,date:pgChData_(r.end),sent:pgChData_(r.sent),req:r.req,oc:r.oc};
     t.costs.push(detail);
     pgChAdd_(lotes,key,t);
@@ -58,7 +58,7 @@ function pgChFinanceiro_(dados,tickets,numeros) {
       return true;
     });
     if(match.length!==1){alerta(candidates,r,'oc','OC ou requisição com vínculo divergente; conferir ID, marca, fornecedor e CD');continue;}
-    match[0].orders.push({row:r.row,id:r.id,req:r.req,oc:r.oc,tri:r.tri,system:r.system,printer:r.printer,cd:r.cd,value:r.value,
+    match[0].orders.push({row:r.row,id:r.id,req:r.req,oc:r.oc,tri:r.tri,system:r.system,printer:pgChGrafNome_(r.printer),cd:pgChCDNome_(r.cd),value:r.value,
       opened:pgChData_(r.opened),sent:pgChData_(r.sent),approval:r.approval,status:r.status,
       method:byLot.length?'ID completo do lote + rota':n?'Chamado no ID + rota':'OC do SPG + rota'});
   }

@@ -5,22 +5,133 @@ function pgChNormal_(v) {
   return pgChTexto_(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
 }
 function pgChToken_(v) { return pgChNormal_(v).replace(/[^A-Z0-9]/g, ''); }
-function pgChMarca_(v) {
-  const s=pgChToken_(v);
-  return ({GEK:'GKI',GEEKIE:'GKI',GEN:'GFN',GENIO:'GFN',PLENO:'PLN',PLE:'PLN',MAR:'MRT',MARALTO:'MRT',IS:'INS',EI:'EDI',
-    POSITIVO:'SPE',NAVEAVELA:'NAV',MESTRE:'MDM',SELONEUTRO:'SLN',SASADAPT:'SAD',PEARSON:'PRS'})[s]||s;
-}
-function pgChGraf_(v) { return pgChToken_(v).replace(/^SDIGRAFICA$/,'SDI'); }
-function pgChCD_(v) {
-  const s = pgChNormal_(v).replace(/\s*-\s*(SP|CE|PR)$/, '').trim();
-  const aliases = {
-    CJUN:'JDI', 'CD JDI':'JDI', JUNDIAI:'JDI', CITA:'FOR', 'CD FOR':'FOR', ITAITINGA:'FOR', FORTALEZA:'FOR',
-    CCWB:'CWB', CURITIBA:'CWB', POSIGRAF:'CWB', 'CD CWB':'CWB', CSJR:'SJR', 'SAO JOSE DO RIO PRETO':'SJR',
-    CLOV:'LOV', LOUVEIRA:'LOV', CRPR:'RP', 'CD RP':'RP', 'RIBEIRAO PRETO':'RP', AT:'ATHOS', 'ACABADORA - ATHOS':'ATHOS'
-  };
-  const names={'CD JUNDIAI':'JDI','CD CE':'FOR','CD RIBEIRAO':'RP','RIBEIRAO_PRETO':'RP','KN':'LOV','RAIZES':'SJR'};
-  return aliases[s] || names[s] || pgChToken_(s);
-}
+// De-para oficial do PCP informado em 18/11/2026. Gráfica e destino são domínios distintos.
+const PG_CH_DEPARA_GRAF={
+  "COAN": "COAN",
+  "MIDIOGRAF": "MIDIOGRAF",
+  "MAXIGRAFICA": "MAXI",
+  "MAXI": "MAXI",
+  "RICARGRAF": "RICARGRAF",
+  "RONA": "RONA",
+  "REPROSET": "REPROSET",
+  "IPSIS": "IPSIS",
+  "PIFFERPRINT": "PIFFER",
+  "PIFFER": "PIFFER",
+  "BERCROM": "BERCROM",
+  "STAR7": "STAR7",
+  "LOGPRINT": "LOGPRINT",
+  "WALPRINT": "WALPRINT",
+  "POSIGRAF": "POSIGRAF",
+  "META": "META",
+  "IMOS": "IMOS",
+  "LEOGRAF": "LEOGRAF",
+  "SAOFRANCISCO": "SÃO FRANCISCO",
+  "OCEANO": "OCEANO",
+  "FORMACERTA": "FORMA CERTA",
+  "ZIT": "ZIT",
+  "MARGRAF": "MARGRAF",
+  "SDIGRAFICA": "SDI",
+  "SDI": "SDI"
+};
+const PG_CH_DEPARA_MARCA={
+  "MARALTO": "MAR",
+  "MAR": "MAR",
+  "GEEKIE": "GEE",
+  "GEE": "GEE",
+  "GENIO": "GEN",
+  "GEN": "GEN",
+  "PES": "PES",
+  "POSITIVO": "SPE",
+  "SPE": "SPE",
+  "MESTRE": "MES",
+  "MES": "MES",
+  "SAS": "SAS",
+  "COC": "COC",
+  "CQT": "CQT",
+  "EI": "EI",
+  "PLENO": "PLE",
+  "PLE": "PLE",
+  "SAE": "SAE",
+  "SASADAPT": "SAS ADAPT",
+  "SELONEUTRO": "NEU",
+  "NEU": "NEU",
+  "WAYS": "WAYS",
+  "NAVEAVELA": "NAV",
+  "NAV": "NAV",
+  "PIA": "PIA",
+  "IS": "IS",
+  "SASBRADESCO": "SAS - BRADESCO",
+  "GEK": "GEE",
+  "GKI": "GEE",
+  "GFN": "GEN",
+  "PLN": "PLE",
+  "MRT": "MAR",
+  "INS": "IS",
+  "EDI": "EI",
+  "MDM": "MES",
+  "SLN": "NEU",
+  "SAD": "SAS ADAPT",
+  "PEARSON": "PES",
+  "PRS": "PES"
+};
+const PG_CH_DEPARA_DESTINO={
+  "CSJR": "RAÍZES",
+  "RAIZES": "RAÍZES",
+  "CRPR": "CD RP",
+  "CDRP": "CD RP",
+  "CCWB": "POSIGRAF",
+  "POSIGRAF": "POSIGRAF",
+  "CJUN": "CD JDI",
+  "CDJDI": "CD JDI",
+  "CITA": "CD FOR",
+  "CDFOR": "CD FOR",
+  "CLOV": "KN",
+  "KN": "KN",
+  "ANTILHAS": "ANTILHAS",
+  "RICARGRAF": "RICARGRAF",
+  "LEOGRAF": "LEOGRAF",
+  "MAXIGRAFICA": "MAXIGRAFICA",
+  "RONA": "RONA",
+  "PIFFERPRINT": "PIFFER",
+  "PIFFER": "PIFFER",
+  "STAR7": "STAR7",
+  "FORMACERTA": "FORMA CERTA",
+  "ATHOS": "ATHOS",
+  "LOGPRINT": "LOGPRINT",
+  "IMOS": "IMOS",
+  "BERCROM": "BERCROM",
+  "TRATTOMANUSEIO": "KN",
+  "HR": "HR",
+  "EMBALARTE": "EMBALARTE",
+  "JDI": "CD JDI",
+  "JUNDIAI": "CD JDI",
+  "CDJUNDIAI": "CD JDI",
+  "FOR": "CD FOR",
+  "ITAITINGA": "CD FOR",
+  "FORTALEZA": "CD FOR",
+  "CDCE": "CD FOR",
+  "CWB": "POSIGRAF",
+  "CDCWB": "POSIGRAF",
+  "CURITIBA": "POSIGRAF",
+  "SJR": "RAÍZES",
+  "SAOJOSEDORIOPRETO": "RAÍZES",
+  "CDSJR": "RAÍZES",
+  "LOV": "KN",
+  "LOUVEIRA": "KN",
+  "CDLOV": "KN",
+  "RP": "CD RP",
+  "CDRIBEIRAO": "CD RP",
+  "RIBEIRAOPRETO": "CD RP",
+  "AT": "ATHOS",
+  "ACABADORAATHOS": "ATHOS"
+};
+function pgChCanon_(v,map){const k=pgChToken_(v);return Object.prototype.hasOwnProperty.call(map,k)?map[k]:k;}
+function pgChMarca_(v){return pgChCanon_(v,PG_CH_DEPARA_MARCA);}
+function pgChGraf_(v){return pgChCanon_(v,PG_CH_DEPARA_GRAF);}
+function pgChCD_(v){return pgChCanon_(pgChNormal_(v).replace(/\s*-\s*(SP|CE|PR)$/,''),PG_CH_DEPARA_DESTINO);}
+function pgChGrafNome_(v){return PG_CH_DEPARA_GRAF[pgChToken_(v)]||pgChTexto_(v);}
+function pgChCDNome_(v){const s=pgChNormal_(v).replace(/\s*-\s*(SP|CE|PR)$/,'');return PG_CH_DEPARA_DESTINO[pgChToken_(s)]||pgChTexto_(v);}
+function pgChMarcaNome_(v){return PG_CH_DEPARA_MARCA[pgChToken_(v)]||pgChTexto_(v);}
 function pgChData_(v) {
   const s = pgChTexto_(v);
   const br = /^(\d{2})\/(\d{2})\/(20\d{2})(?:\s|$)/.exec(s);
@@ -59,15 +170,15 @@ function pgChModelo_(dados) {
   const sla=pgChRotasSLA_(dados.sla||[]);
   const tickets = new Map(), numeros = new Map(), porSKU = new Map(), porOP = new Map();
   const mapaRefs = new Map();
-  const rotaKey = (sku,marca,grafica,cd) => [pgChNormal_(sku),pgChToken_(marca),pgChToken_(grafica),pgChCD_(cd)].join('|');
-  const kitKey = (r) => [r.id || r.n,r.sku,r.brand,r.cd,r.kit].join('|');
+  const rotaKey = (sku,marca,grafica,cd) => [pgChNormal_(sku),pgChMarca_(marca),pgChGraf_(grafica),pgChCD_(cd)].join('|');
+  const kitKey = (r) => [r.id || r.n,pgChNormal_(r.sku),pgChMarca_(r.brand||r.brandName),pgChCD_(r.cd),r.kit].join('|');
   const lotes = new Map();
   dados.spg.forEach(r => {
     if (!r.n || !r.cat) return;
     const id = r.id || 'SPG-'+r.n;
     let t = tickets.get(id);
     if (!t) {
-      t = {id,n:r.n,cat:r.cat,brand:r.brand||r.brandName,shipment:r.shipment,status:r.status,priority:r.priority,
+      t = {id,n:r.n,cat:r.cat,brand:pgChMarcaNome_(r.brand||r.brandName),shipment:r.shipment,status:r.status,priority:r.priority,
         owner:r.owner,created:pgChData_(r.created),desired:pgChData_(r.desired),goal:pgChData_(r.goal),op:r.op,
         edition:r.edition,why:r.why,obs:r.obs,reason:r.reason,steps:{},issues:[],panel:[],items:[],alerts:[],refs:[],_groups:new Map()};
       tickets.set(id,t); pgChAdd_(numeros,String(r.n),t);
@@ -92,7 +203,7 @@ function pgChModelo_(dados) {
     const key=rotaKey(r.sku,t.brand,printer,r.cd);
     let it=t._groups.get(key);
     if (!it) {
-      it={id:t.id,sku:r.sku,desc:r.description,brand:t.brand,printer,cd:r.cd,qty:0,kits:[],rows:[],spg:[],cal:[],pcp:[],maps:[],stages:[],evidence:[]};
+      it={id:t.id,sku:r.sku,desc:r.description,brand:t.brand,printer:pgChGrafNome_(printer),cd:pgChCDNome_(r.cd),qty:0,kits:[],rows:[],spg:[],cal:[],pcp:[],maps:[],stages:[],evidence:[]};
       t._groups.set(key,it); t.items.push(it);
       if (r.sku) pgChAdd_(porSKU,pgChNormal_(r.sku),it);
       if (t.op) pgChAdd_(porOP,pgChToken_(t.op),it);
@@ -113,7 +224,7 @@ function pgChModelo_(dados) {
       group.forEach(x=>{if (pgChQtd_(x.r.assigned)) addItem(t,x.r,pgChQtd_(x.r.assigned),x.r.printer);});
       if (total>aloc) addItem(t,r,total-aloc,'');
     } else {
-      const printers=pgChUnicos_(group.map(x=>x.r.printer));
+      const printers=pgChUnicos_(group.map(x=>pgChGrafNome_(x.r.printer)));
       addItem(t,r,total,printers.length===1?printers[0]:'');
       if (printers.length>1) t.alerts.push({text:'Divisão de tiragem entre gráficas a conferir',sku:r.sku,row:r.row,src:'spg'});
     }
@@ -146,7 +257,7 @@ function pgChModelo_(dados) {
   dados.panel.forEach(r=>{
     const ts=numeros.get(String(r.n))||[];
     if (ts.length!==1 || !comp(r.brand,ts[0].brand,pgChMarca_) || !comp(r.shipment,ts[0].shipment,envio)) return;
-    ts[0].panel.push({row:r.row,cd:r.cd,printer:r.printer,status:r.status,note:r.note,responsible:r.responsible,criticality:r.criticality,risk:r.risk,cause:r.cause,
+    ts[0].panel.push({row:r.row,cd:pgChCDNome_(r.cd),printer:pgChGrafNome_(r.printer),status:r.status,note:r.note,responsible:r.responsible,criticality:r.criticality,risk:r.risk,cause:r.cause,
       startP:pgChData_(r.startP),startR:pgChData_(r.startR),endP:pgChData_(r.endP),endR:pgChData_(r.endR)});
   });
   const seen=new Map();
@@ -184,9 +295,9 @@ function pgChModelo_(dados) {
       pick:pgChData_(m.picked)||pgChData_(m.colPick),eta:pgChData_(m.eta),delivery:received,
       delivered:received?(hasCount?Math.min(qty,pgChQtd_(m.received)):(/^(SIM|TRUE)$/.test(pgChNormal_(m.divergent))?0:qty)):0,
       method:raw.length?'Número do chamado':named.length?'Mapa informado no SPG':'SKU + marca + gráfica + CD',
-      cd,printer,raw:raw.join(' / '),scan:m.scan};
+      cd:pgChCDNome_(cd),printer:pgChGrafNome_(printer),raw:raw.join(' / '),scan:m.scan};
     // Repetições da mesma leitura/conferência não criam uma nova expedição.
-    const k=[m.out||code,m.scan||'',m.document||'',m.kit,m.sku,m.nf,cd,qty].join('|');
+    const k=[m.out||code,m.scan||'',m.document||'',m.kit,m.sku,m.nf,pgChCD_(cd),qty].join('|');
     const old=seen.get(k);
     if(old && old.id===it.id && old.it===it){
       if (pgChData_(m.checked)>=old.checked) {

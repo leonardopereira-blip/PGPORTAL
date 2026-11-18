@@ -75,3 +75,14 @@ test('status por SKU preserva saldo e rotas divergentes',()=>{
 test('PCP posterior confirma etapas anteriores sem inventar datas',()=>{
  const t=build({spg:[a],pcp:[{...a,finishR:'2026-10-02'}]}).tickets.get(a.id);assert.equal(t.totals.coverage[0],100);assert.equal(t.totals.coverage[3],100);assert.equal(t.totals.coverage[4],100);assert.equal(t.totals.coverage[5],0);
 });
+
+test('de-para oficial PCP: todos os 64 pares normalizam na dimensão correta',()=>{
+ const check=(rows,fn)=>rows.forEach(([x,y])=>{assert.equal(fn(x),fn(y));assert.equal(fn(x),y==='RAIZES'?'RAÍZES':y);});
+ check([["COAN","COAN"],["MIDIOGRAF","MIDIOGRAF"],["MAXIGRAFICA","MAXI"],["RICARGRAF","RICARGRAF"],["RONA","RONA"],["REPROSET","REPROSET"],["IPSIS","IPSIS"],["PIFFERPRINT","PIFFER"],["BERCROM","BERCROM"],["STAR7","STAR7"],["LOGPRINT","LOGPRINT"],["WALPRINT","WALPRINT"],["POSIGRAF","POSIGRAF"],["META","META"],["IMOS","IMOS"],["LEOGRAF","LEOGRAF"],["SAO FRANCISCO","SÃO FRANCISCO"],["OCEANO","OCEANO"],["FORMA CERTA","FORMA CERTA"],["ZIT","ZIT"],["MARGRAF","MARGRAF"]],ctx.pgChGraf_);check([["Maralto","MAR"],["Geekie","GEE"],["Gênio","GEN"],["PES","PES"],["POSITIVO","SPE"],["Mestre","MES"],["SAS","SAS"],["COC","COC"],["CQT","CQT"],["EI","EI"],["Pleno","PLE"],["SAE","SAE"],["SAS ADAPT","SAS ADAPT"],["SELO NEUTRO","NEU"],["WAYS","WAYS"],["Nave à Vela","NAV"],["Piá","PIA"],["IS","IS"],["SAS-BRADESCO","SAS - BRADESCO"]],ctx.pgChMarca_);check([["CSJR","RAÍZES"],["CRPR","CD RP"],["CCWB","POSIGRAF"],["CJUN","CD JDI"],["CITA","CD FOR"],["CLOV","KN"],["ANTILHAS","ANTILHAS"],["KN","KN"],["POSIGRAF","POSIGRAF"],["RICARGRAF","RICARGRAF"],["LEOGRAF","LEOGRAF"],["MAXIGRAFICA","MAXIGRAFICA"],["RONA","RONA"],["PIFFERPRINT","PIFFER"],["STAR7","STAR7"],["RAIZES","RAIZES"],["FORMA CERTA","FORMA CERTA"],["ATHOS","ATHOS"],["LOGPRINT","LOGPRINT"],["IMOS","IMOS"],["BERCROM","BERCROM"],["TRATTO MANUSEIO","KN"],["HR","HR"],["EMBALARTE","EMBALARTE"]],ctx.pgChCD_);
+ assert.equal(ctx.pgChGraf_('MAXIGRAFICA'),'MAXI');assert.equal(ctx.pgChCD_('MAXIGRAFICA'),'MAXIGRAFICA');assert.equal(ctx.pgChCD_('POSIGRAF'),'POSIGRAF');
+});
+test('de-para permite cruzamento exato de chamado, SKU, marca, gráfica e CD sem emprestar para outra rota',()=>{
+ const base={...a,brand:'Maralto',printer:'MAXIGRAFICA',cd:'CITA'},other={...base,cd:'CJUN'};
+ const t=build({spg:[base,other],map:[{...map,brand:'MAR',printer:'MAXI',cd:'CD FOR',n:'101',qty:'150',received:'100'}]}).tickets.get(a.id);
+ assert.equal(t.brand,'MAR');assert.equal(t.items.find(x=>x.cd==='CD FOR').printer,'MAXI');assert.equal(t.items.find(x=>x.cd==='CD FOR').coverage[3],100);assert.equal(t.items.find(x=>x.cd==='CD JDI').coverage[3],0);assert.equal(t.totals.balance,100);
+});
