@@ -221,7 +221,7 @@ function salvarTratativaChamadoPortal(id,state,note,base,event) {
   event=pgGiroEventoId_(event);base=pgChTexto_(base);note=note.trim();
   const user=Session.getActiveUser().getEmail();
   if(!user)throw new Error('Entre com sua conta para registrar a alteração.');
-  const s=pgChSnapshot_(false);
+  const s=pgChSnapshot_();
   if(!s.rows.some(t=>t.id===id))throw new Error('Chamado não localizado no SPG.');
   const lock=LockService.getScriptLock();lock.waitLock(30000);
   try{

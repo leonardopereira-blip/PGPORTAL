@@ -55,7 +55,7 @@
       <label>Categoria<select id="ch-cat"></select></label><label>Envio<select id="ch-shipment"></select></label>
       <label>Marca<select id="ch-brand"></select></label><label>Situação<select id="ch-scope"><option value="ativos">Exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option><option value="cancelados">Cancelados</option><option value="todos">Todos</option></select></label>
       <button id="ch-clear" class="ch-btn">Limpar</button></div>
-    <div id="ch-kpis" class="ch-grid"></div>
+    <div id="ch-routefilters" class="ch-tools" style="margin-top:12px"></div><div id="ch-kpis" class="ch-grid"></div>
     <div class="ch-flex"><section class="ch-box"><div class="ch-between"><h2>Distribuição</h2>
       <select id="ch-by" aria-label="Agrupar por"><option value="cat">Categoria</option><option value="shipment">Envio</option><option value="brand">Marca</option></select></div><div id="ch-dist"></div></section>
       <section class="ch-box"><h2>Funil de etapas</h2><div id="ch-funnel" class="ch-funnel"></div><small>Tiragem com registro em cada etapa. Coleta e entrega usam as quantidades do mapa.</small></section></div>
@@ -77,17 +77,137 @@
   const rpc=(name,...args)=>new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args));
   const fields=obj=>'<dl class="ch-fields">'+Object.entries(obj).map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+cell(v)+'</dd></div>').join('')+'</dl>';
   const source=(key,row)=>state.data.links[key] && Number.isInteger(row)?'<a href="'+esc(state.data.links[key]+'&range=A'+row)+'" target="_blank" rel="noopener">Linha '+row+'</a>':'—';
+  // CH_OKR_PURE_BEGIN
+  const chDays=(a,b)=>a&&b?Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000):null;
+  const chAdd=(a,n)=>a?new Date(Date.parse(a+'T00:00:00Z')+n*86400000).toISOString().slice(0,10):'';
+  const chPct=(n,d)=>d?100*n/d:null;
+  const chBands=[[0,10],[11,20],[21,25],[26,30],[31,40],[41,60],[61,Infinity]];
+  const chDimensions=['printer','cd','series','material','feature','cover','finish'];
+  function chGroups(t,f){
+    return (t.groups||[]).filter(g=>chDimensions.every(k=>!f[k]||(Array.isArray(g[k])?g[k].includes(f[k]):g[k]===f[k])));
+  }
+  function chFilteredTotals(t,f){
+    if(!chDimensions.some(k=>f[k]))return t;
+    const groups=chGroups(t,f);if(!groups.length)return null;
+    const totals={qty:0,mapped:0,picked:0,delivered:0,balance:0,coverage:t.totals.coverage.map(()=>0)};
+    for(const g of groups){
+      for(const k of ['qty','mapped','picked','delivered','balance'])totals[k]+=g[k]||0;
+      g.coverage.forEach((v,i)=>totals.coverage[i]+=v);
+    }
+    return {...t,totals,eta:groups.map(g=>g.eta).filter(Boolean).sort().pop()||'',partial:groups.some(g=>g.partial)};
+  }
+  function chAging(t,asof){
+    const delivered=t.delivered&&t.delivered<=asof?t.delivered:'';
+    const n=chDays(t.created,delivered);return n!==null&&n>=0?n:null;
+  }
+  function chMatches(t,f,asof){
+    if(['cat','shipment','brand'].some(k=>f[k]&&f[k]!==t[k]))return false;
+    if(f.openStart&&(!t.created||t.created<f.openStart))return false;
+    if(f.openEnd&&(!t.created||t.created>f.openEnd))return false;
+    if(chDimensions.some(k=>f[k])&&!chGroups(t,f).length)return false;
+    if(f.min!==''&&f.min!=null||f.max!==''&&f.max!=null){
+      const age=chAging(t,asof);
+      if(age===null||(f.min!==''&&f.min!=null&&age<Number(f.min))||(f.max!==''&&f.max!=null&&age>Number(f.max)))return false;
+    }
+    return true;
+  }
+  function chOKR(rows,f){
+    const out={cohort:0,den:0,num:0,late:0,pending:0,upcoming:0,missing:0,canceled:0,actual:0,delivery:0,missingActual:0,ages:[],items:[]};
+    const inside=v=>!!v&&(!f.start||v>=f.start)&&(!f.end||v<=f.end);
+    for(const t of rows){
+      if(t.cat!=='REENTRADA'||!chMatches(t,f,f.asof))continue;
+      // Não usa a situação de hoje para atribuir cancelamentos futuros.
+      if(t.created&&t.created>f.asof)continue;
+      const fixed=chAdd(t.created,25);
+      let due=f.rule==='fixed'?fixed:f.rule==='desired'?t.desired:f.rule==='pick'?t.pickDue:fixed?[fixed,t.desired].filter(Boolean).sort().pop():'';
+      let actual=f.rule==='pick'?t.pickDone:t.closed;
+      if(actual&&actual>f.asof)actual='';
+      const negative=!!actual&&!!t.created&&actual<t.created;
+      if(negative)actual='';
+      const canceled=!!(t.canceled&&t.canceled<=f.asof);
+      const cancelUnknown=/CANCEL/i.test(t.status||'')&&!t.canceled;
+      if(f.basis==='open'?!inside(t.created):due?!inside(due):!!t.created&&!inside(t.created))continue;
+      out.cohort++;
+      if(canceled||cancelUnknown){out.canceled++;continue;}
+      if(f.scope==='abertos'&&t.closed&&t.closed<=f.asof||f.scope==='concluidos'&&(!t.closed||t.closed>f.asof))continue;
+      const age=chAging(t,f.asof);if(age!==null){out.ages.push(age);out.delivery++;}
+      if(actual)out.actual++;
+      let status='';const noEvidence=f.rule==='pick'&&t.pickUnverified&&!!actual;
+      if(!t.created||!due||due<t.created||noEvidence||negative){out.missing++;status='Sem data/evidência válida';}
+      else if(due>f.asof){out.upcoming++;status='A vencer';}
+      else{
+        out.den++;
+        if(actual&&actual<=due&&!(f.rule==='pick'&&t.pickLate)){out.num++;status='No prazo';}
+        else if(actual){out.late++;status='Fora do prazo';}
+        else{out.pending++;out.missingActual++;status='Vencido sem comprovação de conclusão';}
+      }
+      out.items.push({id:t.id,n:t.n,brand:t.brand,shipment:t.shipment,created:t.created,due,actual,delivered:t.delivered&&t.delivered<=f.asof?t.delivered:'',age,status});
+    }
+    let sum=0;out.bands=chBands.map(([lo,hi])=>{const count=out.ages.filter(n=>n>=lo&&n<=hi).length;sum+=count;return {label:hi===Infinity?'61+':lo+'–'+hi,count,pct:chPct(count,out.ages.length),cum:chPct(sum,out.ages.length)};});
+    out.average=out.ages.length?out.ages.reduce((a,b)=>a+b,0)/out.ages.length:null;
+    out.pct=chPct(out.num,out.den);return out;
+  }
+  // CH_OKR_PURE_END
   const detailBox=(label,content)=>'<details><summary>'+esc(label)+'</summary>'+content+'</details>';
   function message(s,error){el('msg').textContent=s;el('msg').className=error?'ch-alert':'ch-muted';}
   function show(){
     root.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.view===state.view)));
     el('list').hidden=state.view!=='carteira'||!!state.detail||!state.data;
-    el('detail').hidden=state.view!=='carteira'||!state.detail;
-    el('okr').hidden=state.view!=='okr';
+    el('detail').hidden=!state.detail;
+    el('okr').hidden=state.view!=='okr'||!!state.detail;
     if(state.view==='okr')renderOKR();
   }
+  const dimNames={printer:'Gráfica',cd:'CD',series:'Série',material:'Tipo de material',feature:'Característica',cover:'Tipo de capa',finish:'Acabamento'};
+  const filterKeys=[...chDimensions,'openStart','openEnd','min','max'];
+  const dayNow=()=>state.data?state.data.now.slice(0,10):new Date().toISOString().slice(0,10);
+  const readFilters=prefix=>Object.fromEntries(filterKeys.map(k=>[k,el(prefix+k)?.value||'']));
+  function filterMarkup(prefix){
+    return chDimensions.map(k=>'<label>'+dimNames[k]+'<select id="ch-'+prefix+k+'"><option value="">Todos</option></select></label>').join('')+
+      [['openStart','Abertura de','date'],['openEnd','Abertura até','date'],['min','Aging mín.','number'],['max','Aging máx.','number']].map(([k,label,type])=>'<label>'+label+'<input type="'+type+'" id="ch-'+prefix+k+'" '+(type==='number'?'min="0"':'')+'></label>').join('');
+  }
+  function dimOptions(prefix,rows){
+    for(const k of chDimensions){
+      const target=el(prefix+k);if(!target)continue;
+      const old=target.value, values=[...new Set(rows.flatMap(t=>(t.groups||[]).flatMap(g=>Array.isArray(g[k])?g[k]:[g[k]])).filter(Boolean))].sort();
+      target.innerHTML='<option value="">Todos</option>'+values.map(opt).join('');
+      if(values.includes(old))target.value=old;
+    }
+  }
+  function agingMarkup(rows,asof){
+    const ages=rows.map(t=>chAging(t,asof)).filter(n=>n!==null);
+    const avg=ages.length?ages.reduce((a,b)=>a+b,0)/ages.length:null;
+    return avg===null?'—':num(Math.round(avg*10)/10)+' dias';
+  }
   function renderOKR(){
-    el('okr').innerHTML='<section class="ch-box"><h2>OKR dos chamados</h2><p class="ch-muted">Indicadores e critérios de apuração aguardando a definição da liderança.</p></section>';
+    if(!state.data){el('okr').innerHTML='<p class="ch-muted">Aguardando dados publicados.</p>';return;}
+    if(!el('okr-rule')){
+      const today=dayNow(), year=today.slice(0,4), q=Math.floor((Number(today.slice(5,7))-1)/3)*3+1;
+      const first=year+'-'+String(q).padStart(2,'0')+'-01';
+      const last=new Date(Date.UTC(Number(year),q+2,0)).toISOString().slice(0,10);
+      el('okr').innerHTML='<section class="ch-box"><h2>OKR de Reentradas · Meta 90%</h2><div class="ch-tools">'+
+      '<label>Critério<select id="ch-okr-rule"><option value="standard">25 dias ou data desejada (o maior)</option><option value="fixed">25 dias corridos</option><option value="desired">Data desejada por Planning</option><option value="pick">100% coleta gráfica (provisório)</option></select></label>'+
+      '<label>Período por<select id="ch-okr-basis"><option value="due">Vencimento</option><option value="open">Abertura</option></select></label>'+
+      '<label>Início do corte<input type="date" id="ch-okr-start" value="'+first+'"></label><label>Fim do corte<input type="date" id="ch-okr-end" value="'+last+'"></label>'+
+      '<label>Realizado observado até<input type="date" id="ch-okr-asof" value="'+today+'" max="'+today+'"></label>'+
+      '<label>Marca<select id="ch-okr-brand"></select></label><label>Envio<select id="ch-okr-shipment"></select></label>'+
+      '<label>Situação<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option></select></label></div>'+
+      '<div class="ch-tools" style="margin-top:12px">'+filterMarkup('okr-')+'</div><p class="ch-muted">Denominador: chamados distintos com prazo válido e vencido até a data observada. Exclui cancelados e casos sem prazo/evidência válida, destacados separadamente. O período por vencimento mostra casos sem prazo pela abertura, quando disponível. Aging: dias entre abertura e entrega integral no CD. Coleta gráfica: comparação por SKU/rota com a data formalizada pela gráfica, hipótese ainda não confirmada.</p></section>'+
+      '<div id="ch-okr-kpis" class="ch-grid"></div><section class="ch-box"><h2>Distribuição de aging de entrega</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2>Base de apuração</h2><div id="ch-okr-rows"></div></section>';
+      el('okr').querySelectorAll('input,select').forEach(x=>x.addEventListener('change',renderOKR));
+    }
+    const re=state.data.rows.filter(t=>t.cat==='REENTRADA');
+    for(const k of ['brand','shipment']){
+      const target=el('okr-'+k),old=target.value,values=[...new Set(re.map(t=>t[k]).filter(Boolean))].sort();
+      target.innerHTML='<option value="">Todos</option>'+values.map(opt).join('');if(values.includes(old))target.value=old;
+    }
+    dimOptions('okr-',re);
+    const f={...readFilters('okr-'),...Object.fromEntries(['rule','basis','start','end','asof','brand','shipment','scope'].map(k=>[k,el('okr-'+k).value]))};
+    f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
+    if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
+    const d=chOKR(re,f),pct=v=>v===null?'—':num(Math.round(v*10)/10)+'%';
+    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / vencidos',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Vencidos em aberto / sem conclusão',num(d.pending)],['A vencer',num(d.upcoming)],['Sem data / evidência válida',num(d.missing)],['Cancelados excluídos',num(d.canceled)],['Concluídos / coletados',num(d.actual)],['Entregues integralmente',num(d.delivery)],['Aging médio de entrega',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
+    el('okr-aging').innerHTML=table(['Dias','Chamados','% da faixa','% acumulado'],d.bands.map(b=>[esc(b.label),num(b.count),pct(b.pct),pct(b.cum)]))+'<p class="ch-muted">Denominador: '+num(d.delivery)+' chamados com entrega integral e aging válido.</p>';
+    el('okr-rows').innerHTML=table(['Chamado','Marca','Envio','Abertura','Prazo','Realizado do critério','Entrega integral','Aging','Apuração'],d.items.map(t=>['<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.brand),cell(t.shipment),dt(t.created),dt(t.due),dt(t.actual),dt(t.delivered),t.age===null?'—':num(t.age),cell(t.status)]),'Nenhum chamado no recorte.');
   }
   async function load(force){
     if(state.loading)return;
@@ -101,18 +221,19 @@
         el(key).innerHTML='<option value="">Todos</option>'+options.map(opt).join('');
         if(options.includes(old))el(key).value=old;
       }
-      el('updated').textContent='Leitura em '+stamp(d.now);el('notice').textContent=d.notice||'';el('notice').hidden=!d.notice;message('');render();show();
+      dimOptions('route-',d.rows);el('updated').textContent='Leitura em '+stamp(d.now);el('notice').textContent=d.notice||'';el('notice').hidden=!d.notice;message('');render();show();
     }catch(err){message('Falha ao atualizar. '+(err.message||err),true);}finally{state.loading=false;el('refresh').disabled=false;}
   }
-  window.pgAbrirChamados=function(view){state.view=view;show();if(!state.data && !state.loading )load(false);};
+  window.pgAbrirChamados=function(view){if(state.view!==view){state.detail=null;state.detailLoad++;}state.view=view;show();if(!state.data && !state.loading )load(false);};
   function selected(){
     const q=el('query').value.trim().replace(/^#/,'').split(/[^0-9]+/).filter(Boolean),scope=el('scope').value;
+    const f={...readFilters('route-'),cat:el('cat').value,shipment:el('shipment').value,brand:el('brand').value};
     return state.data.rows.filter(t=>{
       const canceled=/CANCEL/.test(t.status), closed=/CONCLU/.test(t.status);
       return (scope==='todos'||(scope==='cancelados'?canceled:scope==='concluidos'?closed:scope==='abertos'?!canceled&&!closed:!canceled))
-        && ['cat','shipment','brand'].every(k=>!el(k).value||el(k).value===t[k])
+        && chMatches(t,f,dayNow())
         && (!el('query').value.trim() || (q.length===1?String(t.n).includes(q[0]):q.includes(String(t.n))));
-    }).sort((a,b)=>Number(b.n)-Number(a.n));
+    }).map(t=>chFilteredTotals(t,f)).filter(Boolean).sort((a,b)=>Number(b.n)-Number(a.n));
   }
   function pager(where,page,n,size,type){
     const max=Math.max(1,Math.ceil(n/size));
@@ -121,7 +242,7 @@
   function render(){
     if(!state.data)return;
     const rows=selected(),total=k=>rows.reduce((s,r)=>s+r.totals[k],0),by=el('by').value;
-    el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado no mapa',total('picked')],['Entregue no CD',total('delivered')],['Saldo a entregar',total('balance')]].map(([k,v])=>'<div class="ch-card"><small>'+esc(k)+'</small><b>'+num(v)+'</b></div>').join('');
+    el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado no mapa',total('picked')],['Entregue no CD',total('delivered')],['Saldo a entregar',total('balance')],['Aging médio de entrega',agingMarkup(rows,dayNow())]].map(([k,v])=>'<div class="ch-card"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
     const groups=new Map();rows.forEach(t=>{const k=t[by]||'Sem informação',g=groups.get(k)||[0,0,0];g[0]++;g[1]+=t.totals.qty;g[2]+=t.totals.balance;groups.set(k,g);});
     el('dist').innerHTML=table([el('by').selectedOptions[0].text,'Chamados','Tiragem','Saldo'],[...groups].sort((a,b)=>b[1][2]-a[1][2]).map(([k,g])=>['<button class="ch-link" data-filter="'+esc(k)+'">'+esc(k)+'</button>',...g.map(num)]));
     el('funnel').innerHTML=state.data.phases.map((label,i)=>{const v=rows.reduce((s,t)=>s+t.totals.coverage[i],0),qty=total('qty'),pct=qty?100*v/qty:0;return '<span>'+esc(label)+'</span><div class="ch-bar"><i style="width:'+pct+'%"></i></div><span class="ch-num">'+num(v)+' · '+num(Math.round(pct))+'%</span>';}).join('');
@@ -137,7 +258,7 @@
   }
   function renderDetail(){
     const t=state.detail;
-    el('detail').innerHTML='<button class="ch-link" id="ch-back">Voltar à carteira</button><section class="ch-box"><div class="ch-between"><h2>Chamado #'+esc(t.n)+'</h2><span class="ch-sub">'+cell(t.status)+'</span></div>'+fields({'Categoria':t.cat,'Envio':t.shipment,'Marca':t.brand,'Prioridade SPG':t.priority,'Responsável PG':t.owner,'OP':t.op,'Data desejada':dt(t.desired),'Meta de entrega':dt(t.goal)})+'<h3>Solicitação</h3><p>'+cell(t.why)+'</p>'+(t.obs?'<p>'+esc(t.obs)+'</p>':'')+(t.reason?'<p>Cancelamento · '+esc(t.reason)+'</p>':'')+(t.issues.length?'<p class="ch-alert">'+t.issues.map(esc).join('<br>')+'</p>':'')+'</section>'+
+    el('detail').innerHTML='<button class="ch-link" id="ch-back">Voltar à visão</button><section class="ch-box"><div class="ch-between"><h2>Chamado #'+esc(t.n)+'</h2><span class="ch-sub">'+cell(t.status)+'</span></div>'+fields({'Categoria':t.cat,'Envio':t.shipment,'Marca':t.brand,'Prioridade SPG':t.priority,'Responsável PG':t.owner,'OP':t.op,'Data desejada':dt(t.desired),'Meta de entrega':dt(t.goal)})+'<h3>Solicitação</h3><p>'+cell(t.why)+'</p>'+(t.obs?'<p>'+esc(t.obs)+'</p>':'')+(t.reason?'<p>Cancelamento · '+esc(t.reason)+'</p>':'')+(t.issues.length?'<p class="ch-alert">'+t.issues.map(esc).join('<br>')+'</p>':'')+'</section>'+
       '<section class="ch-box"><h2>Tratativa do time</h2><div class="ch-tools"><label>Status da tratativa<select id="ch-manual-state"><option value="">Selecionar</option>'+state.data.states.map(opt).join('')+'</select></label><label style="flex:1;min-width:200px">Observação opcional<input id="ch-note" maxlength="1500"></label><button id="ch-save" class="ch-btn ch-primary">Salvar</button></div><p id="ch-save-msg" role="status"></p><div id="ch-history"></div></section>'+
       '<section class="ch-box"><h2>Marcos do chamado</h2>'+table(['Etapa','Planejado','Realizado','Fonte'],Object.entries(t.steps).map(([k,s])=>[esc(k),dt(s.p),dt(s.r),'SPG']))+
       detailBox('Registros do painel de produção ('+t.panel.length+')',table(['Gráfica / CD','Status','Andamento','Início plan. / real','Fim plan. / real','Origem'],t.panel.map(p=>[cell(p.printer)+' / '+cell(p.cd),cell(p.status),cell(p.note),dt(p.startP)+' / '+dt(p.startR),dt(p.endP)+' / '+dt(p.endR),source('panel',p.row)])))+'</section>'+
@@ -185,8 +306,10 @@
     if(b.dataset.filter){el(el('by').value).value=b.dataset.filter;state.page=1;render();return;}
     if(b.dataset.page){state.page+=Number(b.dataset.page);render();return;}
     if(b.dataset.itempage){state.itemPage+=Number(b.dataset.itempage);renderItems();return;}
-    if(b.id==='ch-clear'){['query','cat','shipment','brand'].forEach(k=>el(k).value='');el('scope').value='ativos';state.page=1;render();}
+    if(b.id==='ch-clear'){['query','cat','shipment','brand',...filterKeys.map(k=>'route-'+k)].forEach(k=>el(k).value='');el('scope').value='ativos';state.page=1;render();}
   });
+  el('routefilters').innerHTML=filterMarkup('route-');
+  filterKeys.forEach(k=>el('route-'+k).addEventListener('change',()=>{state.page=1;render();}));
   ['cat','brand','shipment','scope','by','query'].forEach(k=>el(k).addEventListener(k==='query'?'input':'change',()=>{state.page=1;render();}));
 })();
 </script>

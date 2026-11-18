@@ -173,6 +173,7 @@ window.exportarSkusFiltradosSheets = function() {
         <div class="w-64 h-1 bg-neutral-800 rounded-full mt-4 overflow-hidden">
             <div id="loadingBar" class="h-full bg-red-600 w-0 transition-all duration-300"></div>
         </div>
+        <div id="pgLoadingRecovery" class="hidden mt-5 text-center text-sm text-white"><p>O Principal ainda não terminou de carregar. Você pode consultar os chamados sem esperar os dados de produção.</p><button class="mt-3 px-4 py-2 rounded bg-white text-black font-bold" onclick="pgAbrirChamadosDuranteCarga()">Abrir Central de chamados</button><button class="ml-2 px-4 py-2 rounded border border-white" onclick="location.reload()">Recarregar portal</button></div>
     </div>
 
     <div id="toastBox" class="fixed top-5 right-5 z-[9999] hidden flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl border-l-4 min-w-[300px] toast-enter bg-white">
@@ -532,6 +533,10 @@ window.exportarSkusFiltradosSheets = function() {
 
         // PG_LOADING_TODOS_MESES_V1
 
+        function pgAbrirChamadosDuranteCarga() {
+            document.getElementById('globalLoading').classList.add('hidden');
+            navegarView('viewChamados',null);pgAbrirChamados('carteira');
+        }
         async function carregarSistema() {
             if (window.pgCarregamentoInicial) return;
             window.pgCarregamentoInicial = true;
@@ -540,6 +545,9 @@ window.exportarSkusFiltradosSheets = function() {
             const msg = document.getElementById('loadingMsg');
             const loading = document.getElementById('globalLoading');
             loading.classList.remove('hidden');
+            const recovery=document.getElementById('pgLoadingRecovery');
+            recovery?.classList.add('hidden');
+            const recoveryTimer=setTimeout(()=>{if(window.pgCarregamentoInicial)recovery?.classList.remove('hidden');},45000);
             // O portal só fica bloqueado pelo que é indispensável para montar a base principal.
             // Meta CD/forecast publicado é complementar: carrega depois e atualiza as curvas quando chegar.
             // Assim uma falha de RPC nessa leitura nunca prende a tela de loading.
@@ -694,6 +702,7 @@ window.exportarSkusFiltradosSheets = function() {
                 window.PG_PERFORMANCE.processamentoInicialMs = Math.round(performance.now() - processamento);
                 window.PG_PERFORMANCE.inicialCompletoMs = Math.round(performance.now() - inicio);
                 window.pgCarregamentoInicial = false;
+                clearTimeout(recoveryTimer);recovery?.classList.add('hidden');
                 if (bar) bar.style.width = '100%';
                 loading.classList.add('hidden');
                 const dataF5 = new Date();
@@ -728,6 +737,7 @@ window.exportarSkusFiltradosSheets = function() {
             } catch (erro) {
                 clearInterval(timer);
                 window.pgCarregamentoInicial = false;
+                clearTimeout(recoveryTimer);recovery?.classList.remove('hidden');
                 if (msg) msg.textContent = 'Não foi possível carregar todos os dados. ' + String(erro.message || erro) + '. Atualize para tentar novamente.';
                 console.error('[CARREGAMENTO]', erro);
             }
