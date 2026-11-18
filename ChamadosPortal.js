@@ -102,25 +102,35 @@ function pgChJsonRelease_(token){
     if(lease && lease.token===token)props.deleteProperty(PG_CH_JSON_LEASE);
   }finally{lock.releaseLock();}
 }
+// Referência da primeira carga: 16.923 registros com INFO_MAPA_CODE
+// conferidos na fonte em 18/11/2026, não o tamanho da grade.
+const PG_CH_MAPA_BOOTSTRAP_ROWS=16923;
+function pgChMapaValido_(first,second,previous){
+  const keyRows=rows=>rows.filter(r=>r&&pgChTexto_(r.map));
+  const a=keyRows(first),b=keyRows(second);
+  const ref=Number(previous)||PG_CH_MAPA_BOOTSTRAP_ROWS;
+  const min=Math.ceil(ref*0.95);
+  if(a.length<min||b.length<min)
+    throw new Error('Mapa em reposição ou redução de volume: '+a.length+' / '+b.length+' registros válidos; mínimo de segurança '+min+' (referência '+ref+'). Nenhum JSON foi substituído.');
+  // Detecta repovoamento, troca das linhas e das informações efetivamente
+  // utilizadas pela Central, inclusive quando as contagens são iguais.
+  if(JSON.stringify(a)!==JSON.stringify(b))
+    throw new Error('Mapa mudou durante a leitura ('+a.length+' / '+b.length+' registros). Nenhum JSON foi substituído; execute novamente.');
+  return b;
+}
 function pgChJsonBuild_(before){
   const datasets={},links={},counts={};
-  let mapPartial=false;
-  Object.keys(PG_CH_FONTES).forEach(k=>{
+  const initial=pgChLerFonte_('map');
+  Object.keys(PG_CH_FONTES).filter(k=>k!=='map').forEach(k=>{
     const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;
-    if((k==='spg'||k==='map') && (!counts[k] || (before && counts[k]<before.counts[k]*0.8))) {
-      if(k==='map' && counts[k])mapPartial=true;
-      else throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização. Tente novamente em instantes.');
-    }
-    if(k==='map'){
-      const meta=Sheets.Spreadsheets.get(pgChFonte_(k),{fields:'sheets(properties(sheetId,gridProperties(rowCount)))'});
-      const sheet=meta.sheets.find(s=>s.properties.sheetId===PG_CH_FONTES.map.gid);
-      // O consolidado é apagado e repovoado em lotes. Uma lacuna grande no
-      // final da grade é exibida como leitura parcial, inclusive no primeiro acesso.
-      const capacity=sheet.properties.gridProperties.rowCount-1;
-      mapPartial=mapPartial || counts.map<capacity*0.97;
-    }
+    if(k==='spg' && (!counts[k] || (before && counts[k]<before.counts[k]*0.8)))
+      throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização. Tente novamente em instantes.');
   });
-  if(mapPartial) throw new Error('Mapa em atualização; a geração publicada permanece intacta.');
+  const last=pgChLerFonte_('map');
+  datasets.map=pgChMapaValido_(initial.rows,last.rows,before&&before.counts.map);
+  links.map=last.url;counts.map=datasets.map.length;
+  const mapPartial=false;
+  console.log('[CH JSON] mapa validado: '+counts.map+' registros; duas leituras consistentes.');
   datasets.sla=getMatrizSLAPortal();
   const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString();
   const result={gen,now,links,counts,mapPartial,rows:model.summaries,phases:PG_CH_ETAPAS};
