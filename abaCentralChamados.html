@@ -1,65 +1,111 @@
 <style>
-  #ch-central{height:100%;overflow:auto;background:#f4f6f8;color:#172937;font:14px/1.45 Inter,Arial,sans-serif}
+  /* Manual de Marca Arco Educação, pp. 18–20: Poppins e paletas primária/secundária. Escopo exclusivo das novas visões. */
+  #ch-central{--ch-navy:#0C2340;--ch-blue:#418EDE;--ch-orange:#FA4616;--ch-indigo:#284081;--ch-sky:#049FEC;--ch-gold:#FCB04E;--ch-coral:#F04E37;--ch-line:#e0e6ed;--ch-muted:#64748b;height:100%;overflow:auto;background:#f3f5f8;color:var(--ch-navy);font:400 13px/1.5 'Poppins',Arial,sans-serif}
   #ch-central [hidden]{display:none!important}
-  #ch-central .ch-wrap{max-width:1550px;margin:auto;padding:24px clamp(16px,3vw,44px) 44px}
+  #ch-central .ch-wrap{width:100%;max-width:none;padding:20px clamp(14px,2.4vw,32px) 36px}
   #ch-central .ch-head,#ch-central .ch-between,#ch-central .ch-actions{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-  #ch-central h1{font-size:clamp(24px,3vw,34px);font-weight:750;letter-spacing:-.045em;margin:0}
-  #ch-central h2{font-size:19px;font-weight:700;margin:0 0 12px;letter-spacing:-.022em}
-  #ch-central h3{font-size:15px;font-weight:700;margin:12px 0 7px}
-  #ch-central .ch-muted,#ch-central small{color:#526777}
-  #ch-central button,#ch-central select,#ch-central input,#ch-central textarea{font:inherit}
+  #ch-central .ch-head{margin-bottom:18px}
+  #ch-central .ch-head-main{display:flex;align-items:center;gap:12px}
+  #ch-central .ch-heading-icon{width:46px;height:46px;display:grid;place-items:center;border-radius:12px;background:#e6effa;color:var(--ch-indigo);flex:none}
+  #ch-central .ch-heading-icon svg{width:26px;height:26px}
+  #ch-central .ch-eyebrow{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.105em;color:var(--ch-indigo)}
+  #ch-central h1{font-size:clamp(22px,2vw,30px);font-weight:700;letter-spacing:-.035em;margin:0;line-height:1.25}
+  #ch-central h2{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;margin:0 0 14px;color:var(--ch-navy)}
+  #ch-central h2 svg{color:var(--ch-indigo);flex:none;width:18px;height:18px}
+  #ch-central h3{font-size:13px;font-weight:600;margin:12px 0 7px}
+  #ch-central .ch-muted,#ch-central small{color:var(--ch-muted)}
+  #ch-central button,#ch-central select,#ch-central input,#ch-central textarea{font-family:inherit}
   #ch-central button{cursor:pointer}
-  #ch-central button:focus-visible,#ch-central summary:focus-visible,#ch-central a:focus-visible{outline:3px solid #0f938b;outline-offset:2px}
-  #ch-central .ch-btn,#ch-central .ch-tabs button{border:1px solid #bdcad4;padding:6px 12px;border-radius:7px;background:#fff;font-weight:600}
-  #ch-central .ch-btn:hover,#ch-central .ch-tabs button:hover{background:#edf5f4}
-  #ch-central .ch-tabs{display:flex;gap:8px;margin:17px 0}
-  #ch-central .ch-tabs button[aria-selected=true],#ch-central .ch-primary{background:#124e51;color:white;border-color:#124e51}
-  #ch-central .ch-filters{display:grid;grid-template-columns:1.45fr repeat(4,minmax(105px,1fr)) auto;gap:10px;align-items:end}
-  #ch-central label{font-size:12px;font-weight:650;display:grid;gap:3px}
-  #ch-central select,#ch-central input,#ch-central textarea{color:#213945;background:white;border:1px solid #bbcbd3;border-radius:6px;padding:7px;min-width:0}
-  #ch-central .ch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px;margin:16px 0}
-  #ch-central .ch-card,#ch-central .ch-box{border:1px solid #d6e0e5;border-radius:10px;background:white;padding:15px}
-  #ch-central .ch-card b{display:block;font-size:23px;font-weight:720;letter-spacing:-.035em;font-variant-numeric:tabular-nums}
-  #ch-central .ch-box{margin:13px 0}
-  #ch-central .ch-flex{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(340px,1.1fr);gap:12px}
-  #ch-central .ch-sub{padding:3px 8px;border-radius:5px;background:#eaf2f1;color:#195d59;font-weight:650}
-  #ch-central .ch-link,#ch-central a{color:#155f75;text-decoration:underline;text-underline-offset:2px}
-  #ch-central .ch-frame{overflow-x:auto}
-  #ch-central table{border-collapse:collapse;width:100%;font-size:12px;text-align:left}
-  #ch-central th,#ch-central td{padding:7px 9px;border-bottom:1px solid #e2e9ed;vertical-align:top}
-  #ch-central th{font-weight:650;color:#405765;background:#f4f7f9}
+  #ch-central button:focus-visible,#ch-central select:focus-visible,#ch-central input:focus-visible,#ch-central summary:focus-visible,#ch-central a:focus-visible{outline:2px solid var(--ch-blue);outline-offset:2px}
+  #ch-central .ch-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #ccd5e0;padding:7px 11px;border-radius:7px;background:#fff;font-size:11px;font-weight:600;white-space:nowrap;box-shadow:0 2px 5px #0c23400b;color:var(--ch-navy)}
+  #ch-central .ch-btn svg{width:14px;height:14px}
+  #ch-central .ch-btn:hover{background:#edf4fc;border-color:var(--ch-blue)}
+  #ch-central .ch-primary{background:var(--ch-indigo);color:white;border-color:var(--ch-indigo)}
+  #ch-central .ch-primary:hover{background:var(--ch-navy);color:white}
+  #ch-central .ch-filter-panel{background:white;border:1px solid var(--ch-line);border-radius:10px;box-shadow:0 2px 8px #0c234009;padding:12px;margin-bottom:16px}
+  #ch-central .ch-filterline,#ch-central .ch-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  #ch-central .ch-filterline+.ch-filterline{margin-top:8px}
+  #ch-central .ch-filter-caption{display:flex;align-items:center;gap:5px;white-space:nowrap;color:#64748b;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-right:2px}
+  #ch-central .ch-filter-caption svg{width:14px;height:14px}
+  #ch-central label{font-size:11px;font-weight:600;display:grid;gap:4px}
+  #ch-central select,#ch-central input,#ch-central textarea{color:var(--ch-navy);background:white;border:1px solid #cdd7e4;border-radius:6px;padding:7px;min-width:0;font-size:12px}
+  #ch-central .ch-filterline label{position:relative;display:flex;gap:6px;align-items:center;white-space:nowrap;background:white;border:1px solid #e0e6ed;border-radius:7px;box-shadow:0 2px 5px #0c23400c;padding:5px 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.025em;color:var(--ch-navy);min-height:34px}
+  #ch-central .ch-filterline label:has(select):hover,#ch-central .ch-filterline label:has(input):hover{border-color:#b0c7e4}
+  #ch-central .ch-filterline label:has(select[data-active="true"]),#ch-central .ch-filterline label:has(input[data-active="true"]){background:#eaf2fc;border-color:var(--ch-blue);color:var(--ch-indigo)}
+  #ch-central .ch-filterline select{border:0;background:transparent;color:inherit;font-size:11px;font-weight:600;padding:3px 0;max-width:190px;cursor:pointer}
+  #ch-central .ch-filterline select option{background:white;color:var(--ch-navy);font-weight:400}
+  #ch-central .ch-filterline input{border:0;background:transparent;padding:3px 0;font-size:11px}
+  #ch-central .ch-filterline input[type=number]{width:49px}
+  #ch-central .ch-filterline input[type=search]{width:clamp(110px,12vw,170px)}
+  #ch-central .ch-filterline input[type=date]{width:113px}
+  #ch-central .ch-filterline .ch-date-group{border-left:1px solid var(--ch-line);margin:0 2px;height:26px}
+  #ch-central .ch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(152px,1fr));gap:12px;margin:0 0 16px}
+  #ch-central .ch-card,#ch-central .ch-box{border:1px solid var(--ch-line);border-radius:12px;background:white;box-shadow:0 3px 12px #0c234008}
+  #ch-central .ch-card{position:relative;overflow:hidden;padding:14px 14px 13px;border-top:3px solid var(--ch-blue);min-width:0}
+  #ch-central .ch-card:first-child{border-top-color:var(--ch-indigo)}
+  #ch-central .ch-card[data-tone=orange]{border-top-color:var(--ch-orange)}
+  #ch-central .ch-card[data-tone=navy]{border-top-color:var(--ch-navy)}
+  #ch-central .ch-card[data-tone=green]{border-top-color:#16a34a}
+  #ch-central .ch-card[data-tone=yellow]{border-top-color:#d99a14}
+  #ch-central .ch-card[data-tone=green] b{color:#16803d}
+  #ch-central .ch-card[data-tone=yellow] b{color:#9c650a}
+  #ch-central .ch-card[data-tone=orange] b{color:#c43c1a}
+  #ch-central .ch-card small{display:block;font-size:10px;font-weight:600;line-height:1.45;min-height:29px;color:#5c7088}
+  #ch-central .ch-card b{display:block;font-size:clamp(20px,1.9vw,27px);line-height:1.12;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+  #ch-central .ch-box{padding:18px;margin:0 0 16px;min-width:0}
+  #ch-central .ch-flex{display:grid;grid-template-columns:minmax(300px,1fr) minmax(460px,1.5fr);gap:16px;align-items:start}
+  #ch-central .ch-sub{padding:4px 8px;border-radius:5px;background:#e6effa;color:var(--ch-indigo);font-weight:600}
+  #ch-central .ch-link,#ch-central a{color:var(--ch-indigo);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+  #ch-central .ch-link:hover{color:var(--ch-orange)}
+  #ch-central .ch-frame{overflow-x:auto;border:1px solid #e5eaf1;border-radius:8px}
+  #ch-central table{border-collapse:collapse;width:100%;font-size:11px;text-align:left}
+  #ch-central th,#ch-central td{padding:9px 10px;border-bottom:1px solid #e8edf3;vertical-align:middle;white-space:nowrap}
+  #ch-central th{font-size:10px;font-weight:600;letter-spacing:.025em;text-transform:uppercase;color:var(--ch-indigo);background:#edf3fa}
+  #ch-central tbody tr:nth-child(even){background:#f9fbfd}
+  #ch-central tbody tr:hover{background:#eaf3fd}
+  #ch-central tbody tr:last-child td{border-bottom:0}
   #ch-central .ch-num{font-variant-numeric:tabular-nums;white-space:nowrap}
-  #ch-central .ch-bar{background:#e5edef;overflow:hidden;border-radius:3px;height:6px}
-  #ch-central .ch-bar i{display:block;height:100%;background:#34817a}
-  #ch-central .ch-funnel{display:grid;grid-template-columns:minmax(110px,1.3fr) minmax(60px,1fr) auto;gap:5px 12px;align-items:center;font-size:12px}
-  #ch-central .ch-alert{border-left:3px solid #aa671d;background:#fff4de;padding:9px 13px;border-radius:4px;margin:8px 0}
-  #ch-central .ch-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  #ch-central .ch-pager{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:9px 0}
+  #ch-central .ch-funnel{display:flex;flex-direction:column;gap:4px;margin:10px 0 14px}
+  #ch-central .ch-funnel-stage{display:grid;grid-template-columns:minmax(118px,0.84fr) minmax(100px,2fr) minmax(104px,.72fr);gap:10px;align-items:center;min-height:30px}
+  #ch-central .ch-stage-label{font-size:10px;font-weight:600;color:var(--ch-navy);line-height:1.3}
+  #ch-central .ch-stage-label small{font-size:9px;margin-right:5px;color:#64748b}
+  #ch-central .ch-stage-track{height:31px;display:flex;align-items:center;justify-content:center;width:100%;position:relative}
+  #ch-central .ch-stage-shape{height:100%;display:block;clip-path:polygon(0 0,100% 0,96% 100%,4% 100%);border-radius:3px;background:var(--ch-indigo);min-width:0}
+  #ch-central .ch-stage-track:has(.ch-stage-shape[style*="width:0%"]):after{content:'—';color:#a8b5c5}
+  #ch-central .ch-stage-values{font-size:11px;font-weight:600;text-align:right;color:var(--ch-navy);font-variant-numeric:tabular-nums;white-space:nowrap;display:flex;justify-content:space-between;gap:6px}
+  #ch-central .ch-stage-values span{color:#61758d;font-size:10px}
+  #ch-central .ch-stage-base .ch-stage-shape{clip-path:polygon(0 0,100% 0,96% 100%,4% 100%);border-radius:6px 6px 0 0}
+  #ch-central .ch-stage-base .ch-stage-label,#ch-central .ch-stage-base .ch-stage-values{font-weight:700}
+  #ch-central .ch-alert{border-left:3px solid var(--ch-gold);background:#fff5e6;padding:9px 13px;border-radius:5px;margin:8px 0;color:#765018}
+  #ch-central .ch-pager{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:12px 0 0}
   #ch-central button:disabled{opacity:.45;cursor:default}
-  #ch-central details{border:1px solid #d7e1e7;border-radius:7px;margin:7px 0;background:white;padding:8px 10px}
-  #ch-central summary{cursor:pointer;font-weight:630}
-  #ch-central .ch-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px 16px}
-  #ch-central .ch-fields dt{font-size:11px;color:#506875}#ch-central .ch-fields dd{margin:0;font-weight:600}
+  #ch-central details{border:1px solid var(--ch-line);border-radius:8px;margin:8px 0;background:white;padding:10px 12px}
+  #ch-central summary{cursor:pointer;font-weight:600}
+  #ch-central .ch-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px 18px}
+  #ch-central .ch-fields dt{font-size:10px;color:#64748b}#ch-central .ch-fields dd{margin:0;font-weight:600}
   #ch-central .ch-history{padding-left:18px;list-style:disc}
-  @media(max-width:900px){#ch-central .ch-filters{grid-template-columns:repeat(3,1fr)}#ch-central .ch-flex{grid-template-columns:1fr}}
-  @media(max-width:550px){#ch-central .ch-filters{grid-template-columns:1fr 1fr}#ch-central .ch-filters label:first-child{grid-column:1/-1}#ch-central .ch-wrap{padding:14px}}
+  #ch-central .ch-note{font-size:10px;line-height:1.6;margin-top:12px;color:#64748b}
+  #ch-central .ch-loading{display:flex;align-items:center;gap:8px;padding:14px 0;color:var(--ch-indigo);font-weight:600}
+  #ch-central .ch-loading:before{content:'';width:17px;height:17px;border:2px solid #d5e4f5;border-top-color:var(--ch-indigo);border-radius:50%;animation:chSpin .8s linear infinite}
+  @keyframes chSpin{to{transform:rotate(360deg)}}
+  @media(max-width:1020px){#ch-central .ch-flex{grid-template-columns:1fr}#ch-central .ch-grid{grid-template-columns:repeat(auto-fit,minmax(142px,1fr))}}
+  @media(max-width:550px){#ch-central .ch-wrap{padding:12px}#ch-central .ch-stage-funnel{gap:6px}#ch-central .ch-funnel-stage{grid-template-columns:minmax(85px,1fr) minmax(60px,1.2fr) minmax(72px,.7fr);gap:5px}#ch-central .ch-stage-values{display:block}#ch-central .ch-stage-values span{display:block}#ch-central .ch-filter-panel{padding:9px}}
 </style>
 <section id="ch-central"><div class="ch-wrap">
-  <div class="ch-head"><h1>Central de chamados</h1><div class="ch-tools"><small id="ch-updated"></small><button class="ch-btn" id="ch-refresh">Recarregar dados</button></div></div>
-  <nav class="ch-tabs" aria-label="Visões de chamados"><button data-view="carteira" aria-selected="true">Carteira</button><button data-view="okr" aria-selected="false">OKR</button></nav>
+  <header class="ch-head"><div class="ch-head-main"><span id="ch-title-icon" class="ch-heading-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/><path d="M13 6v3m0 3v1m0 3v2"/></svg></span><div><div class="ch-eyebrow">Produção gráfica · Reentradas</div><h1 id="ch-title">Central de chamados</h1></div></div><div class="ch-tools"><small id="ch-updated"></small><button class="ch-btn" id="ch-refresh"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L3 9m0-5v5h5m-4 4a8 8 0 0 0 14 5l3-3m0 5v-5h-5"/></svg> Recarregar dados</button></div></header>
   <div id="ch-msg" role="status" aria-live="polite"></div>
   <div id="ch-notice" class="ch-alert" hidden></div>
   <div id="ch-okr" hidden></div>
   <div id="ch-list" hidden>
-    <div class="ch-filters"><label>Buscar chamado<input id="ch-query" type="search" placeholder="Número do chamado"></label>
+    <div class="ch-filter-panel"><div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span><label>Chamado<input id="ch-query" type="search" placeholder="Número do chamado"></label>
       <label>Categoria<select id="ch-cat"></select></label><label>Envio<select id="ch-shipment"></select></label>
       <label>Marca<select id="ch-brand"></select></label><label>Situação<select id="ch-scope"><option value="ativos">Exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option><option value="cancelados">Cancelados</option><option value="todos">Todos</option></select></label>
-      <button id="ch-clear" class="ch-btn">Limpar</button></div>
-    <div id="ch-routefilters" class="ch-tools" style="margin-top:12px"></div><div id="ch-kpis" class="ch-grid"></div>
-    <div class="ch-flex"><section class="ch-box"><div class="ch-between"><h2>Distribuição</h2>
+      <button id="ch-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div>
+    <div id="ch-routefilters" class="ch-filterline"></div></div><div id="ch-kpis" class="ch-grid"></div>
+    <div class="ch-flex"><section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="4" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="10" width="8" height="10" rx="1"/></svg> Distribuição</h2>
       <select id="ch-by" aria-label="Agrupar por"><option value="cat">Categoria</option><option value="shipment">Envio</option><option value="brand">Marca</option></select></div><div id="ch-dist"></div></section>
-      <section class="ch-box"><h2>Funil de etapas</h2><div id="ch-funnel" class="ch-funnel"></div><small>Tiragem com registro em cada etapa. Coleta e entrega usam as quantidades do mapa.</small></section></div>
-    <section class="ch-box"><div class="ch-between"><h2>Chamados</h2><small id="ch-count"></small></div><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
+      <section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg> Funil de etapas</h2><div id="ch-funnel" class="ch-funnel"></div><small>Tiragem com registro em cada etapa. Coleta e entrega usam as quantidades do mapa.</small></section></div>
+    <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Chamados</h2><small id="ch-count"></small></div><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
   </div>
   <div id="ch-detail" hidden></div>
 </div></section>
@@ -149,9 +195,9 @@
   }
   // CH_OKR_PURE_END
   const detailBox=(label,content)=>'<details><summary>'+esc(label)+'</summary>'+content+'</details>';
-  function message(s,error){el('msg').textContent=s;el('msg').className=error?'ch-alert':'ch-muted';}
+  function message(s,error){el('msg').textContent=s;el('msg').className=error?'ch-alert':s&&s.startsWith('Carregando')?'ch-loading':'ch-muted';}
   function show(){
-    root.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.view===state.view)));
+    const isOKR=state.view==='okr';el('title').textContent=isOKR?'OKR de reentradas':'Central de chamados';el('title-icon').innerHTML=isOKR?"<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"5\"/><circle cx=\"12\" cy=\"12\" r=\"1.5\"/></svg>":"<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z\"/><path d=\"M13 6v3m0 3v1m0 3v2\"/></svg>";
     el('list').hidden=state.view!=='carteira'||!!state.detail||!state.data;
     el('detail').hidden=!state.detail;
     el('okr').hidden=state.view!=='okr'||!!state.detail;
@@ -159,6 +205,13 @@
   }
   const dimNames={printer:'Gráfica',cd:'CD',series:'Série',material:'Tipo de material',feature:'Característica',cover:'Tipo de capa',finish:'Acabamento'};
   const filterKeys=[...chDimensions,'openStart','openEnd','min','max'];
+  function styleFilters(){
+    root.querySelectorAll('.ch-filterline input,.ch-filterline select').forEach(x=>{
+      const defaultValue=x.id==='ch-scope'||x.id==='ch-okr-scope'?'ativos':'';
+      x.dataset.active=String(x.value!==defaultValue);
+    });
+  }
+  root.addEventListener('change',styleFilters);root.addEventListener('input',styleFilters);
   const dayNow=()=>{const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(state.data?.now||Date.now()));const d=Object.fromEntries(parts.map(p=>[p.type,p.value]));return d.year+'-'+d.month+'-'+d.day;};
   const readFilters=prefix=>Object.fromEntries(filterKeys.map(k=>[k,el(prefix+k)?.value||'']));
   function filterMarkup(prefix){
@@ -184,15 +237,15 @@
       const today=dayNow(), year=today.slice(0,4), q=Math.floor((Number(today.slice(5,7))-1)/3)*3+1;
       const first=year+'-'+String(q).padStart(2,'0')+'-01';
       const last=new Date(Date.UTC(Number(year),q+2,0)).toISOString().slice(0,10);
-      el('okr').innerHTML='<section class="ch-box"><h2>OKR de Reentradas · Meta 90%</h2><div class="ch-tools">'+
+      el('okr').innerHTML='<section class="ch-filter-panel"><div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg> Apuração:</span>'+
       '<label>Critério<select id="ch-okr-rule"><option value="standard">25 dias ou data desejada (o maior)</option><option value="fixed">25 dias corridos</option><option value="desired">Data desejada por Planning</option><option value="pick">100% coleta gráfica (provisório)</option></select></label>'+
       '<label>Período por<select id="ch-okr-basis"><option value="due">Vencimento</option><option value="open">Abertura</option></select></label>'+
       '<label>Início do corte<input type="date" id="ch-okr-start" value="'+first+'"></label><label>Fim do corte<input type="date" id="ch-okr-end" value="'+last+'"></label>'+
       '<label>Realizado observado até<input type="date" id="ch-okr-asof" value="'+today+'" max="'+today+'"></label>'+
       '<label>Marca<select id="ch-okr-brand"></select></label><label>Envio<select id="ch-okr-shipment"></select></label>'+
       '<label>Situação<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option></select></label></div>'+
-      '<div class="ch-tools" style="margin-top:12px">'+filterMarkup('okr-')+'</div><p class="ch-muted">Denominador: chamados distintos com prazo válido e vencido até a data observada. Exclui cancelados e casos sem prazo/evidência válida, destacados separadamente. O período por vencimento mostra casos sem prazo pela abertura, quando disponível. Aging: dias entre abertura e entrega integral no CD. Coleta gráfica: comparação por SKU/rota com a data formalizada pela gráfica, hipótese ainda não confirmada.</p></section>'+
-      '<div id="ch-okr-kpis" class="ch-grid"></div><section class="ch-box"><h2>Distribuição de aging de entrega</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2>Base de apuração</h2><div id="ch-okr-rows"></div></section>';
+      '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note">Denominador: chamados distintos com prazo válido e vencido até a data observada. Exclui cancelados e casos sem prazo/evidência válida, destacados separadamente. O período por vencimento mostra casos sem prazo pela abertura, quando disponível. Aging: dias entre abertura e entrega integral no CD. Coleta gráfica: comparação por SKU/rota com a data formalizada pela gráfica, hipótese ainda não confirmada.</p></section>'+
+      '<div id="ch-okr-kpis" class="ch-grid"></div><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de entrega</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div id="ch-okr-rows"></div></section>';
       el('okr').querySelectorAll('input,select').forEach(x=>x.addEventListener('change',renderOKR));
     }
     const re=state.data.rows.filter(t=>t.cat==='REENTRADA');
@@ -200,12 +253,12 @@
       const target=el('okr-'+k),old=target.value,values=[...new Set(re.map(t=>t[k]).filter(Boolean))].sort();
       target.innerHTML='<option value="">Todos</option>'+values.map(opt).join('');if(values.includes(old))target.value=old;
     }
-    dimOptions('okr-',re);
+    dimOptions('okr-',re);styleFilters();
     const f={...readFilters('okr-'),...Object.fromEntries(['rule','basis','start','end','asof','brand','shipment','scope'].map(k=>[k,el('okr-'+k).value]))};
     f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
     if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
     const d=chOKR(re,f),pct=v=>v===null?'—':num(Math.round(v*10)/10)+'%';
-    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / vencidos',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Vencidos em aberto / sem conclusão',num(d.pending)],['A vencer',num(d.upcoming)],['Sem data / evidência válida',num(d.missing)],['Cancelados excluídos',num(d.canceled)],['Concluídos / coletados',num(d.actual)],['Entregues integralmente',num(d.delivery)],['Aging médio de entrega',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
+    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / vencidos',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Vencidos em aberto / sem conclusão',num(d.pending)],['A vencer',num(d.upcoming)],['Sem data / evidência válida',num(d.missing)],['Cancelados excluídos',num(d.canceled)],['Concluídos / coletados',num(d.actual)],['Entregues integralmente',num(d.delivery)],['Aging médio de entrega',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Aderência'?(d.pct===null?'navy':d.pct>=90?'green':'yellow'):k==='Fora do prazo'||k.startsWith('Vencidos')?'orange':k==='Meta'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
     el('okr-aging').innerHTML=table(['Dias','Chamados','% da faixa','% acumulado'],d.bands.map(b=>[esc(b.label),num(b.count),pct(b.pct),pct(b.cum)]))+'<p class="ch-muted">Denominador: '+num(d.delivery)+' chamados com entrega integral e aging válido.</p>';
     el('okr-rows').innerHTML=table(['Chamado','Marca','Envio','Abertura','Prazo','Realizado do critério','Entrega integral','Aging','Apuração'],d.items.map(t=>['<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.brand),cell(t.shipment),dt(t.created),dt(t.due),dt(t.actual),dt(t.delivered),t.age===null?'—':num(t.age),cell(t.status)]),'Nenhum chamado no recorte.');
   }
@@ -221,7 +274,7 @@
         el(key).innerHTML='<option value="">Todos</option>'+options.map(opt).join('');
         if(options.includes(old))el(key).value=old;
       }
-      dimOptions('route-',d.rows);el('updated').textContent='Leitura em '+stamp(d.now);el('notice').textContent=d.notice||'';el('notice').hidden=!d.notice;message('');render();show();
+      dimOptions('route-',d.rows);styleFilters();el('updated').textContent='Leitura em '+stamp(d.now);el('notice').textContent=d.notice||'';el('notice').hidden=!d.notice;message('');render();show();
     }catch(err){message('Falha ao atualizar. '+(err.message||err),true);}finally{state.loading=false;el('refresh').disabled=false;}
   }
   window.pgAbrirChamados=function(view){if(state.view!==view){state.detail=null;state.detailLoad++;}state.view=view;show();if(!state.data && !state.loading )load(false);};
@@ -242,10 +295,12 @@
   function render(){
     if(!state.data)return;
     const rows=selected(),total=k=>rows.reduce((s,r)=>s+r.totals[k],0),by=el('by').value;
-    el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado no mapa',total('picked')],['Entregue no CD',total('delivered')],['Saldo a entregar',total('balance')],['Aging médio de entrega',agingMarkup(rows,dayNow())]].map(([k,v])=>'<div class="ch-card"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
+    el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado no mapa',total('picked')],['Entregue no CD',total('delivered')],['Saldo a entregar',total('balance')],['Aging médio de entrega',agingMarkup(rows,dayNow())]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Saldo a entregar'?'orange':k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
     const groups=new Map();rows.forEach(t=>{const k=t[by]||'Sem informação',g=groups.get(k)||[0,0,0];g[0]++;g[1]+=t.totals.qty;g[2]+=t.totals.balance;groups.set(k,g);});
     el('dist').innerHTML=table([el('by').selectedOptions[0].text,'Chamados','Tiragem','Saldo'],[...groups].sort((a,b)=>b[1][2]-a[1][2]).map(([k,g])=>['<button class="ch-link" data-filter="'+esc(k)+'">'+esc(k)+'</button>',...g.map(num)]));
-    el('funnel').innerHTML=state.data.phases.map((label,i)=>{const v=rows.reduce((s,t)=>s+t.totals.coverage[i],0),qty=total('qty'),pct=qty?100*v/qty:0;return '<span>'+esc(label)+'</span><div class="ch-bar"><i style="width:'+pct+'%"></i></div><span class="ch-num">'+num(v)+' · '+num(Math.round(pct))+'%</span>';}).join('');
+    const qty=total('qty'),colors=['#284081','#418EDE','#418EDE','#284081','#284081','#284081','#0C2340','#FCB04E','#FA4616','#418EDE','#049FEC','#284081'];
+    const layer=(label,v,pct,color,idx)=>'<div class="ch-funnel-stage'+(idx===0?' ch-stage-base':'')+'"><div class="ch-stage-label"><small>'+String(idx).padStart(2,'0')+'</small>'+esc(label)+'</div><div class="ch-stage-track"><div class="ch-stage-shape" style="width:'+Math.max(0,Math.min(100,pct))+'%;background:'+color+'" title="'+esc(label)+' · '+num(v)+' · '+num(Math.round(pct*10)/10)+'%"></div></div><div class="ch-stage-values">'+num(v)+'<span>'+num(Math.round(pct*10)/10)+'%</span></div></div>';
+    el('funnel').innerHTML=layer('Tiragem total',qty,qty?100:0,'#0C2340',0)+state.data.phases.map((label,i)=>{const v=rows.reduce((s,t)=>s+t.totals.coverage[i],0),pct=qty?100*v/qty:0;return layer(label,v,pct,colors[i%colors.length],i+1);}).join('');
     el('table').innerHTML=table(['Chamado','Categoria','Envio','Marca','Status SPG','Tratativa','Meta de entrega','Previsão vigente','Saldo','Conferir'],rows.slice((state.page-1)*30,state.page*30).map(t=>[
       '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(t.status),cell(state.data.manual[t.id]),dt(t.goal),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),num(t.totals.balance),num(t.issues)]),'Nenhum chamado corresponde aos filtros.');
     el('count').textContent=num(rows.length)+' chamados';pager(el('pages'),state.page,rows.length,30,'page');
@@ -299,14 +354,14 @@
   }
   root.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;
-    if(b.dataset.view){window.pgAbrirChamados(b.dataset.view);return;}
+    if(b.id==='ch-okr-clear'){[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment'].forEach(k=>el(k).value='');el('okr-scope').value='ativos';renderOKR();return;}
     if(b.id==='ch-refresh'){load(true);return;}if(b.id==='ch-save'){save();return;}
     if(b.id==='ch-back'){state.detailLoad++;state.detail=null;render();show();return;}
     if(b.dataset.ticket){openTicket(b.dataset.ticket);return;}
-    if(b.dataset.filter){el(el('by').value).value=b.dataset.filter;state.page=1;render();return;}
+    if(b.dataset.filter){el(el('by').value).value=b.dataset.filter;state.page=1;render();styleFilters();return;}
     if(b.dataset.page){state.page+=Number(b.dataset.page);render();return;}
     if(b.dataset.itempage){state.itemPage+=Number(b.dataset.itempage);renderItems();return;}
-    if(b.id==='ch-clear'){['query','cat','shipment','brand',...filterKeys.map(k=>'route-'+k)].forEach(k=>el(k).value='');el('scope').value='ativos';state.page=1;render();}
+    if(b.id==='ch-clear'){['query','cat','shipment','brand',...filterKeys.map(k=>'route-'+k)].forEach(k=>el(k).value='');el('scope').value='ativos';state.page=1;render();styleFilters();}
   });
   el('routefilters').innerHTML=filterMarkup('route-');
   filterKeys.forEach(k=>el('route-'+k).addEventListener('change',()=>{state.page=1;render();}));
