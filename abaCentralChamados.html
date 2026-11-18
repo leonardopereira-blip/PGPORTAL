@@ -159,7 +159,7 @@
   }
   const dimNames={printer:'Gráfica',cd:'CD',series:'Série',material:'Tipo de material',feature:'Característica',cover:'Tipo de capa',finish:'Acabamento'};
   const filterKeys=[...chDimensions,'openStart','openEnd','min','max'];
-  const dayNow=()=>state.data?state.data.now.slice(0,10):new Date().toISOString().slice(0,10);
+  const dayNow=()=>{const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(state.data?.now||Date.now()));const d=Object.fromEntries(parts.map(p=>[p.type,p.value]));return d.year+'-'+d.month+'-'+d.day;};
   const readFilters=prefix=>Object.fromEntries(filterKeys.map(k=>[k,el(prefix+k)?.value||'']));
   function filterMarkup(prefix){
     return chDimensions.map(k=>'<label>'+dimNames[k]+'<select id="ch-'+prefix+k+'"><option value="">Todos</option></select></label>').join('')+
@@ -251,8 +251,8 @@
     el('count').textContent=num(rows.length)+' chamados';pager(el('pages'),state.page,rows.length,30,'page');
   }
   async function openTicket(id){
-    const seq=++state.detailLoad;message('Carregando o histórico do chamado…');
-    try{const res=await rpc('getDetalheChamadoPortal',id,state.data.gen);if(seq!==state.detailLoad)return;
+    const seq=++state.detailLoad;message('Carregando o histórico do chamado…');const started=performance.now();
+    try{const res=await rpc('getDetalheChamadoPortal',id,state.data.gen);if(seq!==state.detailLoad)return;console.info('[CH JSON] detalhe ms',Math.round(performance.now()-started));
       state.detail=res.ticket;state.history=res.history;state.itemPage=1;state.pending=null;message('');renderDetail();show();root.scrollTop=0;
     }catch(e){if(seq===state.detailLoad)message(e.message||String(e),true);}
   }

@@ -197,8 +197,9 @@ function pgChEventos_(id) {
     .filter(r=>!id || r[0]===id).map(r=>({ticket:r[0],event:r[1],at:r[2],user:r[3],state:r[4],note:r[5],base:r[6]}));
 }
 function getChamadosPortal(atualizar) {
-  const s=pgChSnapshot_(), latest={};
+  const start=Date.now(),s=pgChSnapshot_(), latest={};
   pgChEventos_().forEach(e=>{latest[e.ticket]=e.state;});
+  console.log('[CH JSON] resumo + tratativas ms='+(Date.now()-start));
   return Object.assign({},s,{manual:latest,states:PG_CH_TRATATIVAS});
 }
 function pgChValidaId_(id) {
@@ -207,13 +208,14 @@ function pgChValidaId_(id) {
 function getDetalheChamadoPortal(id,gen) {
   pgChValidaId_(id);
   if(typeof gen!=='string' || !/^[a-f0-9-]{36}$/.test(gen))throw new Error('Atualize a lista de chamados.');
-  const ref=pgChJsonRefs_().find(r=>r.gen===gen);
+  const start=Date.now(),ref=pgChJsonRefs_().find(r=>r.gen===gen);
   if(!ref)throw new Error('A geração da lista expirou. Atualize a lista.');
   const index=pgChJsonRead_(ref.details),file=index[id];
   if(!file)throw new Error('Chamado não localizado nesta geração.');
   const t=pgChJsonRead_(file)[id];
   if(!t || t.id!==id)throw new Error('Detalhe inválido. Atualize a lista.');
-  return {ticket:t,history:pgChEventos_(id)};
+  const history=pgChEventos_(id);console.log('[CH JSON] detalhe ms='+(Date.now()-start));
+  return {ticket:t,history};
 }
 function salvarTratativaChamadoPortal(id,state,note,base,event) {
   pgChValidaId_(id);
