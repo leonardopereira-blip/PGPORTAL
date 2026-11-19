@@ -371,7 +371,7 @@
     message('Carregando JSON publicado dos chamados…');
     try{
       const started=performance.now(),d=await rpc('getChamadosPortal',false);if(token!==state.load)return;console.info('[CH JSON] abertura ms',Math.round(performance.now()-started));
-      if(d.calculationVersion!==7){state.data=null;state.detail=null;show();message('Atualize o JSON para carregar os indicadores com as regras corrigidas (atualizarCacheChamadosPortal).',true);return;}
+      if(d.calculationVersion!==8){state.data=null;state.detail=null;show();message('Atualize o JSON para carregar os indicadores com as regras corrigidas (atualizarCacheChamadosPortal).',true);return;}
       state.data=d;state.detail=null;state.detailLoad++;state.page=1;
       for(const key of ['cat','shipment','brand']){
         const old=el(key).value,options=[...new Set(d.rows.map(r=>r[key]).filter(Boolean))].sort();

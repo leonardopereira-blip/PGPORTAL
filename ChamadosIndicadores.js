@@ -157,6 +157,13 @@ function pgChColetaRota_(it){
       const n=Math.min(remaining,pending.get(e.kit)||0,e.qty);if(n>0){events.push({...e,qty:n});pending.set(e.kit,pending.get(e.kit)-n);remaining-=n;}
    }
  }
+ // O mapa integral da própria rota é evidência independente: não exige kit
+ // exclusivo quando todas as unidades já estão comprovadas pelo próprio mapa.
+ // Não soma as duas fontes; preserva a prioridade da coleta integral no SPG.
+ const spgDate=pgChDataIntegral_(primary,q,'date','qty');
+ const mapDate=pgChDataIntegral_(mapEvents,q,'date','qty');
+ const combinedDate=pgChDataIntegral_(events,q,'date','qty');
+ if(!spgDate&&mapDate&&(!combinedDate||mapDate<combinedDate))events=mapEvents;
  const mapPhysical=maps.reduce((n,m)=>n+Math.max(0,m.pick?m.qty:Math.min(m.qty,m.delivered)),0);
  const picked=Math.min(q,Math.max(mapPhysical,events.reduce((n,e)=>n+e.qty,0)));
  const date=pgChDataIntegral_(events,q,'date','qty');
