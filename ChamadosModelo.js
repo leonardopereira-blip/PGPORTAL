@@ -125,12 +125,67 @@ const PG_CH_DEPARA_DESTINO={
   "AT": "ATHOS",
   "ACABADORAATHOS": "ATHOS"
 };
+Object.assign(PG_CH_DEPARA_DESTINO,{
+  "CD": "CD",
+  "POSIGRAF": "POSIGRAF",
+  "CDJDI": "CD JDI",
+  "CDFOR": "CD FOR",
+  "KN": "KN",
+  "DEIGO": "Deigo",
+  "RIBEIRAOPRETO": "CD RP",
+  "CDRP": "CD RP",
+  "RAIZES": "RAÍZES",
+  "CDSBC": "CD SBC",
+  "ATHOS": "ATHOS",
+  "RP": "CD RP",
+  "ATHOSOSASCO": "ATHOS",
+  "IS": "CD SBC",
+  "FORTALEZACE": "CD FOR",
+  "JUNDIAISP": "CD JDI",
+  "KNSP": "KN",
+  "RIBEIRAOPRETOSP": "CD RP",
+  "SAOBERNARDOSP": "CD SBC",
+  "RAIZESSP": "RAÍZES",
+  "FORTALEZA": "CD FOR",
+  "DESTINO": "Destino",
+  "JUNDIAI": "CD JDI",
+  "ACABADORAHRACABAMENTOS": "HR",
+  "HR": "HR",
+  "SAOJOSEDORIOPRETOSP": "RAÍZES",
+  "LOUVEIRASP": "KN",
+  "ACABADORAEMBALARTE": "EMBALARTE",
+  "EMBALARTE": "EMBALARTE",
+  "CURITIBAPR": "POSIGRAF",
+  "ITAITINGACE": "CD FOR",
+  "ACABADORAKNEMLOUVEIRA": "KN",
+  "ACABADORAANTILHAS": "ANTILHAS",
+  "ANTILHAS": "ANTILHAS",
+  "ACABADORATRATTOFELK": "FELK",
+  "FELK": "FELK",
+  "ACABADORAATHOS": "ATHOS",
+  "ACABADORAATHOSMANUSEIOEARMAZENAGEMLTDAFILIAL": "ATHOS",
+  "ACABADORAHRACABAMENTO": "HR",
+  "ACABADORAANTILHASLOGISTICAEDEPOSITODEMERCADORIASPARATERCEIROSLTDA": "ANTILHAS",
+  "ACABADORAHR": "HR",
+  "ACABADORAATHOSRUAURBANOSANTOS901SITIOBRITOSSP": "ATHOS",
+  "ACABADORARAIZES": "RAÍZES",
+  "ACABADORAHRACABAMENTOSGRAFICOSEIRELI": "HR",
+  "ACABADORAANTILHASLOGISTICAEDEPOSITODEMERCADORIASPARATERCEIROSLTD": "ANTILHAS",
+  "ACABADORAHRACABAMENTOSEIRELI": "HR",
+  "ACABADORAATHOSGUARULHOS": "ATHOS",
+  "ACABADORAKN": "KN",
+  "ACABADORAPOSIGRAF": "POSIGRAF",
+  "ACABADORAFELKMANUSEIOLTDA": "FELK",
+  "SAOBERNARDO": "CD SBC",
+  "SAOBERNARDODOCAMPO": "CD SBC",
+  "SBC": "CD SBC"
+});
 function pgChCanon_(v,map){const k=pgChToken_(v);return Object.prototype.hasOwnProperty.call(map,k)?map[k]:k;}
 function pgChMarca_(v){return pgChCanon_(v,PG_CH_DEPARA_MARCA);}
 function pgChGraf_(v){return pgChCanon_(v,PG_CH_DEPARA_GRAF);}
-function pgChCD_(v){return pgChCanon_(pgChNormal_(v).replace(/\s*-\s*(SP|CE|PR)$/,''),PG_CH_DEPARA_DESTINO);}
+function pgChCD_(v){const raw=pgChToken_(v);return PG_CH_DEPARA_DESTINO[raw]||pgChCanon_(pgChNormal_(v).replace(/\s*-\s*(SP|CE|PR)$/,''),PG_CH_DEPARA_DESTINO);}
 function pgChGrafNome_(v){return PG_CH_DEPARA_GRAF[pgChToken_(v)]||pgChTexto_(v);}
-function pgChCDNome_(v){const s=pgChNormal_(v).replace(/\s*-\s*(SP|CE|PR)$/,'');return PG_CH_DEPARA_DESTINO[pgChToken_(s)]||pgChTexto_(v);}
+function pgChCDNome_(v){const s=pgChNormal_(v).replace(/\s*-\s*(SP|CE|PR)$/,'');return PG_CH_DEPARA_DESTINO[pgChToken_(v)]||PG_CH_DEPARA_DESTINO[pgChToken_(s)]||pgChTexto_(v);}
 function pgChMarcaNome_(v){return PG_CH_DEPARA_MARCA[pgChToken_(v)]||pgChTexto_(v);}
 function pgChData_(v) {
   const s = pgChTexto_(v);
@@ -162,7 +217,7 @@ function pgChAdd_(idx, key, value) {
   if (!idx.get(key).includes(value)) idx.get(key).push(value);
 }
 const PG_CH_ETAPAS = ['Arquivo enviado','Boneco recebido','Boneco aprovado','Impressão','Acabamento','Formação de kit',
-  'Produção concluída','Custo validado','OC emitida','Mapa solicitado','Coleta no mapa','Entrega no CD'];
+  'Produção concluída','Custo validado','OC emitida','Mapa solicitado','Coleta real','Entrega no CD'];
 function pgChEtapa_(plan,real,fonte,andamento) {
   return {p:pgChData_(plan), r:pgChData_(real), f:fonte, a:andamento || ''};
 }

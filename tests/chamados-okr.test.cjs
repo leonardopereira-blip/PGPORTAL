@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','abaCentralChamados.html'),'utf8').split('// CH_OKR_PURE_BEGIN')[1].split('// CH_OKR_PURE_END')[0];
-const ctx=vm.createContext({});vm.runInContext(source+';this.rules={chOKR,chFilteredTotals,chAging};',ctx);
-const {chOKR,chFilteredTotals}=ctx.rules;
+const ctx=vm.createContext({});vm.runInContext(source+';this.rules={chOKR,chFilteredTotals,chAging,chOKRDestinationRows};',ctx);
+const {chOKR,chFilteredTotals,chOKRDestinationRows}=ctx.rules;
 const t={id:'A',n:1,cat:'REENTRADA',created:'2026-11-17',desired:'2026-12-20',closed:'2026-12-12',delivered:'2026-12-13',brand:'SAS',shipment:'V4',groups:[],totals:{coverage:[]}};
 const f={rule:'fixed',basis:'open',start:'2026-11-01',end:'2026-11-30',asof:'2026-12-31'};
 test('25 dias inclusivos, 26 fora do prazo',()=>{assert.equal(chOKR([t],f).num,1);assert.equal(chOKR([{...t,closed:'2026-12-13'}],f).late,1)});
@@ -21,4 +21,10 @@ test('coleta histórica usa apenas eventos até o corte e respeita cada rota',()
  const x={...t,totals:{qty:200,coverage:[]},okrRoutes:[route('2026-11-28','2026-11-27'),route('2026-12-04','2026-12-05')]};
  const a=chOKR([x],{...f,rule:'pick'});assert.equal(a.late,1);assert.equal(a.items[0].days,1);
  const b=chOKR([x],{...f,rule:'pick',asof:'2026-12-03'});assert.equal(b.upcoming,1);assert.equal(b.items[0].pick,'');
+});
+
+test('destinos separados sem duplicar peso de chamados nem tiragem',()=>{
+ const g=(cd,qty)=>({printer:'A',cd,qty,mapped:0,picked:0,delivered:0,balance:qty,coverage:[0]});
+ const x={...t,groups:[g('CD FOR',30),g('CD JDI',100)],totals:{qty:130,coverage:[0]}};
+ for(const unit of ['tickets','qty']){const opts={...f,unit},d=chOKR([x],opts),lines=chOKRDestinationRows(d,opts,[x]);assert.equal(lines.length,2);assert.equal(lines.reduce((n,x)=>n+x.qty,0),130);assert.equal(lines.reduce((n,x)=>n+x.den,0),d.den);assert.equal(lines.reduce((n,x)=>n+x.num,0),d.num);}
 });

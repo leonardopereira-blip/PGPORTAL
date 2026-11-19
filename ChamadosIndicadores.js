@@ -144,13 +144,22 @@ function pgChPrazoResumo_(items){
 
 // Eventos de coleta exclusivamente da própria rota. SPG é alternativa, nunca soma a um mapa parcial.
 function pgChColetaRota_(it){
- const q=it.qty,sp=it.spg.filter(s=>s.q>0),maps=it.maps||[],dated=maps.filter(m=>m.pick&&m.qty>0);
- const mapEvents=dated.map(m=>({date:m.pick,qty:m.qty,kit:m.kit||'',map:m.map||'',source:'Mapa'}));
- const fallback=sp.filter(s=>s.pick&&s.q>0).map(s=>({date:s.pick,qty:s.q,kit:s.kit||'',map:'',source:'SPG · Coleta real'}));
- const events=mapEvents.length?mapEvents:fallback;
+ const q=it.qty,sp=it.spg.filter(s=>s.q>0),maps=it.maps||[];
+ const primary=sp.filter(s=>s.pick).map(s=>({date:s.pick,qty:s.q,kit:s.kit||'',map:'',source:'SPG · Coleta real'}));
+ const mapEvents=maps.filter(m=>m.pick&&m.qty>0).map(m=>({date:m.pick,qty:m.qty,kit:m.kit||'',map:m.map||'',source:'Mapa'}));
+ let events=primary.slice(),remaining=Math.max(0,q-primary.reduce((n,e)=>n+e.qty,0));
+ // Prioridade absoluta à Coleta real de cada linha. Complemento por kit exclusivo;
+ // sem data SPG na rota, o mapa inteiro é a fonte alternativa.
+ if(!primary.length)events=mapEvents;
+ else if(remaining){
+   const known=new Set(primary.map(e=>e.kit).filter(Boolean));
+   const pending=new Map();if(primary.every(e=>e.kit))for(const s of sp)if(!s.pick&&s.kit&&!known.has(s.kit))pending.set(s.kit,(pending.get(s.kit)||0)+s.q);
+   for(const e of mapEvents.slice().sort((a,b)=>a.date.localeCompare(b.date))){
+      const n=Math.min(remaining,pending.get(e.kit)||0,e.qty);if(n>0){events.push({...e,qty:n});pending.set(e.kit,pending.get(e.kit)-n);remaining-=n;}
+   }
+ }
  const mapPhysical=maps.reduce((n,m)=>n+Math.max(0,m.pick?m.qty:Math.min(m.qty,m.delivered)),0);
  const picked=Math.min(q,Math.max(mapPhysical,events.reduce((n,e)=>n+e.qty,0)));
  const date=pgChDataIntegral_(events,q,'date','qty');
- const sources=pgChUnicos_(events.map(e=>e.source));
- return {picked,date,events,source:sources.join(' + '),maps:pgChUnicos_(maps.map(m=>m.map)),parts:sp.map(s=>({kit:s.kit||'',qty:s.q,due:s.formal||''}))};
+ return {picked,date,events,source:pgChUnicos_(events.map(e=>e.source)).join(' + '),maps:pgChUnicos_(maps.map(m=>m.map)),parts:sp.map(s=>({kit:s.kit||'',qty:s.q,due:s.formal||''}))};
 }

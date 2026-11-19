@@ -140,7 +140,7 @@ function pgChJsonBuild_(before){
  const datasets={},links={},counts={};
  Object.keys(PG_CH_FONTES).filter(k=>k!=='map').forEach(k=>{const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;if(k==='spg'&&(!counts[k]||(before&&counts[k]<before.counts[k]*0.8)))throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização.');});
  const map=pgChMapaFonte_(before&&before.counts.map);datasets.map=map.rows;links.map=map.url;counts.map=map.rows.length;datasets.sla=getMatrizSLAPortal();
- const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:5,rows:model.summaries,phases:PG_CH_ETAPAS};
+ const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:6,rows:model.summaries,phases:PG_CH_ETAPAS};
  if(map.stale)result.notice='Mapa: última leitura íntegra em '+new Date(map.at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+'. Atualização automática pendente.';
  if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');return {result,tickets:model.tickets};
 }
