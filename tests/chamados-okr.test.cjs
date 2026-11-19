@@ -20,7 +20,7 @@ test('coleta histórica usa apenas eventos até o corte e respeita cada rota',()
  const route=(date,due)=>({qty:100,collection:{parts:[{qty:100,kit:'K',due}],events:[{date,qty:100,kit:'K',source:'SPG · Coleta real'}],maps:[]}});
  const x={...t,totals:{qty:200,coverage:[]},okrRoutes:[route('2026-11-28','2026-11-27'),route('2026-12-04','2026-12-05')]};
  const a=chOKR([x],{...f,rule:'pick'});assert.equal(a.late,1);assert.equal(a.items[0].days,1);
- const b=chOKR([x],{...f,rule:'pick',asof:'2026-12-03'});assert.equal(b.upcoming,1);assert.equal(b.items[0].pick,'');
+ const b=chOKR([x],{...f,rule:'pick',asof:'2026-12-03'});assert.equal(b.upcoming,0);assert.equal(b.pending,1);assert.equal(b.late,1);assert.equal(b.items[0].pick,'');
 });
 
 test('destinos separados sem duplicar peso de chamados nem tiragem',()=>{
@@ -38,3 +38,15 @@ test('coleta determina realizado no critério de 25 dias e ignora encerramento',
  const z=chOKR([x],{...f,start:'2026-09-05',end:'2026-12-06',asof:'2026-11-19'});assert.equal(z.num,1);assert.equal(z.items[0].due,'2026-11-17');assert.equal(z.items[0].actual,'2026-11-05');
 });
 test('categoria é configurável',()=>{const x={...t,cat:'SPOT'};assert.equal(chOKR([x],{...f,cat:['SPOT']}).num,1);assert.equal(chOKR([x],{...f,cat:['REENTRADA']}).num,0);});
+
+test('OKR exclui abertos no prazo e contabiliza vencidos abertos como fora, nas duas unidades',()=>{
+ const base={...t,created:'2026-11-01',desired:'',pickDone:'',closed:'',totals:{qty:100,coverage:[]}};
+ const rows=[{...base,id:'A',pickDone:'2026-11-20'},{...base,id:'B',pickDone:'2026-11-28',totals:{qty:200,coverage:[]}},{...base,id:'C',totals:{qty:300,coverage:[]}},{...base,id:'D',created:'2026-11-20',totals:{qty:400,coverage:[]}}];
+ for(const [unit,num,den,late,pending,upcoming] of [['tickets',1,3,2,1,1],['qty',100,600,500,300,400]]){
+   const r=chOKR(rows,{...f,unit,asof:'2026-11-30'});assert.equal(r.num,num);assert.equal(r.den,den);assert.equal(r.late,late);assert.equal(r.pending,pending);assert.equal(r.upcoming,upcoming);assert.equal(r.den,r.num+r.late);assert.equal(r.items[2].status,'Fora do prazo · em aberto');assert.equal(r.items[3].den,0);
+ }
+});
+test('aberto no próprio dia do vencimento ainda não está atrasado',()=>{
+ const x={...t,pickDone:'',closed:''};const r=chOKR([x],{...f,asof:'2026-12-12'});assert.equal(r.den,0);assert.equal(r.upcoming,1);assert.equal(r.late,0);
+ const next=chOKR([x],{...f,asof:'2026-12-13'});assert.equal(next.den,1);assert.equal(next.late,1);assert.equal(next.items[0].days,1);
+});

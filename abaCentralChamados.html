@@ -207,8 +207,8 @@
     if(pick.actual&&!actual||!t.created||!due||due<t.created||f.rule==='pick'&&pick.invalid)return {actual,status:'Sem data/evidência válida',days:null,den:0,num:0};
     const days=Math.max(0,chDays(due,actual||f.asof)||0,f.rule==='pick'?(pick.days||0):0);
     if(actual){const late=actual>due||(f.rule==='pick'&&pick.late);return {actual,status:late?'Fora do prazo':'No prazo',days,den:1,num:late?0:1};}
-    if(due>f.asof)return {actual,status:'A vencer',days:null,den:0,num:0};
-    return {actual,status:'Vencido em aberto',days,den:1,num:0};
+    if(due>=f.asof&&!(f.rule==='pick'&&(pick.late||pick.days>0)))return {actual,status:'A vencer',days:null,den:0,num:0};
+    return {actual,status:'Fora do prazo · em aberto',days,den:1,num:0};
   }
   function chOKRDestinationRows(d,f,rows){
     const source=new Map(rows.map(t=>[t.id,t])),out=[];
@@ -243,7 +243,7 @@
         if(actual){out.actual+=w;if(age!==null&&age>=0){out.ages.push({age,w});out.delivery+=w;}}
         out.den+=result.den*w;out.num+=result.num*w;
         if(status==='Fora do prazo')out.late+=w;
-        else if(status==='Vencido em aberto'){out.pending+=w;out.missingActual+=w;}
+        else if(status==='Fora do prazo · em aberto'){out.late+=w;out.pending+=w;out.missingActual+=w;}
         else if(status==='A vencer')out.upcoming+=w;
         else if(status==='Sem data/evidência válida')out.missing+=w;
       }
@@ -328,7 +328,7 @@
       '<label>Realizado observado até<input type="date" id="ch-okr-asof" value="'+today+'" max="'+today+'"></label>'+
       '<label>Categoria<select id="ch-okr-cat"><option value="">Todos</option><option value="REENTRADA" selected>REENTRADA</option></select></label><label>Marca<select id="ch-okr-brand"></select></label><label>Envio<select id="ch-okr-shipment"></select></label>'+
       '<label>Situação<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option></select></label></div>'+
-      '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note">Base: chamados coletados ou com prazo vencido até a data observada.</p></section>'+
+      '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note">Base: coletados e vencidos em aberto. Pendentes ainda no prazo não entram na aderência.</p></section>'+
       '<div id="ch-okr-kpis" class="ch-grid"></div><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de coleta</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Baixar base CSV</button><small id="ch-okr-count"></small></div><div id="ch-okr-rows"></div></section>';
       el('okr').querySelectorAll('input,select').forEach(x=>x.addEventListener('change',renderOKR));
     }
@@ -342,7 +342,7 @@
     f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
     state.okrExport=null;el('okr-export').disabled=true;if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
     const d=chOKR(re,f),display=chOKRDestinationRows(d,f,re),unit=f.unit==='qty'?'Tiragem':'Chamados';state.okrExport={d,f,display};el('okr-export').disabled=false;el('okr-count').textContent=num(d.items.length)+' chamados · '+num(display.length)+' linhas por destino';const pct=v=>v===null?'—':num(Math.round(v*10)/10)+'%';
-    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / base apurada',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Vencidos em aberto / sem conclusão',num(d.pending)],['A vencer',num(d.upcoming)],['Sem data / evidência válida',num(d.missing)],['Cancelados excluídos',num(d.canceled)],['Coletados',num(d.actual)],['Aging médio de coleta',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Aderência'?(d.pct===null?'navy':d.pct>=90?'green':'yellow'):k==='Fora do prazo'||k.startsWith('Vencidos')?'orange':k==='Meta'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
+    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / base apurada',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Dos quais, vencidos em aberto',num(d.pending)],['A vencer (fora da apuração)',num(d.upcoming)],['Sem data / evidência válida',num(d.missing)],['Cancelados excluídos',num(d.canceled)],['Coletados',num(d.actual)],['Aging médio de coleta',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Aderência'?(d.pct===null?'navy':d.pct>=90?'green':'yellow'):k==='Fora do prazo'||k.startsWith('Dos quais')?'orange':k==='Meta'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
     el('okr-aging').innerHTML=table(['Dias',unit,'% da faixa','% acumulado'],d.bands.map(b=>[esc(b.label),num(b.count),pct(b.pct),pct(b.cum)]))+'<p class="ch-muted">Denominador: '+num(d.delivery)+' '+unit.toLowerCase()+' com coleta integral e aging válido.</p>';
     el('okr-rows').innerHTML=table(['Chamado','Categoria','Marca','Envio','Gráfica','CD','Tiragem','Abertura','Prazo','Realizado','Dias de atraso','Origem coleta','Mapa de saída','Aging','Apuração do destino','Apuração do chamado'],display.map(t=>['<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.brand),cell(t.shipment),cell(t.printers.join(' | ')),cell(t.cds.map(cdLabel).join(' | ')),num(t.qty),dt(t.created),dt(t.due),collectionCell(t,t.actual),t.days===null?'—':num(t.days),cell(t.pickSource),cell(t.maps.join(' | ')),t.age===null?'—':num(t.age),cell(t.localStatus||t.status),cell(t.status)]),'Nenhum chamado no recorte.');
   }
