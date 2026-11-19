@@ -12,7 +12,7 @@ function pgChAtributos_(idx,it) {
   const list=(key)=>clean(fichas.map(r=>r[key]));
   const cuts=fichas.flatMap(r=>['cut','cut0','cut1','cut2','cut3','cut4','cut5','cut6'].map(k=>pgChNormal_(r[k])));
   const features=[];
-  if(cuts.some(v=>['TRUE','SIM','1'].includes(v)))features.push('Corte e vinco');
+  if(cuts.some(v=>['TRUE','SIM','1'].includes(v))||it.legacy&&it.spg.some(r=>['SIM','TRUE','1'].includes(pgChNormal_(r.cut))))features.push('Corte e vinco');
   if(list('cover').some(v=>pgChNormal_(v)==='DURA'))features.push('Capa dura');
   if([it.desc,...list('description')].some(s=>/\bMONTAVE(?:L|IS)\b/.test(pgChNormal_(s))))features.push('Montável');
   return {printer:pgChGrafNome_(it.printer),cd:pgChCDNome_(it.cd),series:clean(fichas.flatMap(r=>pgChTexto_(r.series).split(/[;|]/))),
@@ -78,6 +78,7 @@ function pgChStatusRota_(t,it,panel){
   if(any(11)&&full(10))return result('Entrega parcial · saldo em trânsito','Mapa');
   if(full(10))return result('Em trânsito','Mapa');
   if(any(10))return result('Coleta parcial','Mapa');
+  if(it.legacy&&has('GESTAO TIME COMPRAS'))return result('Gestão time Compras','Painel de produção');
   if(!it.printer)return result(/SOLICITADO/.test(state)&&!t.steps?.Liberação?.r?'Aguardando liberação':'Em alocação','SPG');
   if(full(6)){
     if(full(9))return result('Aguardando coleta','Mapa');
@@ -98,7 +99,7 @@ function pgChStatusRota_(t,it,panel){
   if(full(2))return result('Aguardando entrada em máquina','Calendário');
   if(full(1))return result('Aguardando aprovação de boneco','Calendário');
   if(full(0))return result('Aguardando recebimento de boneco','Calendário');
-  if(/CONCLU/.test(state))return result('Encerrado no SPG','SPG');
+  if(/CONCLU/.test(state))return result(it.legacy?'Concluído no painel':'Encerrado no SPG',it.legacy?'Painel de produção':'SPG');
   if(/VALIDADO/.test(state))return result('Custos validados · produção pendente','SPG');
   return result('Aguardando envio de arquivo','Calendário / SPG');
 }
@@ -144,7 +145,7 @@ function pgChPrazoResumo_(items){
 // Eventos de coleta exclusivamente da própria rota. SPG é alternativa, nunca soma a um mapa parcial.
 function pgChColetaRota_(it){
  const q=it.qty,sp=it.spg.filter(s=>s.q>0),maps=it.maps||[];
- const primary=sp.filter(s=>s.pick).map(s=>({date:s.pick,qty:s.q,kit:s.kit||'',map:'',source:'SPG · Coleta real'}));
+ const primary=sp.filter(s=>s.pick).map(s=>({date:s.pick,qty:s.q,kit:s.kit||'',map:'',source:s.legacy?'Painel de produção · Histórico':'SPG · Coleta real'}));
  const mapEvents=maps.filter(m=>m.pick&&m.qty>0).map(m=>({date:m.pick,qty:m.qty,kit:m.kit||'',map:m.map||'',source:'Mapa'}));
  let events=primary.slice(),remaining=Math.max(0,q-primary.reduce((n,e)=>n+e.qty,0));
  // Prioridade absoluta à Coleta real de cada linha. Complemento por kit exclusivo;
@@ -163,7 +164,7 @@ function pgChColetaRota_(it){
  const spgDate=pgChDataIntegral_(primary,q,'date','qty');
  const mapDate=pgChDataIntegral_(mapEvents,q,'date','qty');
  const combinedDate=pgChDataIntegral_(events,q,'date','qty');
- if(!spgDate&&mapDate&&(!combinedDate||mapDate<combinedDate))events=mapEvents;
+ if(it.legacy&&mapDate||!spgDate&&mapDate&&(!combinedDate||mapDate<combinedDate))events=mapEvents;
  const mapPhysical=maps.reduce((n,m)=>n+Math.max(0,m.pick?m.qty:Math.min(m.qty,m.delivered)),0);
  const picked=Math.min(q,Math.max(mapPhysical,events.reduce((n,e)=>n+e.qty,0)));
  const date=pgChDataIntegral_(events,q,'date','qty');

@@ -119,3 +119,17 @@ test('mapa integral da própria rota confirma coleta mesmo com SPG parcial e kit
 test('mapa parcial e sem data integral não inventa data de coleta',()=>{
  const result=ctx.pgChColetaRota_({qty:100,spg:[{q:100}],maps:[{qty:40,pick:'2026-09-11'}]});assert.equal(result.date,'');assert.equal(result.picked,40);
 });
+
+test('importa exclusivamente setembro sem repetir chamado existente no SPG',()=>{
+ const r={n:'900',brand:'SAS',shipment:'V1',category:'Reentrada, Preventiva',printer:'Alpha',cd:'CJUN',qty:'100',created:'2026-09-05',pickup:'2026-09-20',status:'Concluído',row:7};
+ const model=build({panel:[r,{...r,row:8},{...r,cd:'CITA',qty:'40',row:9},{...r,n:'101'},{...r,n:'901',created:'2026-10-01'},{...r,n:'902',created:'2026-08-30'}]});
+ const x=model.tickets.get('PAINEL-900');assert.equal(x.totals.qty,140);assert.equal(x.totals.picked,140);assert.equal(x.totals.delivered,0);assert.equal(x.items.length,2);assert.equal(model.tickets.size,3);assert.equal(x.items[0].collection.source,'Painel de produção · Histórico');
+});
+test('painel aberto não converte previsão em coleta e mapa exige vínculo explícito',()=>{
+ const r={n:'900',brand:'SAS',shipment:'V1',category:'Reentrada',printer:'Alpha',cd:'CJUN',qty:'100',created:'2026-09-05',pickup:'2026-09-20',status:'Em produção',row:7};
+ const x=build({panel:[r],map:[{...map,n:'900',qty:'100',received:'100'}]}).tickets.get('PAINEL-900');assert.equal(x.totals.picked,100);assert.equal(x.totals.delivered,100);assert.equal(x.items[0].collection.date,'2026-10-02');assert.equal(x.items[0].collection.source,'Mapa');
+ const y=build({panel:[r],map:[{...map,n:'',qty:'100',received:'100'}]}).tickets.get('PAINEL-900');assert.equal(y.totals.picked,0);
+});
+test('histórico com data anterior à abertura não confirma coleta',()=>{
+ const x=build({panel:[{n:'900',brand:'SAS',shipment:'V1',category:'SPOT',printer:'Alpha',cd:'CJUN',qty:'100',created:'2026-09-05',pickup:'2026-08-30',status:'Concluído'}]}).tickets.get('PAINEL-900');assert.equal(x.totals.picked,0);
+});

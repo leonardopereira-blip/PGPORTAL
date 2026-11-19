@@ -148,6 +148,7 @@ const PG_CH_FONTES = {
     "header": 6,
     "fields": {
       "n": "ID",
+      "category": "Tipo", "qty": "Tiragem", "description": "Descrição", "owner": "Resp. Fornecedor", "cycle": "Ciclo", "desired": "Data desejada entrega do chamado", "formal": "Data coleta formalizada", "priority": "Prioridade / Parte do chamado", "oc": "Nº da OC", "ocStatus": "Status OC", "cut": "Corte e vinco",
       "brand": "Marca",
       "shipment": "Painel",
       "cd": "Filial",
