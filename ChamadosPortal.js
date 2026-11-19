@@ -140,7 +140,7 @@ function pgChJsonBuild_(before){
  const datasets={},links={},counts={};
  Object.keys(PG_CH_FONTES).filter(k=>k!=='map').forEach(k=>{const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;if(k==='spg'&&(!counts[k]||(before&&counts[k]<before.counts[k]*0.8)))throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização.');});
  const map=pgChMapaFonte_(before&&before.counts.map);datasets.map=map.rows;links.map=map.url;counts.map=map.rows.length;datasets.sla=getMatrizSLAPortal();
- const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:6,rows:model.summaries,phases:PG_CH_ETAPAS};
+ const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:7,rows:model.summaries,phases:PG_CH_ETAPAS};
  if(map.stale)result.notice='Mapa: última leitura íntegra em '+new Date(map.at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+'. Atualização automática pendente.';
  if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');return {result,tickets:model.tickets};
 }
@@ -217,6 +217,7 @@ function getChamadosPortal(atualizar) {
   const start=Date.now(),s=pgChSnapshot_(), latest={};
   pgChEventos_().forEach(e=>{latest[e.ticket]=e.state;});
   console.log('[CH JSON] resumo + tratativas ms='+(Date.now()-start));
+  pgChAplicarColetasResumo_(s,pgChColetasManuais_());
   return Object.assign({},s,{manual:latest,states:PG_CH_TRATATIVAS});
 }
 function pgChValidaId_(id) {
@@ -231,6 +232,7 @@ function getDetalheChamadoPortal(id,gen) {
   if(!file)throw new Error('Chamado não localizado nesta geração.');
   const t=pgChJsonRead_(file)[id];
   if(!t || t.id!==id)throw new Error('Detalhe inválido. Atualize a lista.');
+  pgChAplicarColetasDetalhe_(t,pgChColetasManuais_());
   const history=pgChEventos_(id);console.log('[CH JSON] detalhe ms='+(Date.now()-start));
   return {ticket:t,history};
 }
@@ -258,4 +260,60 @@ function salvarTratativaChamadoPortal(id,state,note,base,event) {
     Sheets.Spreadsheets.Values.append({values:[[id,event,at,user,state,note,base]]},ss.getId(),"'"+PG_CH_ABA_EDICAO+"'!A:G",{valueInputOption:'RAW',insertDataOption:'INSERT_ROWS'});
     return {ok:true,history:history.concat([{ticket:id,event,at,user,state,note,base}])};
   }finally{lock.releaseLock();}
+}
+
+const PG_CH_ABA_COLETA='Chamados_Coletas_Manuais';
+function pgChColetasManuais_(){
+ const sheet=pgArquivoObservacoesGiro_().getSheetByName(PG_CH_ABA_COLETA),out=new Map();
+ if(!sheet||sheet.getLastRow()<2)return out;
+ sheet.getRange(2,1,sheet.getLastRow()-1,6).getDisplayValues().forEach(r=>{const date=pgChData_(r[2]);if(date)out.set(JSON.stringify([r[0],pgChCDNome_(r[1])]),{date,user:r[3],at:r[4]});});return out;
+}
+function salvarColetaManualChamadoPortal(id,cd,date){
+ pgChValidaId_(id);cd=pgChCDNome_(cd);const d=pgChData_(date),today=Utilities.formatDate(new Date(),'America/Sao_Paulo','yyyy-MM-dd'),user=Session.getActiveUser().getEmail();
+ if(!user||!cd||!d||d>today)throw new Error('Informe uma data válida, não futura, e entre com sua conta.');
+ const s=pgChSnapshot_(),t=s.rows.find(r=>r.id===id);
+ if(!t||/CANCEL/i.test(t.status)||!t.created||d<t.created)throw new Error('Chamado cancelado, inexistente ou data anterior à abertura.');
+ const routes=(t.okrRoutes||[]).filter(r=>pgChCDNome_(r.cd)===cd&&r.qty>0);
+ if(!routes.length)throw new Error('Destino não localizado neste chamado.');
+ if(routes.every(r=>r.pick))throw new Error('O destino já tem coleta integral registrada.');
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const old=pgChColetasManuais_().get(JSON.stringify([id,cd]));if(old)throw new Error('Este destino já possui uma coleta manual registrada.');
+  const ss=pgArquivoObservacoesGiro_();let sheet=ss.getSheetByName(PG_CH_ABA_COLETA);
+  if(!sheet){sheet=ss.insertSheet(PG_CH_ABA_COLETA);sheet.getRange(1,1,1,6).setValues([['ID Chamado','CD','Data de coleta','Usuário','Registrado em','Evento']]);sheet.setFrozenRows(1);SpreadsheetApp.flush();}
+  Sheets.Spreadsheets.Values.append({values:[[id,cd,d,user,new Date().toISOString(),Utilities.getUuid()]]},ss.getId(),"'"+PG_CH_ABA_COLETA+"'!A:F",{valueInputOption:'RAW',insertDataOption:'INSERT_ROWS'});
+  return {ok:true};
+ }finally{lock.releaseLock();}
+}
+function pgChComplementoManual_(collection,qty,manual){
+ if(!manual||!collection||!(qty>0)||pgChDataIntegral_(collection.events||[],qty,'date','qty'))return false;
+ const events=collection.events||[],remaining=Math.max(0,qty-events.reduce((n,e)=>n+e.qty,0));if(!remaining)return false;
+ const known=new Map();events.forEach(e=>{if(e.kit)known.set(e.kit,(known.get(e.kit)||0)+e.qty);});
+ let left=remaining;
+ for(const part of collection.parts||[]){const covered=Math.min(part.qty,known.get(part.kit)||0);known.set(part.kit,Math.max(0,(known.get(part.kit)||0)-covered));const q=Math.min(left,part.qty-covered);if(q>0){events.push({date:manual.date,qty:q,kit:part.kit||'',map:'',source:'Manual'});left-=q;}}
+ if(left)events.push({date:manual.date,qty:left,kit:'',map:'',source:'Manual'});
+ collection.events=events;collection.source=pgChUnicos_(events.map(e=>e.source)).join(' + ');collection.date=pgChDataIntegral_(events,qty,'date','qty');collection.picked=qty;return true;
+}
+function pgChAplicarColetasResumo_(s,manual){
+ for(const t of s.rows||[]){
+  let changed=false;
+  for(const r of t.okrRoutes||[]){
+   const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(r.cd)]));if(!pgChComplementoManual_(r.collection,r.qty,edit))continue;
+   changed=true;r.pick=r.collection.date;const prev=r.coverage||[];
+   const {specRows,...dims}=r.dimensions||{},g=(t.groups||[]).find(g=>Object.keys(dims).every(k=>JSON.stringify(g[k])===JSON.stringify(dims[k])));
+   const delta=Math.max(0,r.qty-(r.picked||0));t.totals.picked+=delta;if(g)g.picked+=delta;r.picked=r.qty;
+   for(const k of [0,1,2,3,4,5,6,10]){const diff=Math.max(0,r.qty-(prev[k]||0));t.totals.coverage[k]+=diff;if(g)g.coverage[k]+=diff;prev[k]=r.qty;}
+   const label=r.delivery?'Entregue integralmente':'Em trânsito';
+   for(const list of [t.production,g&&g.production])if(list&&r.productionStatus!==label){const old=list.find(x=>x.label===r.productionStatus);if(old)old.qty=Math.max(0,old.qty-r.qty);let next=list.find(x=>x.label===label);if(!next){next={label,qty:0};list.push(next);}next.qty+=r.qty;}
+   r.productionStatus=label;
+  }
+  if(changed){t.pickDone=pgChMarcoItens_(t.okrRoutes,'pick');t.pickSource=pgChUnicos_(t.okrRoutes.map(r=>r.collection.source)).join(' + ');t.production=(t.production||[]).filter(x=>x.qty>0);(t.groups||[]).forEach(g=>g.production=(g.production||[]).filter(x=>x.qty>0));}
+ }
+}
+function pgChAplicarColetasDetalhe_(t,manual){
+ for(const it of t.items||[]){const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(it.cd)]));if(!pgChComplementoManual_(it.collection,it.qty,edit))continue;
+  const delta=Math.max(0,it.qty-Math.min(it.qty,it.picked));t.totals.picked+=delta;it.picked=it.qty;
+  for(const k of [0,1,2,3,4,5,6,10]){const diff=Math.max(0,it.qty-(it.coverage[k]||0));t.totals.coverage[k]+=diff;it.coverage[k]=it.qty;it.stages[k].units=it.qty;}
+  it.stages[10].r=it.collection.date;it.stages[10].f=it.collection.source;it.productionStatus={label:it.delivered>=it.qty?'Entregue integralmente':'Em trânsito',source:'Manual'};
+ }
 }

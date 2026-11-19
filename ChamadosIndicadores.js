@@ -36,8 +36,7 @@ function pgChMetricaChamado_(t,idx) {
     const attributes=pgChAtributos_(idx,it);it.attributes=attributes;
     const sp=it.spg.filter(r=>r.q>0);
     const mapDelivery=pgChDataIntegral_(it.maps,it.qty,'delivery','delivered');
-    const spDelivery=pgChMarcoItens_(sp,'delivery');
-    const delivery=mapDelivery||spDelivery;
+    const delivery=mapDelivery;
     const collection=it.collection||pgChColetaRota_(it),pick=collection.date;
     const formal=pgChMarcoItens_(sp,'formal');
     const deadlines=pgChUnicos_(sp.map(r=>r.formal));
@@ -50,7 +49,7 @@ function pgChMetricaChamado_(t,idx) {
         if(!collected)unverified=true;else if(collected>part.formal)late=true;
       }
     }
-    if(it.qty>0)routes.push({sku:it.sku,printer:it.printer,cd:it.cd,qty:it.qty,delivery,pick,formal,late,unverified,source:mapDelivery?'Mapa':spDelivery?'SPG':'',collection:{events:collection.events,parts:collection.parts,source:collection.source,maps:collection.maps}});
+    if(it.qty>0)routes.push({sku:it.sku,printer:it.printer,cd:it.cd,qty:it.qty,delivery,pick,formal,late,unverified,source:mapDelivery?'Mapa':'',dimensions:attributes,coverage:it.coverage.slice(),picked:Math.min(it.qty,it.picked),productionStatus:it.productionStatus.label,collection:{events:collection.events,parts:collection.parts,source:collection.source,maps:collection.maps}});
     const {specRows,...dims}=attributes,key=JSON.stringify(dims);
     let g=groups.get(key);
     if(!g){
