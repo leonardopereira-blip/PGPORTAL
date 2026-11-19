@@ -38,19 +38,19 @@ function pgChMetricaChamado_(t,idx) {
     const mapDelivery=pgChDataIntegral_(it.maps,it.qty,'delivery','delivered');
     const spDelivery=pgChMarcoItens_(sp,'delivery');
     const delivery=mapDelivery||spDelivery;
-    const pick=pgChDataIntegral_(it.maps,it.qty,'pick','qty');
+    const collection=it.collection||pgChColetaRota_(it),pick=collection.date;
     const formal=pgChMarcoItens_(sp,'formal');
     const deadlines=pgChUnicos_(sp.map(r=>r.formal));
     let late=!!(pick && formal && pick>formal),unverified=false;
     if(formal && deadlines.length>1){
       // Entregas de kits com compromissos diferentes exigem evidência de coleta por kit.
       for(const part of sp){
-        const events=it.maps.filter(m=>part.kit && m.kit===part.kit);
-        const collected=pgChDataIntegral_(events,part.q,'pick','qty');
+        const events=collection.events.filter(m=>part.kit && m.kit===part.kit);
+        const collected=pgChDataIntegral_(events,part.q,'date','qty');
         if(!collected)unverified=true;else if(collected>part.formal)late=true;
       }
     }
-    if(it.qty>0)routes.push({delivery,pick,formal,late,unverified,source:mapDelivery?'Mapa':spDelivery?'SPG':''});
+    if(it.qty>0)routes.push({sku:it.sku,printer:it.printer,cd:it.cd,qty:it.qty,delivery,pick,formal,late,unverified,source:mapDelivery?'Mapa':spDelivery?'SPG':'',collection:{events:collection.events,parts:collection.parts,source:collection.source,maps:collection.maps}});
     const {specRows,...dims}=attributes,key=JSON.stringify(dims);
     let g=groups.get(key);
     if(!g){
@@ -67,7 +67,7 @@ function pgChMetricaChamado_(t,idx) {
   return {groups:Array.from(groups.values(),g=>{g.target=pgChPrazoResumo_(g.targetItems);delete g.targetItems;return g;}),closed:t.steps['Conclusão']?.r||'',canceled:t.steps.Cancelamento?.r||'',
     delivered,deliverySource:delivered?pgChUnicos_(routes.map(r=>r.source)).join(' + '):'',
     pickDone:pgChMarcoItens_(routes,'pick'),pickDue:pgChMarcoItens_(routes,'formal'),
-    pickLate:routes.some(r=>r.late),pickUnverified:routes.some(r=>r.unverified),owner:t.owner||''};
+    pickLate:routes.some(r=>r.late),pickUnverified:routes.some(r=>r.unverified),okrRoutes:routes,pickMaps:pgChUnicos_(routes.flatMap(r=>r.collection.maps)),pickSource:pgChUnicos_(routes.map(r=>r.collection.source)).join(' + '),owner:t.owner||''};
 }
 
 function pgChStatusRota_(t,it,panel){
@@ -140,4 +140,17 @@ function pgChPrazoRota_(t,it,profile,slaDays){
 function pgChPrazoResumo_(items){
  const valid=items.filter(it=>it.qty>0&&it.target);if(!valid.length)return null;const pending=valid.filter(it=>it.target.next).sort((a,b)=>a.target.next.localeCompare(b.target.next));
  return {dates:PG_CH_ETAPAS.map((_,k)=>pgChUltima_(valid.map(it=>it.target.dates[k]))),deadline:pgChUltima_(valid.map(it=>it.target.deadline)),next:pending[0]?.target.next||'',nextStage:pending[0]?.target.nextStage??-1};
+}
+
+// Eventos de coleta exclusivamente da própria rota. SPG é alternativa, nunca soma a um mapa parcial.
+function pgChColetaRota_(it){
+ const q=it.qty,sp=it.spg.filter(s=>s.q>0),maps=it.maps||[],dated=maps.filter(m=>m.pick&&m.qty>0);
+ const mapEvents=dated.map(m=>({date:m.pick,qty:m.qty,kit:m.kit||'',map:m.map||'',source:'Mapa'}));
+ const fallback=sp.filter(s=>s.pick&&s.q>0).map(s=>({date:s.pick,qty:s.q,kit:s.kit||'',map:'',source:'SPG · Coleta real'}));
+ const events=mapEvents.length?mapEvents:fallback;
+ const mapPhysical=maps.reduce((n,m)=>n+Math.max(0,m.pick?m.qty:Math.min(m.qty,m.delivered)),0);
+ const picked=Math.min(q,Math.max(mapPhysical,events.reduce((n,e)=>n+e.qty,0)));
+ const date=pgChDataIntegral_(events,q,'date','qty');
+ const sources=pgChUnicos_(events.map(e=>e.source));
+ return {picked,date,events,source:sources.join(' + '),maps:pgChUnicos_(maps.map(m=>m.map)),parts:sp.map(s=>({kit:s.kit||'',qty:s.q,due:s.formal||''}))};
 }

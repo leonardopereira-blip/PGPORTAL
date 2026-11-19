@@ -99,3 +99,12 @@ test('cada rota é monotônica mesmo com excedente de outro SKU',()=>{
  const x=build({spg:[a,{...a,sku:'C',qty:'75'}],map:[{...map,qty:'300',received:'300'}]}).tickets.get(a.id);
  assert.equal(x.totals.coverage[3],100);assert.equal(x.totals.picked,100);assert.equal(x.totals.delivered,100);assert.equal(x.totals.balance,75);
 });
+
+test('fallback de Coleta real SPG sem mapa, não cria mapa nem OC',()=>{
+ const x=build({spg:[{...a,pick:'2026-09-15',formal:'2026-09-16'}]}).tickets.get(a.id);
+ assert.equal(x.totals.picked,100);assert.equal(x.totals.mapped,0);assert.equal(x.totals.coverage[3],100);assert.equal(x.items[0].collection.source,'SPG · Coleta real');
+});
+test('mapa parcial não soma Coleta real do SPG nem baixa o saldo de outro SKU',()=>{
+ const x=build({spg:[{...a,pick:'2026-09-15'},{...a,sku:'C',qty:'60'}],map:[map]}).tickets.get(a.id);
+ assert.equal(x.totals.picked,40);assert.equal(x.items.find(i=>i.sku==='C').picked,0);assert.equal(x.items[0].collection.date,'');
+});

@@ -102,7 +102,7 @@
   @media(max-width:550px){#ch-central .ch-wrap{padding:12px}#ch-central .ch-stage-funnel{gap:6px}#ch-central .ch-funnel-stage{grid-template-columns:minmax(85px,1fr) minmax(60px,1.2fr) minmax(72px,.7fr);gap:5px}#ch-central .ch-stage-values{display:block}#ch-central .ch-stage-values span{display:block}#ch-central .ch-filter-panel{padding:9px}}
 </style>
 <section id="ch-central"><div class="ch-wrap">
-  <header class="ch-head"><div class="ch-head-main"><span id="ch-title-icon" class="ch-heading-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/><path d="M13 6v3m0 3v1m0 3v2"/></svg></span><div><div class="ch-eyebrow">Produção gráfica · Reentradas</div><h1 id="ch-title">Central de chamados</h1></div></div><div class="ch-tools"><small id="ch-updated"></small><button class="ch-btn" id="ch-refresh"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L3 9m0-5v5h5m-4 4a8 8 0 0 0 14 5l3-3m0 5v-5h-5"/></svg> Recarregar dados</button></div></header>
+  <header class="ch-head"><div class="ch-head-main"><span id="ch-title-icon" class="ch-heading-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/><path d="M13 6v3m0 3v1m0 3v2"/></svg></span><div><div class="ch-eyebrow">Produção gráfica · Reentradas</div><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h1 id="ch-title">Central de chamados</h1><span id="ch-calibration" style="font-size:11px;font-weight:600;color:#965312;background:#fff1db;padding:4px 9px;border-radius:5px">Em calibração</span></div></div></div><div class="ch-tools"><small id="ch-updated"></small><button class="ch-btn" id="ch-refresh"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L3 9m0-5v5h5m-4 4a8 8 0 0 0 14 5l3-3m0 5v-5h-5"/></svg> Recarregar dados</button></div></header>
   <div id="ch-msg" role="status" aria-live="polite"></div>
   <div id="ch-notice" class="ch-alert" hidden></div>
   <div id="ch-okr" hidden></div>
@@ -172,47 +172,70 @@
     }
     return true;
   }
+  function chIntegral(events,qty,asof){
+    if(!(qty>0))return '';let done=0;
+    for(const e of (events||[]).filter(e=>e.date&&e.date<=asof&&e.qty>0).sort((a,b)=>a.date.localeCompare(b.date))){done+=e.qty;if(done>=qty)return e.date;}return '';
+  }
+  function chPickEvidence(t,asof){
+    if(!Array.isArray(t.okrRoutes)||!t.okrRoutes.length)return {due:t.pickDue||'',actual:t.pickDone&&t.pickDone<=asof?t.pickDone:'',late:!!t.pickLate&&!!t.pickDone&&t.pickDone<=asof,invalid:!!t.pickUnverified&&!!t.pickDone&&t.pickDone<=asof,days:null,source:t.pickSource||'',maps:t.pickMaps||[]};
+    const last=a=>a.filter(Boolean).sort().pop()||'',rs=t.okrRoutes.filter(r=>r.qty>0),out=[];
+    for(const r of rs){
+      const parts=r.collection?.parts||[],events=r.collection?.events||[],dues=[...new Set(parts.map(p=>p.due).filter(Boolean))];
+      const formal=parts.length&&parts.every(p=>p.due)?last(dues):'',actual=chIntegral(events,r.qty,asof);
+      let invalid=!formal,late=false,days=0;
+      if(formal&&dues.length>1){
+        // Consolida por kit; um mesmo evento não pode comprovar dois compromissos.
+        const kits=new Map();for(const p of parts){if(!p.kit){invalid=true;continue;}const k=kits.get(p.kit)||{qty:0,due:p.due};k.qty+=p.qty;if(k.due!==p.due)invalid=true;kits.set(p.kit,k);}
+        for(const [kit,p] of kits){const d=chIntegral(events.filter(e=>e.kit===kit),p.qty,asof);if(!d&&actual)invalid=true;if(d&&d>p.due){late=true;days=Math.max(days,chDays(p.due,d));}else if(!d&&asof>p.due)days=Math.max(days,chDays(p.due,asof));}
+      }else if(formal){const d=actual||asof;if(d>formal){days=chDays(formal,d);late=!!actual;}}
+      out.push({formal,actual,invalid,late,days,source:[...new Set(events.filter(e=>e.date<=asof).map(e=>e.source).filter(Boolean))].join(' + '),maps:r.collection?.maps||[]});
+    }
+    return {due:out.length&&out.every(r=>r.formal)?last(out.map(r=>r.formal)):'',actual:out.length&&out.every(r=>r.actual)?last(out.map(r=>r.actual)):'',late:out.some(r=>r.late),invalid:out.some(r=>r.invalid),days:Math.max(0,...out.map(r=>r.days)),source:[...new Set(out.map(r=>r.source).filter(Boolean))].join(' + '),maps:[...new Set(out.flatMap(r=>r.maps).filter(Boolean))]};
+  }
   function chOKR(rows,f){
     const out={cohort:0,den:0,num:0,late:0,pending:0,upcoming:0,missing:0,canceled:0,actual:0,delivery:0,missingActual:0,ages:[],items:[]};
     const inside=v=>!!v&&(!f.start||v>=f.start)&&(!f.end||v<=f.end);
     for(const t of rows){
-      if(t.cat!=='REENTRADA'||!chMatches(t,f,f.asof))continue;
-      // Não usa a situação de hoje para atribuir cancelamentos futuros.
-      if(t.created&&t.created>f.asof)continue;
-      const fixed=chAdd(t.created,25);
-      let due=f.rule==='fixed'?fixed:f.rule==='desired'?t.desired:f.rule==='pick'?t.pickDue:fixed?[fixed,t.desired].filter(Boolean).sort().pop():'';
-      let actual=f.rule==='pick'?t.pickDone:t.closed;
+      if(t.cat!=='REENTRADA'||!chMatches(t,f,f.asof)||t.created&&t.created>f.asof)continue;
+      // Filtros técnicos recortam a tiragem, não transformam um chamado parcial em integral.
+      const scoped=chFilteredTotals(t,f);if(!scoped)continue;
+      const qty=Number(scoped.totals?.qty)||0,w=f.unit==='qty'?qty:1;
+      const fixed=chAdd(t.created,25),pick=chPickEvidence(t,f.asof);
+      const due=f.rule==='fixed'?fixed:f.rule==='desired'?t.desired:f.rule==='pick'?pick.due:fixed?[fixed,t.desired].filter(Boolean).sort().pop():'';
+      let actual=f.rule==='pick'?pick.actual:t.closed;
       if(actual&&actual>f.asof)actual='';
-      const negative=!!actual&&!!t.created&&actual<t.created;
-      if(negative)actual='';
-      const canceled=!!(t.canceled&&t.canceled<=f.asof);
-      const cancelUnknown=/CANCEL/i.test(t.status||'')&&!t.canceled;
+      const negative=!!actual&&!!t.created&&actual<t.created;if(negative)actual='';
+      const canceled=!!(t.canceled&&t.canceled<=f.asof)||/CANCEL/i.test(t.status||'')&&!t.canceled;
       if(f.basis==='open'?!inside(t.created):due?!inside(due):!!t.created&&!inside(t.created))continue;
-      out.cohort++;
-      if(canceled||cancelUnknown){out.canceled++;continue;}
-      if(f.scope==='abertos'&&t.closed&&t.closed<=f.asof||f.scope==='concluidos'&&(!t.closed||t.closed>f.asof))continue;
-      const age=chAging(t,f.asof);if(age!==null){out.ages.push(age);out.delivery++;}
-      if(actual)out.actual++;
-      let status='';const noEvidence=f.rule==='pick'&&t.pickUnverified&&!!actual;
-      if(!t.created||!due||due<t.created||noEvidence||negative){out.missing++;status='Sem data/evidência válida';}
-      else if(due>f.asof){out.upcoming++;status='A vencer';}
+      if(!canceled&&(f.scope==='abertos'&&t.closed&&t.closed<=f.asof||f.scope==='concluidos'&&(!t.closed||t.closed>f.asof)))continue;
+      out.cohort+=w;
+      const age=chAging(t,f.asof);
+      let status='',days=null,inDen=0,inNum=0;
+      if(canceled){out.canceled+=w;status='Cancelado · excluído';}
       else{
-        out.den++;
-        if(actual&&actual<=due&&!(f.rule==='pick'&&t.pickLate)){out.num++;status='No prazo';}
-        else if(actual){out.late++;status='Fora do prazo';}
-        else{out.pending++;out.missingActual++;status='Vencido sem comprovação de conclusão';}
+        if(age!==null){out.ages.push({age,w});out.delivery+=w;}
+        if(actual)out.actual+=w;
+        const noEvidence=f.rule==='pick'&&pick.invalid;
+        if(!t.created||!due||due<t.created||noEvidence||negative){out.missing+=w;status='Sem data/evidência válida';}
+        else if(due>f.asof){out.upcoming+=w;status='A vencer';}
+        else{
+          out.den+=w;inDen=w;
+          days=Math.max(0,chDays(due,actual||f.asof)||0,f.rule==='pick'?(pick.days||0):0);
+          if(actual&&actual<=due&&!(f.rule==='pick'&&pick.late)){out.num+=w;inNum=w;status='No prazo';}
+          else if(actual){out.late+=w;status='Fora do prazo';}
+          else{out.pending+=w;out.missingActual+=w;status='Vencido em aberto';}
+        }
       }
-      out.items.push({id:t.id,n:t.n,brand:t.brand,shipment:t.shipment,created:t.created,due,actual,delivered:t.delivered&&t.delivered<=f.asof?t.delivered:'',age,status});
+      out.items.push({id:t.id,n:t.n,brand:t.brand,shipment:t.shipment,owner:t.owner||'',qty,totalQty:Number(t.totals?.qty)||qty,created:t.created,due,actual,delivered:t.delivered&&t.delivered<=f.asof?t.delivered:'',pick:pick.actual,pickSource:pick.source,maps:pick.maps,age,days,status,weight:w,den:inDen,num:inNum,printers:[...new Set((scoped.groups||[]).map(g=>g.printer).filter(Boolean))],cds:[...new Set((scoped.groups||[]).map(g=>g.cd).filter(Boolean))]});
     }
-    let sum=0;out.bands=chBands.map(([lo,hi])=>{const count=out.ages.filter(n=>n>=lo&&n<=hi).length;sum+=count;return {label:hi===Infinity?'61+':lo+'–'+hi,count,pct:chPct(count,out.ages.length),cum:chPct(sum,out.ages.length)};});
-    out.average=out.ages.length?out.ages.reduce((a,b)=>a+b,0)/out.ages.length:null;
-    out.pct=chPct(out.num,out.den);return out;
+    let sum=0;out.bands=chBands.map(([lo,hi])=>{const count=out.ages.filter(x=>x.age>=lo&&x.age<=hi).reduce((a,x)=>a+x.w,0);sum+=count;return {label:hi===Infinity?'61+':lo+'–'+hi,count,pct:chPct(count,out.delivery),cum:chPct(sum,out.delivery)};});
+    out.average=out.delivery?out.ages.reduce((a,b)=>a+b.age*b.w,0)/out.delivery:null;out.pct=chPct(out.num,out.den);return out;
   }
   // CH_OKR_PURE_END
   const detailBox=(label,content)=>'<details><summary>'+esc(label)+'</summary>'+content+'</details>';
   function message(s,error){el('msg').textContent=s;el('msg').className=error?'ch-alert':s&&s.startsWith('Carregando')?'ch-loading':'ch-muted';}
   function show(){
-    const isOKR=state.view==='okr';el('title').textContent=isOKR?'OKR de reentradas':'Central de chamados';el('title-icon').innerHTML=isOKR?"<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"5\"/><circle cx=\"12\" cy=\"12\" r=\"1.5\"/></svg>":"<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z\"/><path d=\"M13 6v3m0 3v1m0 3v2\"/></svg>";
+    const isOKR=state.view==='okr';el('calibration').hidden=isOKR;el('title').textContent=isOKR?'OKR de reentradas':'Central de chamados';el('title-icon').innerHTML=isOKR?"<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"5\"/><circle cx=\"12\" cy=\"12\" r=\"1.5\"/></svg>":"<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z\"/><path d=\"M13 6v3m0 3v1m0 3v2\"/></svg>";
     el('list').hidden=state.view!=='carteira'||!!state.detail||!state.data;
     el('detail').hidden=!state.detail;
     el('okr').hidden=state.view!=='okr'||!!state.detail;
@@ -220,7 +243,7 @@
   }
   const dimNames={printer:'Gráfica',cd:'CD',series:'Série',material:'Tipo de material',feature:'Característica',cover:'Tipo de capa',finish:'Acabamento'};
   const filterKeys=[...chDimensions,'openStart','openEnd','min','max'];
-  const singleIds=new Set(['ch-scope','ch-okr-scope','ch-okr-basis','ch-okr-rule']);
+  const singleIds=new Set(['ch-scope','ch-okr-scope','ch-okr-basis','ch-okr-rule','ch-okr-unit']);
   const filterState=new WeakMap();
   function filterVal(x){if(!x)return '';if(x.tagName!=='SELECT'||singleIds.has(x.id))return x.value||'';const s=filterState.get(x);return !s||s.all?'':Array.from(s.values);}
   function setFilterValue(x,v){if(!x)return;filterState.delete(x);x.value=v;if(x.tagName==='SELECT'&&!singleIds.has(x.id)&&v)filterState.set(x,{all:false,values:new Set([v])});}
@@ -279,14 +302,15 @@
       const first=year+'-'+String(q).padStart(2,'0')+'-01';
       const last=new Date(Date.UTC(Number(year),q+2,0)).toISOString().slice(0,10);
       el('okr').innerHTML='<section class="ch-filter-panel"><div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg> Apuração:</span>'+
-      '<label>Critério<select id="ch-okr-rule"><option value="standard">25 dias ou data desejada (o maior)</option><option value="fixed">25 dias corridos</option><option value="desired">Data desejada por Planning</option><option value="pick">100% coleta gráfica (provisório)</option></select></label>'+
+      '<label>Critério<select id="ch-okr-rule"><option value="standard">25 dias ou data desejada (o maior)</option><option value="fixed">25 dias corridos</option><option value="desired">Data desejada por Planning</option><option value="pick">100% coleta gráfica</option></select></label>'+
+      '<label>Apurar por<select id="ch-okr-unit"><option value="tickets">Chamados</option><option value="qty">Tiragem</option></select></label>'+
       '<label>Período por<select id="ch-okr-basis"><option value="due">Vencimento</option><option value="open">Abertura</option></select></label>'+
       '<label>Início do corte<input type="date" id="ch-okr-start" value="'+first+'"></label><label>Fim do corte<input type="date" id="ch-okr-end" value="'+last+'"></label>'+
       '<label>Realizado observado até<input type="date" id="ch-okr-asof" value="'+today+'" max="'+today+'"></label>'+
       '<label>Marca<select id="ch-okr-brand"></select></label><label>Envio<select id="ch-okr-shipment"></select></label>'+
       '<label>Situação<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option></select></label></div>'+
-      '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note">Denominador: chamados distintos com prazo válido e vencido até a data observada. Exclui cancelados e casos sem prazo/evidência válida, destacados separadamente. O período por vencimento mostra casos sem prazo pela abertura, quando disponível. Aging: dias entre abertura e entrega integral no CD. Coleta gráfica: comparação por SKU/rota com a data formalizada pela gráfica, hipótese ainda não confirmada.</p></section>'+
-      '<div id="ch-okr-kpis" class="ch-grid"></div><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de entrega</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div id="ch-okr-rows"></div></section>';
+      '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note">Base: prazos vencidos até a data observada. Tiragem ponderada pela situação integral do chamado.</p></section>'+
+      '<div id="ch-okr-kpis" class="ch-grid"></div><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de entrega</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Baixar base CSV</button><small id="ch-okr-count"></small></div><div id="ch-okr-rows"></div></section>';
       el('okr').querySelectorAll('input,select').forEach(x=>x.addEventListener('change',renderOKR));
     }
     const re=state.data.rows.filter(t=>t.cat==='REENTRADA');
@@ -295,13 +319,21 @@
       target.innerHTML='<option value="">Todos</option>'+values.map(v=>opt(v)).join('');if(values.includes(old))target.value=old;
     }
     dimOptions('okr-',re);styleFilters();
-    const f={...readFilters('okr-'),...Object.fromEntries(['rule','basis','start','end','asof','brand','shipment','scope'].map(k=>[k,filterVal(el('okr-'+k))]))};
+    const f={...readFilters('okr-'),...Object.fromEntries(['rule','basis','start','end','asof','brand','shipment','scope','unit'].map(k=>[k,filterVal(el('okr-'+k))]))};
     f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
-    if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
-    const d=chOKR(re,f),pct=v=>v===null?'—':num(Math.round(v*10)/10)+'%';
-    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / vencidos',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Vencidos em aberto / sem conclusão',num(d.pending)],['A vencer',num(d.upcoming)],['Sem data / evidência válida',num(d.missing)],['Cancelados excluídos',num(d.canceled)],['Concluídos / coletados',num(d.actual)],['Entregues integralmente',num(d.delivery)],['Aging médio de entrega',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Aderência'?(d.pct===null?'navy':d.pct>=90?'green':'yellow'):k==='Fora do prazo'||k.startsWith('Vencidos')?'orange':k==='Meta'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
-    el('okr-aging').innerHTML=table(['Dias','Chamados','% da faixa','% acumulado'],d.bands.map(b=>[esc(b.label),num(b.count),pct(b.pct),pct(b.cum)]))+'<p class="ch-muted">Denominador: '+num(d.delivery)+' chamados com entrega integral e aging válido.</p>';
-    el('okr-rows').innerHTML=table(['Chamado','Marca','Envio','Abertura','Prazo','Realizado do critério','Entrega integral','Aging','Apuração'],d.items.map(t=>['<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.brand),cell(t.shipment),dt(t.created),dt(t.due),dt(t.actual),dt(t.delivered),t.age===null?'—':num(t.age),cell(t.status)]),'Nenhum chamado no recorte.');
+    state.okrExport=null;el('okr-export').disabled=true;if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
+    const d=chOKR(re,f),unit=f.unit==='qty'?'Tiragem':'Chamados';state.okrExport={d,f};el('okr-export').disabled=false;el('okr-count').textContent=num(d.items.length)+' chamados no recorte';const pct=v=>v===null?'—':num(Math.round(v*10)/10)+'%';
+    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / base vencida',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Vencidos em aberto / sem conclusão',num(d.pending)],['A vencer',num(d.upcoming)],['Sem data / evidência válida',num(d.missing)],['Cancelados excluídos',num(d.canceled)],['Concluídos / coletados',num(d.actual)],['Entregues integralmente',num(d.delivery)],['Aging médio de entrega',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Aderência'?(d.pct===null?'navy':d.pct>=90?'green':'yellow'):k==='Fora do prazo'||k.startsWith('Vencidos')?'orange':k==='Meta'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
+    el('okr-aging').innerHTML=table(['Dias',unit,'% da faixa','% acumulado'],d.bands.map(b=>[esc(b.label),num(b.count),pct(b.pct),pct(b.cum)]))+'<p class="ch-muted">Denominador: '+num(d.delivery)+' '+unit.toLowerCase()+' com entrega integral e aging válido.</p>';
+    el('okr-rows').innerHTML=table(['Chamado','Marca','Envio','Gráfica','CD','Tiragem','Abertura','Prazo','Realizado','Dias de atraso','Coleta integral','Origem coleta','Mapa de saída','Entrega integral','Aging','Apuração'],d.items.map(t=>['<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.brand),cell(t.shipment),cell(t.printers.join(' | ')),cell(t.cds.map(cdLabel).join(' | ')),num(t.qty),dt(t.created),dt(t.due),dt(t.actual),t.days===null?'—':num(t.days),dt(t.pick),cell(t.pickSource),cell(t.maps.join(' | ')),dt(t.delivered),t.age===null?'—':num(t.age),cell(t.status)]),'Nenhum chamado no recorte.');
+  }
+  function exportOKR(){
+    const x=state.okrExport;if(!x)return;
+    const {d,f}=x,headers=['Chamado','Marca','Envio','Responsável PG','Gráfica','CD','Tiragem filtrada','Tiragem total','Abertura','Prazo','Realizado do critério','Dias de atraso','Coleta integral','Origem da coleta','Mapa de saída','Entrega integral','Aging','Apuração','Peso','Denominador','Numerador','Critério','Unidade','Corte início','Corte fim','Observado até'];
+    const value=v=>{if(v===null||v===undefined)return '""';let s=String(v);if(typeof v==='string'&&/^[\s]*[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+    const date=v=>v?dt(v):'';
+    const lines=d.items.map(t=>[t.n,t.brand,t.shipment,t.owner,t.printers.join(' | '),t.cds.map(cdLabel).join(' | '),t.qty,t.totalQty,date(t.created),date(t.due),date(t.actual),t.days,date(t.pick),t.pickSource,t.maps.join(' | '),date(t.delivered),t.age,t.status,t.weight,t.den,t.num,f.rule,f.unit,date(f.start),date(f.end),date(f.asof)]);
+    const csv='\uFEFF'+[headers,...lines].map(a=>a.map(value).join(';')).join('\r\n'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='OKR_Reentradas_'+f.rule+'_'+f.unit+'_'+f.asof+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   async function load(force){
     if(state.loading)return;
@@ -309,7 +341,7 @@
     message('Carregando JSON publicado dos chamados…');
     try{
       const started=performance.now(),d=await rpc('getChamadosPortal',false);if(token!==state.load)return;console.info('[CH JSON] abertura ms',Math.round(performance.now()-started));
-      if(d.calculationVersion!==4){state.data=null;state.detail=null;show();message('Atualize o JSON para carregar os indicadores com as regras corrigidas (atualizarCacheChamadosPortal).',true);return;}
+      if(d.calculationVersion!==5){state.data=null;state.detail=null;show();message('Atualize o JSON para carregar os indicadores com as regras corrigidas (atualizarCacheChamadosPortal).',true);return;}
       state.data=d;state.detail=null;state.detailLoad++;state.page=1;
       for(const key of ['cat','shipment','brand']){
         const old=el(key).value,options=[...new Set(d.rows.map(r=>r[key]).filter(Boolean))].sort();
@@ -337,7 +369,7 @@
   function render(){
     if(!state.data)return;
     const rows=selected(),total=k=>rows.reduce((s,r)=>s+r.totals[k],0),by=el('by').value;
-    el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado no mapa',total('picked')],['Entregue no CD',total('delivered')],['Saldo a entregar',total('balance')],['Aging médio de entrega',agingMarkup(rows,dayNow())]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Saldo a entregar'?'orange':k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
+    el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado',total('picked')],['Entregue no CD',total('delivered')],['Saldo a entregar',total('balance')],['Aging médio de entrega',agingMarkup(rows,dayNow())]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Saldo a entregar'?'orange':k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
     const groups=new Map();rows.forEach(t=>{const k=t[by]||'Sem informação',g=groups.get(k)||[0,0,0];g[0]++;g[1]+=t.totals.qty;g[2]+=t.totals.balance;groups.set(k,g);});
     el('dist').innerHTML=table([el('by').selectedOptions[0].text,'Chamados','Tiragem','Saldo'],[...groups].sort((a,b)=>b[1][2]-a[1][2]).map(([k,g])=>['<button class="ch-link" data-filter="'+esc(k)+'">'+esc(k)+'</button>',...g.map(num)]));
     const qty=total('qty'),mode=state.funnelMode,base=mode==='qty'?qty:rows.length,colors=['#0C2340','#284081','#284081','#418EDE','#418EDE','#FCB04E','#FA4616','#049FEC','#284081'];
@@ -376,7 +408,7 @@
     el('items').innerHTML=its.slice(base,base+25).map((it,i)=>'<details data-item="'+(base+i)+'"><summary>'+cell(it.sku)+' · '+cell(it.printer)+' → '+cell(cdLabel(it.cd))+' · '+num(it.qty)+' un. · saldo '+num(Math.max(0,it.qty-it.delivered))+'</summary><div></div></details>').join('');pager(el('itempages'),state.itemPage,its.length,25,'itempage');
   }
   function itemHtml(it){
-    return '<p>'+cell(it.desc)+'</p>'+fields({'Status de produção':it.productionStatus?.label,'Tiragem':num(it.qty),'Mapa solicitado':num(it.mapped),'Coletado no mapa':num(it.picked),'Entregue no CD':num(it.delivered),'Saldo':num(Math.max(0,it.qty-it.delivered)),'Previsão de entrega':dt(it.eta)+(it.etaPartial&&it.eta?' · parcial':''),'Origem da previsão':it.forecastSource})+
+    return '<p>'+cell(it.desc)+'</p>'+fields({'Status de produção':it.productionStatus?.label,'Tiragem':num(it.qty),'Mapa solicitado':num(it.mapped),'Coletado':num(it.picked),'Origem da coleta':it.collection?.source,'Entregue no CD':num(it.delivered),'Saldo':num(Math.max(0,it.qty-it.delivered)),'Previsão de entrega':dt(it.eta)+(it.etaPartial&&it.eta?' · parcial':''),'Origem da previsão':it.forecastSource})+
       '<h3>Etapas do SKU</h3>'+table(['Etapa','Data esperada','Planejado','Realizado','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(it.target?.dates[i]),dt(s.p),dt(s.r),cell(s.a||(s.r?'Realizado':'Sem registro real')),esc(s.f)]))+
       detailBox('Itens no SPG',table(['Kit','Tiragem','Estoque CD','Subcontratada','OC / NF','Coleta formalizada','Coleta prevista / real','Entrega prevista / real','Origem'],it.spg.map(s=>[cell(s.kit),num(s.q),num(s.stock),num(s.sub),cell(s.oc)+' / '+cell(s.nf),dt(s.formal),dt(s.pickP)+' / '+dt(s.pick),dt(s.deliveryP)+' / '+dt(s.delivery),source('spg',s.row)])))+
       detailBox('Calendário e PCP',table(['Fonte','Kit / OP','Status','Observação','Origem'],it.cal.map(c=>['Calendário',cell(c.kit),cell(c.state),cell(c.note),source('cal',c.row)]).concat(it.pcp.map(p=>['PCP',cell(p.op),'—','—',source('pcp',p.row)]))))+
@@ -399,6 +431,7 @@
   }
   root.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;
+    if(b.id==='ch-okr-export'){exportOKR();return;}
     if(b.id==='ch-okr-clear'){[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment'].forEach(k=>setFilterValue(el(k),''));el('okr-scope').value='ativos';renderOKR();return;}
     if(b.id==='ch-funnel-qty'||b.id==='ch-funnel-tickets'){state.funnelMode=b.id==='ch-funnel-qty'?'qty':'tickets';render();return;}
     if(b.id==='ch-refresh'){load(true);return;}if(b.id==='ch-save'){save();return;}

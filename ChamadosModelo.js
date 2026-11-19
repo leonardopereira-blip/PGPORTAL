@@ -334,7 +334,7 @@ function pgChModelo_(dados) {
         if(!it.stages[6].p && prod.p) it.stages[6].p=prod.p;
       }
       const sum=fn=>it.maps.reduce((n,m)=>n+fn(m),0);
-      it.mapped=sum(m=>Math.max(0,m.qty));it.delivered=sum(m=>Math.max(0,Math.min(m.qty,m.delivered)));it.picked=sum(m=>Math.max(0,m.pick?m.qty:Math.min(m.qty,m.delivered)));
+      it.mapped=sum(m=>Math.max(0,m.qty));it.delivered=sum(m=>Math.max(0,Math.min(m.qty,m.delivered)));it.collection=pgChColetaRota_(it);it.picked=it.collection.picked;
       const spgForecast=pgChUltima_(it.spg.map(s=>s.deliveryP));
       const days=sla.get(pgChGraf_(it.printer)+'|'+pgChCD_(it.cd));
       function transporte(coleta){
@@ -382,7 +382,8 @@ function pgChModelo_(dados) {
       }
       const log=(q,p,r)=>pgChEtapa_(p,it.qty>0 && q>=it.qty?r:'','Mapa',q>0 && q<it.qty?'Parcial':'');
       it.stages.push(log(it.mapped,'',pgChUltima_(it.maps.map(m=>m.created))),log(it.picked,pgChUltima_(it.spg.map(s=>s.pickP)),
-        pgChUltima_(it.maps.filter(m=>m.pick).map(m=>m.pick))),log(it.delivered,it.eta,pgChUltima_(it.maps.filter(m=>m.delivered>0).map(m=>m.delivery))));
+        it.collection.date),log(it.delivered,it.eta,pgChUltima_(it.maps.filter(m=>m.delivered>0).map(m=>m.delivery))));
+      if(it.collection.source)it.stages[10].f=it.collection.source;
       totals.qty+=it.qty;totals.balance+=saldo;
       for(const k of ['mapped','picked','delivered']) totals[k]+=Math.min(it.qty,it[k]);
       it.coverage=it.stages.map((s,i)=>Math.max(0,Math.min(it.qty,i>=9?[it.mapped,it.picked,it.delivered][i-9]:s.units!=null?s.units:s.r?it.qty:0)));
@@ -404,5 +405,5 @@ function pgChValidarFunilRota_(t,it){
   const fail=()=>{throw new Error('Funil inconsistente: chamado '+t.n+' SKU '+it.sku+' / '+it.printer+' / '+it.cd);};
   if(c.some(v=>!Number.isFinite(v)||v<0||v>q))fail();
   let prior=q;for(const k of seq){if(c[k]>prior)fail();prior=c[k];}
-  if(c[11]>c[10]||c[10]>c[9])fail();
+  if(c[11]>c[10])fail(); // Coleta real do SPG pode existir sem mapa solicitado localizado.
 }

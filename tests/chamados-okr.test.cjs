@@ -10,3 +10,15 @@ test('corte histórico e prazo entre anos',()=>{assert.equal(chOKR([t],{...f,aso
 test('aging por chamado com faixa e acumulado',()=>{const r=chOKR([t,{...t,id:'B',delivered:'2026-11-26'}],f);assert.equal(r.bands[0].count,1);assert.equal(r.bands[3].count,1);assert.equal(r.bands[3].cum,100);assert.equal(r.delivery,2)});
 test('filtro conjunto não cruza características de rotas diferentes e não duplica chamado',()=>{const g1={printer:'A',cd:'JDI',feature:['Capa dura'],qty:100,mapped:50,picked:50,delivered:0,balance:100,coverage:[50]},g2={printer:'B',cd:'FOR',feature:['Corte e vinco'],qty:30,mapped:30,picked:30,delivered:30,balance:0,coverage:[30]};const r={...t,groups:[g1,g2],totals:{coverage:[80]}};assert.equal(chFilteredTotals(r,{printer:'A',feature:'Corte e vinco'}),null);assert.equal(chFilteredTotals(r,{printer:'A',feature:'Capa dura'}).totals.qty,100);assert.equal(chOKR([r],{...f,printer:'B'}).den,1)});
 test('coleta integral: sem formalização não entra no denominador; atraso na rota não é compensado',()=>{assert.equal(chOKR([{...t,pickDone:'2026-12-03',pickDue:'2026-12-04',pickLate:true}],{...f,rule:'pick'}).late,1);assert.equal(chOKR([{...t,pickDone:'2026-12-03',pickDue:''}],{...f,rule:'pick'}).missing,1)});
+
+test('tiragem pondera classificação integral e exporta atraso, coleta e mapa',()=>{
+ const x={...t,totals:{qty:100,coverage:[]},pickDone:'2026-12-03',pickSource:'Mapa',pickMaps:['MP-123456']};
+ const y={...t,id:'B',n:2,closed:'2026-12-13',totals:{qty:300,coverage:[]}};
+ const a=chOKR([x,y],{...f,unit:'qty'});assert.equal(a.num,100);assert.equal(a.den,400);assert.equal(a.pct,25);assert.equal(a.items[1].days,1);assert.equal(a.items[0].pick,'2026-12-03');assert.equal(a.items[0].maps[0],'MP-123456');
+});
+test('coleta histórica usa apenas eventos até o corte e respeita cada rota',()=>{
+ const route=(date,due)=>({qty:100,collection:{parts:[{qty:100,kit:'K',due}],events:[{date,qty:100,kit:'K',source:'SPG · Coleta real'}],maps:[]}});
+ const x={...t,totals:{qty:200,coverage:[]},okrRoutes:[route('2026-11-28','2026-11-27'),route('2026-12-04','2026-12-05')]};
+ const a=chOKR([x],{...f,rule:'pick'});assert.equal(a.late,1);assert.equal(a.items[0].days,1);
+ const b=chOKR([x],{...f,rule:'pick',asof:'2026-12-03'});assert.equal(b.upcoming,1);assert.equal(b.items[0].pick,'');
+});
