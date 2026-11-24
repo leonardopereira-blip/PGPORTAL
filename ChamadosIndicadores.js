@@ -2,12 +2,12 @@ function pgChIndiceEspec_(rows) {
   const idx=new Map();
   rows.forEach(r=>{
     if(!r.sku || !r.brand)return;
-    pgChAdd_(idx,pgChNormal_(r.sku)+'|'+pgChMarca_(r.brand),r);
+    pgChAdd_(idx,pgChSku_(r.sku)+'|'+pgChMarca_(r.brand),r);
   });
   return idx;
 }
 function pgChAtributos_(idx,it) {
-  const fichas=idx.get(pgChNormal_(it.sku)+'|'+pgChMarca_(it.brand))||[];
+  const fichas=idx.get(pgChSku_(it.sku)+'|'+pgChMarca_(it.brand))||[];
   const clean=values=>pgChUnicos_(values.map(pgChTexto_)).sort();
   const list=(key)=>clean(fichas.map(r=>r[key]));
   const cuts=fichas.flatMap(r=>['cut','cut0','cut1','cut2','cut3','cut4','cut5','cut6'].map(k=>pgChNormal_(r[k])));

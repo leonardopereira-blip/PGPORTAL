@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-11-24T11:03:00Z",
-  "motivo": "Corrigir vínculos explícitos e datas reais da Central de Chamados, sem misturar produção principal."
+  "solicitado_em": "2026-11-24T11:12:00Z",
+  "motivo": "Isolar cada número de chamado e destino após normalização integral das chaves; publicar Central e OKR."
 }

@@ -178,10 +178,43 @@ Object.assign(PG_CH_DEPARA_DESTINO,{
   "ACABADORAFELKMANUSEIOLTDA": "FELK",
   "SAOBERNARDO": "CD SBC",
   "SAOBERNARDODOCAMPO": "CD SBC",
-  "SBC": "CD SBC"
+  "SBC": "CD SBC",
+  "ACABADORAGRAFICAOCEANO":"OCEANO",
+  "GRAFICAATHOS":"ATHOS",
+  "GRAFICAMIDIOGRAF":"MIDIOGRAF",
+  "GRAFICAWALPRINT":"WALPRINT",
+  "GRAFICALOGPRINT":"LOGPRINT",
+  "GRAFICAANTILHAS":"ANTILHAS",
+  "GRAFICAFORMACERTA":"FORMA CERTA",
+  "ACABADORAFELKPRESTACAODESERVICOSDEMANUSEIOEMEMBALAGENS":"FELK",
+  "ACABADORATRATTOMANUSEIOLTDA":"KN",
+  "ACABADORALOGPRINT":"LOGPRINT",
+  "ACABADORALOGPRINTGRAFICADADOSVARIAVEIS":"LOGPRINT",
+  "ACABADORAWALTPRINTGRAFICAEEDITORAEIRELLI":"WALPRINT",
+  "ACABADORAHRACABAMENTOSGRAFICOSEIRELIAVENIDAPRESTESMAIA1419CENTRO09930270SAOPAULO":"HR",
+  "ACABADORAEIKOU":"EIKOU"
 });
 function pgChCanon_(v,map){const k=pgChToken_(v);return Object.prototype.hasOwnProperty.call(map,k)?map[k]:k;}
 function pgChMarca_(v){return pgChCanon_(v,PG_CH_DEPARA_MARCA);}
+function pgChNumero_(v){
+  const raw=pgChTexto_(v),match=/^(\d+)(?:[.,]0+)?$/.exec(raw);
+  return match?match[1].replace(/^0+(?=\d)/,''):raw;
+}
+function pgChNumerosMapa_(values){
+  return pgChUnicos_(values.flatMap(v=>pgChTexto_(v).replace(/\b(\d+)[.,]0+(?=\s|$|[;|])/g,'$1').match(/\b\d+\b/g)||[]).map(pgChNumero_).filter(n=>n!=='0'));
+}
+function pgChSku_(v){
+  return pgChNormal_(v).replace(/^(\d+)[.,]0+$/,'$1').replace(/[‐‑‒–—−]/g,'-').replace(/\s*-\s*/g,'-').replace(/\s+/g,' ');
+}
+function pgChEnvio_(v){return pgChToken_(v).replace(/^V(?=\d)/,'').replace(/^0+(?=\d)/,'');}
+function pgChCodigoMapa_(v){return pgChNormal_(v).replace(/[‐‑‒–—−]/g,'-').replace(/\s*-\s*/g,'-').replace(/^MP-?/,'');}
+function pgChChaveChamadoDestino_(n,cd){
+  const number=pgChNumero_(n),dest=pgChCD_(cd);
+  return number&&dest?JSON.stringify([number,dest]):'';
+}
+function pgChRefsMapa_(v){
+  return (pgChNormal_(v).replace(/[‐‑‒–—−]/g,'-').replace(/\s*-\s*/g,'-').match(/(?:MP-?)?\d{6}(?:-[A-Z0-9]+)*/g)||[]).map(pgChCodigoMapa_);
+}
 function pgChGraf_(v){return pgChCanon_(v,PG_CH_DEPARA_GRAF);}
 function pgChCD_(v){const raw=pgChToken_(v);return PG_CH_DEPARA_DESTINO[raw]||pgChCanon_(pgChNormal_(v).replace(/\s*-\s*(SP|CE|PR)$/,''),PG_CH_DEPARA_DESTINO);}
 function pgChGrafNome_(v){return PG_CH_DEPARA_GRAF[pgChToken_(v)]||pgChTexto_(v);}
@@ -223,10 +256,10 @@ function pgChEtapa_(plan,real,fonte,andamento) {
 }
 // Somente setembro de 2026; exclui o número inteiro se existir em qualquer linha SPG.
 function pgChImportarPainelSetembro_(spg,panel){
- const present=new Set((spg||[]).map(r=>pgChTexto_(r.n)).filter(Boolean)),seen=new Set(),out=[];
+ const present=new Set((spg||[]).map(r=>pgChNumero_(r.n)).filter(Boolean)),seen=new Set(),out=[];
  const today=new Date().toISOString().slice(0,10);
  for(const r of panel||[]){
-  const n=pgChTexto_(r.n),created=pgChData_(r.created);
+  const n=pgChNumero_(r.n),created=pgChData_(r.created);
   if(!/^\d+$/.test(n)||present.has(n)||created<'2026-09-01'||created>'2026-09-30')continue;
   const type=pgChNormal_(r.category),cat=type.includes('REENTRADA')?'REENTRADA':type.includes('MANUSEIO')?'MANUSEIO':type.includes('SPOT')?'SPOT':/INCLUSIV|BRAILLE|AMPLIAD/.test(type)?'INCLUSIVOS':type||'SEM CATEGORIA';
   const key=JSON.stringify([n,pgChMarca_(r.brand),pgChGraf_(r.printer),pgChCD_(r.cd),pgChTexto_(r.description),pgChQtd_(r.qty),created,pgChData_(r.pickup),pgChData_(r.delivered),pgChNormal_(r.status)]);
@@ -240,7 +273,7 @@ function pgChImportarPainelSetembro_(spg,panel){
 function pgChIndiceTransportes_(rows) {
   const index=new Map();
   for(const row of rows){
-    const code=pgChTexto_(row.map).toUpperCase();
+    const code=pgChCodigoMapa_(row.map);
     if(!code || code==='-')continue;
     const pick=pgChData_(row.pick), delivery=pgChData_(row.delivery);
     if(!pick && !delivery)continue;
@@ -276,26 +309,24 @@ function pgChModelo_(dados) {
   const sla=pgChRotasSLA_(dados.sla||[]);
   const transport=pgChIndiceTransportes_(dados.tp||[]);
   const tickets = new Map(), numeros = new Map(), porSKU = new Map(), porOP = new Map();
-  const mapaRefs = new Map();
-  const rotaKey = (sku,marca,grafica,cd) => [pgChNormal_(sku),pgChMarca_(marca),pgChGraf_(grafica),pgChCD_(cd)].join('|');
-  const kitKey = (r) => [r.id || r.n,pgChNormal_(r.sku),pgChMarca_(r.brand||r.brandName),pgChCD_(r.cd),r.kit,r.legacy?r.legacyKey:''].join('|');
+  const porChamadoDestino=new Map(), mapaRefs=new Map();
+  const rotaKey = (sku,marca,grafica,cd) => [pgChSku_(sku),pgChMarca_(marca),pgChGraf_(grafica),pgChCD_(cd)].join('|');
+  const kitKey = (r) => [r.id || pgChNumero_(r.n),pgChSku_(r.sku),pgChMarca_(r.brand||r.brandName),pgChCD_(r.cd),r.kit,r.legacy?r.legacyKey:''].join('|');
   const lotes = new Map();
   const imported=pgChImportarPainelSetembro_(dados.spg,dados.panel);
   (dados.spg||[]).concat(imported).forEach(r => {
     if (!r.n || !r.cat) return;
-    const id = r.id || 'SPG-'+r.n;
+    const id = r.id || 'SPG-'+pgChNumero_(r.n);
     let t = tickets.get(id);
     if (!t) {
       t = {id,n:r.n,cat:r.cat,legacy:!!r.legacy,brand:pgChMarcaNome_(r.brand||r.brandName),shipment:r.shipment,status:r.status,priority:r.priority,
         owner:r.owner,created:pgChData_(r.created),desired:pgChData_(r.desired),goal:pgChData_(r.goal),op:r.op,
         edition:r.edition,why:r.why,obs:r.obs,reason:r.reason,steps:{},issues:[],panel:[],items:[],alerts:[],refs:[],_groups:new Map()};
-      tickets.set(id,t); pgChAdd_(numeros,String(r.n),t);
+      tickets.set(id,t); pgChAdd_(numeros,pgChNumero_(r.n),t);
     }
     const opening=pgChData_(r.created);
     if(opening&&(!t.created||opening<t.created))t.created=opening;
     if(r.legacy&&!/CONCLU|ENTREGUE/.test(r.status))t.status=r.status;
-    const refs = pgChTexto_(r.map).toUpperCase().match(/(?:MP-)?\d{6}(?:-[A-Z0-9]+)*/g) || [];
-    refs.forEach(code=>pgChAdd_(mapaRefs,code.replace(/^MP-/i,''),t));
     if (r.map && !t.refs.includes(r.map)) t.refs.push(r.map);
     if (r.issue && !t.issues.includes(r.issue)) t.issues.push(r.issue);
     const stages = {Abertura:r.created,Aceite:r.accepted,Liberação:r.released,Alocação:r.allocated,
@@ -316,9 +347,13 @@ function pgChModelo_(dados) {
     if (!it) {
       it={id:t.id,legacy:!!r.legacy,sku:r.sku,desc:r.description,brand:t.brand,printer:pgChGrafNome_(printer),cd:pgChCDNome_(r.cd),qty:0,kits:[],rows:[],spg:[],cal:[],pcp:[],maps:[],stages:[],evidence:[]};
       t._groups.set(key,it); t.items.push(it);
-      if (r.sku) pgChAdd_(porSKU,pgChNormal_(r.sku),it);
+      const ticketDest=pgChChaveChamadoDestino_(t.n,it.cd);
+      if(ticketDest)pgChAdd_(porChamadoDestino,ticketDest,it);
+      if (r.sku) pgChAdd_(porSKU,pgChSku_(r.sku),it);
       if (t.op) pgChAdd_(porOP,pgChToken_(t.op),it);
     }
+    // Referências sem número no mapa só comprovam o item/destino que as informou.
+    for(const code of pgChRefsMapa_(r.map))pgChAdd_(mapaRefs,code,it);
     it.qty+=qty; it.rows.push(r.row);
     if (r.kit && !it.kits.includes(r.kit)) it.kits.push(r.kit);
     const real=pgChDatasMapa_(null,r.pick,r.delivery,t.created);
@@ -342,15 +377,15 @@ function pgChModelo_(dados) {
     }
   }
   function comp(a,b,fn) { return !a || !b || fn(a)===fn(b); }
-  function envio(v){return pgChToken_(v).replace(/^V(?=\d)/,'');}
+  const envio=pgChEnvio_;
   const graf=pgChGraf_;
   dados.cal.forEach(c=>{
     if (pgChNormal_(c.kind).includes('PRINCIPAL') || !c.sku) return;
-    const ts=numeros.get(String(c.n))||[];
+    const ts=numeros.get(pgChNumero_(c.n))||[];
     if (ts.length!==1) return;
     const t=ts[0];
     if (!comp(c.brand,t.brand,pgChMarca_) || !comp(c.shipment,t.shipment,envio)) return;
-    const matches=(porSKU.get(pgChNormal_(c.sku))||[]).filter(it=>it.id===t.id && comp(c.printer,it.printer,graf));
+    const matches=(porSKU.get(pgChSku_(c.sku))||[]).filter(it=>it.id===t.id && comp(c.printer,it.printer,graf));
     if (!c.printer && pgChUnicos_(matches.map(it=>it.printer)).length>1) return;
     matches.forEach(it=>{
       if (c.kit && c.kit!=='-' && it.kits.length && !it.kits.includes(c.kit)) return;
@@ -361,13 +396,13 @@ function pgChModelo_(dados) {
   });
   dados.pcp.forEach(r=>{
     if (!r.op || !r.sku || !r.printer || !r.cd || !r.brand) return;
-    const eligible=(porOP.get(pgChToken_(r.op))||[]).filter(it=>pgChNormal_(it.sku)===pgChNormal_(r.sku)
+    const eligible=(porOP.get(pgChToken_(r.op))||[]).filter(it=>pgChSku_(it.sku)===pgChSku_(r.sku)
       && graf(it.printer)===graf(r.printer) && pgChCD_(it.cd)===pgChCD_(r.cd) && pgChMarca_(it.brand)===pgChMarca_(r.brand)
       && comp(tickets.get(it.id).shipment,r.shipment,envio));
     if (eligible.length===1) eligible[0].pcp.push(r);
   });
   dados.panel.forEach(r=>{
-    const ts=numeros.get(String(r.n))||[];
+    const ts=numeros.get(pgChNumero_(r.n))||[];
     if (ts.length!==1 || !comp(r.brand,ts[0].brand,pgChMarca_) || !comp(r.shipment,ts[0].shipment,envio)) return;
     ts[0].panel.push({row:r.row,cd:pgChCDNome_(r.cd),printer:pgChGrafNome_(r.printer),status:r.status,note:r.note,responsible:r.responsible,criticality:r.criticality,risk:r.risk,cause:r.cause,
       startP:pgChData_(r.startP),startR:pgChData_(r.startR),endP:pgChData_(r.endP),endR:pgChData_(r.endR)});
@@ -376,18 +411,27 @@ function pgChModelo_(dados) {
   dados.map.forEach(m=>{
     const code=m.map||m.code;
     if (!code || !m.sku || /^(SIM|TRUE|1)$/.test(pgChNormal_(m.canceled)) || /CANCEL/.test(pgChNormal_(m.state+' '+m.collection))) return;
-    const raw=pgChUnicos_([m.n,m.nCol,m.nInc].filter(v=>v && !/^(0|-|não|false)$/i.test(v)));
-    const ns=pgChUnicos_(raw.flatMap(v=>String(v).match(/\b\d+\b/g)||[]));
-    const num=(code.match(/(?:MP-)?(\d{6})(?:-|$)/i)||[])[1];
-    const codeKey=pgChTexto_(code).toUpperCase().replace(/^MP-/,'');
-    const named=raw.length?pgChUnicos_(ns.flatMap(n=>numeros.get(n)||[])):pgChUnicos_([...(mapaRefs.get(codeKey)||[]),...(mapaRefs.get(num)||[])]);
-    // SKU, marca, gráfica e CD não identificam uma reentrada: também existem na produção principal.
+    // Normaliza todos os domínios antes de procurar chamado e destino.
+    const outCD=pgChCD_(m.cd),colCD=pgChCD_(m.colCD),cd=outCD||colCD;
+    const printer=graf(m.printer||m.org),brand=pgChMarca_(m.brand);
+    if(!cd||!printer)return;
+    const generic=new Set(['ACABADORA','GRAFICA','CD','DESTINO']);
+    const sameCol=!outCD||!colCD||outCD===colCD||generic.has(colCD);
+    const allRaw=pgChUnicos_([m.n,m.nCol,m.nInc].filter(v=>v && !/^(0|-|não|false)$/i.test(v)));
+    const raw=pgChUnicos_([m.n,m.nInc,sameCol?m.nCol:''].filter(v=>v && !/^(0|-|não|false)$/i.test(v)));
+    const ns=pgChNumerosMapa_(raw);
+    const codeKey=pgChCodigoMapa_(code),num=(codeKey.match(/^(\d{6})(?:-|$)/)||[])[1];
+    // Número explícito + destino canônico, ou referência explícita do próprio item/destino.
+    const candidates=allRaw.length?pgChUnicos_(ns.flatMap(n=>porChamadoDestino.get(pgChChaveChamadoDestino_(n,cd))||[])):
+      pgChUnicos_([...(mapaRefs.get(codeKey)||[]),...(mapaRefs.get(num)||[])]).filter(it=>pgChCD_(it.cd)===cd);
+    const named=allRaw.length?pgChUnicos_(pgChNumerosMapa_(allRaw).flatMap(n=>numeros.get(n)||[])):pgChUnicos_(candidates.map(it=>tickets.get(it.id)));
     if(!named.length)return;
-    const printer=m.printer||m.org, cd=m.cd||m.colCD;
-    let opts=(porSKU.get(pgChNormal_(m.sku))||[]).filter(it=>named.includes(tickets.get(it.id)) && it.sku && it.printer && it.cd && printer && cd && comp(it.brand,m.brand,pgChMarca_) && graf(it.printer)===graf(printer) && pgChCD_(it.cd)===pgChCD_(cd));
-    // Legado sem SKU: somente um chamado explicitamente citado e rota completa compatível.
-    if(raw.length&&ns.length===1&&named.length===1&&named[0].legacy&&m.brand&&printer&&cd){opts=named[0].items.filter(it=>it.legacy&&it.printer&&it.cd&&pgChMarca_(it.brand)===pgChMarca_(m.brand)&&graf(it.printer)===graf(printer)&&pgChCD_(it.cd)===pgChCD_(cd));}
-    opts=opts.filter(it=>comp(tickets.get(it.id).shipment,m.shipment,envio));
+    const compatible=it=>it.printer&&graf(it.printer)===printer&&pgChCD_(it.cd)===cd&&(!brand||pgChMarca_(it.brand)===brand)&&comp(tickets.get(it.id).shipment,m.shipment,envio);
+    let opts=candidates.filter(it=>it.sku&&pgChSku_(it.sku)===pgChSku_(m.sku)&&compatible(it));
+    // Legado realmente sem SKU exige número explícito, destino e demais dimensões compatíveis.
+    if(!opts.length&&raw.length&&ns.length===1&&named.length===1&&named[0].legacy&&brand){
+      opts=candidates.filter(it=>it.legacy&&!it.sku&&pgChMarca_(it.brand)===brand&&compatible(it));
+    }
     if (opts.length>1 && m.kit) {
       const ex=opts.filter(it=>it.kits.includes(m.kit)); if(ex.length) opts=ex;
     }
@@ -398,14 +442,14 @@ function pgChModelo_(dados) {
       return;
     }
     const it=opts[0], qty=pgChQtd_(m.qty);
-    const dates=pgChDatasMapa_(transport.get(pgChTexto_(code).toUpperCase()),
-      pgChDataRealChamado_(m.picked,tickets.get(it.id).created)||pgChDataRealChamado_(m.colPick,tickets.get(it.id).created),
+    const dates=pgChDatasMapa_(transport.get(pgChCodigoMapa_(code)),
+      pgChDataRealChamado_(m.picked,tickets.get(it.id).created)||(sameCol?pgChDataRealChamado_(m.colPick,tickets.get(it.id).created):''),
       pgChDataRealChamado_(m.delivered,tickets.get(it.id).created)||pgChDataRealChamado_(m.checked,tickets.get(it.id).created),tickets.get(it.id).created);
     const hasCount=pgChTexto_(m.received)!=='';
     const event={row:m.row,map:code,kit:m.kit,sku:m.sku,nf:m.nf,qty,created:pgChData_(m.created),book:pgChData_(m.book),
       ...dates,eta:pgChData_(m.eta),
       delivered:dates.delivery?(hasCount?Math.min(qty,pgChQtd_(m.received)):(/^(SIM|TRUE)$/.test(pgChNormal_(m.divergent))?0:qty)):0,
-      method:raw.length?'Número do chamado':'Mapa informado no SPG',
+      method:raw.length?'Número do chamado + destino':'Mapa informado no SPG + destino',
       cd:pgChCDNome_(cd),printer:pgChGrafNome_(printer),raw:raw.join(' / '),scan:m.scan};
     // Repetições da mesma leitura/conferência não criam uma nova expedição.
     const k=[m.out||code,m.scan||'',m.document||'',m.kit,m.sku,m.nf,pgChCD_(cd),qty].join('|');
@@ -462,7 +506,7 @@ function pgChModelo_(dados) {
       it.eta=saldo?pgChUltima_(forecasts.map(f=>f.date)):'';
       it.etaPartial=!!saldo && forecasts.some(f=>!f.date);
       it.forecastSource=pgChUnicos_(forecasts.map(f=>f.source)).join(' + ');
-      const costs=t.costs.filter(c=>pgChNormal_(c.sku)===pgChNormal_(it.sku) && pgChGraf_(c.printer)===pgChGraf_(it.printer) && pgChCD_(c.cd)===pgChCD_(it.cd));
+      const costs=t.costs.filter(c=>pgChSku_(c.sku)===pgChSku_(it.sku) && pgChGraf_(c.printer)===pgChGraf_(it.printer) && pgChCD_(c.cd)===pgChCD_(it.cd));
       const validCosts=costs.filter(c=>/^(CONCLUID[OA]|VALIDAD[OA]|FINALIZAD[OA])$/.test(pgChNormal_(c.status)));
       const costStage=stage(it.spg,'costP','cost',it.legacy?'Painel de produção':'SPG');
       if(!costStage.r && validCosts.length){

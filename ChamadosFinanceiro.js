@@ -2,7 +2,7 @@ function pgChFinanceiro_(dados,tickets,numeros) {
   const lotes=new Map(), ordensSPG=new Map();
   function refs(v) { return (pgChTexto_(v).match(/\b\d{3,}\b/g)||[]); }
   function rota(t,r,sku) {
-    return t.items.filter(it=>(!sku || pgChNormal_(it.sku)===pgChNormal_(sku)) && it.printer && it.cd && r.brand && r.printer && r.cd &&
+    return t.items.filter(it=>(!sku || pgChSku_(it.sku)===pgChSku_(sku)) && it.printer && it.cd && r.brand && r.printer && r.cd &&
       pgChMarca_(it.brand)===pgChMarca_(r.brand) && pgChGraf_(it.printer)===pgChGraf_(r.printer) && pgChCD_(it.cd)===pgChCD_(r.cd));
   }
   function alerta(ts,r,src,text) {
@@ -17,7 +17,7 @@ function pgChFinanceiro_(dados,tickets,numeros) {
     if(!r.lotId || !r.sku || pgChNormal_(r.type)==='PRINCIPAL')continue;
     const explicit=/(?:^|_)LOTE\s*(\d+)(?:_|$)/.exec(pgChNormal_(r.lotId));
     if(!explicit || explicit[1]!==pgChTexto_(r.lot) || !/REENTRADA|INCLUSIV|SPOT|MANUSEIO|BRAILLE|AMPLIAD/i.test(r.lotId))continue;
-    const candidates=numeros.get(explicit[1])||[];
+    const candidates=numeros.get(pgChNumero_(explicit[1]))||[];
     if(!candidates.length)continue;
     const valid=candidates.filter(t=>rota(t,r,r.sku).length===1 && (!r.cycle || pgChNormal_(t.edition).startsWith(pgChNormal_(r.cycle))));
     if(valid.length!==1){alerta(candidates,r,'cost','Lote de custo citado; conferir SKU, marca, gráfica, ciclo e CD');continue;}
@@ -36,7 +36,7 @@ function pgChFinanceiro_(dados,tickets,numeros) {
     const named=/^CHAMADO\s+(\d+)\b/.exec(key);
     const lotNumber=/^VALIDACAO_DE_CUSTO_(?:REENTRADA|SPOT|MANUSEIO|INCLUSIVOS)_.+_LOTE(\d+)(?:_|$)/.exec(key);
     const n=legacy?legacy[5]:named?named[1]:lotNumber?lotNumber[1]:'';
-    const byId=n?(numeros.get(n)||[]):[];
+    const byId=n?(numeros.get(pgChNumero_(n))||[]):[];
     const byOC=pgChUnicos_(refs(r.oc).flatMap(o=>ordensSPG.get(o)||[]));
     const candidates=pgChUnicos_(byLot.concat(byId,byOC));
     if(!candidates.length)continue;

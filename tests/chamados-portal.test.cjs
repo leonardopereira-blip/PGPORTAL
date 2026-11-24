@@ -215,3 +215,47 @@ test('TP seleciona coleta entre a abertura e entrega inclusive',()=>{
   const date=ctx.pgChDatasMapa_({picks:[{date:'2026-10-04',row:1},{date:'2026-10-03',row:2},{date:'2026-10-01',row:3}],delivery:'2026-10-03',deliveryRow:4},'','', '2026-10-02');
   assert.equal(date.pick,'2026-10-03');assert.equal(date.delivery,'2026-10-03');
 });
+
+test('número e destino normalizados isolam a coleta de cada CD do mesmo chamado e de outros chamados',()=>{
+  const x={...a,n:'000101',brand:'Maralto',printer:'MAXIGRAFICA',cd:'CJUN',qty:'100'};
+  const forRoute={...x,cd:'CITA'};
+  const another={...x,n:'102',id:b.id};
+  const route=(cd,date,n,code)=>({...map,brand:'MAR',printer:'MAXI',cd,n,map:code,qty:'100',received:'100',picked:date,delivered:date});
+  const jdi=route('Jundiaí_SP','2026-10-02','101.0','MP-111111-MAR');
+  const fort=route('Itaitinga - CE','2026-10-04','000101','MP-222222-MAR');
+  const first=build({spg:[x,forRoute,another],map:[jdi]});
+  const ticket=first.tickets.get(a.id);
+  assert.equal(ticket.items.find(i=>i.cd==='CD JDI').collection.date,'2026-10-02');
+  assert.equal(ticket.items.find(i=>i.cd==='CD FOR').collection.date,'');
+  assert.equal(first.tickets.get(b.id).totals.picked,0);
+  assert.equal(first.summaries.find(s=>s.id===a.id).pickDone,'');
+  const both=build({spg:[x,forRoute,another],map:[jdi,fort]});
+  assert.equal(both.summaries.find(s=>s.id===a.id).pickDone,'2026-10-04');
+  assert.equal(both.summaries.find(s=>s.id===a.id).delivered,'2026-10-04');
+});
+test('mapa informado em um destino não vira referência para outro destino do mesmo chamado',()=>{
+  const x={...a,map:map.map};
+  const y={...a,cd:'CITA',map:''};
+  const wrong={...map,n:'',cd:'Fortaleza_CE',qty:'100',received:'100'};
+  const result=build({spg:[x,y],map:[wrong]}).tickets.get(a.id);
+  assert.equal(result.totals.mapped,0);
+  const correct=build({spg:[x,y],map:[{...wrong,cd:'Jundiaí - SP'}]}).tickets.get(a.id);
+  assert.equal(correct.items.find(i=>i.cd==='CD JDI').collection.date,'2026-10-02');
+  assert.equal(correct.items.find(i=>i.cd==='CD FOR').collection.date,'');
+});
+test('destino de coleta divergente não empresta chamado ou data à saída',()=>{
+  const x={...a,cd:'CJUN'},y={...a,cd:'CITA'};
+  const divergent={...map,n:'',nCol:'101',cd:'CITA',colCD:'Jundiaí_SP',qty:'100',received:'100'};
+  assert.equal(build({spg:[x,y],map:[divergent]}).tickets.get(a.id).totals.mapped,0);
+  const valid={...divergent,cd:'CJUN'};
+  assert.equal(build({spg:[x,y],map:[valid]}).tickets.get(a.id).items.find(i=>i.cd==='CD JDI').collection.date,'2026-10-02');
+  assert.equal(build({spg:[x,y],map:[{...divergent,n:'101',picked:'',colPick:'2026-10-02',delivered:'',received:''}]}).tickets.get(a.id).items.find(i=>i.cd==='CD FOR').collection.date,'');
+});
+test('normaliza formato de SKU, envio, número, marca, gráfica, destino e mapa antes de cruzar',()=>{
+  const x={...a,n:'000101',sku:'12345.0',brand:'GKI',printer:'SDI GRAFICA',cd:'CITA',shipment:'V01',map:'MP-123456-GEK-V1-SDI'};
+  const y={...map,n:'101',sku:'12345',brand:'GEK',printer:'SDI',cd:'Itaitinga - CE',shipment:'1',map:'MP – 123456 – GEK – V1 – SDI',qty:'100',received:'100'};
+  const z=build({spg:[x],map:[y],tp:[{map:'mp-123456-gek-v1-sdi',pick:'2026-10-03',delivery:'2026-10-03',row:5}]}).summaries[0];
+  assert.equal(z.pickDone,'2026-10-03');assert.equal(z.delivered,'2026-10-03');assert.equal(z.pickSource,'Transportes');
+  assert.equal(ctx.pgChCD_('Acabadora - GRAFICA OCEANO'),'OCEANO');
+  assert.equal(ctx.pgChCD_('Gráfica - LOG PRINT'),'LOGPRINT');
+});
