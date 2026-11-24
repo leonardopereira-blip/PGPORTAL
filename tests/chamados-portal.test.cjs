@@ -14,6 +14,73 @@ const map={map:'MP-123456-SAS-V1-ALPHA',sku:'A',kit:'K',qty:'40',brand:'SAS',pri
 const cost={lotId:'Validação_de_Custo_Reentrada_V1-27_SAS_ALPHA_Lote101_Jundiaí',lot:'101',type:'Reentrada',cycle:'V1-27',sku:'A',brand:'SAS',printer:'Alpha',cd:'Jundiaí',qty:'100',status:'Concluído',oc:'450001',row:4};
 const order={id:cost.lotId,oc:'450001',req:'888888',brand:'SAS',printer:'Alpha',cd:'CD JUNDIAI',type:'Reentrada',row:10};
 const build=(input={})=>ctx.pgChModelo_({spg:[a,b],map:[],cal:[],pcp:[],panel:[],oc:[],cost:[],...input});
+test('TP usa o código inteiro e a última coleta até a última entrega, inclusive no mesmo dia',()=>{
+  const tp=[
+    {map:map.map,pick:'05/10/2026',delivery:'07/10/2026',row:11},
+    {map:' '+map.map.toLowerCase()+' ',pick:'08/10/2026',row:12},
+    {map:map.map,pick:'09/10/2026',delivery:'08/10/2026',row:13},
+    {map:map.map.replace('SAS','SAE'),pick:'10/10/2026',delivery:'12/10/2026',row:14}
+  ];
+  for(const rows of [tp,tp.slice().reverse()]){
+    const result=build({spg:[{...a,pick:'03/10/2026'}],map:[{...map,qty:'100',received:'100'}],tp:rows});
+    const item=result.tickets.get(a.id).items[0], event=item.maps[0], summary=result.summaries[0];
+    assert.equal(event.pick,'2026-10-08');assert.equal(event.delivery,event.pick);
+    assert.equal(event.tpPickRow,12);assert.equal(event.tpDeliveryRow,13);
+    assert.equal(item.stages[10].r,event.pick);assert.equal(item.stages[11].r,event.delivery);
+    assert.equal(summary.pickDone,event.pick);assert.equal(summary.delivered,event.delivery);
+    assert.equal(summary.pickSource,'Transportes');assert.equal(summary.deliverySource,'Transportes');
+    assert.equal(item.picked,100);assert.equal(item.delivered,100);assert.equal(item.maps.length,1);
+  }
+});
+test('TP mantém o valor anterior em cada campo ausente, inválido ou incompatível',()=>{
+  const event=tp=>build({map:[map],tp}).tickets.get(a.id).items[0].maps[0];
+  const base=event([]);
+  for(const r of [{map:'MP-123456'},{map:map.map+'-X'},{map:'-'}]){
+    assert.deepEqual(event([{...r,pick:'03/10/2026',delivery:'04/10/2026',row:2}]),base);
+  }
+  for(const [pick,delivery,expectedPick,expectedDelivery] of [
+    ['03/10/2026','','2026-10-03',base.delivery],
+    ['','06/10/2026',base.pick,'2026-10-06'],
+    ['06/10/2026','',base.pick,base.delivery],
+    ['','01/10/2026',base.pick,base.delivery],
+    ['10/10/2026','07/10/2026',base.pick,'2026-10-07'],
+    ['31/02/2026','PENDENTE',base.pick,base.delivery]
+  ]){
+    const m=event([{map:map.map,pick,delivery,row:2}]);
+    assert.equal(m.pick,expectedPick);assert.equal(m.delivery,expectedDelivery);assert.ok(m.pick<=m.delivery);
+    assert.equal(m.delivered,30);
+  }
+});
+test('TP parcial substitui só a parcela do mapa; o saldo mantém a coleta do SPG',()=>{
+  const result=build({spg:[{...a,pick:'01/10/2026'},b],map:[map,{...map,row:8}],
+    tp:[{map:map.map,pick:'03/10/2026',row:2}]});
+  const it=result.tickets.get(a.id).items[0], events=it.collection.events;
+  assert.equal(it.collection.date,'2026-10-03');assert.equal(it.picked,100);
+  assert.equal(events.find(e=>e.source==='Transportes').qty,40);
+  assert.equal(events.find(e=>e.source.startsWith('SPG')).qty,60);
+  assert.equal(result.tickets.get(b.id).totals.picked,0);
+});
+test('parcelas com e sem TP mantêm suas datas; TP não preenche uma parcela sem evidência',()=>{
+  const second={...map,map:'MP-999999-OUTRO',qty:'60',picked:'06/10/2026',delivered:'07/10/2026',received:'60'};
+  const tp=[{map:map.map,pick:'03/10/2026',delivery:'04/10/2026',row:6}];
+  const item=maps=>build({spg:[a],map:maps,tp}).tickets.get(a.id).items[0];
+  const partial=item([map]);assert.equal(partial.collection.date,'');assert.equal(partial.picked,40);
+  const full=item([map,second]);assert.equal(full.collection.date,'2026-10-06');
+  assert.equal(full.maps[1].delivery,'2026-10-07');assert.equal(full.delivered,90);
+});
+test('leitura em lote de C, G e Z preserva as linhas mesmo com datas vazias',()=>{
+  const prev=ctx.Sheets;
+  try{
+    ctx.Sheets={Spreadsheets:{Values:{batchGet(id,request){
+      assert.deepEqual(Array.from(request.ranges),["'Base Fechada'!C1:C","'Base Fechada'!G1:G","'Base Fechada'!Z1:Z"]);
+      assert.equal(request.valueRenderOption,'FORMATTED_VALUE');
+      return {valueRanges:[['MAPA ','A','','B'],['DATA DA COLETA','01/10/2026'],['ENTREGUE','','','04/10/2026']].map(c=>({values:[c]}))};
+    }}}};
+    const {rows}=ctx.pgChLerTransportes_();
+    assert.equal(rows.length,2);assert.equal(rows[0].row,2);assert.equal(rows[0].pick,'01/10/2026');
+    assert.equal(rows[1].row,4);assert.equal(rows[1].delivery,'04/10/2026');assert.equal(rows[1].pick,undefined);
+  }finally{ctx.Sheets=prev;}
+});
 test('um mapa compartilhado credita apenas o SKU compatível e mantém a entrega parcial',()=>{
   const m=build({map:[map,{...map,row:3}]}),t=m.tickets.get(a.id);
   assert.equal(t.totals.picked,40);assert.equal(t.totals.delivered,30);assert.equal(t.totals.balance,70);

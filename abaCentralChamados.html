@@ -134,6 +134,7 @@
   const rpc=(name,...args)=>new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args));
   const fields=obj=>'<dl class="ch-fields">'+Object.entries(obj).map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+cell(v)+'</dd></div>').join('')+'</dl>';
   const source=(key,row)=>state.data.links[key] && Number.isInteger(row)?'<a href="'+esc(state.data.links[key]+'&range=A'+row)+'" target="_blank" rel="noopener">Linha '+row+'</a>':'—';
+  const transportDate=(value,row,col)=>row && state.data.links.tp?'<a href="'+esc(state.data.links.tp+'&range='+col+row)+'" title="Transportes" target="_blank" rel="noopener">'+dt(value)+'</a>':dt(value);
   // CH_OKR_PURE_BEGIN
   const chDays=(a,b)=>a&&b?Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000):null;
   const chAdd=(a,n)=>a?new Date(Date.parse(a+'T00:00:00Z')+n*86400000).toISOString().slice(0,10):'';
@@ -444,7 +445,7 @@
       '<h3>Etapas do SKU</h3>'+table(['Etapa','Data esperada','Planejado','Realizado','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(it.target?.dates[i]),dt(s.p),dt(s.r),cell(s.a||(s.r?'Realizado':'Sem registro real')),esc(s.f)]))+
       detailBox(it.legacy?'Registro no painel de produção':'Itens no SPG',table(['Kit','Tiragem','Estoque CD','Subcontratada','OC / NF','Coleta formalizada','Coleta prevista / real','Entrega prevista / real','Origem'],it.spg.map(s=>[cell(s.kit),num(s.q),num(s.stock),num(s.sub),cell(s.oc)+' / '+cell(s.nf),dt(s.formal),dt(s.pickP)+' / '+dt(s.pick),dt(s.deliveryP)+' / '+dt(s.delivery),source(s.legacy?'panel':'spg',s.row)])))+
       detailBox('Calendário e PCP',table(['Fonte','Kit / OP','Status','Observação','Origem'],it.cal.map(c=>['Calendário',cell(c.kit),cell(c.state),cell(c.note),source('cal',c.row)]).concat(it.pcp.map(p=>['PCP',cell(p.op),'—','—',source('pcp',p.row)]))))+
-      '<h3>Mapas de saída</h3>'+table(['Mapa / NF','Kit','Vínculo','Tiragem','Agendamento','Coleta real','Previsão CD','Chegada CD','Qtd. entregue','Origem'],it.maps.map(m=>[cell(m.map)+' / '+cell(m.nf),cell(m.kit),cell(m.method),num(m.qty),dt(m.book),dt(m.pick),dt(m.eta),dt(m.delivery),num(m.delivered),source('map',m.row)]));
+      '<h3>Mapas de saída</h3>'+table(['Mapa / NF','Kit','Vínculo','Tiragem','Agendamento','Coleta real','Previsão CD','Chegada CD','Qtd. entregue','Origem'],it.maps.map(m=>[cell(m.map)+' / '+cell(m.nf),cell(m.kit),cell(m.method),num(m.qty),dt(m.book),transportDate(m.pick,m.tpPickRow,'G'),dt(m.eta),transportDate(m.delivery,m.tpDeliveryRow,'Z'),num(m.delivered),source('map',m.row)]));
   }
   root.addEventListener('toggle',e=>{const d=e.target;if(d.open && d.hasAttribute('data-item') && !d.lastElementChild.childElementCount)d.lastElementChild.innerHTML=itemHtml(state.detail.items[Number(d.dataset.item)]);},true);
   async function save(){

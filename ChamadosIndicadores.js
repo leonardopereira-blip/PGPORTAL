@@ -49,7 +49,7 @@ function pgChMetricaChamado_(t,idx) {
         if(!collected)unverified=true;else if(collected>part.formal)late=true;
       }
     }
-    if(it.qty>0)routes.push({sku:it.sku,printer:it.printer,cd:it.cd,qty:it.qty,delivery,pick,formal,late,unverified,source:mapDelivery?'Mapa':'',dimensions:attributes,coverage:it.coverage.slice(),picked:Math.min(it.qty,it.picked),productionStatus:it.productionStatus.label,collection:{events:collection.events,parts:collection.parts,source:collection.source,maps:collection.maps}});
+    if(it.qty>0)routes.push({sku:it.sku,printer:it.printer,cd:it.cd,qty:it.qty,delivery,pick,formal,late,unverified,source:mapDelivery?it.stages[11].f:'',dimensions:attributes,coverage:it.coverage.slice(),picked:Math.min(it.qty,it.picked),productionStatus:it.productionStatus.label,collection:{events:collection.events,parts:collection.parts,source:collection.source,maps:collection.maps}});
     const {specRows,...dims}=attributes,key=JSON.stringify(dims);
     let g=groups.get(key);
     if(!g){
@@ -142,11 +142,47 @@ function pgChPrazoResumo_(items){
  return {dates:PG_CH_ETAPAS.map((_,k)=>pgChUltima_(valid.map(it=>it.target.dates[k]))),deadline:pgChUltima_(valid.map(it=>it.target.deadline)),next:pending[0]?.target.next||'',nextStage:pending[0]?.target.nextStage??-1};
 }
 
-// Eventos de coleta exclusivamente da própria rota. SPG é alternativa, nunca soma a um mapa parcial.
+// Usa a data de TP para as unidades do mapa e conserva a evidência anterior para o saldo.
+function pgChPreferirColetaTP_(events,mapEvents,qty){
+  const tp=mapEvents.filter(e=>e.source==='Transportes');
+  if(!tp.length || events===mapEvents)return events;
+  const sum=list=>list.reduce((n,e)=>n+e.qty,0);
+  const limit=Math.min(qty,Math.max(sum(events),sum(mapEvents)));
+  let remaining=Math.max(0,limit-sum(tp));
+  if(!remaining)return tp;
+
+  const credit=new Map();
+  for(const e of tp)credit.set(e.kit,(credit.get(e.kit)||0)+e.qty);
+  const fallback=[];
+  for(const e of events){
+    if(e.source==='Transportes')credit.set(e.kit,credit.get(e.kit)-e.qty);
+    else fallback.push({...e});
+  }
+  function deduct(e,kit){
+    const used=Math.min(e.qty,credit.get(kit)||0);
+    e.qty-=used;
+    credit.set(kit,(credit.get(kit)||0)-used);
+  }
+  // Outros mapas são parcelas distintas. Somente SPG/painel pode representar as mesmas unidades.
+  const spg=fallback.filter(e=>!e.map);
+  for(const e of spg)deduct(e,e.kit);
+  for(const e of spg){
+    if(e.kit)deduct(e,'');
+    else for(const kit of credit.keys())deduct(e,kit);
+  }
+  const result=tp.slice();
+  for(const e of fallback.sort((a,b)=>a.date.localeCompare(b.date))){
+    const units=Math.min(remaining,e.qty);
+    if(units>0){result.push({...e,qty:units});remaining-=units;}
+  }
+  return result;
+}
+
+// Eventos de coleta exclusivamente da própria rota.
 function pgChColetaRota_(it){
  const q=it.qty,sp=it.spg.filter(s=>s.q>0),maps=it.maps||[];
  const primary=sp.filter(s=>s.pick).map(s=>({date:s.pick,qty:s.q,kit:s.kit||'',map:'',source:s.legacy?'Painel de produção · Histórico':'SPG · Coleta real'}));
- const mapEvents=maps.filter(m=>m.pick&&m.qty>0).map(m=>({date:m.pick,qty:m.qty,kit:m.kit||'',map:m.map||'',source:'Mapa'}));
+ const mapEvents=maps.filter(m=>m.pick&&m.qty>0).map(m=>({date:m.pick,qty:m.qty,kit:m.kit||'',map:m.map||'',source:m.tpPickRow?'Transportes':'Mapa'}));
  let events=primary.slice(),remaining=Math.max(0,q-primary.reduce((n,e)=>n+e.qty,0));
  // Prioridade absoluta à Coleta real de cada linha. Complemento por kit exclusivo;
  // sem data SPG na rota, o mapa inteiro é a fonte alternativa.
@@ -165,6 +201,7 @@ function pgChColetaRota_(it){
  const mapDate=pgChDataIntegral_(mapEvents,q,'date','qty');
  const combinedDate=pgChDataIntegral_(events,q,'date','qty');
  if(it.legacy&&mapDate||!spgDate&&mapDate&&(!combinedDate||mapDate<combinedDate))events=mapEvents;
+ events=pgChPreferirColetaTP_(events,mapEvents,q);
  const mapPhysical=maps.reduce((n,m)=>n+Math.max(0,m.pick?m.qty:Math.min(m.qty,m.delivered)),0);
  const picked=Math.min(q,Math.max(mapPhysical,events.reduce((n,e)=>n+e.qty,0)));
  const date=pgChDataIntegral_(events,q,'date','qty');

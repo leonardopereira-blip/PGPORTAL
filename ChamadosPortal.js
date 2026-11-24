@@ -35,6 +35,22 @@ function pgChLetra_(n) {
   for(;n>0;n=Math.floor((n-1)/26)) s=String.fromCharCode(65+(n-1)%26)+s;
   return s;
 }
+function pgChLerTransportes_() {
+  const id='1fue7_H6-vWdDuV4oI0Lu1dL9atOumjSM_8mkipNC11E', gid=1102000840;
+  const columns=[['C','MAPA'],['G','DATA DA COLETA'],['Z','ENTREGUE']];
+  const ranges=columns.map(([c])=>"'Base Fechada'!"+c+'1:'+c);
+  const result=Sheets.Spreadsheets.Values.batchGet(id,{ranges,majorDimension:'COLUMNS',valueRenderOption:'FORMATTED_VALUE'});
+  const [maps,picks,deliveries]=columns.map(([,header],i)=>{
+    const values=result.valueRanges[i].values?.[0]||[];
+    if(pgChTexto_(values[0])!==header)throw new Error('Coluna de Transportes inválida: '+header);
+    return values;
+  });
+  const rows=[];
+  for(let i=1;i<maps.length;i++){
+    if(pgChTexto_(maps[i]))rows.push({map:maps[i],pick:picks[i],delivery:deliveries[i],row:i+1});
+  }
+  return {rows,url:'https://docs.google.com/spreadsheets/d/'+id+'/edit#gid='+gid};
+}
 function pgChLerFonte_(key) {
   const def=PG_CH_FONTES[key], id=pgChFonte_(key), tab="'"+def.sheet.replace(/'/g,"''")+"'!";
   const out=Sheets.Spreadsheets.Values.get(id,tab+def.header+':'+def.header), headers=(out.values||[])[0]||[];
@@ -140,6 +156,7 @@ function pgChJsonBuild_(before){
  const datasets={},links={},counts={};
  Object.keys(PG_CH_FONTES).filter(k=>k!=='map').forEach(k=>{const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;if(k==='spg'&&(!counts[k]||(before&&counts[k]<before.counts[k]*0.8)))throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização.');});
  const map=pgChMapaFonte_(before&&before.counts.map);datasets.map=map.rows;links.map=map.url;counts.map=map.rows.length;datasets.sla=getMatrizSLAPortal();
+ const tp=pgChLerTransportes_();datasets.tp=tp.rows;links.tp=tp.url;counts.tp=tp.rows.length;
  const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:9,rows:model.summaries,phases:PG_CH_ETAPAS};
  if(map.stale)result.notice='Mapa: última leitura íntegra em '+new Date(map.at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+'. Atualização automática pendente.';
  if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');return {result,tickets:model.tickets};

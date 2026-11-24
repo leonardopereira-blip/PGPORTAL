@@ -237,8 +237,38 @@ function pgChImportarPainelSetembro_(spg,panel){
  }
  return out;
 }
+function pgChIndiceTransportes_(rows) {
+  const index=new Map();
+  for(const row of rows){
+    const code=pgChTexto_(row.map).toUpperCase();
+    if(!code || code==='-')continue;
+    const pick=pgChData_(row.pick), delivery=pgChData_(row.delivery);
+    if(!pick && !delivery)continue;
+    if(!index.has(code))index.set(code,{picks:[],delivery:'',deliveryRow:0});
+    const dates=index.get(code);
+    if(pick)dates.picks.push({date:pick,row:row.row});
+    if(delivery>dates.delivery){dates.delivery=delivery;dates.deliveryRow=row.row;}
+  }
+  for(const dates of index.values())dates.picks.sort((a,b)=>b.date.localeCompare(a.date));
+  return index;
+}
+
+function pgChDatasMapa_(transport,originalPick,originalDelivery) {
+  const dates={pick:originalPick,delivery:originalDelivery,tpPickRow:undefined,tpDeliveryRow:undefined};
+  if(!transport)return dates;
+  const limit=transport.delivery||originalDelivery;
+  const pick=transport.picks.find(p=>!limit || p.date<=limit);
+  if(pick){dates.pick=pick.date;dates.tpPickRow=pick.row;}
+  if(transport.delivery && (!dates.pick || dates.pick<=transport.delivery)){
+    dates.delivery=transport.delivery;
+    dates.tpDeliveryRow=transport.deliveryRow;
+  }
+  return dates;
+}
+
 function pgChModelo_(dados) {
   const sla=pgChRotasSLA_(dados.sla||[]);
+  const transport=pgChIndiceTransportes_(dados.tp||[]);
   const tickets = new Map(), numeros = new Map(), porSKU = new Map(), porOP = new Map();
   const mapaRefs = new Map();
   const rotaKey = (sku,marca,grafica,cd) => [pgChNormal_(sku),pgChMarca_(marca),pgChGraf_(grafica),pgChCD_(cd)].join('|');
@@ -364,11 +394,13 @@ function pgChModelo_(dados) {
         text:opts.length?'Rota compatível com mais de um item ou chamado':'Chamado citado; SKU ou rota divergente'}));
       return;
     }
-    const it=opts[0], qty=pgChQtd_(m.qty), received=pgChData_(m.delivered)||pgChData_(m.checked);
+    const it=opts[0], qty=pgChQtd_(m.qty);
+    const dates=pgChDatasMapa_(transport.get(pgChTexto_(code).toUpperCase()),
+      pgChData_(m.picked)||pgChData_(m.colPick),pgChData_(m.delivered)||pgChData_(m.checked));
     const hasCount=pgChTexto_(m.received)!=='';
     const event={row:m.row,map:code,kit:m.kit,sku:m.sku,nf:m.nf,qty,created:pgChData_(m.created),book:pgChData_(m.book),
-      pick:pgChData_(m.picked)||pgChData_(m.colPick),eta:pgChData_(m.eta),delivery:received,
-      delivered:received?(hasCount?Math.min(qty,pgChQtd_(m.received)):(/^(SIM|TRUE)$/.test(pgChNormal_(m.divergent))?0:qty)):0,
+      ...dates,eta:pgChData_(m.eta),
+      delivered:dates.delivery?(hasCount?Math.min(qty,pgChQtd_(m.received)):(/^(SIM|TRUE)$/.test(pgChNormal_(m.divergent))?0:qty)):0,
       method:raw.length?'Número do chamado':named.length?'Mapa informado no SPG':'SKU + marca + gráfica + CD',
       cd:pgChCDNome_(cd),printer:pgChGrafNome_(printer),raw:raw.join(' / '),scan:m.scan};
     // Repetições da mesma leitura/conferência não criam uma nova expedição.
@@ -459,6 +491,8 @@ function pgChModelo_(dados) {
       it.stages.push(log(it.mapped,'',pgChUltima_(it.maps.map(m=>m.created))),log(it.picked,pgChUltima_(it.spg.map(s=>s.pickP)),
         it.collection.date),log(it.delivered,it.eta,pgChUltima_(it.maps.filter(m=>m.delivered>0).map(m=>m.delivery))));
       if(it.collection.source)it.stages[10].f=it.collection.source;
+      const deliveredMaps=it.maps.filter(m=>m.delivered>0);
+      if(deliveredMaps.some(m=>m.tpDeliveryRow))it.stages[11].f=pgChUnicos_(deliveredMaps.map(m=>m.tpDeliveryRow?'Transportes':'Mapa')).join(' + ');
       totals.qty+=it.qty;totals.balance+=saldo;
       for(const k of ['mapped','picked','delivered']) totals[k]+=Math.min(it.qty,it[k]);
       it.coverage=it.stages.map((s,i)=>Math.max(0,Math.min(it.qty,i>=9?[it.mapped,it.picked,it.delivered][i-9]:s.units!=null?s.units:s.r?it.qty:0)));

@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const source=fs.readFileSync(path.join(__dirname,'..','ChamadosPortal.js'),'utf8');
 function load(f){
   const ctx=vm.createContext(f.mocks);vm.runInContext(source,ctx);
-  ctx.pgChEventos_=()=>[];ctx.pgChJsonBuild_=f.build;
+  ctx.pgChEventos_=()=>[];ctx.pgChColetasManuais_=()=>new Map();ctx.pgChJsonBuild_=f.build;
   return ctx;
 }
 const uid='74b79202-798e-4b12-b7da-b7dffa1e01f1';
