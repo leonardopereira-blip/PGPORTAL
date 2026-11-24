@@ -116,8 +116,25 @@ function pgTempSasAdaptLerInternalizado_() {
         previsoes[chave] = (previsoes[chave] || 0) + Math.max(0, pgTempSasAdaptNumero_(linha[2]));
         itens[chave] = (itens[chave] || 0) + Math.max(0, pgTempSasAdaptNumero_(linha[3]));
       });
-      porCD[cd] = itens;
       previsoesPorCD[cd] = previsoes;
+      if (cd === 'CD FOR') {
+        // Somente o recebido de Fortaleza muda de fonte; a previsão permanece.
+        var adapt = pgTempSasAdaptLerColunas_('TIRAGEM ADAPT SAS',
+          ['1. ID_Código Kit', '1. ID_Código SKU', 'TIRAGEM RECEBIDA', '15. DES_CD envio'], fontes[cd]);
+        itens = Object.create(null);
+        adapt.slice(1).forEach(function(linha) {
+          // CITA identifica Fortaleza nesta fonte; não incluir outros destinos.
+          var destino = pgTempSasAdaptNormalizar_(linha[3]);
+          if (destino !== 'CITA' && pgTempSasAdaptDestino_(destino) !== 'CD FOR') return;
+          var kit = pgTempSasAdaptNormalizar_(linha[0]), sku = pgTempSasAdaptNormalizar_(linha[1]);
+          if (!kit || !sku) return;
+          var chave = JSON.stringify([sku, kit]);
+          // Q é um XLOOKUP por kit, não parcelas: repetir a chave não soma o recebido.
+          // Componentes e kits distintos continuam separados na granularidade vigente.
+          itens[chave] = Math.max(itens[chave] || 0, pgTempSasAdaptNumero_(linha[2]));
+        });
+      }
+      porCD[cd] = itens;
     } catch (e) {
       indisponiveis.push(cd);
       console.warn('[TEMP SAS ADAPT] Não foi possível ler o internalizado de ' + cd + ': ' + e.message);

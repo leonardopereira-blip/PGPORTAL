@@ -112,3 +112,46 @@ test('coleta parcial não reserva volume de outra coleta física na janela anter
  assert.deepEqual(Array.from(r.athosPorSku,x=>[x.janela,x.total,x.mapaSolicitado,x.coletado,x.entregue]),[['Janela 1',100,100,100,100],['Janela 2',100,80,0,0]]);
  assert.equal(r.trilhaMapa.reduce((s,x)=>s+x.mapaSolicitado,0),180);assert.equal(r.trilhaMapa.reduce((s,x)=>s+x.coletado,0),100);
 });
+
+test('novo recebido Fortaleza é consumido uma só vez entre janelas, sem alterar Jundiaí ou mapa', () => {
+  const js = [
+    janela('0', [linha('P1', 'KIT-A', 'SKU-1', 10, 'Fortaleza - CE'),
+      linha('P2', 'KIT-A', 'SKU-1', 10, 'Jundiaí - SP')]),
+    janela('1758854262', [linha('P3', 'KIT-A', 'SKU-1', 20, 'Fortaleza - CE'),
+      linha('P4', 'KIT-A', 'SKU-1', 20, 'Jundiaí - SP'),
+      linha('P5', 'KIT-B', 'SKU-1', 20, 'Fortaleza - CE'),
+      linha('P6', 'KIT-A', 'SKU-2', 20, 'Fortaleza - CE')])
+  ];
+  const ms = [
+    mapa('KIT-A', 'SKU-1', 12, { destino: 'CD FOR', tiragem: 12, codigoMapa: 'MP-FOR-1',
+      dataColeta: '2026-10-01', dataEntrega: '2026-10-02', nfVenda: 'NF-FOR' }),
+    mapa('KIT-A', 'SKU-1', 12, { destino: 'CD FOR', tiragem: 12, codigoMapa: 'MP-FOR-1',
+      dataColeta: '2026-10-01', dataEntrega: '2026-10-02', nfVenda: 'NF-FOR' }),
+    mapa('KIT-A', 'SKU-1', 8, { destino: 'CD FOR', tiragem: 18, codigoMapa: 'MP-FOR-2',
+      dataColeta: '2026-10-03' }),
+    mapa('KIT-A', 'SKU-1', 30, { tiragem: 30, codigoMapa: 'MP-JDI',
+      dataColeta: '2026-10-01', dataEntrega: '2026-10-02', nfVenda: 'NF-JDI' })
+  ];
+  const key = (sku, kit) => JSON.stringify([sku, kit]);
+  const jdi = { [key('SKU-1', 'KIT-A')]: 10 };
+  const antes = contexto.pgTempSasAdaptConciliarJanelas_(js, ms, { porCD: {
+    'CD JDI': jdi, 'CD FOR': { [key('SKU-1', 'KIT-A')]: 90,
+      [key('SKU-1', 'KIT-B')]: 70, [key('SKU-2', 'KIT-A')]: 60 }
+  } });
+  const depois = contexto.pgTempSasAdaptConciliarJanelas_(js, ms, { porCD: {
+    'CD JDI': jdi, 'CD FOR': { [key('SKU-1', 'KIT-A')]: 15,
+      [key('SKU-1', 'KIT-B')]: 7, [key('SKU-2', 'KIT-A')]: 8 }
+  } });
+  const received = rows => Array.from(rows, r => [r.janela, r.kit, r.sku, r.internalizado]);
+  assert.deepEqual(received(depois.athosPorSku.filter(r => r.destino === 'CD FOR')), [
+    ['Janela 1', 'KIT-A', 'SKU-1', 10], ['Janela 3', 'KIT-A', 'SKU-1', 5],
+    ['Janela 3', 'KIT-A', 'SKU-2', 8], ['Janela 3', 'KIT-B', 'SKU-1', 7]
+  ]);
+  assert.equal(depois.expedicoesAthos.find(r => r.destino === 'CD FOR').internalizado, 30);
+  assert.equal(depois.internalizadoAthos, 40);
+  assert.deepEqual(JSON.parse(JSON.stringify(depois.athosPorSku.filter(r => r.destino === 'CD JDI'))),
+    JSON.parse(JSON.stringify(antes.athosPorSku.filter(r => r.destino === 'CD JDI'))));
+  const withoutReceipt = value => JSON.parse(JSON.stringify(value, (k, v) => k === 'internalizado' || k === 'internalizadoAthos' ? undefined : v));
+  assert.deepEqual(withoutReceipt(depois), withoutReceipt(antes),
+    'toda a saída de janelas, mapas, coletas, entregas, NFs e saldos é preservada');
+});

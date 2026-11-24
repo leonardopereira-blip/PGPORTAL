@@ -308,7 +308,10 @@ test('endpoint usa PCP para gráficas e Mapa original mais fontes do CD para ent
     },
     '1nCVxwkQw_loqHCGahYoTa-8ZyFy42gXg7hC2MliUoHM': {
       'SAS V1 27': [['Cód Kit', 'Cód Item', 'Previsão', 'Recebido'],
-        ['K-2', 'SKU-2', 30, 0], ['K-1', 'SKU-2', 15, 4]]
+        ['K-2', 'SKU-2', 30, 90], ['K-1', 'SKU-2', 15, 4]],
+      'TIRAGEM ADAPT SAS': [['1. ID_Código SKU', 'TIRAGEM RECEBIDA', '1. ID_Código Kit', '15. DES_CD envio'],
+        [' sku-2 ', 12, ' k-2 ', 'CITA'], [], ['SKU-2', 12, 'K-2', 'CITA'],
+        ['SKU-2', 999, 'OUTRO-KIT', 'CITA'], ['SKU-2', 999, 'K-2', 'CD JDI']]
     }
   };
   const sourceRequests = [], headers = [], batches = [];
@@ -347,13 +350,18 @@ test('endpoint usa PCP para gráficas e Mapa original mais fontes do CD para ent
     } } }
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'TempSasAdapt.js'), 'utf8'), api);
+  api.pgTempSasAdaptLerJanelas_ = () => [{ id: '1', titulo: 'Janela 1', valores: [
+    ['Pedido', 'Cod Kit', 'Componente', 'CD', '', '', '', '', '', '', 'Qtde'],
+    ['P-JDI', 'K-1', 'SKU-2', 'Jundiaí - SP', '', '', '', '', '', '', 45],
+    ['P-FOR', 'K-2', 'SKU-2', 'Fortaleza - CE', '', '', '', '', '', '', 30]
+  ] }];
   const r = api.getTempSasAdapt();
   assert.deepEqual(sourceRequests, [['PCP'], ['PCP_ACABADORAS'],
     ['MAPA DE SAÍDA','MAPA DE SAIDA','MAPA DE SAIDA ']]);
-  assert.deepEqual(headers, ['PCP', 'PCP_ACABADORAS', 'SAS V1 27', 'SAS V1 27']);
-  assert.equal(batches.length, 5);
+  assert.deepEqual(headers, ['PCP', 'PCP_ACABADORAS', 'SAS V1 27', 'SAS V1 27', 'TIRAGEM ADAPT SAS']);
+  assert.equal(batches.length, 6);
   assert.equal(batches[0].length, pHeader.length);
-  assert.deepEqual(batches[2], ['C','E','G','H','K','L','O','AN','AT','AU'].map(c => "'MAPA DE SAÍDA'!" + c + "2:" + c + "12"));
+  assert.deepEqual(batches[2], ['C','E','G','H','K','L','O','AN','AT','AU','U','W'].map(c => "'MAPA DE SAÍDA'!" + c + "2:" + c + "12"));
   assert.equal(r.pcpTotal, 150);
   assert.equal(r.saiuGraficas, 35);
   assert.equal(r.mapaSolicitado, 75, 'mapa solicitado soma O inclusive quando AN está zerada');
@@ -362,12 +370,12 @@ test('endpoint usa PCP para gráficas e Mapa original mais fontes do CD para ent
   assert.equal(r.coletadoAthos, 20, 'AN precisa da data Coleta TP');
   assert.equal(r.entregueAthos, 20, 'AN precisa da data Entrega TP');
   assert.deepEqual(Array.from(r.expedicoesAthos, x => [x.destino,x.total,x.mapaSolicitado,x.coletado,x.entregue,x.internalizado]),
-    [['CD JDI',45,45,20,20,10], ['CD FOR',30,30,0,0,0]]);
-  assert.equal(r.internalizadoAthos, 10);
+    [['CD FOR',30,30,0,0,12], ['CD JDI',45,45,20,20,10]]);
+  assert.equal(r.internalizadoAthos, 22);
   assert.deepEqual(Array.from(r.internalizacaoIndisponivel), []);
   assert.equal(r.internalizacaoSemCorrespondencia, 0);
   assert.deepEqual(Array.from(r.athosPorSku, x => [x.kit,x.sku,x.destino,x.total,x.mapaSolicitado,x.coletado,x.entregue,x.internalizado]),
-    [['K-1','SKU-2','CD JDI',45,45,20,20,10], ['K-2','SKU-2','CD FOR',30,30,0,0,0]]);
+    [['K-2','SKU-2','CD FOR',30,30,0,0,12], ['K-1','SKU-2','CD JDI',45,45,20,20,10]]);
   assert.deepEqual(Array.from(r.linhasGraficas, row => row.linha), [3, 4]);
   assert.equal('linhasAthos' in r, false);
   assert.equal(r.dataReferencia, hoje);
@@ -414,6 +422,118 @@ test('mapa Athos separa kits no mesmo SKU e CD e conserva os volumes e os totais
   assert.equal(legivel.internalizacaoSemCorrespondencia, 2);
   assert.equal(legivel.expedicoesAthos.find(cd => cd.destino === 'CD FOR').internalizado, null);
   assert.equal(legivel.internalizadoAthos, 7, 'CD legível sem correspondências não esconde os valores confirmados');
+});
+
+function fontesInternalizacao({ falharFortaleza = false } = {}) {
+  const jdi = '1qyRgj1_hdiJDo1zEu21vMSioeZe_i-emmnCPV4FMErk';
+  const forId = '1nCVxwkQw_loqHCGahYoTa-8ZyFy42gXg7hC2MliUoHM';
+  const legados = {
+    [jdi]: [['Cód Kit', 'Cód Item', 'Previsão', 'Recebido'],
+      ['KIT-A', 'SKU-1', 40, 3], ['KIT-A', 'SKU-1', 60, 7], ['KIT-B', 'SKU-1', 20, 5]],
+    [forId]: [['Cód Kit', 'Cód Item', 'Previsão', 'Recebido'],
+      ['KIT-A', 'SKU-1', 40, 90], ['KIT-A', 'SKU-1', 60, 80],
+      ['KIT-B', 'SKU-1', 20, 70], ['KIT-A', 'SKU-2', 30, 60],
+      ['KIT-ZERO', 'SKU-1', 10, 50], ['KIT-SEM-NOVO', 'SKU-1', 10, 40]]
+  };
+  const adapt = [['1. ID_Código Kit', '1. ID_Código SKU', 'TIRAGEM RECEBIDA', '15. DES_CD envio'],
+    [' kít-a ', ' sku-1 ', '12', ' cita '], [], ['KIT-A', 'SKU-1', 12, 'CITA'],
+    ['KIT-A', 'SKU-1', 15, 'Fortaleza - CE'], ['KIT-B', 'SKU-1', 7, 'CD FOR'],
+    ['KIT-A', 'SKU-2', 8, 'CITA'], ['KIT-ZERO', 'SKU-1', 0, 'CITA'],
+    ['', 'SKU-1', 999, 'CITA'], ['KIT-A', '', 999, 'CITA'],
+    ['KIT-A', 'SKU-1', 999, 'CD JDI'], ['KIT-A', 'SKU-1', 999, 'CD RP'],
+    ['KIT-A', 'SKU-1', 999, '']];
+  const antes = JSON.stringify({ legados, adapt });
+  const chamadas = [], avisos = [];
+  const api = vm.createContext({ Date, console: { warn: (...args) => avisos.push(args.join(' ')) } });
+  vm.runInContext(fs.readFileSync(path.join(root, 'TempSasAdapt.js'), 'utf8'), api);
+  api.pgTempSasAdaptLerColunas_ = (aba, campos, id) => {
+    chamadas.push({ aba, campos: Array.from(campos), id });
+    if (aba === 'SAS V1 27') {
+      assert.deepEqual(Array.from(campos), ['Cód Kit', 'Cód Item', 'Previsão', 'Recebido']);
+      assert.ok(legados[id], 'fonte legada tem o mesmo ID de cada CD');
+      return legados[id];
+    }
+    assert.equal(aba, 'TIRAGEM ADAPT SAS', 'Fortaleza usa o nome exato da aba');
+    assert.equal(id, forId, 'a nova fonte não é consultada em Jundiaí');
+    assert.deepEqual(Array.from(campos), ['1. ID_Código Kit', '1. ID_Código SKU', 'TIRAGEM RECEBIDA', '15. DES_CD envio']);
+    if (falharFortaleza) throw new Error('Fonte Adapt indisponível');
+    return adapt;
+  };
+  const dados = api.pgTempSasAdaptLerInternalizado_();
+  assert.equal(JSON.stringify({ legados, adapt }), antes, 'o leitor não modifica as fontes');
+  return { api, dados, chamadas, avisos };
+}
+
+test('somente internalização FOR muda para Adapt; JDI e previsões permanecem iguais', () => {
+  const { api, dados, chamadas } = fontesInternalizacao();
+  const chave = (sku, kit) => JSON.stringify([sku, kit]);
+  const ka = chave('SKU-1', 'KIT-A'), kb = chave('SKU-1', 'KIT-B');
+  assert.deepEqual(JSON.parse(JSON.stringify(dados.previsoesPorCD)), {
+    'CD JDI': { [ka]: 100, [kb]: 20 },
+    'CD FOR': { [ka]: 100, [kb]: 20, [chave('SKU-2', 'KIT-A')]: 30,
+      [chave('SKU-1', 'KIT-ZERO')]: 10, [chave('SKU-1', 'KIT-SEM-NOVO')]: 10 }
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(dados.porCD['CD JDI'])), { [ka]: 10, [kb]: 5 },
+    'JDI continua somando suas parcelas legadas');
+  assert.deepEqual(JSON.parse(JSON.stringify(dados.porCD['CD FOR'])), {
+    [ka]: 15, [kb]: 7, [chave('SKU-2', 'KIT-A')]: 8, [chave('SKU-1', 'KIT-ZERO')]: 0
+  }, 'normaliza SKU e KIT e não soma repetições do mesmo total recebido');
+  assert.deepEqual(Array.from(dados.indisponiveis), []);
+  assert.equal(chamadas.filter(c => c.aba === 'TIRAGEM ADAPT SAS').length, 1);
+
+  const mapas = [
+    { sku: 'SKU-1', kit: 'KIT-A', destino: 'CD FOR', codigoMapa: 'MP-1', tiragem: 40,
+      coletado: 30, dataColeta: '2026-10-01', dataEntrega: '2026-10-02' },
+    { sku: 'SKU-1', kit: 'KIT-A', destino: 'CD FOR', codigoMapa: 'MP-1', tiragem: 40,
+      coletado: 30, dataColeta: '2026-10-01', dataEntrega: '2026-10-02' },
+    { sku: 'SKU-1', kit: 'KIT-A', destino: 'CD FOR', codigoMapa: 'MP-2', tiragem: 60,
+      coletado: 20, dataColeta: '2026-10-03' },
+    { sku: 'SKU-1', kit: 'KIT-A', destino: 'CD JDI', codigoMapa: 'MP-3', tiragem: 100,
+      coletado: 50, dataColeta: '2026-10-01', dataEntrega: '2026-10-02' },
+    { sku: 'SKU-1', kit: 'KIT-ZERO', destino: 'CD FOR', codigoMapa: 'MP-4', tiragem: 10 },
+    { sku: 'SKU-1', kit: 'KIT-SEM-NOVO', destino: 'CD FOR', codigoMapa: 'MP-5', tiragem: 10 }
+  ];
+  const legado = { porCD: { 'CD JDI': dados.porCD['CD JDI'], 'CD FOR': {
+    [ka]: 170, [kb]: 70, [chave('SKU-2', 'KIT-A')]: 60,
+    [chave('SKU-1', 'KIT-ZERO')]: 50, [chave('SKU-1', 'KIT-SEM-NOVO')]: 40
+  } }, previsoesPorCD: dados.previsoesPorCD, indisponiveis: [] };
+  const antes = api.pgTempSasAdaptSaidaPorSkuCD_(mapas, legado);
+  const depois = api.pgTempSasAdaptSaidaPorSkuCD_(mapas, dados);
+  assert.deepEqual(JSON.parse(JSON.stringify(depois.athosPorSku.filter(x => x.destino === 'CD JDI'))),
+    JSON.parse(JSON.stringify(antes.athosPorSku.filter(x => x.destino === 'CD JDI'))));
+  const semInternalizado = rows => Array.from(rows, ({ internalizado, ...row }) => row);
+  assert.deepEqual(semInternalizado(depois.athosPorSku), semInternalizado(antes.athosPorSku),
+    'tiragens, vínculos e etapas de mapa, coleta e entrega não mudam');
+  assert.deepEqual(semInternalizado(depois.expedicoesAthos), semInternalizado(antes.expedicoesAthos));
+  assert.equal(depois.mapaSolicitado, antes.mapaSolicitado);
+  assert.equal(depois.coletadoAthos, antes.coletadoAthos);
+  assert.equal(depois.entregueAthos, antes.entregueAthos);
+  const forA = depois.athosPorSku.find(x => x.destino === 'CD FOR' && x.kit === 'KIT-A');
+  assert.equal(forA.internalizado, 15, 'dois mapas e uma repetição não multiplicam recebido');
+  assert.equal(depois.athosPorSku.find(x => x.kit === 'KIT-ZERO').internalizado, 0);
+  assert.equal(depois.athosPorSku.find(x => x.kit === 'KIT-SEM-NOVO').internalizado, null,
+    'ausência na nova fonte não recupera silenciosamente o recebido antigo');
+});
+
+test('falha na nova fonte de Fortaleza mantém Jundiaí e não usa recebido legado FOR', () => {
+  const { api, dados, avisos } = fontesInternalizacao({ falharFortaleza: true });
+  const ka = JSON.stringify(['SKU-1', 'KIT-A']);
+  assert.deepEqual(Array.from(dados.indisponiveis), ['CD FOR']);
+  assert.equal(dados.porCD['CD JDI'][ka], 10);
+  assert.equal(dados.porCD['CD FOR'], undefined);
+  assert.equal(dados.previsoesPorCD['CD JDI'][ka], 100);
+  assert.equal(dados.previsoesPorCD['CD FOR'][ka], 100, 'previsão independente permanece disponível');
+  assert.ok(avisos.some(x => x.includes('CD FOR')));
+  const r = api.pgTempSasAdaptSaidaPorSkuCD_(['CD JDI', 'CD FOR'].map(destino => ({
+    destino, sku: 'SKU-1', kit: 'KIT-A', codigoMapa: 'MP-1', tiragem: 100,
+    coletado: 50, dataColeta: '2026-10-01', dataEntrega: '2026-10-02'
+  })), dados);
+  assert.deepEqual(Array.from(r.athosPorSku, x => [x.destino, x.total, x.internalizado]),
+    [['CD FOR', 100, null], ['CD JDI', 100, 10]]);
+  assert.equal(r.internalizadoAthos, null);
+  assert.equal(r.mapaSolicitado, 200);
+  assert.equal(r.coletadoAthos, 100);
+  assert.equal(r.entregueAthos, 100);
 });
 
 function frontHarness(data) {
