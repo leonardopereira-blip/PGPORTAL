@@ -58,6 +58,7 @@
   #ch-central .ch-card[data-tone=orange] b{color:#c43c1a}
   #ch-central .ch-card small{display:block;font-size:10px;font-weight:600;line-height:1.45;min-height:29px;color:#5c7088}
   #ch-central .ch-card b{display:block;font-size:clamp(20px,1.9vw,27px);line-height:1.12;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+  #ch-central .ch-deadline-card{text-align:left;color:var(--ch-navy);cursor:pointer;font:inherit}#ch-central .ch-deadline-card[aria-pressed=true]{background:#edf3fa;outline:2px solid var(--ch-blue);outline-offset:1px}#ch-central .ch-deadline-card:hover{background:#f3f7fc}#ch-central .ch-deadline-chip{display:inline-block;border-radius:5px;padding:4px 7px;background:#eaf2fc;color:var(--ch-indigo);font-weight:600}#ch-central .ch-deadline-chip[data-deadline=backlog]{background:#fff0e8;color:#be381c}
   #ch-central .ch-box{padding:18px;margin:0 0 16px;min-width:0}
   #ch-central .ch-flex{display:grid;grid-template-columns:minmax(0,1fr);gap:0;align-items:start}
   #ch-central .ch-sub{padding:4px 8px;border-radius:5px;background:#e6effa;color:var(--ch-indigo);font-weight:600}
@@ -110,7 +111,9 @@
     <div class="ch-filter-panel"><div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span><label>Chamado<input id="ch-query" type="search" placeholder="Número do chamado"></label>
       <label>Categoria<select id="ch-cat"></select></label><label>Envio<select id="ch-shipment"></select></label>
       <label>Marca<select id="ch-brand"></select></label><label>Status de produção<select id="ch-production"><option value="">Todos</option></select></label><label>Situação<select id="ch-scope"><option value="ativos">Exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option><option value="cancelados">Cancelados</option><option value="todos">Todos</option></select></label>
-      <button id="ch-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button><div id="ch-routefilters" class="contents"></div></div></div><div id="ch-kpis" class="ch-grid"></div>
+      <button id="ch-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button><div id="ch-routefilters" class="contents"></div></div></div>
+    <section class="ch-box"><div class="ch-between"><h2>Prazos de entrega</h2><button type="button" class="ch-btn" data-deadline="">Todos os prazos</button></div><p class="ch-muted">Chamados sem entrega integral, pelo prazo final de 25 dias. Semanas de segunda a domingo; cada chamado é contado uma vez.</p><div id="ch-deadline-cards" class="ch-grid"></div><p id="ch-deadline-selection" class="ch-muted" role="status"></p></section>
+    <div id="ch-kpis" class="ch-grid"></div>
     <div class="ch-flex"><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg> Funil de etapas</h2><div class="ch-tools" style="margin-bottom:10px"><button class="ch-btn ch-primary" id="ch-funnel-qty" aria-pressed="true">Tiragem</button><button class="ch-btn" id="ch-funnel-tickets" aria-pressed="false">Chamados</button></div><div id="ch-funnel" class="ch-funnel"></div><small>Etapas atendidas por chamado, SKU e rota. Estoque e subcontratação não comprovam produção própria. Custos, OC e mapa solicitado: marcos independentes.</small><div id="ch-parallel" class="ch-grid" style="margin-top:12px"></div></section>
 <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="4" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="10" width="8" height="10" rx="1"/></svg> Distribuição</h2>
       <select id="ch-by" aria-label="Agrupar por"><option value="cat">Categoria</option><option value="shipment">Envio</option><option value="brand">Marca</option></select></div><div id="ch-dist"></div></section></div>
@@ -121,7 +124,7 @@
 <script>
 (function(){
   const root=document.getElementById('ch-central'), el=id=>document.getElementById('ch-'+id);
-  const state={funnelMode:'qty',view:'carteira',data:null,detail:null,history:[],page:1,itemPage:1,load:0,detailLoad:0,loading:false,pending:null};
+  const state={funnelMode:'qty',deadline:'',view:'carteira',data:null,detail:null,history:[],page:1,itemPage:1,load:0,detailLoad:0,loading:false,pending:null};
   const nf=new Intl.NumberFormat('pt-BR'),num=x=>nf.format(Number(x)||0);
   const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const dt=x=>/^\d{4}-\d{2}-\d{2}/.test(x||'')?x.slice(0,10).split('-').reverse().join('/'):'—';
@@ -156,8 +159,10 @@
       g.coverage.forEach((v,i)=>totals.coverage[i]+=v);
     }
     const by=new Map();groups.forEach(g=>(g.production||[]).forEach(p=>by.set(p.label,(by.get(p.label)||0)+p.qty)));
-    const targets=groups.filter(g=>g.target).map(g=>g.target),pending=targets.filter(x=>x.next).sort((a,b)=>a.next.localeCompare(b.next));const target=targets.length?{deadline:targets.map(x=>x.deadline).sort().pop(),next:pending[0]?.next||'',nextStage:pending[0]?.nextStage??-1}:t.target;
-    return {...t,groups,totals,target,production:Array.from(by,([label,qty])=>({label,qty})).sort((a,b)=>b.qty-a.qty),eta:groups.map(g=>g.eta).filter(Boolean).sort().pop()||'',partial:groups.some(g=>g.partial)};
+    const targets=groups.filter(g=>g.target).map(g=>g.target),pending=targets.filter(x=>x.next).sort((a,b)=>a.next.localeCompare(b.next));const target=targets.length?{dates:Array.from({length:12},(_,i)=>targets.map(x=>x.dates?.[i]).filter(Boolean).sort().pop()||''),deadline:targets.map(x=>x.deadline).filter(Boolean).sort().pop()||'',next:pending[0]?.next||'',nextStage:pending[0]?.nextStage??-1}:t.target;
+    const stages=Array.from({length:12},(_,i)=>{const ss=groups.filter(g=>g.qty>0).map(g=>g.stages?.[i]);return {p:ss.map(s=>s?.p).filter(Boolean).sort().pop()||'',r:ss.length&&ss.every(s=>s?.r)?ss.map(s=>s.r).sort().pop():'',a:[...new Set(ss.map(s=>s?.a).filter(Boolean))].join(' | '),f:[...new Set(ss.map(s=>s?.f).filter(Boolean))].join(' + ')};});
+    const okrRoutes=(t.okrRoutes||[]).filter(r=>chDimensions.every(k=>chDimMatch(f[k],({...r,...r.dimensions})[k])));
+    return {...t,groups,totals,target,stages,okrRoutes,production:Array.from(by,([label,qty])=>({label,qty})).sort((a,b)=>b.qty-a.qty),eta:groups.map(g=>g.eta).filter(Boolean).sort().pop()||'',partial:groups.some(g=>g.partial)};
   }
   function chAgingDays(created,date){
     const days=chDays(created,date);
@@ -206,8 +211,39 @@
     if(!by.size)return [t];
     return [...by].sort(([a],[b])=>a.localeCompare(b)).map(([cd,groups])=>{
       const scoped=chFilteredTotals({...t,groups},{cd:cd||['']});
-      return {...scoped,groups,cd,okrRoutes:(t.okrRoutes||[]).filter(r=>(r.cd||'')===cd&&groups.some(g=>(g.printer||'')===(r.printer||'')))};
+      return {...scoped,groups,cd};
     });
+  }
+  const chDeadlineLabels={backlog:'Backlog',today:'Vence hoje',week:'Restante da semana',next:'Próxima semana'};
+  function chTodaySP(now=Date.now()){
+    const d=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(now)).map(p=>[p.type,p.value]));return d.year+'-'+d.month+'-'+d.day;
+  }
+  function chDeliveryDate(t,asof){
+    const valid=d=>!!d&&d<=asof&&(!t.created||d>=t.created),routes=(t.okrRoutes||[]).filter(r=>r.qty>0);
+    if(routes.length)return routes.every(r=>valid(r.delivery))?routes.map(r=>r.delivery).sort().pop():'';
+    const items=Array.isArray(t.items)?t.items.filter(it=>it.qty>0):[];
+    if(items.length)return items.every(it=>it.delivered>=it.qty&&valid(it.stages?.[11]?.r))?items.map(it=>it.stages[11].r).sort().pop():'';
+    return t.totals?.qty>0&&t.totals.delivered>=t.totals.qty&&valid(t.delivered)?t.delivered:'';
+  }
+  function chFinalForecast(t){
+    if(!Array.isArray(t.items))return {date:t.eta||'',partial:!!t.partial};
+    const pending=t.items.filter(it=>it.qty>0&&it.delivered<it.qty);
+    return {date:pending.map(it=>it.eta).filter(Boolean).sort().pop()||'',partial:pending.some(it=>!it.eta||it.etaPartial)};
+  }
+  function chDeadlineBucket(t,today){
+    if(/CANCEL/i.test(t.status||'')||t.canceled&&t.canceled<=today||!(t.totals?.qty>0)||chDeliveryDate(t,today))return '';
+    const due=t.target?.deadline||t.target?.dates?.[11]||'';if(!due)return '';
+    if(due<today)return 'backlog';if(due===today)return 'today';
+    const weekday=new Date(today+'T00:00:00Z').getUTCDay(),sunday=chAdd(today,(7-weekday)%7);
+    if(due<=sunday)return 'week';if(due<=chAdd(sunday,7))return 'next';return '';
+  }
+  function chDeadlineCounts(rows,today){
+    const counts=Object.fromEntries(Object.keys(chDeadlineLabels).map(k=>[k,new Set()]));
+    for(const t of rows){const bucket=chDeadlineBucket(t,today);if(bucket)counts[bucket].add(t.id||String(t.n));}
+    return Object.fromEntries(Object.entries(counts).map(([k,ids])=>[k,ids.size]));
+  }
+  function chDeadlineLabel(t,today){
+    const bucket=chDeadlineBucket(t,today);return chDeadlineLabels[bucket]||(/CANCEL/i.test(t.status||'')||t.canceled&&t.canceled<=today?'Cancelado':chDeliveryDate(t,today)?'Entregue':t.target?.deadline||t.target?.dates?.[11]?'Após próxima semana':'Sem prazo');
   }
   // Preserva a apuração histórica do corte V1, sem reintroduzir coletas anteriores à abertura.
   // Origem: geração 350e3644-93ce-498e-8a10-5c08ee9960ae (24/11/2026, 07:44 BRT).
@@ -250,17 +286,18 @@
     const out={cohort:0,den:0,num:0,late:0,pending:0,upcoming:0,canceled:0,historicalExcluded:0,actual:0,delivery:0,notCollected:0,ages:[],items:[]};
     const inside=v=>!!v&&(!f.start||v>=f.start)&&(!f.end||v<=f.end);
     for(const t of rows){
-      if(!chMatches(t,f,f.asof)||t.created&&t.created>f.asof)continue;
+      if(!chMatches(t,{...f,min:'',max:''},f.asof)||t.created&&t.created>f.asof)continue;
       const scoped=chFilteredTotals(t,f);if(!scoped)continue;
       const qty=Number(scoped.totals?.qty)||0,w=f.unit==='qty'?qty:1;
-      const fixed=chAdd(t.created,25),pick=chPickEvidence(t,f.asof);
+      const fixed=chAdd(t.created,25),pick=chPickEvidence(scoped,f.asof),age=chAgingDays(t.created,pick.actual);
+      if((f.min!==''&&f.min!=null||f.max!==''&&f.max!=null)&&(age===null||f.min!==''&&f.min!=null&&age<Number(f.min)||f.max!==''&&f.max!=null&&age>Number(f.max)))continue;
       const due=f.rule==='fixed'?fixed:f.rule==='desired'?t.desired:f.rule==='pick'?pick.due:fixed?[fixed,t.desired].filter(Boolean).sort().pop():'';
       const canceled=!!(t.canceled&&t.canceled<=f.asof)||/CANCEL/i.test(t.status||'')&&!t.canceled;
       if(f.basis==='open'?!inside(t.created):due?!inside(due):!!t.created&&!inside(t.created))continue;
       if(canceled){out.canceled+=w;continue;}
       const actual=pick.actual,status=chStatusColeta(actual);
       if(f.scope==='abertos'&&actual||f.scope==='concluidos'&&!actual)continue;
-      const result=chPrazoColeta(t,f,pick,due),days=result.days,age=chAgingDays(t.created,actual);
+      const result=chPrazoColeta(t,f,pick,due),days=result.days;
       out.cohort+=w;
       if(actual){
         out.actual+=w;
@@ -320,7 +357,7 @@
     x.dispatchEvent(new Event('change',{bubbles:true}));
   },true);
   root.addEventListener('change',e=>{if(e.target.tagName==='SELECT')styleFilters();});
-  const dayNow=()=>{const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(state.data?.now||Date.now()));const d=Object.fromEntries(parts.map(p=>[p.type,p.value]));return d.year+'-'+d.month+'-'+d.day;};
+  const dayNow=()=>chTodaySP();
   const readFilters=prefix=>Object.fromEntries(filterKeys.map(k=>[k,filterVal(el(prefix+k))]));
   function filterMarkup(prefix){
     return chDimensions.map(k=>'<label>'+dimNames[k]+'<select id="ch-'+prefix+k+'"><option value="">Todos</option></select></label>').join('')+
@@ -421,20 +458,22 @@
   }
   function render(){
     if(!state.data)return;
-    const rows=selected(),total=k=>rows.reduce((s,r)=>s+r.totals[k],0),by=el('by').value;
-    el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado',total('picked')],['Entregue no CD',total('delivered')],['Saldo a entregar',total('balance')],['Aging médio de entrega',agingMarkup(rows,dayNow())]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Saldo a entregar'?'orange':k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
-    const groups=new Map();rows.forEach(t=>{const k=t[by]||'Sem informação',g=groups.get(k)||[0,0,0];g[0]++;g[1]+=t.totals.qty;g[2]+=t.totals.balance;groups.set(k,g);});
-    el('dist').innerHTML=table([el('by').selectedOptions[0].text,'Chamados','Tiragem','Saldo'],[...groups].sort((a,b)=>b[1][2]-a[1][2]).map(([k,g])=>['<button class="ch-link" data-filter="'+esc(k)+'">'+esc(k)+'</button>',...g.map(num)]));
+    const baseRows=selected(),today=dayNow(),counts=chDeadlineCounts(baseRows,today),rows=state.deadline?baseRows.filter(t=>chDeadlineBucket(t,today)===state.deadline):baseRows,total=k=>rows.reduce((s,r)=>s+r.totals[k],0),by=el('by').value;
+    el('deadline-cards').innerHTML=Object.entries(chDeadlineLabels).map(([key,label])=>'<button type="button" class="ch-card ch-deadline-card" data-deadline="'+key+'" data-tone="'+(key==='backlog'?'orange':'navy')+'" aria-pressed="'+(state.deadline===key)+'"><small>'+esc(label)+'</small><b>'+num(counts[key])+'</b></button>').join('');
+    el('deadline-selection').textContent=(state.deadline?'Filtro: '+chDeadlineLabels[state.deadline]+'. ':'Todos os prazos. ')+'Hoje: '+dt(today)+'.';
+    el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado',total('picked')],['Entregue no CD',total('delivered')],['Aging médio de entrega',agingMarkup(rows,today)]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
+    const groups=new Map();rows.forEach(t=>{const k=t[by]||'Sem informação',g=groups.get(k)||[0,0];g[0]++;g[1]+=t.totals.qty;groups.set(k,g);});
+    el('dist').innerHTML=table([el('by').selectedOptions[0].text,'Chamados','Tiragem'],[...groups].sort((a,b)=>b[1][1]-a[1][1]).map(([k,g])=>['<button class="ch-link" data-filter="'+esc(k)+'">'+esc(k)+'</button>',...g.map(num)]));
     const qty=total('qty'),mode=state.funnelMode,base=mode==='qty'?qty:rows.length,colors=['#0C2340','#284081','#284081','#418EDE','#418EDE','#FCB04E','#FA4616','#049FEC','#284081'];
     const values=state.data.phases.map((label,i)=>({label,v:rows.reduce((s,t)=>s+t.totals.coverage[i],0),n:rows.filter(t=>t.totals.qty>0&&t.totals.coverage[i]>=t.totals.qty).length}));
     const layer=(label,v,pct,color,idx)=>'<div class="funnel-layer ch-portal-layer text-center'+(pct<35?' ch-narrow':'')+'" style="width:'+Math.min(100,Math.max(pct,32))+'%;background:'+color+';color:'+(color==='#FCB04E'?'#0C2340':'white')+'" title="'+esc(label)+' · '+num(v)+'"><span>'+String(idx).padStart(2,'0')+' - '+esc(label)+' ('+num(v)+' | '+num(Math.round(pct*10)/10)+'%)</span></div>';
     const physical=[0,1,2,3,4,5,6,10,11];
     el('funnel').innerHTML=layer(mode==='qty'?'Tiragem total':'Total de chamados',base,base?100:0,'#0C2340',0)+physical.map((k,i)=>{const v=mode==='qty'?values[k].v:values[k].n;return layer(values[k].label,v,base?100*v/base:0,colors[i],i+1);}).join('');for(const [id,v] of [['funnel-qty','qty'],['funnel-tickets','tickets']]){el(id).classList.toggle('ch-primary',mode===v);el(id).setAttribute('aria-pressed',String(mode===v));}
     el('parallel').innerHTML=[7,8,9].map(k=>'<div class="ch-card"><small>'+esc(values[k].label)+'</small><b>'+num(values[k].v)+'</b><small>'+num(qty?Math.round(1000*values[k].v/qty)/10:0)+'% · '+num(values[k].n)+' chamados</small></div>').join('');
-    const destinationRows=rows.flatMap(chDestinationRows);
+    const destinationRows=rows.flatMap(t=>chDestinationRows(t).map(r=>({...r,deadlineBucket:chDeadlineBucket(t,today),deadlineLabel:chDeadlineLabel(t,today)})));
     const maxPage=Math.max(1,Math.ceil(destinationRows.length/30));state.page=Math.min(state.page,maxPage);
-    el('table').innerHTML=table(['Chamado','Categoria','Envio','Marca','Responsável PG','Gráfica','CD','Status de produção','Tiragem','Saldo','Data de coleta','Data de entrega','Prazo final (25 dias)','Próxima etapa','Data esperada','Previsão de entrega','Tratativa'],destinationRows.slice((state.page-1)*30,state.page*30).map(t=>[
-      '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(t.owner),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),num(t.totals.balance),collectionCell(t,chPickEvidence(t,dayNow()).actual),dt((t.okrRoutes||[]).length&&(t.okrRoutes||[]).every(r=>r.delivery)?t.okrRoutes.map(r=>r.delivery).sort().pop():''),dt(t.target?.deadline),cell(state.data.phases[t.target?.nextStage]),'<span class="'+(t.target?.next&&t.target.next<dayNow()?'ch-overdue':'ch-ontrack')+'">'+dt(t.target?.next)+'</span>',dt(t.eta)+(t.partial&&t.eta?' · parcial':''),cell(state.data.manual[t.id])]),'Nenhum chamado corresponde aos filtros.');
+    el('table').innerHTML=table(['Chamado','Categoria','Envio','Marca','Responsável PG','Gráfica','CD','Status de produção','Tiragem','Data de coleta','Data de entrega','Previsão final de entrega','Prazo final (25 dias)','Situação do prazo','Próxima etapa','Data desejada da etapa','Previsão da etapa','Real da etapa'],destinationRows.slice((state.page-1)*30,state.page*30).map(t=>[
+      '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(t.owner),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),collectionCell(t,chPickEvidence(t,today).actual),dt(chDeliveryDate(t,today)),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),dt(t.target?.deadline),'<span class="ch-deadline-chip" data-deadline="'+esc(t.deadlineBucket)+'">'+esc(t.deadlineLabel)+'</span>',cell(state.data.phases[t.target?.nextStage]),'<span class="'+(t.target?.next&&t.target.next<today?'ch-overdue':'ch-ontrack')+'">'+dt(t.target?.dates?.[t.target?.nextStage])+'</span>',dt(t.stages?.[t.target?.nextStage]?.p),dt(t.stages?.[t.target?.nextStage]?.r)]),'Nenhum chamado corresponde aos filtros.');
     el('count').textContent=num(rows.length)+' chamados · '+num(destinationRows.length)+' destinos';pager(el('pages'),state.page,destinationRows.length,30,'page');
   }
   async function openTicket(id){
@@ -444,10 +483,10 @@
     }catch(e){if(seq===state.detailLoad)message(e.message||String(e),true);}
   }
   function renderDetail(){
-    const t=state.detail;
-    el('detail').innerHTML='<button class="ch-link" id="ch-back">Voltar à visão</button><section class="ch-box"><div class="ch-between"><h2>Chamado #'+esc(t.n)+'</h2><span class="ch-sub">'+productionCell(t)+'</span></div>'+fields({'Categoria':t.cat,'Envio':t.shipment,'Marca':t.brand,'Prioridade SPG':t.priority,'Responsável PG':t.owner,'OP':t.op,'Data desejada':dt(t.desired),'Prazo final (25 dias)':dt(t.target?.deadline),'Meta de entrega SPG':dt(t.goal)})+'<h3>Solicitação</h3><p>'+cell(t.why)+'</p>'+(t.obs?'<p>'+esc(t.obs)+'</p>':'')+(t.reason?'<p>Cancelamento · '+esc(t.reason)+'</p>':'')+'</section>'+
+    const t=state.detail,forecast=chFinalForecast(t);
+    el('detail').innerHTML='<button class="ch-link" id="ch-back">Voltar à visão</button><section class="ch-box"><div class="ch-between"><h2>Chamado #'+esc(t.n)+'</h2><span class="ch-sub">'+productionCell(t)+'</span></div>'+fields({'Categoria':t.cat,'Envio':t.shipment,'Marca':t.brand,'Prioridade SPG':t.priority,'Responsável PG':t.owner,'OP':t.op,'Data desejada por Planning':dt(t.desired),'Data de entrega':dt(chDeliveryDate(t,dayNow())),'Previsão final de entrega':dt(forecast.date)+(forecast.partial&&forecast.date?' · parcial':''),'Prazo final (25 dias)':dt(t.target?.deadline),'Situação do prazo':chDeadlineLabel(t,dayNow()),'Meta de entrega SPG':dt(t.goal)})+'<h3>Solicitação</h3><p>'+cell(t.why)+'</p>'+(t.obs?'<p>'+esc(t.obs)+'</p>':'')+(t.reason?'<p>Cancelamento · '+esc(t.reason)+'</p>':'')+'</section>'+
       '<section class="ch-box"><h2>Tratativa do time</h2><div class="ch-tools"><label>Status da tratativa<select id="ch-manual-state"><option value="">Selecionar</option>'+state.data.states.map(v=>opt(v)).join('')+'</select></label><label style="flex:1;min-width:200px">Observação opcional<input id="ch-note" maxlength="1500"></label><button id="ch-save" class="ch-btn ch-primary">Salvar</button></div><p id="ch-save-msg" role="status"></p><div id="ch-history"></div></section>'+
-      '<section class="ch-box"><h2>Marcos do chamado</h2>'+table(['Etapa','Planejado','Realizado','Fonte'],Object.entries(t.steps).map(([k,s])=>[esc(k),dt(s.p),dt(s.r),'SPG']))+
+      '<section class="ch-box"><h2>Marcos do chamado</h2>'+table(['Etapa','Previsão da etapa','Real da etapa','Fonte'],Object.entries(t.steps).map(([k,s])=>[esc(k),dt(s.p),dt(s.r),'SPG']))+
       detailBox('Registros do painel de produção ('+t.panel.length+')',table(['Gráfica / CD','Status','Andamento','Início plan. / real','Fim plan. / real','Origem'],t.panel.map(p=>[cell(p.printer)+' / '+cell(cdLabel(p.cd)),cell(p.status),cell([p.note,p.cause].filter(Boolean).join(' | ')),dt(p.startP)+' / '+dt(p.startR),dt(p.endP)+' / '+dt(p.endR),source('panel',p.row)])))+'</section>'+
       '<section class="ch-box"><h2>Validação de custos e ordens de compra</h2>'+detailBox('Validação de custos · '+t.costs.length+' linhas de SKU',table(['Lote','SKU','Gráfica / CD','Tiragem','Valor','Status','Fim','Enviado a Pós','OC','Origem'],t.costs.map(c=>[cell(c.lot),cell(c.sku),cell(c.printer)+' / '+cell(cdLabel(c.cd)),cell(c.qty),cell(c.value),cell(c.status),dt(c.date),dt(c.sent),cell(c.oc),source('cost',c.row)])))+
       detailBox('Solicitações de OC · '+t.orders.length+' registros',table(['Sistema','Requisição','OC','OC triangulação','Fornecedor / CD','Status / aprovação','Valor','Abertura / envio','Vínculo','Origem'],t.orders.map(o=>[cell(o.system),cell(o.req),cell(o.oc),cell(o.tri),cell(o.printer)+' / '+cell(cdLabel(o.cd)),cell(o.status)+' / '+cell(o.approval),cell(o.value),dt(o.opened)+' / '+dt(o.sent),cell(o.method),source('oc',o.row)])))+'</section>'+
@@ -460,11 +499,11 @@
   }
   function renderItems(){
     const its=state.detail.items,base=(state.itemPage-1)*25;
-    el('items').innerHTML=its.slice(base,base+25).map((it,i)=>'<details data-item="'+(base+i)+'"><summary>'+cell(it.sku)+' · '+cell(it.printer)+' → '+cell(cdLabel(it.cd))+' · '+num(it.qty)+' un. · saldo '+num(Math.max(0,it.qty-it.delivered))+'</summary><div></div></details>').join('');pager(el('itempages'),state.itemPage,its.length,25,'itempage');
+    el('items').innerHTML=its.slice(base,base+25).map((it,i)=>'<details data-item="'+(base+i)+'"><summary>'+cell(it.sku)+' · '+cell(it.printer)+' → '+cell(cdLabel(it.cd))+' · '+num(it.qty)+' un.</summary><div></div></details>').join('');pager(el('itempages'),state.itemPage,its.length,25,'itempage');
   }
   function itemHtml(it){
-    return '<p>'+cell(it.desc)+'</p>'+fields({'Status de produção':it.productionStatus?.label,'Tiragem':num(it.qty),'Mapa solicitado':num(it.mapped),'Coletado':num(it.picked),'Origem da coleta':it.collection?.source,'Entregue no CD':num(it.delivered),'Saldo':num(Math.max(0,it.qty-it.delivered)),'Previsão de entrega':dt(it.eta)+(it.etaPartial&&it.eta?' · parcial':''),'Origem da previsão':it.forecastSource})+
-      '<h3>Etapas do SKU</h3>'+table(['Etapa','Data esperada','Planejado','Realizado','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(it.target?.dates[i]),dt(s.p),dt(s.r),cell(s.a||(s.r?'Realizado':'Sem registro real')),esc(s.f)]))+
+    return '<p>'+cell(it.desc)+'</p>'+fields({'Status de produção':it.productionStatus?.label,'Tiragem':num(it.qty),'Mapa solicitado':num(it.mapped),'Coletado':num(it.picked),'Origem da coleta':it.collection?.source,'Entregue no CD':num(it.delivered),'Data de entrega':dt(it.stages?.[11]?.r),'Previsão final de entrega':dt(it.eta)+(it.etaPartial&&it.eta?' · parcial':''),'Origem da previsão':it.forecastSource})+
+      '<h3>Etapas do SKU</h3><p class="ch-muted">As datas desejadas das etapas são metas para cumprir o prazo final; previsão e real vêm das fontes.</p>'+table(['Etapa','Data desejada da etapa','Previsão da etapa','Real da etapa','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(it.target?.dates?.[i]),dt(s.p),dt(s.r),cell(s.a||(s.r?'Realizado':'Sem registro real')),esc(s.f)]))+
       detailBox(it.legacy?'Registro no painel de produção':'Itens no SPG',table(['Kit','Tiragem','Estoque CD','Subcontratada','OC / NF','Coleta formalizada','Coleta prevista / real','Entrega prevista / real','Origem'],it.spg.map(s=>[cell(s.kit),num(s.q),num(s.stock),num(s.sub),cell(s.oc)+' / '+cell(s.nf),dt(s.formal),dt(s.pickP)+' / '+dt(s.pick),dt(s.deliveryP)+' / '+dt(s.delivery),source(s.legacy?'panel':'spg',s.row)])))+
       detailBox('Calendário e PCP',table(['Fonte','Kit / OP','Status','Observação','Origem'],it.cal.map(c=>['Calendário',cell(c.kit),cell(c.state),cell(c.note),source('cal',c.row)]).concat(it.pcp.map(p=>['PCP',cell(p.op),'—','—',source('pcp',p.row)]))))+
       '<h3>Mapas de saída</h3>'+table(['Mapa / NF','Kit','Vínculo','Tiragem','Agendamento','Coleta real','Previsão CD','Chegada CD','Qtd. entregue','Origem'],it.maps.map(m=>[cell(m.map)+' / '+cell(m.nf),cell(m.kit),cell(m.method),num(m.qty),dt(m.book),transportDate(m.pick,m.tpPickRow,'G'),dt(m.eta),transportDate(m.delivery,m.tpDeliveryRow,'Z'),num(m.delivered),source('map',m.row)]));
@@ -486,6 +525,7 @@
   }
   root.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;
+    if(b.hasAttribute('data-deadline')){state.deadline=state.deadline===b.dataset.deadline?'':b.dataset.deadline;state.page=1;render();return;}
     if(b.dataset.collectId){saveCollection(b);return;}
     if(b.id==='ch-okr-export'){exportOKR();return;}
     if(b.id==='ch-okr-clear'){[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment'].forEach(k=>setFilterValue(el(k),''));setFilterValue(el('okr-cat'),'REENTRADA');el('okr-scope').value='ativos';renderOKR();return;}
@@ -496,7 +536,7 @@
     if(b.dataset.filter){setFilterValue(el(el('by').value),b.dataset.filter);state.page=1;render();styleFilters();return;}
     if(b.dataset.page){state.page+=Number(b.dataset.page);render();return;}
     if(b.dataset.itempage){state.itemPage+=Number(b.dataset.itempage);renderItems();return;}
-    if(b.id==='ch-clear'){['query','cat','shipment','brand','production',...filterKeys.map(k=>'route-'+k)].forEach(k=>setFilterValue(el(k),''));el('scope').value='ativos';state.page=1;render();styleFilters();}
+    if(b.id==='ch-clear'){['query','cat','shipment','brand','production',...filterKeys.map(k=>'route-'+k)].forEach(k=>setFilterValue(el(k),''));el('scope').value='ativos';state.deadline='';state.page=1;render();styleFilters();}
   });
   el('routefilters').innerHTML=filterMarkup('route-');
   filterKeys.forEach(k=>el('route-'+k).addEventListener('change',()=>{state.page=1;render();}));

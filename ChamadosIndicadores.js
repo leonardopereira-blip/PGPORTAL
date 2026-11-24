@@ -30,6 +30,17 @@ function pgChDataIntegral_(events,qty,dateField,qtyField) {
 function pgChMarcoItens_(items,key) {
   return items.length && items.every(r=>r[key])?pgChUltima_(items.map(r=>r[key])):'';
 }
+// Datas consolidadas da própria etapa. Cobertura inferida não cria data real.
+function pgChDatasEtapas_(items) {
+  const routes=(items||[]).filter(it=>it.qty>0);
+  return PG_CH_ETAPAS.map((_,k)=>{
+    const stages=routes.map(it=>(it.stages||[])[k]||{});
+    const real=stages.map(s=>pgChData_(s.r)),complete=real.length>0&&real.every(Boolean);
+    return {p:pgChUltima_(stages.map(s=>pgChData_(s.p))),r:complete?pgChUltima_(real):'',
+      a:!complete&&real.some(Boolean)?'Parcial':pgChUnicos_(stages.map(s=>pgChTexto_(s.a))).join(' / '),
+      f:pgChUnicos_(stages.flatMap(s=>pgChTexto_(s.f).split(/\s+\+\s+/))).join(' + ')};
+  });
+}
 function pgChMetricaChamado_(t,idx) {
   const groups=new Map(),routes=[];
   for(const it of t.items){
@@ -53,17 +64,17 @@ function pgChMetricaChamado_(t,idx) {
     const {specRows,...dims}=attributes,key=JSON.stringify(dims);
     let g=groups.get(key);
     if(!g){
-      g={...dims,qty:0,mapped:0,picked:0,delivered:0,balance:0,coverage:it.stages.map(()=>0),eta:'',partial:false,production:[],targetItems:[]};
+      g={...dims,qty:0,mapped:0,picked:0,delivered:0,balance:0,coverage:it.stages.map(()=>0),eta:'',partial:false,production:[],targetItems:[],stageItems:[]};
       groups.set(key,g);
     }
     g.qty+=it.qty;const label=it.productionStatus.label,prev=g.production.find(x=>x.label===label);if(prev)prev.qty+=it.qty;else g.production.push({label,qty:it.qty});
     ['mapped','picked','delivered'].forEach(k=>g[k]+=Math.min(it.qty,it[k]));
     g.balance+=Math.max(0,it.qty-it.delivered);
     for(let i=0;i<it.coverage.length;i++)g.coverage[i]+=it.coverage[i];
-    g.targetItems.push({qty:it.qty,target:it.target});g.eta=pgChUltima_([g.eta,it.eta]);g.partial=g.partial||it.etaPartial;
+    g.targetItems.push({qty:it.qty,target:it.target});g.stageItems.push(it);g.eta=pgChUltima_([g.eta,it.eta]);g.partial=g.partial||it.etaPartial;
   }
   const delivered=pgChMarcoItens_(routes,'delivery');
-  return {groups:Array.from(groups.values(),g=>{g.target=pgChPrazoResumo_(g.targetItems);delete g.targetItems;return g;}),closed:t.steps['Conclusão']?.r||'',canceled:t.steps.Cancelamento?.r||'',
+  return {stages:pgChDatasEtapas_(t.items),groups:Array.from(groups.values(),g=>{g.target=pgChPrazoResumo_(g.targetItems);g.stages=pgChDatasEtapas_(g.stageItems);delete g.targetItems;delete g.stageItems;return g;}),closed:t.steps['Conclusão']?.r||'',canceled:t.steps.Cancelamento?.r||'',
     delivered,deliverySource:delivered?pgChUnicos_(routes.map(r=>r.source)).join(' + '):'',
     pickDone:pgChMarcoItens_(routes,'pick'),pickDue:pgChMarcoItens_(routes,'formal'),
     pickLate:routes.some(r=>r.late),pickUnverified:routes.some(r=>r.unverified),okrRoutes:routes,pickMaps:pgChUnicos_(routes.flatMap(r=>r.collection.maps)),pickSource:pgChUnicos_(routes.map(r=>r.collection.source)).join(' + '),owner:t.owner||''};
