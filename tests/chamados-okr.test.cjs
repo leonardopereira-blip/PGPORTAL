@@ -5,11 +5,11 @@ const {chOKR,chFilteredTotals,chOKRDestinationRows}=ctx.rules;
 const t={id:'A',n:1,cat:'REENTRADA',created:'2026-11-17',desired:'2026-12-20',closed:'2026-12-18',pickDone:'2026-12-12',delivered:'2026-12-13',brand:'SAS',shipment:'V4',groups:[],totals:{coverage:[]}};
 const f={rule:'fixed',basis:'open',start:'2026-11-01',end:'2026-11-30',asof:'2026-12-31'};
 test('25 dias inclusivos, 26 fora do prazo',()=>{assert.equal(chOKR([t],f).num,1);assert.equal(chOKR([{...t,pickDone:'2026-12-13'}],f).late,1)});
-test('planning posterior, anterior e ausente',()=>{assert.equal(chOKR([{...t,pickDone:'2026-12-20'}],{...f,rule:'standard'}).num,1);assert.equal(chOKR([{...t,desired:'2026-11-20'}],{...f,rule:'standard'}).num,1);assert.equal(chOKR([{...t,desired:''}],{...f,rule:'desired'}).missing,1)});
+test('planning posterior, anterior e ausente',()=>{assert.equal(chOKR([{...t,pickDone:'2026-12-20'}],{...f,rule:'standard'}).num,1);assert.equal(chOKR([{...t,desired:'2026-11-20'}],{...f,rule:'standard'}).num,1);assert.equal(chOKR([{...t,desired:''}],{...f,rule:'desired'}).den,0)});
 test('corte histórico e prazo entre anos',()=>{assert.equal(chOKR([t],{...f,asof:'2026-12-01'}).upcoming,1);assert.equal(chOKR([{...t,created:'2026-12-31',desired:'',pickDone:'2027-01-25'}],{...f,start:'2026-12-01',end:'2026-12-31',asof:'2027-01-31'}).num,1)});
 test('aging por chamado com faixa e acumulado',()=>{const r=chOKR([t,{...t,id:'B',pickDone:'2026-11-26'}],f);assert.equal(r.bands[0].count,1);assert.equal(r.bands[2].count,1);assert.equal(r.bands[2].cum,100);assert.equal(r.delivery,2)});
 test('filtro conjunto não cruza características de rotas diferentes e não duplica chamado',()=>{const g1={printer:'A',cd:'JDI',feature:['Capa dura'],qty:100,mapped:50,picked:50,delivered:0,balance:100,coverage:[50]},g2={printer:'B',cd:'FOR',feature:['Corte e vinco'],qty:30,mapped:30,picked:30,delivered:30,balance:0,coverage:[30]};const r={...t,groups:[g1,g2],totals:{coverage:[80]}};assert.equal(chFilteredTotals(r,{printer:'A',feature:'Corte e vinco'}),null);assert.equal(chFilteredTotals(r,{printer:'A',feature:'Capa dura'}).totals.qty,100);assert.equal(chOKR([r],{...f,printer:'B'}).den,1)});
-test('coleta integral: sem formalização não entra no denominador; atraso na rota não é compensado',()=>{assert.equal(chOKR([{...t,pickDone:'2026-12-03',pickDue:'2026-12-04',pickLate:true}],{...f,rule:'pick'}).late,1);assert.equal(chOKR([{...t,pickDone:'2026-12-03',pickDue:''}],{...f,rule:'pick'}).missing,1)});
+test('coleta integral: sem formalização não entra no denominador; atraso na rota não é compensado',()=>{assert.equal(chOKR([{...t,pickDone:'2026-12-03',pickDue:'2026-12-04',pickLate:true}],{...f,rule:'pick'}).late,1);assert.equal(chOKR([{...t,pickDone:'2026-12-03',pickDue:''}],{...f,rule:'pick'}).den,0)});
 
 test('tiragem pondera classificação integral e exporta atraso, coleta e mapa',()=>{
  const x={...t,totals:{qty:100,coverage:[]},pickDone:'2026-12-03',pickSource:'Mapa',pickMaps:['MP-123456']};
@@ -43,10 +43,43 @@ test('OKR exclui abertos no prazo e contabiliza vencidos abertos como fora, nas 
  const base={...t,created:'2026-11-01',desired:'',pickDone:'',closed:'',totals:{qty:100,coverage:[]}};
  const rows=[{...base,id:'A',pickDone:'2026-11-20'},{...base,id:'B',pickDone:'2026-11-28',totals:{qty:200,coverage:[]}},{...base,id:'C',totals:{qty:300,coverage:[]}},{...base,id:'D',created:'2026-11-20',totals:{qty:400,coverage:[]}}];
  for(const [unit,num,den,late,pending,upcoming] of [['tickets',1,3,2,1,1],['qty',100,600,500,300,400]]){
-   const r=chOKR(rows,{...f,unit,asof:'2026-11-30'});assert.equal(r.num,num);assert.equal(r.den,den);assert.equal(r.late,late);assert.equal(r.pending,pending);assert.equal(r.upcoming,upcoming);assert.equal(r.den,r.num+r.late);assert.equal(r.items[2].status,'Fora do prazo · em aberto');assert.equal(r.items[3].den,0);
+   const r=chOKR(rows,{...f,unit,asof:'2026-11-30'});assert.equal(r.num,num);assert.equal(r.den,den);assert.equal(r.late,late);assert.equal(r.pending,pending);assert.equal(r.upcoming,upcoming);assert.equal(r.den,r.num+r.late);assert.equal(r.items[2].status,'Não coletado');assert.equal(r.items[3].den,0);
  }
 });
 test('aberto no próprio dia do vencimento ainda não está atrasado',()=>{
  const x={...t,pickDone:'',closed:''};const r=chOKR([x],{...f,asof:'2026-12-12'});assert.equal(r.den,0);assert.equal(r.upcoming,1);assert.equal(r.late,0);
  const next=chOKR([x],{...f,asof:'2026-12-13'});assert.equal(next.den,1);assert.equal(next.late,1);assert.equal(next.items[0].days,1);
+});
+
+test('situação de coleta depende apenas da data observada, mesmo sem prazo de comparação',()=>{
+  const base={...t,desired:'',pickDue:'',closed:'',totals:{qty:80,coverage:[]}};
+  const rows=[{...base,id:'A',pickDone:'2026-11-19'},{...base,id:'B',pickDone:''},
+    {...base,id:'C',pickDone:'2026-12-01'},{...base,id:'D',canceled:'2026-11-19'}];
+  for(const rule of ['fixed','standard','desired','pick']){
+    for(const unit of ['tickets','qty']){
+      const opts={...f,rule,unit,asof:'2026-11-30'},result=chOKR(rows,opts),w=unit==='qty'?80:1;
+      assert.deepEqual(Array.from(result.items,r=>r.status),['Coletado','Não coletado','Não coletado']);
+      assert.equal(result.actual,w);assert.equal(result.notCollected,2*w);assert.equal(result.canceled,w);
+      for(const [scope,state] of [['abertos','Não coletado'],['concluidos','Coletado']]){
+        const filtered=chOKR(rows,{...opts,scope});
+        assert.equal(filtered.items.length,scope==='abertos'?2:1);
+        assert.ok(filtered.items.every(r=>r.status===state));
+      }
+    }
+  }
+  const earlier=chOKR([{...base,pickDone:'2026-11-16'}],f);
+  assert.equal(earlier.items[0].actual,'2026-11-16');assert.equal(earlier.items[0].status,'Coletado');
+  assert.equal(earlier.den,0);assert.equal(earlier.items[0].age,null);
+});
+test('data integral de um destino aparece mesmo quando outro CD do chamado aguarda coleta',()=>{
+  const group=cd=>({printer:'A',cd,qty:10,coverage:[]});
+  const route=(cd,pick)=>({cd,printer:'A',qty:10,pick,collection:{parts:[{qty:10}],events:[]}});
+  const x={...t,groups:[group('FOR'),group('JDI')],totals:{qty:20,coverage:[]},
+    okrRoutes:[route('JDI','2026-11-20'),route('FOR','')]};
+  const opts={...f,rule:'pick'},d=chOKR([x],opts),rows=chOKRDestinationRows(d,opts,[x]);
+  assert.equal(d.items[0].status,'Não coletado');
+  assert.deepEqual(Array.from(rows,r=>[r.cds[0],r.actual,r.localStatus,r.status]),[
+    ['FOR','','Não coletado','Não coletado'],['JDI','2026-11-20','Coletado','Não coletado']]);
+  x.okrRoutes[1].pick='2026-11-23';
+  assert.equal(chOKR([x],opts).items[0].status,'Coletado');
 });

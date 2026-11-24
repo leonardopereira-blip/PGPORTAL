@@ -158,9 +158,13 @@
     const targets=groups.filter(g=>g.target).map(g=>g.target),pending=targets.filter(x=>x.next).sort((a,b)=>a.next.localeCompare(b.next));const target=targets.length?{deadline:targets.map(x=>x.deadline).sort().pop(),next:pending[0]?.next||'',nextStage:pending[0]?.nextStage??-1}:t.target;
     return {...t,groups,totals,target,production:Array.from(by,([label,qty])=>({label,qty})).sort((a,b)=>b.qty-a.qty),eta:groups.map(g=>g.eta).filter(Boolean).sort().pop()||'',partial:groups.some(g=>g.partial)};
   }
+  function chAgingDays(created,date){
+    const days=chDays(created,date);
+    return days!==null&&days>=0?days:null;
+  }
   function chAging(t,asof){
     const delivered=t.delivered&&t.delivered<=asof?t.delivered:'';
-    const n=chDays(t.created,delivered);return n!==null&&n>=0?n:null;
+    return chAgingDays(t.created,delivered);
   }
   function chMatches(t,f,asof){
     if(['cat','shipment','brand'].some(k=>!chHas(f[k],t[k])))return false;
@@ -177,12 +181,13 @@
     if(!(qty>0))return '';let done=0;
     for(const e of (events||[]).filter(e=>e.date&&e.date<=asof&&e.qty>0).sort((a,b)=>a.date.localeCompare(b.date))){done+=e.qty;if(done>=qty)return e.date;}return '';
   }
+  const chStatusColeta=date=>date?'Coletado':'Não coletado';
   function chPickEvidence(t,asof){
     if(!Array.isArray(t.okrRoutes)||!t.okrRoutes.length)return {due:t.pickDue||'',actual:t.pickDone&&t.pickDone<=asof?t.pickDone:'',late:!!t.pickLate&&!!t.pickDone&&t.pickDone<=asof,invalid:!!t.pickUnverified&&!!t.pickDone&&t.pickDone<=asof,days:null,source:t.pickSource||'',maps:t.pickMaps||[]};
     const last=a=>a.filter(Boolean).sort().pop()||'',rs=t.okrRoutes.filter(r=>r.qty>0),out=[];
     for(const r of rs){
       const parts=r.collection?.parts||[],events=r.collection?.events||[],dues=[...new Set(parts.map(p=>p.due).filter(Boolean))];
-      const formal=parts.length&&parts.every(p=>p.due)?last(dues):'',actual=chIntegral(events,r.qty,asof);
+      const formal=parts.length&&parts.every(p=>p.due)?last(dues):'',actual=chIntegral(events,r.qty,asof)||(r.pick&&r.pick<=asof?r.pick:'');
       let invalid=!formal,late=false,days=0;
       if(formal&&dues.length>1){
         // Consolida por kit; um mesmo evento não pode comprovar dois compromissos.
@@ -202,31 +207,33 @@
       return {...scoped,groups,cd,okrRoutes:(t.okrRoutes||[]).filter(r=>(r.cd||'')===cd&&groups.some(g=>(g.printer||'')===(r.printer||'')))};
     });
   }
-  function chClassify(t,f,pick,due,canceled){
-    const actual=pick.actual&&pick.actual<=f.asof&&(!t.created||pick.actual>=t.created)?pick.actual:'';
-    if(canceled)return {actual,status:'Cancelado · excluído',days:null,den:0,num:0};
-    if(pick.actual&&!actual||!t.created||!due||due<t.created||f.rule==='pick'&&pick.invalid)return {actual,status:'Sem data/evidência válida',days:null,den:0,num:0};
+  function chPrazoColeta(t,f,pick,due){
+    const actual=pick.actual;
+    const excluded={days:null,den:0,num:0,upcoming:false};
+    if(!t.created||!due||due<t.created||actual&&actual<t.created||f.rule==='pick'&&actual&&pick.invalid)return excluded;
     const days=Math.max(0,chDays(due,actual||f.asof)||0,f.rule==='pick'?(pick.days||0):0);
-    if(actual){const late=actual>due||(f.rule==='pick'&&pick.late);return {actual,status:late?'Fora do prazo':'No prazo',days,den:1,num:late?0:1};}
-    if(due>=f.asof&&!(f.rule==='pick'&&(pick.late||pick.days>0)))return {actual,status:'A vencer',days:null,den:0,num:0};
-    return {actual,status:'Fora do prazo · em aberto',days,den:1,num:0};
+    if(!actual&&due>=f.asof&&!(f.rule==='pick'&&(pick.late||pick.days>0)))return {...excluded,upcoming:true};
+    const onTime=actual&&actual<=due&&!(f.rule==='pick'&&pick.late);
+    return {days,den:1,num:onTime?1:0,upcoming:false};
   }
   function chOKRDestinationRows(d,f,rows){
     const source=new Map(rows.map(t=>[t.id,t])),out=[];
     for(const item of d.items){
       const t=source.get(item.id),scoped=t&&chFilteredTotals(t,f),parts=scoped?chDestinationRows(scoped):[];
       if(!parts.length){out.push(item);continue;}
-      const hasRoutes=parts.some(r=>r.okrRoutes?.length);
+      const useTicketDate=!t.okrRoutes?.length && new Set((t.groups||[]).map(g=>g.cd||'')).size<=1;
       parts.forEach((r,k)=>{
-        const qty=Number(r.totals?.qty)||0,pick=hasRoutes?chPickEvidence({...r,pickDue:'',pickDone:'',pickLate:false,pickUnverified:false,pickMaps:[],pickSource:''},f.asof):{actual:item.actual,source:item.pickSource,maps:item.maps,due:item.due,late:false};
-        const w=f.unit==='qty'?qty:k===0?1:0,due=f.rule==='pick'?pick.due:item.due,local=chClassify(r,f,pick,due,item.status.startsWith('Cancelado'));
-        out.push({...item,qty,printers:[...new Set((r.groups||[]).map(g=>g.printer).filter(Boolean))],cds:[r.cd||''],due,actual:local.actual,pick:local.actual,pickSource:pick.source,maps:pick.maps,age:chDays(item.created,local.actual),days:local.days,localStatus:local.status,weight:w,den:item.den?w:0,num:item.num?w:0});
+        const qty=Number(r.totals?.qty)||0;
+        const pick=useTicketDate?chPickEvidence(t,f.asof):chPickEvidence({...r,pickDue:'',pickDone:'',pickLate:false,pickUnverified:false,pickMaps:[],pickSource:''},f.asof);
+        const w=f.unit==='qty'?qty:k===0?1:0,due=f.rule==='pick'?pick.due:item.due;
+        const local=chPrazoColeta(r,f,pick,due);
+        out.push({...item,qty,printers:[...new Set((r.groups||[]).map(g=>g.printer).filter(Boolean))],cds:[r.cd||''],due,actual:pick.actual,pick:pick.actual,pickSource:pick.source,maps:pick.maps,age:chAgingDays(item.created,pick.actual),days:local.days,localStatus:chStatusColeta(pick.actual),weight:w,den:item.den?w:0,num:item.num?w:0});
       });
     }
     return out;
   }
   function chOKR(rows,f){
-    const out={cohort:0,den:0,num:0,late:0,pending:0,upcoming:0,missing:0,canceled:0,actual:0,delivery:0,missingActual:0,ages:[],items:[]};
+    const out={cohort:0,den:0,num:0,late:0,pending:0,upcoming:0,canceled:0,actual:0,delivery:0,notCollected:0,ages:[],items:[]};
     const inside=v=>!!v&&(!f.start||v>=f.start)&&(!f.end||v<=f.end);
     for(const t of rows){
       if(!chMatches(t,f,f.asof)||t.created&&t.created>f.asof)continue;
@@ -236,18 +243,18 @@
       const due=f.rule==='fixed'?fixed:f.rule==='desired'?t.desired:f.rule==='pick'?pick.due:fixed?[fixed,t.desired].filter(Boolean).sort().pop():'';
       const canceled=!!(t.canceled&&t.canceled<=f.asof)||/CANCEL/i.test(t.status||'')&&!t.canceled;
       if(f.basis==='open'?!inside(t.created):due?!inside(due):!!t.created&&!inside(t.created))continue;
-      const result=chClassify(t,f,pick,due,canceled),{actual,status,days}=result;
-      if(!canceled&&(f.scope==='abertos'&&actual||f.scope==='concluidos'&&!actual))continue;
-      out.cohort+=w;const age=chDays(t.created,actual);
-      if(canceled)out.canceled+=w;
-      else{
-        if(actual){out.actual+=w;if(age!==null&&age>=0){out.ages.push({age,w});out.delivery+=w;}}
-        out.den+=result.den*w;out.num+=result.num*w;
-        if(status==='Fora do prazo')out.late+=w;
-        else if(status==='Fora do prazo · em aberto'){out.late+=w;out.pending+=w;out.missingActual+=w;}
-        else if(status==='A vencer')out.upcoming+=w;
-        else if(status==='Sem data/evidência válida')out.missing+=w;
-      }
+      if(canceled){out.canceled+=w;continue;}
+      const actual=pick.actual,status=chStatusColeta(actual);
+      if(f.scope==='abertos'&&actual||f.scope==='concluidos'&&!actual)continue;
+      const result=chPrazoColeta(t,f,pick,due),days=result.days,age=chAgingDays(t.created,actual);
+      out.cohort+=w;
+      if(actual){
+        out.actual+=w;
+        if(age!==null){out.ages.push({age,w});out.delivery+=w;}
+      }else out.notCollected+=w;
+      out.den+=result.den*w;out.num+=result.num*w;
+      if(result.den&&!result.num){out.late+=w;if(!actual)out.pending+=w;}
+      if(result.upcoming)out.upcoming+=w;
       out.items.push({id:t.id,n:t.n,cat:t.cat,brand:t.brand,shipment:t.shipment,owner:t.owner||'',qty,totalQty:Number(t.totals?.qty)||qty,created:t.created,due,actual,pick:actual,pickSource:pick.source,maps:pick.maps,age,days,status,weight:w,den:result.den*w,num:result.num*w,printers:[...new Set((scoped.groups||[]).map(g=>g.printer).filter(Boolean))],cds:[...new Set((scoped.groups||[]).map(g=>g.cd).filter(Boolean))]});
     }
     let sum=0;out.bands=chBands.map(([lo,hi])=>{const count=out.ages.filter(x=>x.age>=lo&&x.age<=hi).reduce((a,x)=>a+x.w,0);sum+=count;return {label:hi===Infinity?'61+':lo+'–'+hi,count,pct:chPct(count,out.delivery),cum:chPct(sum,out.delivery)};});
@@ -328,7 +335,7 @@
       '<label>Início do corte<input type="date" id="ch-okr-start" value="'+first+'"></label><label>Fim do corte<input type="date" id="ch-okr-end" value="'+last+'"></label>'+
       '<label>Realizado observado até<input type="date" id="ch-okr-asof" value="'+today+'" max="'+today+'"></label>'+
       '<label>Categoria<select id="ch-okr-cat"><option value="">Todos</option><option value="REENTRADA" selected>REENTRADA</option></select></label><label>Marca<select id="ch-okr-brand"></select></label><label>Envio<select id="ch-okr-shipment"><option value="">Todos</option><option value="V1" selected>V1</option></select></label>'+
-      '<label>Situação<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option></select></label></div>'+
+      '<label>Coleta do chamado<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Não coletado</option><option value="concluidos">Coletado</option></select></label></div>'+
       '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note">Base: coletados e vencidos em aberto. Pendentes ainda no prazo não entram na aderência.</p></section>'+
       '<div id="ch-okr-kpis" class="ch-grid"></div><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de coleta</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Baixar base CSV</button><small id="ch-okr-count"></small></div><div id="ch-okr-rows"></div></section>';
       el('okr').querySelectorAll('input,select').forEach(x=>x.addEventListener('change',renderOKR));
@@ -343,13 +350,13 @@
     f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
     state.okrExport=null;el('okr-export').disabled=true;if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
     const d=chOKR(re,f),display=chOKRDestinationRows(d,f,re),unit=f.unit==='qty'?'Tiragem':'Chamados';state.okrExport={d,f,display};el('okr-export').disabled=false;el('okr-count').textContent=num(d.items.length)+' chamados · '+num(display.length)+' linhas por destino';const pct=v=>v===null?'—':num(Math.round(v*10)/10)+'%';
-    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / base apurada',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Dos quais, vencidos em aberto',num(d.pending)],['A vencer (fora da apuração)',num(d.upcoming)],['Sem data / evidência válida',num(d.missing)],['Cancelados excluídos',num(d.canceled)],['Coletados',num(d.actual)],['Aging médio de coleta',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Aderência'?(d.pct===null?'navy':d.pct>=90?'green':'yellow'):k==='Fora do prazo'||k.startsWith('Dos quais')?'orange':k==='Meta'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
+    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / base apurada',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Dos quais, vencidos em aberto',num(d.pending)],['A vencer (fora da apuração)',num(d.upcoming)],['Cancelados excluídos',num(d.canceled)],['Coletados',num(d.actual)],['Não coletados',num(d.notCollected)],['Aging médio de coleta',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Aderência'?(d.pct===null?'navy':d.pct>=90?'green':'yellow'):k==='Fora do prazo'||k.startsWith('Dos quais')?'orange':k==='Meta'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
     el('okr-aging').innerHTML=table(['Dias',unit,'% da faixa','% acumulado'],d.bands.map(b=>[esc(b.label),num(b.count),pct(b.pct),pct(b.cum)]))+'<p class="ch-muted">Denominador: '+num(d.delivery)+' '+unit.toLowerCase()+' com coleta integral e aging válido.</p>';
-    el('okr-rows').innerHTML=table(['Chamado','Categoria','Marca','Envio','Gráfica','CD','Tiragem','Abertura','Prazo','Realizado','Dias de atraso','Origem coleta','Mapa de saída','Aging','Apuração do destino','Apuração do chamado'],display.map(t=>['<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.brand),cell(t.shipment),cell(t.printers.join(' | ')),cell(t.cds.map(cdLabel).join(' | ')),num(t.qty),dt(t.created),dt(t.due),collectionCell(t,t.actual),t.days===null?'—':num(t.days),cell(t.pickSource),cell(t.maps.join(' | ')),t.age===null?'—':num(t.age),cell(t.localStatus||t.status),cell(t.status)]),'Nenhum chamado no recorte.');
+    el('okr-rows').innerHTML=table(['Chamado','Categoria','Marca','Envio','Gráfica','CD','Tiragem','Abertura','Prazo','Realizado','Dias de atraso','Origem coleta','Mapa de saída','Aging','Coleta do destino','Coleta do chamado'],display.map(t=>['<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.brand),cell(t.shipment),cell(t.printers.join(' | ')),cell(t.cds.map(cdLabel).join(' | ')),num(t.qty),dt(t.created),dt(t.due),collectionCell(t,t.actual),t.days===null?'—':num(t.days),cell(t.pickSource),cell(t.maps.join(' | ')),t.age===null?'—':num(t.age),cell(t.localStatus||t.status),cell(t.status)]),'Nenhum chamado no recorte.');
   }
   function exportOKR(){
     const x=state.okrExport;if(!x)return;
-    const {d,f,display}=x,headers=['Chamado','Categoria','Marca','Envio','Responsável PG','Gráfica','CD','Tiragem filtrada','Tiragem total','Abertura','Prazo','Realizado','Dias de atraso','Origem da coleta','Mapa de saída','Aging','Apuração do destino','Apuração do chamado','Peso','Denominador','Numerador','Critério','Unidade','Corte início','Corte fim','Observado até'];
+    const {d,f,display}=x,headers=['Chamado','Categoria','Marca','Envio','Responsável PG','Gráfica','CD','Tiragem filtrada','Tiragem total','Abertura','Prazo','Realizado','Dias de atraso','Origem da coleta','Mapa de saída','Aging','Coleta do destino','Coleta do chamado','Peso','Denominador','Numerador','Critério','Unidade','Corte início','Corte fim','Observado até'];
     const value=v=>{if(v===null||v===undefined)return '""';let s=String(v);if(typeof v==='string'&&/^[\s]*[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
     const date=v=>v?dt(v):'';
     const lines=display.map(t=>[t.n,t.cat,t.brand,t.shipment,t.owner,t.printers.join(' | '),t.cds.map(cdLabel).join(' | '),t.qty,t.totalQty,date(t.created),date(t.due),date(t.actual),t.days,t.pickSource,t.maps.join(' | '),t.age,t.localStatus||t.status,t.status,t.weight,t.den,t.num,f.rule,f.unit,date(f.start),date(f.end),date(f.asof)]);
