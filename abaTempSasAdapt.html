@@ -81,7 +81,7 @@
   <div class="pg-sas-body scroller">
     <div class="pg-sas-content">
       <p id="statusTempSasAdapt" role="status" aria-live="polite" class="pg-sas-status">Aguardando atualização.</p>
-      <div class="pg-sas-filterbar" style="padding:0 0 20px;justify-content:flex-start"><label>Janela <select id="pgTempGlobalJanela" class="pg-sas-search" style="width:auto" onchange="window.pgFiltrarGlobalTempSasAdapt()"><option value="">Todas</option><option>Janela 1</option><option>Janela 2</option><option>Janela 3</option></select></label><label>CD <select id="pgTempGlobalCD" class="pg-sas-search" style="width:auto" onchange="window.pgFiltrarGlobalTempSasAdapt()"><option value="">Todos</option><option>CD JDI</option><option>CD FOR</option></select></label><label>Situação <select id="pgTempGlobalStatus" class="pg-sas-search" style="width:auto" onchange="window.pgFiltrarGlobalTempSasAdapt()"><option value="">Geral</option><option value="pendente">Pendente</option><option value="concluido">Concluído</option></select></label><span id="pgTempNotaFiltro" class="pg-sas-panel-caption"></span></div>
+      <div class="pg-sas-filterbar" style="padding:0 0 20px;justify-content:flex-start"><label>Janela <select id="pgTempGlobalJanela" class="pg-sas-search" style="width:auto" onchange="window.pgFiltrarGlobalTempSasAdapt()"><option value="">Todas</option><option>Janela 1</option><option>Janela 2</option><option>Janela 3</option></select></label><label>CD <select id="pgTempGlobalCD" class="pg-sas-search" style="width:auto" onchange="window.pgFiltrarGlobalTempSasAdapt()"><option value="">Todos</option><option>CD JDI</option><option>CD FOR</option></select></label><label>Situação <select id="pgTempGlobalStatus" class="pg-sas-search" style="width:auto" onchange="window.pgFiltrarGlobalTempSasAdapt()"><option value="">Geral</option><option value="pendente">Pendente</option><option value="concluido">Concluído</option></select></label><label>Mapa solicitado <select id="pgTempGlobalMapa" class="pg-sas-search" style="width:auto" title="Sim: etapa concluída integralmente. Não: parcial, pendente ou sem confirmação." onchange="window.pgFiltrarGlobalTempSasAdapt()"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option></select></label><label>Coletado <select id="pgTempGlobalColeta" class="pg-sas-search" style="width:auto" title="Sim: etapa concluída integralmente. Não: parcial, pendente ou sem confirmação." onchange="window.pgFiltrarGlobalTempSasAdapt()"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option></select></label><label>Entrega <select id="pgTempGlobalEntrega" class="pg-sas-search" style="width:auto" title="Sim: etapa concluída integralmente. Não: parcial, pendente ou sem confirmação." onchange="window.pgFiltrarGlobalTempSasAdapt()"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option></select></label><label>Internalização <select id="pgTempGlobalInternalizacao" class="pg-sas-search" style="width:auto" title="Sim: etapa concluída integralmente. Não: parcial, pendente ou sem confirmação." onchange="window.pgFiltrarGlobalTempSasAdapt()"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option></select></label><span id="pgTempNotaFiltro" class="pg-sas-panel-caption"></span></div>
       <div class="pg-sas-kpis" aria-label="Indicadores da operação">
         <section class="pg-sas-kpi pg-sas-kpi--base" aria-labelledby="pgTempLabelTotal">
           <h3 id="pgTempLabelTotal" class="pg-sas-kpi-label">Tiragem total</h3>
@@ -353,19 +353,26 @@
     if(!original)return;
     function val(id){var e=el(id);return e&&e.value||'';}
     var j=val('pgTempGlobalJanela'),cd=val('pgTempGlobalCD'),st=val('pgTempGlobalStatus');
+    var etapas=[['mapaSolicitado',val('pgTempGlobalMapa')],['coletado',val('pgTempGlobalColeta')],['entregue',val('pgTempGlobalEntrega')],['internalizado',val('pgTempGlobalInternalizacao')]];
+    var etapasAtivas=etapas.some(function(e){return Boolean(e[1]);});
+    function etapaConfere(r,e){
+      if(!e[1])return true;
+      var concluida=Number(r.total)>0&&r[e[0]]!=null&&Number(r[e[0]])>=Number(r.total);
+      return e[1]==='sim'?concluida:!concluida;
+    }
     if(original.tiragemJanelas==null){desenhar(original);return;}
     var linhas=(original.athosPorSku||[]).filter(function(r){
-      return (!j||j===r.janela)&&(!cd||cd===r.destino)&&(!st||(st==='concluido'?r.total>0&&r.entregue>=r.total:r.entregue<r.total));
+      return (!j||j===r.janela)&&(!cd||cd===r.destino)&&(!st||(st==='concluido'?r.total>0&&r.entregue>=r.total:r.entregue<r.total))&&etapas.every(function(e){return etapaConfere(r,e);});
     });
-    var ativos=Boolean(j||cd||st),rJ=new Map(),rCD=new Map(),rJC=new Map(),tot={total:0,mapaSolicitado:0,coletado:0,entregue:0,internalizado:null};
+    var ativos=Boolean(j||cd||st||etapasAtivas),rJ=new Map(),rCD=new Map(),rJC=new Map(),tot={total:0,mapaSolicitado:0,coletado:0,entregue:0,internalizado:null};
     function key(r){return JSON.stringify([r.janela,r.kit,r.sku,r.destino]);}
     var keys=new Set(linhas.map(key));
     function acum(r,x){['total','mapaSolicitado','coletado','entregue','aConferir','saldo'].forEach(function(k){r[k]=(r[k]||0)+(x[k]||0);});if(x.internalizado!=null)r.internalizado=(r.internalizado||0)+x.internalizado;}
     function add(m,k,init,x){if(!m.has(k))m.set(k,Object.assign({internalizado:null},init));acum(m.get(k),x);}
     linhas.forEach(function(r){var fonte=(original.entregasPorJanela||[]).find(function(x){return x.titulo===r.janela;})||{};acum(tot,r);add(rJ,r.janela,{titulo:r.janela,id:fonte.id,fonteIds:fonte.fonteIds},r);add(rCD,r.destino,{destino:r.destino,coletaFora:0,entregaFora:0},r);add(rJC,r.janela+'|'+r.destino,{titulo:r.janela,destino:r.destino},r);});
-    var diver=(original.divergenciasMapa||[]).filter(function(r){return !j&&!st&&(!cd||r.destino===cd);});
+    var diver=(original.divergenciasMapa||[]).filter(function(r){return !j&&!st&&!etapasAtivas&&(!cd||r.destino===cd);});
     diver.forEach(function(r){if(!rCD.has(r.destino))rCD.set(r.destino,{destino:r.destino,total:0,mapaSolicitado:0,coletado:0,entregue:0,internalizado:null,coletaFora:0,entregaFora:0});var x=rCD.get(r.destino);x.coletaFora+=r.coletado||0;x.entregaFora+=r.entregue||0;});
-    var trilha=(original.trilhaMapa||[]).filter(function(r){return r.janela==='Sem janela'?(!j&&!st&&(!cd||r.destino===cd)):keys.has(key(r));});
+    var trilha=(original.trilhaMapa||[]).filter(function(r){return r.janela==='Sem janela'?(!j&&!st&&!etapasAtivas&&(!cd||r.destino===cd)):keys.has(key(r));});
     desenhar(Object.assign({},original,{filtroAtivo:ativos,tiragemJanelas:tot.total,mapaSolicitado:tot.mapaSolicitado,coletadoAthos:tot.coletado,entregueAthos:tot.entregue,internalizadoAthos:tot.internalizado,athosPorSku:linhas,entregasPorJanela:Array.from(rJ.values()).sort(function(a,b){return a.titulo.localeCompare(b.titulo);}),expedicoesAthos:Array.from(rCD.values()),janelasPorCD:Array.from(rJC.values()),trilhaMapa:trilha,divergenciasMapa:diver}));
   };
   window.pgCarregarTempSasAdapt = function(forcar) {
