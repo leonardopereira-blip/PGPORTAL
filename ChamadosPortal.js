@@ -157,7 +157,7 @@ function pgChJsonBuild_(before){
  Object.keys(PG_CH_FONTES).filter(k=>k!=='map').forEach(k=>{const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;if(k==='spg'&&(!counts[k]||(before&&counts[k]<before.counts[k]*0.8)))throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização.');});
  const map=pgChMapaFonte_(before&&before.counts.map);datasets.map=map.rows;links.map=map.url;counts.map=map.rows.length;datasets.sla=getMatrizSLAPortal();
  const tp=pgChLerTransportes_();datasets.tp=tp.rows;links.tp=tp.url;counts.tp=tp.rows.length;
- const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:9,rows:model.summaries,phases:PG_CH_ETAPAS};
+ const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:10,rows:model.summaries,phases:PG_CH_ETAPAS};
  if(map.stale)result.notice='Mapa: última leitura íntegra em '+new Date(map.at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+'. Atualização automática pendente.';
  if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');return {result,tickets:model.tickets};
 }
@@ -292,6 +292,7 @@ function salvarColetaManualChamadoPortal(id,cd,date){
  if(!t||/CANCEL/i.test(t.status)||!t.created||d<t.created)throw new Error('Chamado cancelado, inexistente ou data anterior à abertura.');
  const routes=(t.okrRoutes||[]).filter(r=>pgChCDNome_(r.cd)===cd&&r.qty>0);
  if(!routes.length)throw new Error('Destino não localizado neste chamado.');
+ if(routes.some(r=>r.delivery&&d>r.delivery))throw new Error('A coleta não pode ser posterior à entrega.');
  if(routes.every(r=>r.pick))throw new Error('O destino já tem coleta integral registrada.');
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
@@ -315,7 +316,7 @@ function pgChAplicarColetasResumo_(s,manual){
  for(const t of s.rows||[]){
   let changed=false;
   for(const r of t.okrRoutes||[]){
-   const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(r.cd)]));if(!pgChComplementoManual_(r.collection,r.qty,edit))continue;
+   const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(r.cd)]));if(!edit||!pgChDataRealChamado_(edit.date,t.created)||r.delivery&&edit.date>r.delivery||!pgChComplementoManual_(r.collection,r.qty,edit))continue;
    changed=true;r.pick=r.collection.date;const prev=r.coverage||[];
    const {specRows,...dims}=r.dimensions||{},g=(t.groups||[]).find(g=>Object.keys(dims).every(k=>JSON.stringify(g[k])===JSON.stringify(dims[k])));
    const delta=Math.max(0,r.qty-(r.picked||0));t.totals.picked+=delta;if(g)g.picked+=delta;r.picked=r.qty;
@@ -328,7 +329,7 @@ function pgChAplicarColetasResumo_(s,manual){
  }
 }
 function pgChAplicarColetasDetalhe_(t,manual){
- for(const it of t.items||[]){const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(it.cd)]));if(!pgChComplementoManual_(it.collection,it.qty,edit))continue;
+ for(const it of t.items||[]){const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(it.cd)])),delivery=pgChDataIntegral_(it.maps||[],it.qty,'delivery','delivered');if(!edit||!pgChDataRealChamado_(edit.date,t.created)||delivery&&edit.date>delivery||!pgChComplementoManual_(it.collection,it.qty,edit))continue;
   const delta=Math.max(0,it.qty-Math.min(it.qty,it.picked));t.totals.picked+=delta;it.picked=it.qty;
   for(const k of [0,1,2,3,4,5,6,10]){const diff=Math.max(0,it.qty-(it.coverage[k]||0));t.totals.coverage[k]+=diff;it.coverage[k]=it.qty;it.stages[k].units=it.qty;}
   it.stages[10].r=it.collection.date;it.stages[10].f=it.collection.source;it.productionStatus={label:it.delivered>=it.qty?'Entregue integralmente':'Em trânsito',source:'Manual'};

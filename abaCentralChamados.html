@@ -183,11 +183,12 @@
   }
   const chStatusColeta=date=>date?'Coletado':'Não coletado';
   function chPickEvidence(t,asof){
-    if(!Array.isArray(t.okrRoutes)||!t.okrRoutes.length)return {due:t.pickDue||'',actual:t.pickDone&&t.pickDone<=asof?t.pickDone:'',late:!!t.pickLate&&!!t.pickDone&&t.pickDone<=asof,invalid:!!t.pickUnverified&&!!t.pickDone&&t.pickDone<=asof,days:null,source:t.pickSource||'',maps:t.pickMaps||[]};
+    const valid=date=>!!date&&date<=asof&&(!t.created||date>=t.created);
+    if(!Array.isArray(t.okrRoutes)||!t.okrRoutes.length)return {due:t.pickDue||'',actual:valid(t.pickDone)?t.pickDone:'',late:!!t.pickLate&&valid(t.pickDone),invalid:!!t.pickUnverified&&valid(t.pickDone),days:null,source:t.pickSource||'',maps:t.pickMaps||[]};
     const last=a=>a.filter(Boolean).sort().pop()||'',rs=t.okrRoutes.filter(r=>r.qty>0),out=[];
     for(const r of rs){
-      const parts=r.collection?.parts||[],events=r.collection?.events||[],dues=[...new Set(parts.map(p=>p.due).filter(Boolean))];
-      const formal=parts.length&&parts.every(p=>p.due)?last(dues):'',actual=chIntegral(events,r.qty,asof)||(r.pick&&r.pick<=asof?r.pick:'');
+      const parts=r.collection?.parts||[],events=(r.collection?.events||[]).filter(e=>valid(e.date)),dues=[...new Set(parts.map(p=>p.due).filter(Boolean))];
+      const formal=parts.length&&parts.every(p=>p.due)?last(dues):'',actual=chIntegral(events,r.qty,asof)||(valid(r.pick)?r.pick:'');
       let invalid=!formal,late=false,days=0;
       if(formal&&dues.length>1){
         // Consolida por kit; um mesmo evento não pode comprovar dois compromissos.

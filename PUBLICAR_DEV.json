@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-11-24T10:56:22.935Z",
-  "motivo": "Sincronizar o Apps Script antes da correção dos vínculos de produção e coleta de Chamados."
+  "solicitado_em": "2026-11-24T11:03:00Z",
+  "motivo": "Corrigir vínculos explícitos e datas reais da Central de Chamados, sem misturar produção principal."
 }

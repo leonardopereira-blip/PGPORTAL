@@ -68,8 +68,8 @@ test('situação de coleta depende apenas da data observada, mesmo sem prazo de 
     }
   }
   const earlier=chOKR([{...base,pickDone:'2026-11-16'}],f);
-  assert.equal(earlier.items[0].actual,'2026-11-16');assert.equal(earlier.items[0].status,'Coletado');
-  assert.equal(earlier.den,0);assert.equal(earlier.items[0].age,null);
+  assert.equal(earlier.items[0].actual,'');assert.equal(earlier.items[0].status,'Não coletado');
+  assert.equal(earlier.den,1);assert.equal(earlier.items[0].age,null);
 });
 test('data integral de um destino aparece mesmo quando outro CD do chamado aguarda coleta',()=>{
   const group=cd=>({printer:'A',cd,qty:10,coverage:[]});

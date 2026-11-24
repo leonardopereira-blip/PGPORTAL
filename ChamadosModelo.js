@@ -253,16 +253,22 @@ function pgChIndiceTransportes_(rows) {
   return index;
 }
 
-function pgChDatasMapa_(transport,originalPick,originalDelivery) {
-  const dates={pick:originalPick,delivery:originalDelivery,tpPickRow:undefined,tpDeliveryRow:undefined};
-  if(!transport)return dates;
-  const limit=transport.delivery||originalDelivery;
-  const pick=transport.picks.find(p=>!limit || p.date<=limit);
-  if(pick){dates.pick=pick.date;dates.tpPickRow=pick.row;}
-  if(transport.delivery && (!dates.pick || dates.pick<=transport.delivery)){
-    dates.delivery=transport.delivery;
-    dates.tpDeliveryRow=transport.deliveryRow;
+function pgChDataRealChamado_(value,created) {
+  const date=pgChData_(value);
+  return date && (!created || date>=created)?date:'';
+}
+function pgChDatasMapa_(transport,originalPick,originalDelivery,created) {
+  const valid=v=>pgChDataRealChamado_(v,created);
+  const dates={pick:valid(originalPick),delivery:valid(originalDelivery),tpPickRow:undefined,tpDeliveryRow:undefined};
+  if(transport){
+    const tpDelivery=valid(transport.delivery),limit=tpDelivery||dates.delivery;
+    const pick=transport.picks.find(p=>valid(p.date) && (!limit || p.date<=limit));
+    if(pick){dates.pick=pick.date;dates.tpPickRow=pick.row;}
+    if(tpDelivery && (!dates.pick || dates.pick<=tpDelivery)){
+      dates.delivery=tpDelivery;dates.tpDeliveryRow=transport.deliveryRow;
+    }
   }
+  if(dates.pick && dates.delivery && dates.pick>dates.delivery){dates.pick='';dates.tpPickRow=undefined;}
   return dates;
 }
 
@@ -285,8 +291,10 @@ function pgChModelo_(dados) {
         edition:r.edition,why:r.why,obs:r.obs,reason:r.reason,steps:{},issues:[],panel:[],items:[],alerts:[],refs:[],_groups:new Map()};
       tickets.set(id,t); pgChAdd_(numeros,String(r.n),t);
     }
+    const opening=pgChData_(r.created);
+    if(opening&&(!t.created||opening<t.created))t.created=opening;
     if(r.legacy&&!/CONCLU|ENTREGUE/.test(r.status))t.status=r.status;
-    const refs = pgChTexto_(r.map).match(/(?:MP-)?\d{6}(?=-|\b)/gi) || [];
+    const refs = pgChTexto_(r.map).toUpperCase().match(/(?:MP-)?\d{6}(?:-[A-Z0-9]+)*/g) || [];
     refs.forEach(code=>pgChAdd_(mapaRefs,code.replace(/^MP-/i,''),t));
     if (r.map && !t.refs.includes(r.map)) t.refs.push(r.map);
     if (r.issue && !t.issues.includes(r.issue)) t.issues.push(r.issue);
@@ -313,9 +321,10 @@ function pgChModelo_(dados) {
     }
     it.qty+=qty; it.rows.push(r.row);
     if (r.kit && !it.kits.includes(r.kit)) it.kits.push(r.kit);
+    const real=pgChDatasMapa_(null,r.pick,r.delivery,t.created);
     it.spg.push({q:qty,legacy:!!r.legacy,cut:r.cut,kit:r.kit,stock:pgChQtd_(r.stock),sub:pgChQtd_(r.sub),oc:r.oc,ocStatus:r.ocStatus,nf:r.nf,
-      formal:pgChData_(r.formal),pickP:pgChData_(r.pickPlan),pick:pgChData_(r.pick),deliveryP:pgChData_(r.deliveryPlan),
-      delivery:pgChData_(r.delivery),produced:pgChData_(r.produced),cost:pgChData_(r.cost),costP:pgChData_(r.costPlan),ocOpen:pgChData_(r.ocOpen),ocDone:pgChData_(r.ocDone),row:r.row});
+      formal:pgChData_(r.formal),pickP:pgChData_(r.pickPlan),pick:real.pick,deliveryP:pgChData_(r.deliveryPlan),
+      delivery:real.delivery,produced:pgChData_(r.produced),cost:pgChData_(r.cost),costP:pgChData_(r.costPlan),ocOpen:pgChData_(r.ocOpen),ocDone:pgChData_(r.ocDone),row:r.row});
   }
   for (const group of lotes.values()) {
     const {t,r}=group[0];
@@ -370,18 +379,12 @@ function pgChModelo_(dados) {
     const raw=pgChUnicos_([m.n,m.nCol,m.nInc].filter(v=>v && !/^(0|-|não|false)$/i.test(v)));
     const ns=pgChUnicos_(raw.flatMap(v=>String(v).match(/\b\d+\b/g)||[]));
     const num=(code.match(/(?:MP-)?(\d{6})(?:-|$)/i)||[])[1];
-    const named=raw.length?pgChUnicos_(ns.flatMap(n=>numeros.get(n)||[])):(mapaRefs.get(num)||[]);
+    const codeKey=pgChTexto_(code).toUpperCase().replace(/^MP-/,'');
+    const named=raw.length?pgChUnicos_(ns.flatMap(n=>numeros.get(n)||[])):pgChUnicos_([...(mapaRefs.get(codeKey)||[]),...(mapaRefs.get(num)||[])]);
+    // SKU, marca, gráfica e CD não identificam uma reentrada: também existem na produção principal.
+    if(!named.length)return;
     const printer=m.printer||m.org, cd=m.cd||m.colCD;
-    const dtOrig=pgChData_(m.created)||pgChData_(m.picked);
-    let opts=porSKU.get(pgChNormal_(m.sku))||[];
-    if (raw.length || named.length) {
-      opts=opts.filter(it=>named.includes(tickets.get(it.id)) && it.sku && it.printer && it.cd && printer && cd && comp(it.brand,m.brand,pgChMarca_) && graf(it.printer)===graf(printer) && pgChCD_(it.cd)===pgChCD_(cd));
-    } else {
-      if (!m.brand || !printer || !cd) return;
-      opts=opts.filter(it=>it.printer && it.cd && it.brand && graf(it.printer)===graf(printer) &&
-        pgChCD_(it.cd)===pgChCD_(cd) && pgChMarca_(it.brand)===pgChMarca_(m.brand) &&
-        !/CANCEL/.test(tickets.get(it.id).status) && dtOrig && dtOrig>=tickets.get(it.id).created);
-    }
+    let opts=(porSKU.get(pgChNormal_(m.sku))||[]).filter(it=>named.includes(tickets.get(it.id)) && it.sku && it.printer && it.cd && printer && cd && comp(it.brand,m.brand,pgChMarca_) && graf(it.printer)===graf(printer) && pgChCD_(it.cd)===pgChCD_(cd));
     // Legado sem SKU: somente um chamado explicitamente citado e rota completa compatível.
     if(raw.length&&ns.length===1&&named.length===1&&named[0].legacy&&m.brand&&printer&&cd){opts=named[0].items.filter(it=>it.legacy&&it.printer&&it.cd&&pgChMarca_(it.brand)===pgChMarca_(m.brand)&&graf(it.printer)===graf(printer)&&pgChCD_(it.cd)===pgChCD_(cd));}
     opts=opts.filter(it=>comp(tickets.get(it.id).shipment,m.shipment,envio));
@@ -396,12 +399,13 @@ function pgChModelo_(dados) {
     }
     const it=opts[0], qty=pgChQtd_(m.qty);
     const dates=pgChDatasMapa_(transport.get(pgChTexto_(code).toUpperCase()),
-      pgChData_(m.picked)||pgChData_(m.colPick),pgChData_(m.delivered)||pgChData_(m.checked));
+      pgChDataRealChamado_(m.picked,tickets.get(it.id).created)||pgChDataRealChamado_(m.colPick,tickets.get(it.id).created),
+      pgChDataRealChamado_(m.delivered,tickets.get(it.id).created)||pgChDataRealChamado_(m.checked,tickets.get(it.id).created),tickets.get(it.id).created);
     const hasCount=pgChTexto_(m.received)!=='';
     const event={row:m.row,map:code,kit:m.kit,sku:m.sku,nf:m.nf,qty,created:pgChData_(m.created),book:pgChData_(m.book),
       ...dates,eta:pgChData_(m.eta),
       delivered:dates.delivery?(hasCount?Math.min(qty,pgChQtd_(m.received)):(/^(SIM|TRUE)$/.test(pgChNormal_(m.divergent))?0:qty)):0,
-      method:raw.length?'Número do chamado':named.length?'Mapa informado no SPG':'SKU + marca + gráfica + CD',
+      method:raw.length?'Número do chamado':'Mapa informado no SPG',
       cd:pgChCDNome_(cd),printer:pgChGrafNome_(printer),raw:raw.join(' / '),scan:m.scan};
     // Repetições da mesma leitura/conferência não criam uma nova expedição.
     const k=[m.out||code,m.scan||'',m.document||'',m.kit,m.sku,m.nf,pgChCD_(cd),qty].join('|');

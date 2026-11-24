@@ -90,12 +90,14 @@ test('coleta integral pode confirmar produção sem inventar data real nem gerar
   const t=build({map:[{...map,qty:'150'}],spg:[a,{...a,sku:'C',qty:'25'}]}).tickets.get(a.id);
   assert.equal(t.totals.picked,100);assert.equal(t.totals.coverage[3],100);assert.equal(t.items[0].stages[3].r,'');assert.equal(t.totals.coverage[8],0);
 });
-test('vínculo por rota rejeita ambiguidade, cancelamento do mapa e número explícito divergente',()=>{
+test('mapa sem vínculo explícito não alimenta chamados mesmo com rota única',()=>{
   const fallback={...map,n:''};
   const good=build({map:[fallback,{...map,canceled:'TRUE',map:'MP-888888'},{...map,n:'999',map:'MP-777777'}]});
-  assert.equal(good.tickets.get(a.id).items[0].maps.length,1);
+  assert.equal(good.tickets.get(a.id).items[0].maps.length,0);
+  assert.equal(build({spg:[{...a,map:map.map},b],map:[fallback]}).tickets.get(a.id).items[0].maps.length,1);
+  assert.equal(build({spg:[{...a,map:map.map+'-OUTRO'},b],map:[fallback]}).tickets.get(a.id).items[0].maps.length,0);
   const ambiguous=build({spg:[a,{...b,sku:'A'}],map:[fallback]});
-  for(const t of ambiguous.tickets.values()){assert.equal(t.totals.mapped,0);assert.equal(t.alerts.length,1);}
+  for(const t of ambiguous.tickets.values()){assert.equal(t.totals.mapped,0);assert.equal(t.alerts.length,0);}
 });
 test('calendário e PCP não emprestam eventos do principal e SLA zero é uma rota válida',()=>{
   const c={n:'101',sku:'A',brand:'SAS',printer:'Alpha',shipment:'1',fileR:'05/10/2026'};
@@ -199,4 +201,17 @@ test('painel aberto não converte previsão em coleta e mapa exige vínculo expl
 });
 test('histórico com data anterior à abertura não confirma coleta',()=>{
  const x=build({panel:[{n:'900',brand:'SAS',shipment:'V1',category:'SPOT',printer:'Alpha',cd:'CJUN',qty:'100',created:'2026-09-05',pickup:'2026-08-30',status:'Concluído'}]}).tickets.get('PAINEL-900');assert.equal(x.totals.picked,0);
+});
+
+test('coleta anterior à abertura não entra no SPG nem no mapa/TP; igualdade é válida',()=>{
+  const ticket={...a,created:'2026-10-02',pick:'2026-10-01'};
+  const before={...map,n:'101',qty:'100',received:'100',picked:'2026-10-01',delivered:'2026-10-01'};
+  const x=build({spg:[ticket],map:[before],tp:[{map:map.map,pick:'2026-10-01',delivery:'2026-10-01',row:3}]}).summaries[0];
+  assert.equal(x.pickDone,'');assert.equal(x.delivered,'');assert.equal(x.totals.picked,0);
+  const y=build({spg:[ticket],map:[{...before,picked:'2026-10-02',delivered:'2026-10-02'}]}).summaries[0];
+  assert.equal(y.pickDone,'2026-10-02');assert.equal(y.delivered,'2026-10-02');
+});
+test('TP seleciona coleta entre a abertura e entrega inclusive',()=>{
+  const date=ctx.pgChDatasMapa_({picks:[{date:'2026-10-04',row:1},{date:'2026-10-03',row:2},{date:'2026-10-01',row:3}],delivery:'2026-10-03',deliveryRow:4},'','', '2026-10-02');
+  assert.equal(date.pick,'2026-10-03');assert.equal(date.delivery,'2026-10-03');
 });
