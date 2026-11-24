@@ -209,9 +209,21 @@
       return {...scoped,groups,cd,okrRoutes:(t.okrRoutes||[]).filter(r=>(r.cd||'')===cd&&groups.some(g=>(g.printer||'')===(r.printer||'')))};
     });
   }
+  // Preserva a apuração histórica do corte V1, sem reintroduzir coletas anteriores à abertura.
+  // Origem: geração 350e3644-93ce-498e-8a10-5c08ee9960ae (24/11/2026, 07:44 BRT).
+  const chExclusoesOKRV1=Object.freeze({
+    '08fe0ec3-5eb8-4214-af87-57125c47b8a5':'2026-10-01', // 2888
+    '93483f9d-5805-4359-b089-e3c07ad42fb4':'2026-10-08', // 2846
+    'c2e91f37-e93b-45b1-a86c-604dbc0ae28b':'2026-10-08'  // 2827
+  });
+  function chExclusaoHistorica(t,f,pick){
+    const date=chExclusoesOKRV1[t.id];
+    return !!(date&&t.cat==='REENTRADA'&&t.shipment==='V1'&&f.basis==='open'&&f.start==='2026-09-05'&&f.end==='2026-12-06'&&(f.rule==='standard'||f.rule==='fixed')&&!pick.actual&&date<=f.asof&&date<t.created);
+  }
   function chPrazoColeta(t,f,pick,due){
     const actual=pick.actual;
     const excluded={days:null,den:0,num:0,upcoming:false};
+    if(chExclusaoHistorica(t,f,pick))return {...excluded,historicalExcluded:true};
     if(!t.created||!due||due<t.created||actual&&actual<t.created||f.rule==='pick'&&actual&&pick.invalid)return excluded;
     const days=Math.max(0,chDays(due,actual||f.asof)||0,f.rule==='pick'?(pick.days||0):0);
     if(!actual&&due>=f.asof&&!(f.rule==='pick'&&(pick.late||pick.days>0)))return {...excluded,upcoming:true};
@@ -235,7 +247,7 @@
     return out;
   }
   function chOKR(rows,f){
-    const out={cohort:0,den:0,num:0,late:0,pending:0,upcoming:0,canceled:0,actual:0,delivery:0,notCollected:0,ages:[],items:[]};
+    const out={cohort:0,den:0,num:0,late:0,pending:0,upcoming:0,canceled:0,historicalExcluded:0,actual:0,delivery:0,notCollected:0,ages:[],items:[]};
     const inside=v=>!!v&&(!f.start||v>=f.start)&&(!f.end||v<=f.end);
     for(const t of rows){
       if(!chMatches(t,f,f.asof)||t.created&&t.created>f.asof)continue;
@@ -257,7 +269,8 @@
       out.den+=result.den*w;out.num+=result.num*w;
       if(result.den&&!result.num){out.late+=w;if(!actual)out.pending+=w;}
       if(result.upcoming)out.upcoming+=w;
-      out.items.push({id:t.id,n:t.n,cat:t.cat,brand:t.brand,shipment:t.shipment,owner:t.owner||'',qty,totalQty:Number(t.totals?.qty)||qty,created:t.created,due,actual,pick:actual,pickSource:pick.source,maps:pick.maps,age,days,status,weight:w,den:result.den*w,num:result.num*w,printers:[...new Set((scoped.groups||[]).map(g=>g.printer).filter(Boolean))],cds:[...new Set((scoped.groups||[]).map(g=>g.cd).filter(Boolean))]});
+      if(result.historicalExcluded)out.historicalExcluded+=w;
+      out.items.push({id:t.id,n:t.n,cat:t.cat,brand:t.brand,shipment:t.shipment,owner:t.owner||'',qty,totalQty:Number(t.totals?.qty)||qty,created:t.created,due,actual,pick:actual,pickSource:pick.source,maps:pick.maps,age,days,status,historicalExcluded:!!result.historicalExcluded,weight:w,den:result.den*w,num:result.num*w,printers:[...new Set((scoped.groups||[]).map(g=>g.printer).filter(Boolean))],cds:[...new Set((scoped.groups||[]).map(g=>g.cd).filter(Boolean))]});
     }
     let sum=0;out.bands=chBands.map(([lo,hi])=>{const count=out.ages.filter(x=>x.age>=lo&&x.age<=hi).reduce((a,x)=>a+x.w,0);sum+=count;return {label:hi===Infinity?'61+':lo+'–'+hi,count,pct:chPct(count,out.delivery),cum:chPct(sum,out.delivery)};});
     out.average=out.delivery?out.ages.reduce((a,b)=>a+b.age*b.w,0)/out.delivery:null;out.pct=chPct(out.num,out.den);return out;
@@ -352,16 +365,16 @@
     f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
     state.okrExport=null;el('okr-export').disabled=true;if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
     const d=chOKR(re,f),display=chOKRDestinationRows(d,f,re),unit=f.unit==='qty'?'Tiragem':'Chamados';state.okrExport={d,f,display};el('okr-export').disabled=false;el('okr-count').textContent=num(d.items.length)+' chamados · '+num(display.length)+' linhas por destino';const pct=v=>v===null?'—':num(Math.round(v*10)/10)+'%';
-    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / base apurada',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Dos quais, vencidos em aberto',num(d.pending)],['A vencer (fora da apuração)',num(d.upcoming)],['Cancelados excluídos',num(d.canceled)],['Coletados',num(d.actual)],['Não coletados',num(d.notCollected)],['Aging médio de coleta',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Aderência'?(d.pct===null?'navy':d.pct>=90?'green':'yellow'):k==='Fora do prazo'||k.startsWith('Dos quais')?'orange':k==='Meta'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
+    el('okr-kpis').innerHTML=[['Aderência',pct(d.pct)],['Meta','90%'],['No prazo / base apurada',num(d.num)+' / '+num(d.den)],['Fora do prazo',num(d.late)],['Dos quais, vencidos em aberto',num(d.pending)],['A vencer (fora da apuração)',num(d.upcoming)],['Cancelados excluídos',num(d.canceled)],...(d.historicalExcluded?[['Exclusões históricas do corte',num(d.historicalExcluded)]]:[]),['Coletados',num(d.actual)],['Não coletados',num(d.notCollected)],['Aging médio de coleta',d.average===null?'—':num(Math.round(d.average*10)/10)+' dias']].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Aderência'?(d.pct===null?'navy':d.pct>=90?'green':'yellow'):k==='Fora do prazo'||k.startsWith('Dos quais')?'orange':k==='Meta'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b></div>').join('');
     el('okr-aging').innerHTML=table(['Dias',unit,'% da faixa','% acumulado'],d.bands.map(b=>[esc(b.label),num(b.count),pct(b.pct),pct(b.cum)]))+'<p class="ch-muted">Denominador: '+num(d.delivery)+' '+unit.toLowerCase()+' com coleta integral e aging válido.</p>';
-    el('okr-rows').innerHTML=table(['Chamado','Categoria','Marca','Envio','Gráfica','CD','Tiragem','Abertura','Prazo','Realizado','Dias de atraso','Origem coleta','Mapa de saída','Aging','Coleta do destino','Coleta do chamado'],display.map(t=>['<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.brand),cell(t.shipment),cell(t.printers.join(' | ')),cell(t.cds.map(cdLabel).join(' | ')),num(t.qty),dt(t.created),dt(t.due),collectionCell(t,t.actual),t.days===null?'—':num(t.days),cell(t.pickSource),cell(t.maps.join(' | ')),t.age===null?'—':num(t.age),cell(t.localStatus||t.status),cell(t.status)]),'Nenhum chamado no recorte.');
+    el('okr-rows').innerHTML=table(['Chamado','Categoria','Marca','Envio','Gráfica','CD','Tiragem','Abertura','Prazo','Realizado','Dias de atraso','Origem coleta','Mapa de saída','Aging','Coleta do destino','Coleta do chamado','Apuração histórica'],display.map(t=>['<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.brand),cell(t.shipment),cell(t.printers.join(' | ')),cell(t.cds.map(cdLabel).join(' | ')),num(t.qty),dt(t.created),dt(t.due),collectionCell(t,t.actual),t.days===null?'—':num(t.days),cell(t.pickSource),cell(t.maps.join(' | ')),t.age===null?'—':num(t.age),cell(t.localStatus||t.status),cell(t.status),t.historicalExcluded?'Excluído na apuração original':'—']),'Nenhum chamado no recorte.');
   }
   function exportOKR(){
     const x=state.okrExport;if(!x)return;
-    const {d,f,display}=x,headers=['Chamado','Categoria','Marca','Envio','Responsável PG','Gráfica','CD','Tiragem filtrada','Tiragem total','Abertura','Prazo','Realizado','Dias de atraso','Origem da coleta','Mapa de saída','Aging','Coleta do destino','Coleta do chamado','Peso','Denominador','Numerador','Critério','Unidade','Corte início','Corte fim','Observado até'];
+    const {d,f,display}=x,headers=['Chamado','Categoria','Marca','Envio','Responsável PG','Gráfica','CD','Tiragem filtrada','Tiragem total','Abertura','Prazo','Realizado','Dias de atraso','Origem da coleta','Mapa de saída','Aging','Coleta do destino','Coleta do chamado','Peso','Denominador','Numerador','Exclusão histórica','Critério','Unidade','Corte início','Corte fim','Observado até'];
     const value=v=>{if(v===null||v===undefined)return '""';let s=String(v);if(typeof v==='string'&&/^[\s]*[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
     const date=v=>v?dt(v):'';
-    const lines=display.map(t=>[t.n,t.cat,t.brand,t.shipment,t.owner,t.printers.join(' | '),t.cds.map(cdLabel).join(' | '),t.qty,t.totalQty,date(t.created),date(t.due),date(t.actual),t.days,t.pickSource,t.maps.join(' | '),t.age,t.localStatus||t.status,t.status,t.weight,t.den,t.num,f.rule,f.unit,date(f.start),date(f.end),date(f.asof)]);
+    const lines=display.map(t=>[t.n,t.cat,t.brand,t.shipment,t.owner,t.printers.join(' | '),t.cds.map(cdLabel).join(' | '),t.qty,t.totalQty,date(t.created),date(t.due),date(t.actual),t.days,t.pickSource,t.maps.join(' | '),t.age,t.localStatus||t.status,t.status,t.weight,t.den,t.num,t.historicalExcluded?'Excluído na apuração original':'',f.rule,f.unit,date(f.start),date(f.end),date(f.asof)]);
     const csv='\uFEFF'+[headers,...lines].map(a=>a.map(value).join(';')).join('\r\n'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='OKR_Reentradas_'+f.rule+'_'+f.unit+'_'+f.asof+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function collectionCell(t,value){

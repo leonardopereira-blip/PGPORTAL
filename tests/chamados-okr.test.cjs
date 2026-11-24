@@ -90,3 +90,18 @@ test('JSON usa a versão exigida pelo servidor, sem número fixo na interface',(
   assert.equal(ctx.chJsonCompativel({calculationVersion:9,requiredCalculationVersion:11}),false);
   assert.equal(ctx.chJsonCompativel({calculationVersion:11}),false);
 });
+
+test('corte histórico mantém exclusões documentadas apenas em V1, sem restaurar datas inválidas',()=>{
+ const opts={...f,rule:'standard',start:'2026-09-05',end:'2026-12-06',asof:'2026-11-24'};
+ const ids=['08fe0ec3-5eb8-4214-af87-57125c47b8a5','93483f9d-5805-4359-b089-e3c07ad42fb4','c2e91f37-e93b-45b1-a86c-604dbc0ae28b'];
+ const rows=ids.map(id=>({...t,id,shipment:'V1',created:'2026-10-28',desired:'',pickDone:'',closed:''}));
+ const ok=Array.from({length:21},(_,i)=>({...rows[0],id:'OK'+i,pickDone:'2026-11-02'}));
+ const late=Array.from({length:10},(_,i)=>({...rows[0],id:'LATE'+i}));
+ const historical=chOKR([...rows,...ok,...late],opts);
+ assert.equal(historical.num,21);assert.equal(historical.den,31);assert.equal(historical.historicalExcluded,3);assert.equal(historical.items[0].actual,'');assert.equal(historical.items[0].status,'Não coletado');
+ assert.equal(chOKR([...rows,...ok,...late],{...opts,end:'2026-12-07'}).den,34);
+ assert.equal(chOKR([{...rows[0],pickDone:'2026-11-02'}],opts).num,1);
+ assert.equal(chOKR([{...rows[0],shipment:'V4'}],opts).den,1);
+ assert.equal(chOKR(rows,{...opts,rule:'pick'}).historicalExcluded,0);
+ assert.equal(chOKR(rows,{...opts,rule:'fixed'}).historicalExcluded,3);
+});

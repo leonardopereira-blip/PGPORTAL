@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-11-24T12:09:00Z",
-  "motivo": "Corrigir bloqueio indevido da Central e OKR: versão do JSON sincronizada com o servidor, sem nova geração obrigatória."
+  "solicitado_em": "2026-11-24T12:17:00Z",
+  "motivo": "Corrigir próxima etapa após coleta e preservar exclusões históricas do corte OKR V1 sem restaurar dados inválidos."
 }

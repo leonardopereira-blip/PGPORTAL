@@ -236,6 +236,13 @@ function getChamadosPortal(atualizar) {
   pgChEventos_().forEach(e=>{latest[e.ticket]=e.state;});
   console.log('[CH JSON] resumo + tratativas ms='+(Date.now()-start));
   pgChAplicarColetasResumo_(s,pgChColetasManuais_());
+  // Corrige também JSONs já publicados, sem exigir nova geração.
+  for(const t of s.rows||[]){
+    const groups=t.groups||[];
+    for(const g of groups)if(g.target&&g.qty>0&&g.coverage?.[10]>=g.qty)g.target=pgChProximaEtapa_(g.target,g.qty,g.coverage);
+    if(groups.length&&groups.some(g=>g.target))t.target=pgChPrazoResumo_(groups);
+    else if(t.target&&t.totals?.coverage?.[10]>=t.totals.qty)t.target=pgChProximaEtapa_(t.target,t.totals.qty,t.totals.coverage);
+  }
   return Object.assign({},s,{requiredCalculationVersion:PG_CH_CALCULATION_VERSION,manual:latest,states:PG_CH_TRATATIVAS});
 }
 function pgChValidaId_(id) {
@@ -251,6 +258,8 @@ function getDetalheChamadoPortal(id,gen) {
   const t=pgChJsonRead_(file)[id];
   if(!t || t.id!==id)throw new Error('Detalhe inválido. Atualize a lista.');
   pgChAplicarColetasDetalhe_(t,pgChColetasManuais_());
+  for(const it of t.items||[])if(it.target&&it.qty>0&&it.coverage?.[10]>=it.qty)it.target=pgChProximaEtapa_(it.target,it.qty,it.coverage);
+  if((t.items||[]).some(it=>it.target))t.target=pgChPrazoResumo_(t.items);
   const history=pgChEventos_(id);console.log('[CH JSON] detalhe ms='+(Date.now()-start));
   return {ticket:t,history};
 }

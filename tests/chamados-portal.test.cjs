@@ -267,3 +267,18 @@ test('resumo devolve a mesma versão exigida pelo gerador JSON',()=>{
     ctx.pgChSnapshot_=()=>({calculationVersion:9,rows:[]});const old=ctx.getChamadosPortal(false);assert.equal(old.calculationVersion,9);assert.equal(old.requiredCalculationVersion,11);
   }finally{ctx.pgChSnapshot_=snapshot;ctx.pgChEventos_=events;ctx.pgChColetasManuais_=manual;ctx.console=logger;}
 });
+
+test('próxima etapa não volta para mapa, custo ou OC após coleta integral, sem inventar cobertura',()=>{
+  const dates=Array.from({length:12},(_,i)=>'2026-11-'+String(i+1).padStart(2,'0'));
+  const target={dates,deadline:dates[11],nextStage:9,next:dates[9]},coverage=[100,100,100,100,100,100,100,0,0,0,100,0];
+  const inTransit=ctx.pgChProximaEtapa_(target,100,coverage);assert.equal(inTransit.nextStage,11);assert.equal(inTransit.next,dates[11]);assert.equal(coverage[9],0);
+  assert.equal(ctx.pgChProximaEtapa_(target,100,[...coverage.slice(0,11),100]).nextStage,-1);
+  assert.equal(ctx.pgChProximaEtapa_(target,100,[...coverage.slice(0,10),50,0]).nextStage,7);
+});
+test('leitura de JSON já publicado corrige próxima etapa por grupo sem nova geração',()=>{
+ const snapshot=ctx.pgChSnapshot_,events=ctx.pgChEventos_,manual=ctx.pgChColetasManuais_,logger=ctx.console;
+ const dates=Array.from({length:12},(_,i)=>'2026-11-'+String(i+1).padStart(2,'0')),target={dates,deadline:dates[11],nextStage:9,next:dates[9]},coverage=[100,100,100,100,100,100,100,0,0,0,100,0];
+ try{ctx.console={log(){}};ctx.pgChSnapshot_=()=>({calculationVersion:11,rows:[{id:a.id,groups:[{qty:100,coverage,target}],totals:{qty:100,coverage},target}]});ctx.pgChEventos_=()=>[];ctx.pgChColetasManuais_=()=>new Map();
+ const r=ctx.getChamadosPortal(false).rows[0];assert.equal(r.target.nextStage,11);assert.equal(r.groups[0].target.nextStage,11);assert.equal(r.groups[0].coverage[9],0);
+ }finally{ctx.pgChSnapshot_=snapshot;ctx.pgChEventos_=events;ctx.pgChColetasManuais_=manual;ctx.console=logger;}
+});

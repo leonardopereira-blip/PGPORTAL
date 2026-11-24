@@ -134,8 +134,15 @@ function pgChPrazoRota_(t,it,profile,slaDays){
  const budget=weights.map(w=>available*w/total),alloc=Math.round(budget[0]),preEnd=Math.round(budget[0]+budget[1]),prodEnd=Math.round(budget[0]+budget[1]+budget[2]),pre=preEnd-alloc,prod=prodEnd-preEnd;
  // O painel mede blocos de produção; subdivisões abaixo são metas internas, não tempos observados.
  const dates=[alloc,alloc+Math.round(pre*.5),preEnd,preEnd+Math.round(prod*.5),preEnd+Math.round(prod*.85),prodEnd,prodEnd,Math.min(available,prodEnd+Math.ceil(targets[3].v)),Math.min(available,prodEnd+Math.ceil(targets[3].v+targets[4].v)),available,available,25].map(n=>pgChLeadAdd_(t.created,Math.min(25,Math.max(0,n))));
- const pending=[0,1,2,3,4,5,6,7,8,9,10,11].filter(k=>(it.coverage[k]||0)<it.qty).sort((a,b)=>dates[a].localeCompare(dates[b]));const next=pending[0]??-1;
- return {dates,deadline:dates[11],next:next<0?'':dates[next],nextStage:next,allocation:pgChLeadAdd_(t.created,alloc),transit,compressed:transit>25||total>available,profile:targets};
+ const target={dates,deadline:dates[11],allocation:pgChLeadAdd_(t.created,alloc),transit,compressed:transit>25||total>available,profile:targets};
+ return pgChProximaEtapa_(target,it.qty,it.coverage);
+}
+function pgChProximaEtapa_(target,qty,coverage){
+ if(!target||!qty||!Array.isArray(coverage))return target;
+ const full=k=>(coverage[k]||0)>=qty;
+ const pending=full(11)?[]:full(10)?[11]:[0,1,2,3,4,5,6,7,8,9,10].filter(k=>!full(k)).sort((a,b)=>(target.dates[a]||'').localeCompare(target.dates[b]||''));
+ const next=pending[0]??-1;
+ return {...target,next:next<0?'':target.dates[next]||target.deadline||'',nextStage:next};
 }
 function pgChPrazoResumo_(items){
  const valid=items.filter(it=>it.qty>0&&it.target);if(!valid.length)return null;const pending=valid.filter(it=>it.target.next).sort((a,b)=>a.target.next.localeCompare(b.target.next));
