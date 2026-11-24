@@ -426,8 +426,21 @@ function pgChModelo_(dados) {
       pgChUnicos_([...(mapaRefs.get(codeKey)||[]),...(mapaRefs.get(num)||[])]).filter(it=>pgChCD_(it.cd)===cd);
     const named=allRaw.length?pgChUnicos_(pgChNumerosMapa_(allRaw).flatMap(n=>numeros.get(n)||[])):pgChUnicos_(candidates.map(it=>tickets.get(it.id)));
     if(!named.length)return;
-    const compatible=it=>it.printer&&graf(it.printer)===printer&&pgChCD_(it.cd)===cd&&(!brand||pgChMarca_(it.brand)===brand)&&comp(tickets.get(it.id).shipment,m.shipment,envio);
-    let opts=candidates.filter(it=>it.sku&&pgChSku_(it.sku)===pgChSku_(m.sku)&&compatible(it));
+    const sameRoute=it=>pgChCD_(it.cd)===cd&&(!brand||pgChMarca_(it.brand)===brand)&&comp(tickets.get(it.id).shipment,m.shipment,envio);
+    const compatible=it=>it.printer&&graf(it.printer)===printer&&sameRoute(it);
+    const skuRoutes=candidates.filter(it=>it.sku&&pgChSku_(it.sku)===pgChSku_(m.sku)&&sameRoute(it));
+    let opts=skuRoutes.filter(compatible);
+    // Gráfica ausente no SPG não é gráfica divergente. Aceita somente a
+    // rota única do SKU, com marca explícita e vínculo inequívoco ao chamado
+    // (número no mapa ou código completo registrado no próprio item).
+    // Não realoca demanda nem altera a gráfica do SPG.
+    let missingPrinter=false;
+    if(!opts.length&&skuRoutes.length===1&&!skuRoutes[0].printer&&brand&&pgChMarca_(skuRoutes[0].brand)===brand){
+      const candidate=skuRoutes[0],ticket=tickets.get(candidate.id);
+      const explicit=raw.length&&ns.includes(pgChNumero_(ticket.n));
+      const exactRef=!allRaw.length&&codeKey!==num&&(mapaRefs.get(codeKey)||[]).includes(candidate);
+      if(explicit||exactRef){opts=[candidate];missingPrinter=true;}
+    }
     // Legado realmente sem SKU exige número explícito, destino e demais dimensões compatíveis.
     if(!opts.length&&raw.length&&ns.length===1&&named.length===1&&named[0].legacy&&brand){
       opts=candidates.filter(it=>it.legacy&&!it.sku&&pgChMarca_(it.brand)===brand&&compatible(it));
@@ -449,7 +462,7 @@ function pgChModelo_(dados) {
     const event={row:m.row,map:code,kit:m.kit,sku:m.sku,nf:m.nf,qty,created:pgChData_(m.created),book:pgChData_(m.book),
       ...dates,eta:pgChData_(m.eta),
       delivered:dates.delivery?(hasCount?Math.min(qty,pgChQtd_(m.received)):(/^(SIM|TRUE)$/.test(pgChNormal_(m.divergent))?0:qty)):0,
-      method:raw.length?'Número do chamado + destino':'Mapa informado no SPG + destino',
+      method:(raw.length?'Número do chamado + destino':'Mapa informado no SPG + destino')+(missingPrinter?' · gráfica ausente no SPG':''),
       cd:pgChCDNome_(cd),printer:pgChGrafNome_(printer),raw:raw.join(' / '),scan:m.scan};
     // Repetições da mesma leitura/conferência não criam uma nova expedição.
     const k=[m.out||code,m.scan||'',m.document||'',m.kit,m.sku,m.nf,pgChCD_(cd),qty].join('|');

@@ -134,8 +134,11 @@ test('coleta parcial propaga somente a própria quantidade e SKU',()=>{
 test('entrega sem coleta datada confirma apenas unidades recebidas',()=>{
  const t=build({spg:[a],map:[{...map,picked:'',received:'30'}]}).tickets.get(a.id);assert.equal(t.totals.picked,30);assert.equal(t.totals.delivered,30);assert.equal(t.totals.coverage[3],30);
 });
-test('mapa com número explícito não cobre SKU sem gráfica ou CD divergente',()=>{
- assert.equal(build({spg:[{...a,printer:''}],map:[map]}).tickets.get(a.id).totals.picked,0);
+test('mapa explícito cobre SKU e destino únicos com gráfica ausente, mas não gráfica ou CD divergente',()=>{
+ const x=build({spg:[{...a,printer:''}],map:[map]}).tickets.get(a.id);
+ assert.equal(x.totals.picked,40);assert.equal(x.totals.delivered,30);assert.equal(x.items[0].printer,'');assert.equal(x.items[0].maps[0].printer,'ALPHA');assert.ok(x.items[0].maps[0].method.includes('gráfica ausente'));
+ assert.equal(build({spg:[{...a,printer:'OUTRA'}],map:[map]}).tickets.get(a.id).totals.picked,0);
+ assert.equal(build({spg:[{...a,printer:''}],map:[{...map,n:'',nCol:'',nInc:''}]}).tickets.get(a.id).totals.picked,0);
  assert.equal(build({spg:[a],map:[{...map,cd:'Fortaleza'}]}).tickets.get(a.id).totals.picked,0);
 });
 test('status por SKU preserva saldo e rotas divergentes',()=>{
@@ -262,9 +265,10 @@ test('normaliza formato de SKU, envio, número, marca, gráfica, destino e mapa 
 
 test('resumo devolve a mesma versão exigida pelo gerador JSON',()=>{
   const snapshot=ctx.pgChSnapshot_,events=ctx.pgChEventos_,manual=ctx.pgChColetasManuais_,logger=ctx.console;
-  try{ctx.console={log(){}};ctx.pgChSnapshot_=()=>({calculationVersion:11,rows:[]});ctx.pgChEventos_=()=>[];ctx.pgChColetasManuais_=()=>new Map();
-    const r=ctx.getChamadosPortal(false);assert.equal(r.calculationVersion,11);assert.equal(r.requiredCalculationVersion,11);
-    ctx.pgChSnapshot_=()=>({calculationVersion:9,rows:[]});const old=ctx.getChamadosPortal(false);assert.equal(old.calculationVersion,9);assert.equal(old.requiredCalculationVersion,11);
+  const version=Number(fs.readFileSync(path.join(__dirname,'..','ChamadosPortal.js'),'utf8').match(/const PG_CH_CALCULATION_VERSION = (\d+);/)[1]);
+  try{ctx.console={log(){}};ctx.pgChSnapshot_=()=>({calculationVersion:version,rows:[]});ctx.pgChEventos_=()=>[];ctx.pgChColetasManuais_=()=>new Map();
+    const r=ctx.getChamadosPortal(false);assert.equal(r.calculationVersion,version);assert.equal(r.requiredCalculationVersion,version);
+    ctx.pgChSnapshot_=()=>({calculationVersion:version-1,rows:[]});const old=ctx.getChamadosPortal(false);assert.equal(old.calculationVersion,version-1);assert.equal(old.requiredCalculationVersion,version);
   }finally{ctx.pgChSnapshot_=snapshot;ctx.pgChEventos_=events;ctx.pgChColetasManuais_=manual;ctx.console=logger;}
 });
 
@@ -281,4 +285,22 @@ test('leitura de JSON já publicado corrige próxima etapa por grupo sem nova ge
  try{ctx.console={log(){}};ctx.pgChSnapshot_=()=>({calculationVersion:11,rows:[{id:a.id,groups:[{qty:100,coverage,target}],totals:{qty:100,coverage},target}]});ctx.pgChEventos_=()=>[];ctx.pgChColetasManuais_=()=>new Map();
  const r=ctx.getChamadosPortal(false).rows[0];assert.equal(r.target.nextStage,11);assert.equal(r.groups[0].target.nextStage,11);assert.equal(r.groups[0].coverage[9],0);
  }finally{ctx.pgChSnapshot_=snapshot;ctx.pgChEventos_=events;ctx.pgChColetasManuais_=manual;ctx.console=logger;}
+});
+
+test('gráfica ausente no SPG não impede entrega TP por mapa completo do próprio chamado e CD',()=>{
+ const m={...map,n:'101',qty:'100',received:'',delivered:'',picked:''};
+ const r=build({spg:[{...a,printer:'',pick:'2026-10-02'},{...a,sku:'A',cd:'CITA',printer:'',pick:'2026-10-02'}],map:[m],tp:[{map:m.map,pick:'2026-10-02',delivery:'2026-10-04',row:8},{map:m.map.replace('SAS','SAE'),pick:'2026-10-02',delivery:'2026-10-05',row:9}]});
+ const ticket=r.tickets.get(a.id),j=ticket.items.find(i=>i.cd==='CD JDI'),f=ticket.items.find(i=>i.cd==='CD FOR');
+ assert.equal(j.mapped,100);assert.equal(j.delivered,100);assert.equal(j.stages[11].r,'2026-10-04');assert.equal(f.mapped,0);assert.equal(f.delivered,0);
+ assert.equal(ticket.totals.picked,200);assert.equal(ticket.totals.delivered,100);assert.equal(ticket.totals.balance,100);
+});
+test('referência completa do próprio item recupera mapa com gráfica ausente sem inferir outro destino',()=>{
+ const m={...map,n:'',qty:'100',received:'100'};
+ const x=build({spg:[{...a,printer:'',map:m.map},{...a,cd:'CITA',printer:'',map:m.map}],map:[m]}).tickets.get(a.id);
+ assert.equal(x.items.find(i=>i.cd==='CD JDI').delivered,100);
+ assert.equal(x.items.find(i=>i.cd==='CD FOR').delivered,0);
+});
+test('gráfica ausente nunca permite associação quando há mais de um chamado compatível',()=>{
+ const x=build({spg:[{...a,printer:''},{...b,sku:'A',printer:''}],map:[map]});
+ assert.equal(x.tickets.get(a.id).totals.mapped,0);assert.equal(x.tickets.get(b.id).totals.mapped,0);
 });
