@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-24T21:31:47.314Z",
+  "lido_em": "2026-11-24T21:33:02.345Z",
   "files": {
     "HTML:abaCentralChamados": "4115dad6b4d2d93feed27236df20a0822c9ee5a14c2d7145635a4360ea096bb9",
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
@@ -71,6 +71,6 @@
     "HTML:Scripts_Meta_Armazem_Realizado": "ae22d29077e27b204359486acc6557a4769d2ab99ee5556d65876220f17e51f5",
     "HTML:Scripts_Resultados_Analistas": "574325913c9f12c84b45f072005e44f5e32416e4d69d28e9a1da0afcd0da8218",
     "SERVER_JS:Sem título": "0d554ca9e8b80dd09850906f18cdd0f84d35dd7bbe6abab69ab4ccbada526ef8",
-    "SERVER_JS:TempSasAdapt": "5d4dffe768eaf4881e17f420b6f24d31bc3cda2cd2c880da12b9b4528d1393a2"
+    "SERVER_JS:TempSasAdapt": "b8ae8869137bbf1623af074b5756e29572a0c953db2816d4eb9da2d02a5a52ff"
   }
 }
