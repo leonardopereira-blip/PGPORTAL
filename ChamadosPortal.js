@@ -1,3 +1,4 @@
+const PG_CH_CALCULATION_VERSION = 11;
 const PG_CH_TRATATIVAS = ['Em análise','Em tratativa','Aguardando retorno','Resolvido'];
 const PG_CH_ABA_EDICAO = 'Chamados_Tratativas';
 
@@ -157,7 +158,7 @@ function pgChJsonBuild_(before){
  Object.keys(PG_CH_FONTES).filter(k=>k!=='map').forEach(k=>{const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;if(k==='spg'&&(!counts[k]||(before&&counts[k]<before.counts[k]*0.8)))throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização.');});
  const map=pgChMapaFonte_(before&&before.counts.map);datasets.map=map.rows;links.map=map.url;counts.map=map.rows.length;datasets.sla=getMatrizSLAPortal();
  const tp=pgChLerTransportes_();datasets.tp=tp.rows;links.tp=tp.url;counts.tp=tp.rows.length;
- const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:11,rows:model.summaries,phases:PG_CH_ETAPAS};
+ const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:PG_CH_CALCULATION_VERSION,rows:model.summaries,phases:PG_CH_ETAPAS};
  if(map.stale)result.notice='Mapa: última leitura íntegra em '+new Date(map.at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+'. Atualização automática pendente.';
  if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');return {result,tickets:model.tickets};
 }
@@ -235,7 +236,7 @@ function getChamadosPortal(atualizar) {
   pgChEventos_().forEach(e=>{latest[e.ticket]=e.state;});
   console.log('[CH JSON] resumo + tratativas ms='+(Date.now()-start));
   pgChAplicarColetasResumo_(s,pgChColetasManuais_());
-  return Object.assign({},s,{manual:latest,states:PG_CH_TRATATIVAS});
+  return Object.assign({},s,{requiredCalculationVersion:PG_CH_CALCULATION_VERSION,manual:latest,states:PG_CH_TRATATIVAS});
 }
 function pgChValidaId_(id) {
   if(typeof id!=='string' || !/^(?:[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}|(?:SPG|PAINEL)-\d+)$/.test(id)) throw new Error('Chamado inválido.');

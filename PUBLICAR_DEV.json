@@ -1,4 +1,4 @@
 {
-  "solicitado_em": "2026-11-24T11:12:00Z",
-  "motivo": "Isolar cada número de chamado e destino após normalização integral das chaves; publicar Central e OKR."
+  "solicitado_em": "2026-11-24T12:09:00Z",
+  "motivo": "Corrigir bloqueio indevido da Central e OKR: versão do JSON sincronizada com o servidor, sem nova geração obrigatória."
 }

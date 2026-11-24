@@ -259,3 +259,11 @@ test('normaliza formato de SKU, envio, número, marca, gráfica, destino e mapa 
   assert.equal(ctx.pgChCD_('Acabadora - GRAFICA OCEANO'),'OCEANO');
   assert.equal(ctx.pgChCD_('Gráfica - LOG PRINT'),'LOGPRINT');
 });
+
+test('resumo devolve a mesma versão exigida pelo gerador JSON',()=>{
+  const snapshot=ctx.pgChSnapshot_,events=ctx.pgChEventos_,manual=ctx.pgChColetasManuais_,logger=ctx.console;
+  try{ctx.console={log(){}};ctx.pgChSnapshot_=()=>({calculationVersion:11,rows:[]});ctx.pgChEventos_=()=>[];ctx.pgChColetasManuais_=()=>new Map();
+    const r=ctx.getChamadosPortal(false);assert.equal(r.calculationVersion,11);assert.equal(r.requiredCalculationVersion,11);
+    ctx.pgChSnapshot_=()=>({calculationVersion:9,rows:[]});const old=ctx.getChamadosPortal(false);assert.equal(old.calculationVersion,9);assert.equal(old.requiredCalculationVersion,11);
+  }finally{ctx.pgChSnapshot_=snapshot;ctx.pgChEventos_=events;ctx.pgChColetasManuais_=manual;ctx.console=logger;}
+});

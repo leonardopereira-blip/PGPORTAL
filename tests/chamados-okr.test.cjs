@@ -83,3 +83,10 @@ test('data integral de um destino aparece mesmo quando outro CD do chamado aguar
   x.okrRoutes[1].pick='2026-11-23';
   assert.equal(chOKR([x],opts).items[0].status,'Coletado');
 });
+
+test('JSON usa a versão exigida pelo servidor, sem número fixo na interface',()=>{
+  assert.equal(ctx.chJsonCompativel({calculationVersion:11,requiredCalculationVersion:11}),true);
+  assert.equal(ctx.chJsonCompativel({calculationVersion:12,requiredCalculationVersion:12}),true);
+  assert.equal(ctx.chJsonCompativel({calculationVersion:9,requiredCalculationVersion:11}),false);
+  assert.equal(ctx.chJsonCompativel({calculationVersion:11}),false);
+});

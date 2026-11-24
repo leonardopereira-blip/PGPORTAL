@@ -136,6 +136,7 @@
   const source=(key,row)=>state.data.links[key] && Number.isInteger(row)?'<a href="'+esc(state.data.links[key]+'&range=A'+row)+'" target="_blank" rel="noopener">Linha '+row+'</a>':'—';
   const transportDate=(value,row,col)=>row && state.data.links.tp?'<a href="'+esc(state.data.links.tp+'&range='+col+row)+'" title="Transportes" target="_blank" rel="noopener">'+dt(value)+'</a>':dt(value);
   // CH_OKR_PURE_BEGIN
+  function chJsonCompativel(d){return !!d&&Number.isInteger(d.requiredCalculationVersion)&&d.calculationVersion===d.requiredCalculationVersion;}
   const chDays=(a,b)=>a&&b?Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000):null;
   const chAdd=(a,n)=>a?new Date(Date.parse(a+'T00:00:00Z')+n*86400000).toISOString().slice(0,10):'';
   const chPct=(n,d)=>d?100*n/d:null;
@@ -380,7 +381,7 @@
     message('Carregando JSON publicado dos chamados…');
     try{
       const started=performance.now(),d=await rpc('getChamadosPortal',false);if(token!==state.load)return;console.info('[CH JSON] abertura ms',Math.round(performance.now()-started));
-      if(d.calculationVersion!==9){state.data=null;state.detail=null;show();message('Atualize o JSON para carregar os indicadores com as regras corrigidas (atualizarCacheChamadosPortal).',true);return;}
+      if(!chJsonCompativel(d)){state.data=null;state.detail=null;show();message('Atualize o JSON dos chamados (atualizarCacheChamadosPortal). Versão publicada: '+(d.calculationVersion??'ausente')+'; versão exigida: '+(d.requiredCalculationVersion??'ausente')+'.',true);return;}
       state.data=d;state.detail=null;state.detailLoad++;state.page=1;
       for(const key of ['cat','shipment','brand']){
         const old=el(key).value,options=[...new Set(d.rows.map(r=>r[key]).filter(Boolean))].sort();
