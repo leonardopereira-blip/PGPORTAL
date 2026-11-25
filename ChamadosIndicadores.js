@@ -42,14 +42,14 @@ function pgChDatasEtapas_(items) {
       f:pgChUnicos_(stages.flatMap(s=>pgChTexto_(s.f).split(/\s+\+\s+/))).join(' + ')};
   });
 }
-function pgChMetricaChamado_(t,idx) {
+function pgChMetricaChamado_(t,idx,costHistory) {
   const groups=new Map(),routes=[];
   for(const it of t.items){
     const attributes=pgChAtributos_(idx,it);it.attributes=attributes;
     const specs=idx.get(pgChSku_(it.sku)+'|'+pgChMarca_(it.brand))||[];
     const pages=[...new Set(specs.map(s=>pgChTexto_(s.pages)).filter(v=>/^\d+$/.test(v)).map(Number))];
     it.pages=pages.length===1?pages[0]:null;
-    it.commercial=pgChComercialItem_(t,it);
+    it.commercial=pgChComercialItem_(t,it,costHistory);
     const sp=it.spg.filter(r=>r.q>0);
     const delivery=it.deliveryEvidence?.date||it.stages?.[11]?.r||'';
     const collection=it.collection||pgChColetaRota_(it),pick=collection.date;

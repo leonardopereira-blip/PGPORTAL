@@ -484,7 +484,7 @@ function pgChModelo_(dados) {
       !real && rows.some(x=>pgChData_(x[r]))?'Parcial':'');
   }
   pgChFinanceiro_(dados,tickets,numeros);
-  const specIdx=pgChIndiceEspec_(dados.spec||[]),leadProfile=pgChLeadProfile_(dados.panel||[]);
+  const specIdx=pgChIndiceEspec_(dados.spec||[]),leadProfile=pgChLeadProfile_(dados.panel||[]),costHistory=pgChHistoricoCusto_(dados.cost||[]);
   const summaries=[];
   for(const t of tickets.values()) {
     delete t._groups;
@@ -575,7 +575,7 @@ function pgChModelo_(dados) {
     t.totals=totals;t.production=pgChResumoStatus_(t.items);t.target=pgChPrazoResumo_(t.items);
     summaries.push({id:t.id,n:t.n,cat:t.cat,legacy:t.legacy,brand:t.brand,shipment:t.shipment,status:t.status,priority:t.priority,created:t.created,
       goal:t.goal,desired:t.desired,eta:pgChUltima_(pendingEtas),partial:missingEta,issues:t.alerts.length,items:t.items.length,totals,production:t.production,target:t.target,
-      ...pgChMetricaChamado_(t,specIdx)});
+      ...pgChMetricaChamado_(t,specIdx,costHistory)});
   }
   return {summaries,tickets};
 }
