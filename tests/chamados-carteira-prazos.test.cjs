@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '..', 'abaCentralChamados.html'), 'utf8');
 const pure = html.split('// CH_OKR_PURE_BEGIN')[1].split('// CH_OKR_PURE_END')[0];
 const ctx = vm.createContext({ Intl, Date });
-vm.runInContext(pure + ';this.rules={chDeadlineBucket,chDeadlineCounts,chDeadlineLabel,chDeliveryDate,chFinalForecast,chTodaySP,chFilteredTotals,chDestinationRows};', ctx);
+vm.runInContext(pure + ';this.rules={chDeadlineBucket,chDeadlineCounts,chDeadlineLabel,chDeliveryDate,chFinalForecast,chTodaySP,chFilteredTotals,chDestinationRows,chDeadlineSummary};', ctx);
 const rules = ctx.rules;
 const stages = (p = '', r = '') => Array.from({ length: 12 }, () => ({ p, r, a: '', f: 'PCP' }));
 const target = deadline => ({ deadline, dates: Array(12).fill(deadline), next: deadline, nextStage: 3 });
@@ -106,8 +106,12 @@ test('renderiza prazos sem Saldo/Tratativa, previsão final ao lado da entrega e
   assert.match(h.elements.get('ch-deadline-selection').textContent, /24\/11\/2026/, 'usa o relógio atual, não a data do JSON');
   assert.match(h.elements.get('ch-count').textContent, /2 chamados · 3 destinos/);
   const table = h.elements.get('ch-table').innerHTML;
-  assert.match(table, /Data de entrega<\/th><th>Previsão final de entrega<\/th><th>Prazo final \(25 dias\)/);
-  assert.match(table, /Data desejada da etapa<\/th><th>Previsão da etapa<\/th><th>Real da etapa/);
+  assert.match(table, /Data de entrega<\/th><th rowspan="2">Previsão final de entrega<\/th><th rowspan="2">Prazo final \(25 dias\)/);
+  assert.equal((table.match(/colspan="4"/g)||[]).length,12);
+  assert.equal((table.match(/>Data acordada \/ formalizada<\/th>/g)||[]).length,12);
+  assert.match(table, /Próxima etapa<\/th><th class="ch-date-head" colspan="4" scope="colgroup">Etapa 0/);
+  assert.equal((table.match(/class="ch-date-cell/g)||[]).length,3*48);
+  assert.match(h.elements.get('ch-deadline-summary').innerHTML,/Backlog<\/td><td>1<\/td><td>50,0%<\/td><td>10<\/td><td>33,3%/);
   assert.doesNotMatch(table, /<th>Saldo<\/th>|<th>Tratativa<\/th>/);
   assert.doesNotMatch(h.elements.get('ch-kpis').innerHTML + h.elements.get('ch-dist').innerHTML, /Saldo/i);
   assert.match(table, /27\/11\/2026/, 'previsão final operacional continua visível');
@@ -128,8 +132,8 @@ test('detalhe do SKU distingue metas, previsão e real sem inventar data nem exi
     mapped: 5, picked: 0, delivered: 0, desc: 'Livro', target: target('2026-11-24'),
     eta: '', etaPartial: true, stages: stages('2026-11-22', ''), spg: [], cal: [], pcp: [], maps: [] };
   const detail = h.ui.itemHtml(it);
-  assert.match(detail, /Data desejada da etapa<\/th><th>Previsão da etapa<\/th><th>Real da etapa/);
-  assert.match(detail, /24\/11\/2026<\/td><td>22\/11\/2026<\/td><td>—<\/td>/);
+  assert.match(detail, /Data desejada da etapa<\/th><th>Data acordada \/ formalizada<\/th><th>Previsão da etapa<\/th><th>Real da etapa/);
+  assert.match(detail, /24\/11\/2026<\/td><td>—<\/td><td>22\/11\/2026<\/td><td>—<\/td>/);
   assert.match(detail, /Previsão final de entrega<\/dt><dd>—<\/dd>/);
   assert.match(detail, /previsão e real vêm das fontes/);
   assert.doesNotMatch(detail, /Saldo/i);
@@ -154,4 +158,24 @@ test('detalhe do chamado deriva previsão dos itens pendentes e entrega real ape
   assert.match(h.elements.get('ch-detail').innerHTML, /Previsão final de entrega<\/dt><dd>—<\/dd>/);
   model.items[1].stages[11].r = '';
   assert.equal(rules.chDeliveryDate(model, '2026-11-24'), '', 'volume sem data real não inventa entrega');
+});
+
+test('resumo soma tiragem sem repetir chamado e preserva denominadores e ordenação',()=>{
+ const a=ticket('A','2026-11-23'),b=ticket('B','2026-11-24',{totals:{qty:30}}),c=ticket('C','2026-12-10');
+ const r=rules.chDeadlineSummary([a,a,b,c],'2026-11-24');
+ assert.equal(r[0].tickets,1);assert.equal(r[0].qty,10);assert.equal(r[0].qtyPct,0.2);
+ assert.equal(r.at(-1).tickets,3);assert.equal(r.at(-1).qty,50);
+ assert.ok(html.indexOf('id="ch-funnel"')<html.indexOf('id="ch-dist"'));
+ assert.ok(html.indexOf('id="ch-dist"')<html.indexOf('id="ch-deadline-cards"'));
+ assert.ok(html.indexOf('id="ch-deadline-cards"')<html.indexOf('id="ch-deadline-summary"'));
+ assert.ok(html.indexOf('id="ch-deadline-summary"')<html.indexOf('id="ch-table"'));
+});
+test('acordo não substitui previsão, meta nem real e só consolida rotas com compromisso',()=>{
+ const a=group('CD JDI','2026-11-24'),b=group('CD FOR','2026-11-24');
+ a.stages[0].agreed='2026-11-20';b.stages[0].agreed='2026-11-21';
+ const t=ticket('A','2026-11-24',{groups:[a,b]});
+ assert.equal(rules.chFilteredTotals(t,{cd:['CD JDI','CD FOR']}).stages[0].agreed,'2026-11-21');
+ delete b.stages[0].agreed;
+ assert.equal(rules.chFilteredTotals(t,{cd:['CD JDI','CD FOR']}).stages[0].agreed,'');
+ const h=viewHarness([t]);h.ui.render();assert.match(h.elements.get('ch-table').innerHTML,/20\/11\/2026/);
 });
