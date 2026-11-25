@@ -1,4 +1,4 @@
-const PG_CH_CALCULATION_VERSION = 12;
+const PG_CH_CALCULATION_VERSION = 13;
 const PG_CH_TRATATIVAS = ['Em análise','Em tratativa','Aguardando retorno','Resolvido'];
 const PG_CH_ABA_EDICAO = 'Chamados_Tratativas';
 
@@ -158,8 +158,13 @@ function pgChJsonBuild_(before){
  Object.keys(PG_CH_FONTES).filter(k=>k!=='map').forEach(k=>{const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;if(k==='spg'&&(!counts[k]||(before&&counts[k]<before.counts[k]*0.8)))throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização.');});
  const map=pgChMapaFonte_(before&&before.counts.map);datasets.map=map.rows;links.map=map.url;counts.map=map.rows.length;datasets.sla=getMatrizSLAPortal();
  const tp=pgChLerTransportes_();datasets.tp=tp.rows;links.tp=tp.url;counts.tp=tp.rows.length;
+ let mail;
+ try{mail=pgChLerAcordos_(datasets.spg);datasets.agreements=mail.agreements;counts.emailAcordos=mail.stats.matched;}
+ catch(e){console.warn('[CH email] '+String(e.message||e));mail={stats:{error:true}};datasets.agreements={};}
  const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:PG_CH_CALCULATION_VERSION,rows:model.summaries,phases:PG_CH_ETAPAS};
+ result.emailAgreements=mail.stats;
  if(map.stale)result.notice='Mapa: última leitura íntegra em '+new Date(map.at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+'. Atualização automática pendente.';
+ if(mail.stats.error||mail.stats.ocrErrors)result.notice=[result.notice,mail.stats.error?'Cronogramas de e-mail não lidos nesta geração (verificar autorização da conta administradora).':'Alguns prints de cronograma não foram lidos nesta geração.'].filter(Boolean).join(' ');
  if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');return {result,tickets:model.tickets};
 }
 function pgChJsonWrite_(folder,name,obj){
