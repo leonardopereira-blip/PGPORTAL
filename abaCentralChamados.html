@@ -118,7 +118,7 @@
       <select id="ch-by" aria-label="Agrupar por"><option value="cat">Categoria</option><option value="shipment">Envio</option><option value="brand">Marca</option></select></div><div id="ch-dist"></div></section></div>
     <section class="ch-box"><div class="ch-between"><h2>Prazos de entrega</h2><button type="button" class="ch-btn" data-deadline="">Todos os prazos</button></div><p class="ch-muted">Chamados sem entrega integral, pelo prazo final de 25 dias. Semanas de segunda a domingo; cada chamado é contado uma vez.</p><div id="ch-deadline-cards" class="ch-grid"></div><p id="ch-deadline-selection" class="ch-muted" role="status"></p></section>
     <section class="ch-box"><h2>Resumo dos prazos de entrega</h2><p class="ch-muted">Percentuais sobre todos os chamados e a tiragem dos filtros aplicados, antes da seleção de uma faixa. Tiragem total dos chamados.</p><div id="ch-deadline-summary"></div></section>
-    <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Chamados</h2><small id="ch-count"></small></div><p class="ch-muted">~ indica estimativa quando não há acordo ou previsão identificada. Início de máquina é distinto do fim de impressão.</p><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
+    <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Chamados</h2><small id="ch-count"></small></div><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
   </div>
   <div id="ch-detail" hidden></div>
 </div></section>
@@ -140,13 +140,13 @@
     return '<div class="ch-frame"><table><thead><tr>'+headers.map(x=>'<th rowspan="2">'+esc(x)+'</th>').join('')+phases.map(x=>'<th class="ch-date-head" colspan="4" scope="colgroup">'+esc(x)+'</th>').join('')+'</tr><tr>'+phases.map(()=>labels.map((x,j)=>'<th'+(j===0?' class="ch-date-first"':'')+'>'+esc(x)+'</th>').join('')).join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map((c,i)=>'<td'+(i>=headers.length?' class="ch-date-cell'+((i-headers.length)%4===0?' ch-date-first':'')+'"':'')+'>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
   }
   function chAgreementCell(s,desired){
-    if(s?.agreedStatus==='ACERVO')return 'ACERVO';
+    if(s?.agreedStatus==='ACERVO')return s.p||desired?'<span title="Data de referência; etapa dispensada">'+dt(s.p||desired)+'</span>':'—';
     if(s?.agreed)return '<span title="'+esc(s.agreedSource||'Data formalizada')+'">'+dt(s.agreed)+'</span>';
     if(s?.agreedStart)return '<span title="'+esc(s.agreedStartSource||'Cronograma da gráfica')+'">Início: '+dt(s.agreedStart)+'</span>';
     const estimated=s?.p||desired;
-    return estimated?'<span title="Estimativa: sem acordo identificado">~ '+dt(estimated)+'</span>':'Sem data';
+    return estimated?'<span title="Estimativa: sem acordo identificado">'+dt(estimated)+'</span>':'Sem data';
   }
-  function chForecastCell(s,desired){return s?.p?dt(s.p):desired?'<span title="Estimativa: sem previsão operacional">~ '+dt(desired)+'</span>':'Sem data';}
+  function chForecastCell(s,desired){return s?.p?dt(s.p):desired?'<span title="Estimativa: sem previsão operacional">'+dt(desired)+'</span>':'Sem data';}
   function chStageDates(t,phases,today){
     return phases.flatMap((_,i)=>{const s=t.stages?.[i]||{},desired=t.target?.dates?.[i];return [i===t.target?.nextStage?'<span class="'+(desired&&desired<today?'ch-overdue':'ch-ontrack')+'">'+dt(desired)+'</span>':dt(desired),chAgreementCell(s,desired),chForecastCell(s,desired),s.r?dt(s.r):'Sem registro real'];});
   }
@@ -490,7 +490,7 @@
     try{
       const started=performance.now(),d=await rpc('getChamadosPortal',false);if(token!==state.load)return;console.info('[CH JSON] abertura ms',Math.round(performance.now()-started));
       if(!chJsonCompativel(d)){state.data=null;state.detail=null;show();message('Atualize o JSON dos chamados (atualizarCacheChamadosPortal). Versão publicada: '+(d.calculationVersion??'ausente')+'; versão exigida: '+(d.requiredCalculationVersion??'ausente')+'.',true);return;}
-      state.data=d;state.detail=null;state.detailLoad++;state.page=1;
+      state.data={...d,phases:(d.phases||[]).map(x=>x==='Arquivo enviado'?'Envio de arquivo':x)};state.detail=null;state.detailLoad++;state.page=1;
       for(const key of ['cat','shipment','brand']){
         const old=el(key).value,options=[...new Set(d.rows.map(r=>r[key]).filter(Boolean))].sort();
         el(key).innerHTML='<option value="">Todos</option>'+options.map(v=>opt(v)).join('');
@@ -563,7 +563,7 @@
   }
   function itemHtml(it){
     return '<p>'+cell(it.desc)+'</p>'+fields({'Status de produção':it.productionStatus?.label,'Tiragem':num(it.qty),'Mapa solicitado':num(it.mapped),'Coletado':num(it.picked),'Origem da coleta':it.collection?.source,'Entregue no CD':num(it.delivered),'Data de entrega':dt(it.stages?.[11]?.r),'Previsão final de entrega':dt(it.eta)+(it.etaPartial&&it.eta?' · parcial':''),'Origem da previsão':it.forecastSource})+
-      '<h3>Etapas do SKU</h3><p class="ch-muted">As datas desejadas das etapas são metas para cumprir o prazo final; acordadas são compromissos formalizados; previsão e real vêm das fontes. ~ indica estimativa, não acordo comprovado. Início de máquina não equivale ao término da impressão.</p>'+table(['Etapa','Data desejada da etapa','Data acordada / formalizada','Previsão da etapa','Real da etapa','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(it.target?.dates?.[i]),chAgreementCell(s,it.target?.dates?.[i]),chForecastCell(s,it.target?.dates?.[i]),s.r?dt(s.r):'Sem registro real',cell(s.a||(s.r?'Realizado':'Sem registro real')),esc(s.f)]))+
+      '<h3>Etapas do SKU</h3><p class="ch-muted">As datas desejadas das etapas são metas para cumprir o prazo final; acordadas são compromissos formalizados; previsão e real vêm das fontes. Início de máquina não equivale ao término da impressão.</p>'+table(['Etapa','Data desejada da etapa','Data acordada / formalizada','Previsão da etapa','Real da etapa','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(it.target?.dates?.[i]),chAgreementCell(s,it.target?.dates?.[i]),chForecastCell(s,it.target?.dates?.[i]),s.r?dt(s.r):'Sem registro real',cell(s.a||(s.r?'Realizado':'Sem registro real')),esc(s.f)]))+
       detailBox(it.legacy?'Registro no painel de produção':'Itens no SPG',table(['Kit','Tiragem','Estoque CD','Subcontratada','OC / NF','Coleta formalizada','Coleta prevista / real','Entrega prevista / real','Origem'],it.spg.map(s=>[cell(s.kit),num(s.q),num(s.stock),num(s.sub),cell(s.oc)+' / '+cell(s.nf),dt(s.formal),dt(s.pickP)+' / '+dt(s.pick),dt(s.deliveryP)+' / '+dt(s.delivery),source(s.legacy?'panel':'spg',s.row)])))+
       detailBox('Calendário e PCP',table(['Fonte','Kit / OP','Status','Observação','Origem'],it.cal.map(c=>['Calendário',cell(c.kit),cell(c.state),cell(c.note),source('cal',c.row)]).concat(it.pcp.map(p=>['PCP',cell(p.op),'—','—',source('pcp',p.row)]))))+
       '<h3>Mapas de saída</h3>'+table(['Mapa / NF','Kit','Vínculo','Tiragem','Agendamento','Coleta real','Previsão CD','Chegada CD','Qtd. entregue','Origem'],it.maps.map(m=>[cell(m.map)+' / '+cell(m.nf),cell(m.kit),cell(m.method),num(m.qty),dt(m.book),transportDate(m.pick,m.tpPickRow,'G'),dt(m.eta),transportDate(m.delivery,m.tpDeliveryRow,'Z'),num(m.delivered),source('map',m.row)]));
