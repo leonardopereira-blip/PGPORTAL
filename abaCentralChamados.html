@@ -527,7 +527,7 @@
     if(!el('okr-rule')){
       const today=dayNow(),first='2026-09-05',last='2026-12-06';
       el('okr').innerHTML='<section class="ch-filter-panel"><div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg> Apuração:</span>'+
-      '<label>Critério<select id="ch-okr-rule"><option value="standard">25 dias ou data desejada (o maior)</option><option value="fixed">25 dias corridos</option><option value="pick">100% coleta gráfica</option></select></label>'+
+      '<label>Critério<select id="ch-okr-rule"><option value="standard">25 dias ou data desejada (o maior)</option><option value="fixed">25 dias corridos</option><option value="desired">Data desejada por Planning</option></select></label>'+
       '<label>Apurar por<select id="ch-okr-unit"><option value="tickets">Chamados</option><option value="qty">Tiragem</option></select></label>'+
       '<label>Período por<select id="ch-okr-basis"><option value="open">Abertura</option><option value="due">Vencimento</option></select></label>'+
       '<label>Início do corte<input type="date" id="ch-okr-start" value="'+first+'"></label><label>Fim do corte<input type="date" id="ch-okr-end" value="'+last+'"></label>'+
@@ -557,7 +557,7 @@
   const chOKRCriteria=[
     ['standard','25 dias ou data desejada (o maior)','O prazo é a maior data entre abertura + 25 dias corridos e data desejada pelo Planning. Sem data desejada, usa 25 dias.'],
     ['fixed','25 dias corridos','Prazo de coleta integral igual à abertura + 25 dias corridos.'],
-    ['pick','100% coleta gráfica','Compara a data da coleta integral com a coleta formalizada da gráfica. Compromissos distintos por kit são respeitados; sem prazo válido, não entra na aderência.']
+    ['desired','Data desejada por Planning','Considera exclusivamente a data desejada pelo Planning como prazo de coleta integral. Sem data desejada válida, não entra na aderência.']
   ];
   const chOKRCardHelp={
     'Valor total das OCs':'Soma dos valores integrais das OCs únicas vinculadas aos chamados e destinos do recorte. Sem rateio por SKU ou CD; OCs sem valor ou com valores divergentes não são somadas. Não depende da unidade de apuração.',
