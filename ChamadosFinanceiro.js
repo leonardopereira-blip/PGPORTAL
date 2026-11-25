@@ -21,7 +21,7 @@ function pgChFinanceiro_(dados,tickets,numeros) {
         if(!o){o={row:s.row,id:'SPG-'+n,req:'',oc:n,tri:'',system:s.legacy?'Painel de produção':'SPG',printer:it.printer,cd:it.cd,value:'',opened:'',sent:'',approved:'',approval:'',status:'',method:'OC do SPG + rota',source:s.legacy?'panel':'spg'};unique.set(k,o);t.orders.push(o);}
         // Valor de uma OC se repete por SKU; não somar. Não repartir valor
         // quando uma linha informa mais de uma OC sem valor individual.
-        if(numbers.length===1&&!o.value)o.value=s.ocValue||'';
+        if(numbers.length===1&&!o.value){o.value=s.ocValue||'';if(o.value!=='')o.valueSource=s.legacy?'panel':'spg';}
         if(!o.status)o.status=s.ocStatus||'';
         o.opened=pgChUltima_([o.opened,s.ocOpen]);o.approved=pgChUltima_([o.approved,s.ocDone]);
         if(o.approved)o.approval='Aprovada';
@@ -78,7 +78,7 @@ function pgChFinanceiro_(dados,tickets,numeros) {
       // BD OC complementa os campos que não existem no SPG, sem sobrescrever
       // número, valor, aprovação, status ou abertura já registrados no SPG.
       existing.id=r.id;existing.req=existing.req||r.req;existing.tri=existing.tri||r.tri;
-      existing.value=existing.value||r.value;existing.opened=existing.opened||pgChData_(r.opened);
+      if(!existing.value&&r.value!==''){existing.value=r.value;existing.valueSource='oc';}existing.opened=existing.opened||pgChData_(r.opened);
       existing.sent=existing.sent||pgChData_(r.sent);existing.approval=existing.approval||r.approval;
       existing.status=existing.status||r.status;existing.externalRow=r.row;
       existing.method='SPG + BD OC (mesma OC e rota)';
@@ -86,4 +86,22 @@ function pgChFinanceiro_(dados,tickets,numeros) {
       opened:pgChData_(r.opened),sent:pgChData_(r.sent),approval:r.approval,status:r.status,
       method:byLot.length?'ID completo do lote + rota':n?'Chamado no ID + rota':'OC do SPG + rota'});
   }
+}
+
+// Valores monetários em centavos: não interpretar campo vazio como zero.
+function pgChOCCentavos_(v){
+ if(v===null||v===undefined||v==='')return null;
+ if(typeof v==='number')return Number.isFinite(v)&&v>=0?Math.round(v*100):null;
+ let s=String(v).trim().replace(/R\$|\s/g,'');
+ if(!s)return null;
+ if(/^\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?$/.test(s))s=s.replace(/\./g,'').replace(',','.');
+ else if(/^\d+(?:,\d{1,2})?$/.test(s))s=s.replace(',','.');
+ else if(!/^\d+\.\d{1,2}$/.test(s))return null;
+ const n=Number(s);return Number.isFinite(n)&&n>=0?Math.round(n*100):null;
+}
+function pgChOCsResumo_(t){
+ if(/CANCEL/.test(pgChNormal_(t.status))||t.steps?.Cancelamento?.r)return [];
+ return (t.orders||[]).filter(o=>/^\d+$/.test(pgChTexto_(o.oc))&&!/CANCEL|REPROV/.test(pgChNormal_((o.status||'')+' '+(o.approval||'')))).map(o=>({
+   oc:pgChTexto_(o.oc),centavos:pgChOCCentavos_(o.value),printer:o.printer||'',cd:o.cd||'',priority:(o.valueSource||o.source)==='spg'?2:1
+ }));
 }

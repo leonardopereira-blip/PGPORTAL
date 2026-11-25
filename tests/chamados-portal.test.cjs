@@ -327,3 +327,10 @@ test('OC do SPG não é duplicada pelo BD OC e mantém valor e aprovação da or
  const t=build({spg:[{...a,oc:order.oc,ocValue:'123,45',ocStatus:'CONCLUIDA',ocOpen:'2026-09-02',ocDone:'2026-09-03'}],cost:[cost],oc:[{...order,value:'999',approval:'Pendente'}]}).tickets.get(a.id);
  assert.equal(t.orders.length,1);assert.equal(t.orders[0].value,'123,45');assert.equal(t.orders[0].approval,'Aprovada');assert.equal(t.orders[0].req,'888888');
 });
+
+test('OC monetária em centavos, sem duplicação por SKU e sem valor inventado',()=>{
+ const spg=[{...a,oc:'4500034988',ocValue:'R$ 2.330,30',ocStatus:'CONCLUIDA'},{...a,sku:'B',oc:'4500034988',ocValue:'R$ 2.330,30',ocStatus:'CONCLUIDA'},{...a,sku:'C',oc:'4500034999',ocValue:'',ocStatus:'CONCLUIDA'},{...a,sku:'D',oc:'4500034111',ocValue:'100,00',ocStatus:'CANCELADA'}];
+ const m=build({spg}),s=m.summaries[0],t=m.tickets.get(a.id);
+ assert.equal(s.ocValues.length,2);assert.equal(s.ocValues[0].centavos,233030);assert.equal(s.ocValues[1].centavos,null);assert.equal(t.ocValues.length,2);
+ assert.equal(ctx.pgChOCCentavos_('1234.56'),123456);assert.equal(ctx.pgChOCCentavos_('0,00'),0);assert.equal(ctx.pgChOCCentavos_('—'),null);
+});
