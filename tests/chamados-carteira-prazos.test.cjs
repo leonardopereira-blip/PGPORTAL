@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '..', 'abaCentralChamados.html'), 'utf8');
 const pure = html.split('// CH_OKR_PURE_BEGIN')[1].split('// CH_OKR_PURE_END')[0];
 const ctx = vm.createContext({ Intl, Date });
-vm.runInContext(pure + ';this.rules={chDeadlineBucket,chDeadlineCounts,chDeadlineLabel,chDeliveryDate,chFinalForecast,chTodaySP,chFilteredTotals,chDestinationRows,chDeadlineSummary,chOwnerForPrinter,chResponsible};', ctx);
+vm.runInContext(pure + ';this.rules={chDeadlineBucket,chDeadlineCounts,chDeadlineLabel,chDeliveryDate,chCarteiraColeta_,chFinalForecast,chTodaySP,chFilteredTotals,chDestinationRows,chDeadlineSummary,chOwnerForPrinter,chResponsible};', ctx);
 const rules = ctx.rules;
 const stages = (p = '', r = '') => Array.from({ length: 12 }, () => ({ p, r, a: '', f: 'PCP' }));
 const target = deadline => ({ deadline, dates: Array(12).fill(deadline), next: deadline, nextStage: 3 });
@@ -213,4 +213,17 @@ test('responsável PG da carteira é por gráfica/destino, sem utilizar respons�
  const html=h.elements.get('ch-table').innerHTML;
  assert.match(html,/>Klayton<\/td>/);assert.match(html,/>Amanda Costa<\/td>/);
  assert.doesNotMatch(html,/Não usar SPG/);
+});
+
+
+test('entrega integral confirma coleta física na carteira sem fabricar data nem alterar o OKR',()=>{
+ const today='2026-11-25',base=ticket('A','2026-11-24',{okrRoutes:[{qty:10,delivery:'2026-11-20',pick:''}]});
+ assert.equal(rules.chCarteiraColeta_(base,'',today).confirmed,true);
+ assert.equal(rules.chCarteiraColeta_(base,'',today).date,'');
+ assert.equal(rules.chCarteiraColeta_(base,'2026-11-20',today).date,'2026-11-20');
+ assert.equal(rules.chCarteiraColeta_(base,'2026-11-21',today).date,'');
+ const partial={...base,okrRoutes:[{qty:5,delivery:'2026-11-20'},{qty:5,delivery:''}]};
+ assert.equal(rules.chCarteiraColeta_(partial,'',today).confirmed,false);
+ const future={...base,okrRoutes:[{qty:10,delivery:'2026-11-26'}]};
+ assert.equal(rules.chCarteiraColeta_(future,'',today).confirmed,false);
 });

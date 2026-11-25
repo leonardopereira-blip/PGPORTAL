@@ -169,7 +169,7 @@
   }
   function chForecastCell(s,desired){return s?.p?dt(s.p):desired?'<span title="Estimativa: sem previsão operacional">'+dt(desired)+'</span>':'Sem data';}
   function chStageDates(t,phases,today){
-    return phases.flatMap((_,i)=>{const s=t.stages?.[i]||{},desired=t.target?.dates?.[i];return [i===t.target?.nextStage?'<span class="'+(desired&&desired<today?'ch-overdue':'ch-ontrack')+'">'+dt(desired)+'</span>':dt(desired),chAgreementCell(s,desired),chForecastCell(s,desired),s.r?dt(s.r):'Sem registro real'];});
+    return phases.flatMap((_,i)=>{const s=t.stages?.[i]||{},desired=t.target?.dates?.[i];return [i===t.target?.nextStage?'<span class="'+(desired&&desired<today?'ch-overdue':'ch-ontrack')+'">'+dt(desired)+'</span>':dt(desired),chAgreementCell(s,desired),chForecastCell(s,desired),i===10?carteiraCollectionCell(t,chPickEvidence(t,today).actual,today,'Sem registro real'):s.r?dt(s.r):'Sem registro real'];});
   }
   const table=(headers,rows,empty='Sem registros vinculados.')=>rows.length?'<div class="ch-frame"><table><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>':'<p class="ch-muted">'+esc(empty)+'</p>';
   const rpc=(name,...args)=>new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](...args));
@@ -340,6 +340,13 @@
     const items=Array.isArray(t.items)?t.items.filter(it=>it.qty>0):[];
     if(items.length)return items.every(it=>it.delivered>=it.qty&&valid(it.stages?.[11]?.r))?items.map(it=>it.stages[11].r).sort().pop():'';
     return t.totals?.qty>0&&t.totals.delivered>=t.totals.qty&&valid(t.delivered)?t.delivered:'';
+  }
+  // Entrega integral comprova a coleta física, mas não comprova sua data.
+  // Não altera o realizado datado nem a apuração histórica do OKR.
+  function chCarteiraColeta_(t,date,asof){
+    const delivery=chDeliveryDate(t,asof);
+    if(date&&date<=asof&&(!t.created||date>=t.created)&&(!delivery||date<=delivery))return {date,confirmed:true};
+    return {date:'',confirmed:!!delivery};
   }
   function chFinalForecast(t){
     if(!Array.isArray(t.items))return {date:t.eta||'',partial:!!t.partial};
@@ -539,6 +546,11 @@
     const csv='\uFEFF'+[headers,...lines].map(a=>a.map(value).join(';')).join('\r\n'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='OKR_Reentradas_'+f.rule+'_'+f.unit+'_'+f.asof+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function collectionCell(t,value){return dt(value); }
+  function carteiraCollectionCell(t,value,today,empty='—'){
+    const result=chCarteiraColeta_(t,value,today);
+    if(result.date)return dt(result.date);
+    return result.confirmed?'<span class="ch-ontrack" title="Coleta confirmada pela entrega integral. A fonte não informa uma data de coleta válida.">Coletado</span>':empty;
+  }
   async function saveCollection(b){
     const date=b.parentElement.querySelector('input')?.value;if(!date){message('Informe a data de coleta.',true);return;}
     if(!confirm('Registrar coleta integral deste chamado no destino '+b.dataset.collectCd+' em '+dt(date)+'?'))return;
@@ -603,7 +615,7 @@
       return [cell(ids.join(' / ')),o.unavailable?'—':o.known?esc(money.format(o.cents/100))+(o.missing||o.conflicts?' · parcial':''):'—',c.pages.length?esc(c.pages.map(num).join(' / '))+(c.pageQty<c.total?' · parcial':''):'—'];};
     fixedTotals[0]='TOTAL GERAL<small>'+num(portfolio.tickets)+' chamados</small>';fixedTotals[7]=num(destinationRows.length)+'<small>destinos</small>';fixedTotals[9]=num(portfolio.qty);fixedTotals[10]=num(oc.count)+'<small>OCs únicas</small>';fixedTotals[11]=oc.unavailable?'—':esc(money.format(oc.cents/100))+(oc.missing||oc.conflicts?'<small>Parcial</small>':'');fixedTotals[12]=commercial.pageQty?num(commercial.pageTotal)+'<small>páginas × tiragem'+(commercial.pageQty<commercial.total?' · parcial':'')+'</small>':'—';fixedTotals[13]=num(portfolio.picked)+'<small>un. coletadas</small>';fixedTotals[14]=num(portfolio.delivered)+'<small>un. entregues</small>';
     el('table').innerHTML=chStageTable(['Chamado','Categoria','Envio','Marca','Prioridade','Responsável PG','Gráfica','CD','Status de produção','Tiragem','OC','Valor OC','Paginação','Data de coleta','Data de entrega','Previsão final de entrega','Prazo final (25 dias)','Situação do prazo','Próxima etapa'],state.data.phases,destinationRows.slice((state.page-1)*30,state.page*30).map(t=>[
-      '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(chPriority(t)),cell(chResponsible(t)),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),...financialCells(t),collectionCell(t,chPickEvidence(t,today).actual),dt(chDeliveryDate(t,today)),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),dt(t.target?.deadline),'<span class="ch-deadline-chip" data-deadline="'+esc(t.deadlineBucket)+'">'+esc(t.deadlineLabel)+'</span>',cell(state.data.phases[t.target?.nextStage]),...chStageDates(t,state.data.phases,today)]),'Nenhum chamado corresponde aos filtros.',{fixed:fixedTotals,phases:portfolio.coverage});
+      '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(chPriority(t)),cell(chResponsible(t)),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),...financialCells(t),carteiraCollectionCell(t,chPickEvidence(t,today).actual,today),dt(chDeliveryDate(t,today)),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),dt(t.target?.deadline),'<span class="ch-deadline-chip" data-deadline="'+esc(t.deadlineBucket)+'">'+esc(t.deadlineLabel)+'</span>',cell(state.data.phases[t.target?.nextStage]),...chStageDates(t,state.data.phases,today)]),'Nenhum chamado corresponde aos filtros.',{fixed:fixedTotals,phases:portfolio.coverage});
     el('count').textContent=num(rows.length)+' chamados · '+num(destinationRows.length)+' destinos';pager(el('pages'),state.page,destinationRows.length,30,'page');chBindTableDrag();
   }
   // Puxador fixo enquanto a página rola. Links e seleção de texto ficam intactos.
@@ -673,7 +685,7 @@
   }
   function itemHtml(it){
     return '<p>'+cell(it.desc)+'</p>'+fields({'Status de produção':it.productionStatus?.label,'Tiragem':num(it.qty),'Paginação':it.pages==null?'—':num(it.pages),'Valor unitário':it.commercial?.unitValue==null?(it.commercial?.priceConflict?'Divergente':'—'):new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2,maximumFractionDigits:6}).format(it.commercial.unitValue),'OC':(it.commercial?.oc||[]).join(' / '),'Mapa solicitado':num(it.mapped),'Coletado':num(it.picked),'Origem da coleta':it.collection?.source,'Entregue no CD':num(it.delivered),'Data de entrega':dt(it.stages?.[11]?.r),'Previsão final de entrega':dt(it.eta)+(it.etaPartial&&it.eta?' · parcial':''),'Origem da previsão':it.forecastSource})+
-      '<h3>Etapas do SKU</h3><p class="ch-muted">As datas seguras (calculadas) das etapas são metas para cumprir o prazo final; acordadas são compromissos formalizados; previsão e real vêm das fontes. Início de máquina não equivale ao término da impressão.</p>'+table(['Etapa','Data segura (calculada)','Data acordada / formalizada','Previsão da etapa','Real da etapa','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(it.target?.dates?.[i]),chAgreementCell(s,it.target?.dates?.[i]),chForecastCell(s,it.target?.dates?.[i]),s.r?dt(s.r):'Sem registro real',cell(s.a||(s.r?'Realizado':'Sem registro real')),esc(s.f)]))+
+      '<h3>Etapas do SKU</h3><p class="ch-muted">As datas seguras (calculadas) das etapas são metas para cumprir o prazo final; acordadas são compromissos formalizados; previsão e real vêm das fontes. Início de máquina não equivale ao término da impressão.</p>'+table(['Etapa','Data segura (calculada)','Data acordada / formalizada','Previsão da etapa','Real da etapa','Andamento','Fonte'],it.stages.map((s,i)=>[esc(state.data.phases[i]),dt(it.target?.dates?.[i]),chAgreementCell(s,it.target?.dates?.[i]),chForecastCell(s,it.target?.dates?.[i]),i===10?carteiraCollectionCell({items:[it],created:state.detail?.created},s.r,dayNow(),'Sem registro real'):s.r?dt(s.r):'Sem registro real',cell(i===10&&!s.r&&chCarteiraColeta_({items:[it],created:state.detail?.created},'',dayNow()).confirmed?'Coletado':s.a||(s.r?'Realizado':'Sem registro real')),esc(i===10&&!s.r&&chCarteiraColeta_({items:[it],created:state.detail?.created},'',dayNow()).confirmed?'Entrega integral confirmada':s.f)]))+
       detailBox(it.legacy?'Registro no painel de produção':'Itens no SPG',table(['Kit','Tiragem','Estoque CD','Subcontratada','OC / NF','Mapa SPG','Coleta formalizada','Coleta prevista / real','Entrega prevista / real','Kit criado','Produto criado','Link do produto','Paginação conferida','Origem'],it.spg.map(s=>[cell(s.kit),num(s.q),num(s.stock),num(s.sub),cell(s.oc)+' / '+cell(s.nf),cell(s.map),dt(s.formal),dt(s.pickP)+' / '+dt(s.pick),dt(s.deliveryP)+' / '+dt(s.delivery),dt(s.kitCreated),dt(s.productCreated),dt(s.productLink),dt(s.paginationDate),source(s.legacy?'panel':'spg',s.row)])))+
       detailBox('Calendário e PCP',table(['Fonte','Kit / OP','Status','Observação','Origem'],it.cal.map(c=>['Calendário',cell(c.kit),cell(c.state),cell(c.note),source('cal',c.row)]).concat(it.pcp.map(p=>['PCP',cell(p.op),'—','—',source('pcp',p.row)]))))+
       '<h3>Mapas de saída</h3>'+table(['Mapa / NF','Kit','Vínculo','Tiragem','Agendamento','Coleta real','Previsão CD','Chegada CD','Qtd. entregue','Origem'],it.maps.map(m=>[cell(m.map)+' / '+cell(m.nf),cell(m.kit),cell(m.method),num(m.qty),dt(m.book),transportDate(m.pick,m.tpPickRow,'G'),dt(m.eta),transportDate(m.delivery,m.tpDeliveryRow,'Z'),num(m.delivered),source('map',m.row)]));
