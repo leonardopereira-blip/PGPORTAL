@@ -142,7 +142,7 @@ function pgChMailOCR_(message,part,stats){
   return UrlFetchApp.fetch(url,{headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()}}).getContentText();
  }finally{if(id)try{DriveApp.getFileById(id).setTrashed(true);}catch(e){console.warn('[CH email] Falha na limpeza de OCR temporário');}}
 }
-function pgChMailReadThread_(id,allocated,stats,meta){
+function pgChMailReadThread_(id,allocated,stats,meta,needs){
  const thread=pgChMailGet_('threads/'+encodeURIComponent(id)+'?format=full',stats),messages=(thread.messages||[]).slice().sort((a,b)=>Number(a.internalDate)-Number(b.internalDate));
  if(!messages.length)return [];
  const root=messages[0],subject=pgChMailSubject_(pgChMailHeader_(root,'Subject'));
@@ -159,7 +159,8 @@ function pgChMailReadThread_(id,allocated,stats,meta){
   if(external&&/declinando|nao (?:conseguimos|podemos) atender|desconsiderar (?:a |esta )?consulta/.test(norm)&&!/cronograma|nova data|melhor data|data estimada/.test(norm)){out.push({n:subject.n,vendor,kind:subject.kind,at,thread:id,declined:true,dates:{}});continue;}
   if(subject.kind==='request'&&!external)continue;
   let text=body,dates=pgChMailParse_(text,at);
-  if(external&&subject.kind==='request'&&(!dates.file||!dates.approval||!dates.pickup)){
+  const wanted=needs?.get(subject.n+'|'+vendor);
+  if(external&&subject.kind==='request'&&(wanted?[...wanted].some(k=>!dates[k]):(!dates.file||!dates.approval||!dates.pickup))){
    for(const p of pgChMailImages_(m.payload)){
     try{const ocr=pgChMailOCR_(m,p,stats);stats.ocr++;if(ocr)text+='\n'+ocr;}
     catch(e){if(e.pgMailPartial)throw e;stats.ocrErrors++;console.warn('[CH email] OCR não concluído em mensagem de cronograma');}
@@ -191,18 +192,33 @@ function pgChMailListPage_(window,stats){
  if(Date.now()>=stats.deadline)throw Error('Tempo reservado à listagem atingido');
  return Gmail.Users.Threads.list('me',{q,maxResults:100,pageToken:window.token||undefined});
 }
+// E-mail é uma fonte de compromisso, não de realizado. Não reabrir
+// cronogramas de rotas entregues ou buscar datas já registradas no SPG.
+function pgChMailNeeds_(r){
+ const valid=v=>pgChDataRealChamado_(v,pgChData_(r.created));
+ if(valid(r.delivery))return [];
+ const fields=[];
+ if(!valid(r.produced)&&!valid(r.pick))fields.push('file','proof','approval','machine','printEnd');
+ if(!valid(r.pick)&&!pgChData_(r.formal)&&!pgChData_(r.pickPlan))fields.push('pickup');
+ if(!pgChData_(r.deliveryPlan))fields.push('delivery');
+ return fields;
+}
 function pgChLerAcordos_(spg){
  const effective=String(Session.getEffectiveUser().getEmail()||'').toLowerCase();
  if(effective!=="leonardo.pereira@arcoeducacao.com.br")throw new Error('A leitura de acordos exige a conta autorizada do portal.');
- const allocated=new Map(),starts=[];
+ const allocated=new Map(),allAllocated=new Map(),needs=new Map(),starts=[];
  for(const r of spg||[]){
   const n=pgChNumero_(r.n),vendor=pgChGraf_(r.printer),d=pgChData_(r.created);
   if(!n||!vendor||/CANCEL/.test(pgChNormal_(r.status)))continue;
+  if(!allAllocated.has(n))allAllocated.set(n,new Set());allAllocated.get(n).add(vendor);
+  const missing=pgChMailNeeds_(r);if(!missing.length)continue;
   if(!allocated.has(n))allocated.set(n,new Set());allocated.get(n).add(vendor);if(d)starts.push(d);
+  const key=n+'|'+vendor;if(!needs.has(key))needs.set(key,new Set());missing.forEach(k=>needs.get(key).add(k));
  }
  const stats={threads:0,ocr:0,ocrErrors:0,decodeErrors:0,matched:0,cached:0,read:0,partial:false,deadline:Date.now()+85000};
- if(!allocated.size){delete stats.deadline;return {agreements:{},stats};}
  const saved=pgChMailLoad_(),entries=saved.entries;
+ stats.routesMissing=needs.size;stats.routesSPGComplete=[...allAllocated.values()].reduce((n,v)=>n+v.size,0)-needs.size;
+ if(!allocated.size){const agreements=pgChMailSelect_(Object.values(entries).flatMap(e=>e.rows||[]),allAllocated);stats.matched=Object.keys(agreements).length;delete stats.deadline;return {agreements,stats};}
  const cutoff=Math.floor(Date.now()/1000),start=Math.floor(Date.parse((starts.sort()[0]||'2026-09-01')+'T00:00:00-03:00')/1000)-1;
  const scan=saved.scan||{cursor:cutoff,historical:{from:start,to:cutoff+1,token:'',done:false},recent:null,pending:{}};
  scan.pending=scan.pending||{};
@@ -210,6 +226,7 @@ function pgChLerAcordos_(spg){
  // Reopen only previously unknown or changed allocations, not all processed mail.
  for(const [id,e] of Object.entries(entries)){
   const scope=pgChMailScope_(allocated,e.n);
+  if(e.n&&!scope){delete pending[id];continue;}
   if((e.n&&scope!==e.scope&&scope)||e.retry||(e.parser!==2&&!e.n))if(!pending[id])pending[id]={history:e.history||'',priority:1};
  }
  if(start<scan.historical.from){scan.historical={from:start,to:scan.historical.from+1,token:'',done:false};}
@@ -220,6 +237,7 @@ function pgChLerAcordos_(spg){
   for(const t of page.threads||[]){
    stats.threads++;
    const old=entries[t.id],history=String(t.historyId||'');
+   if(old?.n&&!allocated.has(old.n)){delete pending[t.id];stats.cached++;continue;}
    const same=old&&!old.retry&&old.scope===pgChMailScope_(allocated,old.n)&&old.n&&((history&&history===String(old.history))||(!history&&priority===1));
    if(same){stats.cached++;continue;}
    const queued=pending[t.id];
@@ -238,7 +256,7 @@ function pgChLerAcordos_(spg){
    if(Date.now()>=stats.deadline||quota)break;
    const q=pending[id],old=entries[id],meta={},before=stats.ocrErrors,beforeDecode=stats.decodeErrors;
    try{
-    const rows=pgChMailReadThread_(id,allocated,stats,meta),retry=stats.ocrErrors!==before||stats.decodeErrors!==beforeDecode;
+    const rows=pgChMailReadThread_(id,allocated,stats,meta,needs),retry=stats.ocrErrors!==before||stats.decodeErrors!==beforeDecode;
     const n=meta.n||old?.n||'';
     entries[id]={history:String(meta.history||q.history||old?.history||''),n,scope:pgChMailScope_(allocated,n),rows:retry?(old?.rows||[]).concat(rows):rows,retry,parser:2};
     stats.read++;
@@ -255,7 +273,7 @@ function pgChLerAcordos_(spg){
  stats.partial=stats.partial||!!scan.recent||!scan.historical.done||Object.keys(pending).length>0;
  stats.pending=Object.keys(pending).length;stats.historyComplete=scan.historical.done;stats.cursor=scan.cursor;
  try{pgChMailSave_(saved.id,entries,scan);}catch(e){stats.partial=true;console.warn('[CH email] Checkpoint não gravado');}
- const records=Object.values(entries).flatMap(e=>e.rows||[]),agreements=pgChMailSelect_(records,allocated);
+ const records=Object.values(entries).flatMap(e=>e.rows||[]),agreements=pgChMailSelect_(records,allAllocated);
  stats.matched=Object.keys(agreements).length;delete stats.deadline;
  console.log('[CH email] '+JSON.stringify(stats));return {agreements,stats};
 }
@@ -265,8 +283,15 @@ function pgChAplicarAcordo_(it,t,agreements){
  const stages={file:0,proof:1,approval:2,printEnd:3,pickup:10,delivery:11};
  for(const [field,i] of Object.entries(stages)){
   const evidence=a[field];if(!evidence||!it.stages[i])continue;
-  const s=it.stages[i];if(evidence.value==='ACERVO')s.agreedStatus='ACERVO';else s.agreed=pgChData_(evidence.value);
+  const s=it.stages[i],sp=it.spg||[];
+  if(s.agreed||s.r||s.p)continue;
+  if(field==='pickup'&&sp.some(r=>r.formal||r.pickP||r.pick))continue;
+  if(field==='delivery'&&sp.some(r=>r.deliveryP||r.delivery))continue;
+  if(field==='printEnd'&&sp.some(r=>r.produced||r.pick||r.delivery))continue;
+  // Compromissos sem destino explícito não se propagam para vários CDs.
+  if((field==='pickup'||field==='delivery')&&pgChUnicos_(t.items.filter(x=>pgChGraf_(x.printer)===pgChGraf_(it.printer)).map(x=>pgChCD_(x.cd))).length>1)continue;
+  if(evidence.value==='ACERVO')s.agreedStatus='ACERVO';else s.agreed=pgChData_(evidence.value);
   s.agreedSource=evidence.source;s.agreedThread=evidence.thread;
  }
- if(a.machine&&a.machine.value!=='ACERVO'){it.stages[3].agreedStart=pgChData_(a.machine.value);it.stages[3].agreedStartSource=a.machine.source;}
+ if(a.machine&&a.machine.value!=='ACERVO'&&!it.stages[3].r&&!it.spg.some(r=>r.produced||r.pick||r.delivery)){it.stages[3].agreedStart=pgChData_(a.machine.value);it.stages[3].agreedStartSource=a.machine.source;}
 }

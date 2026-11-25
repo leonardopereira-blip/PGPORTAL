@@ -327,6 +327,8 @@ function pgChModelo_(dados) {
     const opening=pgChData_(r.created);
     if(opening&&(!t.created||opening<t.created))t.created=opening;
     if(r.legacy&&!/CONCLU|ENTREGUE/.test(r.status))t.status=r.status;
+    if(!t.op&&r.op)t.op=r.op;
+    if(!t.edition&&r.edition)t.edition=r.edition;
     if (r.map && !t.refs.includes(r.map)) t.refs.push(r.map);
     if (r.issue && !t.issues.includes(r.issue)) t.issues.push(r.issue);
     const stages = {Abertura:r.created,Aceite:r.accepted,Liberação:r.released,Alocação:r.allocated,
@@ -357,7 +359,8 @@ function pgChModelo_(dados) {
     it.qty+=qty; it.rows.push(r.row);
     if (r.kit && !it.kits.includes(r.kit)) it.kits.push(r.kit);
     const real=pgChDatasMapa_(null,r.pick,r.delivery,t.created);
-    it.spg.push({q:qty,legacy:!!r.legacy,cut:r.cut,kit:r.kit,stock:pgChQtd_(r.stock),sub:pgChQtd_(r.sub),oc:r.oc,ocStatus:r.ocStatus,nf:r.nf,
+    it.spg.push({q:qty,legacy:!!r.legacy,cut:r.cut,kit:r.kit,stock:pgChQtd_(r.stock),sub:pgChQtd_(r.sub),oc:r.oc,ocStatus:r.ocStatus,ocValue:r.ocValue,nf:r.nf,map:r.map,
+      kitCreated:pgChData_(r.kitCreated),productCreated:pgChData_(r.productCreated),productLink:pgChData_(r.productLink),paginationDate:pgChData_(r.paginationDate),
       formal:pgChData_(r.formal),pickP:pgChData_(r.pickPlan),pick:real.pick,deliveryP:pgChData_(r.deliveryPlan),
       delivery:real.delivery,produced:pgChData_(r.produced),cost:pgChData_(r.cost),costP:pgChData_(r.costPlan),ocOpen:pgChData_(r.ocOpen),ocDone:pgChData_(r.ocDone),row:r.row});
   }
@@ -502,7 +505,7 @@ function pgChModelo_(dados) {
         if(!it.stages[6].p && prod.p) it.stages[6].p=prod.p;
       }
       const sum=fn=>it.maps.reduce((n,m)=>n+fn(m),0);
-      it.mapped=sum(m=>Math.max(0,m.qty));it.delivered=sum(m=>Math.max(0,Math.min(m.qty,m.delivered)));it.collection=pgChColetaRota_(it);it.picked=it.collection.picked;
+      it.mapped=sum(m=>Math.max(0,m.qty));it.deliveryEvidence=pgChEntregaRota_(it);it.delivered=it.deliveryEvidence.delivered;it.collection=pgChColetaRota_(it);it.picked=it.collection.picked;
       const spgForecast=pgChUltima_(it.spg.map(s=>s.deliveryP));
       const days=sla.get(pgChGraf_(it.printer)+'|'+pgChCD_(it.cd));
       function transporte(coleta){
@@ -510,15 +513,16 @@ function pgChModelo_(dados) {
         const d=new Date(coleta+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);
       }
       const outstanding=it.maps.filter(m=>m.delivered<m.qty);
-      const forecasts=outstanding.map(m=>({date:m.eta||transporte(m.pick||m.book)||spgForecast,source:m.eta?'Mapa':transporte(m.pick||m.book)?'Coleta + Matriz SLA':spgForecast?'SPG':''}));
+      const fullForecast=pgChMarcoItens_(it.spg.filter(s=>s.q>0),'deliveryP');
+      const forecasts=outstanding.map(m=>({date:fullForecast||m.eta||transporte(m.pick||m.book)||spgForecast,source:fullForecast?'SPG':m.eta?'Mapa':transporte(m.pick||m.book)?'Coleta + Matriz SLA':spgForecast?'SPG':''}));
       const saldo=Math.max(0,it.qty-it.delivered);
       if(saldo && it.mapped<it.qty){
         const pickup=pgChUltima_(it.spg.map(s=>s.pick||s.pickP||s.formal));
         forecasts.push({date:spgForecast||transporte(pickup),source:spgForecast?'SPG':transporte(pickup)?'Coleta + Matriz SLA':''});
       }
-      it.eta=saldo?pgChUltima_(forecasts.map(f=>f.date)):'';
-      it.etaPartial=!!saldo && forecasts.some(f=>!f.date);
-      it.forecastSource=pgChUnicos_(forecasts.map(f=>f.source)).join(' + ');
+      it.eta=saldo?(fullForecast||pgChUltima_(forecasts.map(f=>f.date))):'';
+      it.etaPartial=!!saldo && !fullForecast && forecasts.some(f=>!f.date);
+      it.forecastSource=fullForecast?'SPG':pgChUnicos_(forecasts.map(f=>f.source)).join(' + ');
       const costs=t.costs.filter(c=>pgChSku_(c.sku)===pgChSku_(it.sku) && pgChGraf_(c.printer)===pgChGraf_(it.printer) && pgChCD_(c.cd)===pgChCD_(it.cd));
       const validCosts=costs.filter(c=>/^(CONCLUID[OA]|VALIDAD[OA]|FINALIZAD[OA])$/.test(pgChNormal_(c.status)));
       const costStage=stage(it.spg,'costP','cost',it.legacy?'Painel de produção':'SPG');
@@ -536,7 +540,11 @@ function pgChModelo_(dados) {
         ocStage.units=Math.min(it.qty,qtyOC);
         ocStage.f=matchedCost.length?'BD OC + validação de custos':it.legacy?'Painel de produção':'SPG';
         ocStage.a=qtyOC>=it.qty?'OC emitida':'Parcial';
-        if(qtyOC>=it.qty)ocStage.r=pgChUltima_(orders.filter(o=>matchedCost.some(c=>pgChNormal_(c.lot)===pgChNormal_(o.id)||c.oc===o.oc)||spgOcs.some(s=>s.oc===o.oc)).map(o=>o.sent));
+        if(qtyOC>=it.qty){
+          const spgDate=pgChMarcoItens_(spgOcs,'ocOpen')||pgChMarcoItens_(spgOcs,'ocDone');
+          ocStage.r=spgDate||pgChUltima_(orders.filter(o=>matchedCost.some(c=>pgChNormal_(c.lot)===pgChNormal_(o.id)||c.oc===o.oc)||spgOcs.some(s=>s.oc===o.oc)).map(o=>o.sent));
+          if(spgDate)ocStage.f=it.legacy?'Painel de produção':'SPG';
+        }
       }
       it.stages.push(costStage,ocStage);
       // Realizado progressivo da própria rota; não propaga saldo, estoque ou OC.
@@ -550,11 +558,12 @@ function pgChModelo_(dados) {
       }
       const log=(q,p,r)=>pgChEtapa_(p,it.qty>0 && q>=it.qty?r:'','Mapa',q>0 && q<it.qty?'Parcial':'');
       it.stages.push(log(it.mapped,'',pgChUltima_(it.maps.map(m=>m.created))),log(it.picked,pgChUltima_(it.spg.map(s=>s.pickP)),
-        it.collection.date),log(it.delivered,it.eta,pgChUltima_(it.maps.filter(m=>m.delivered>0).map(m=>m.delivery))));
+        it.collection.date),log(it.delivered,spgForecast||it.eta,it.deliveryEvidence.date));
       if(it.collection.source)it.stages[10].f=it.collection.source;
+      if(it.deliveryEvidence.source)it.stages[11].f=it.deliveryEvidence.source;
+      const formal=pgChMarcoItens_(it.spg.filter(s=>s.q>0),'formal');
+      if(formal){it.stages[10].agreed=formal;it.stages[10].agreedSource=it.legacy?'Painel de produção':'SPG · Coleta formalizada';}
       if(dados.agreements)pgChAplicarAcordo_(it,t,dados.agreements);
-      const deliveredMaps=it.maps.filter(m=>m.delivered>0);
-      if(deliveredMaps.some(m=>m.tpDeliveryRow))it.stages[11].f=pgChUnicos_(deliveredMaps.map(m=>m.tpDeliveryRow?'Transportes':'Mapa')).join(' + ');
       totals.qty+=it.qty;totals.balance+=saldo;
       for(const k of ['mapped','picked','delivered']) totals[k]+=Math.min(it.qty,it[k]);
       it.coverage=it.stages.map((s,i)=>Math.max(0,Math.min(it.qty,i>=9?[it.mapped,it.picked,it.delivered][i-9]:s.units!=null?s.units:s.r?it.qty:0)));

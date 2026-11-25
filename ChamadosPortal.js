@@ -1,4 +1,4 @@
-const PG_CH_CALCULATION_VERSION = 13;
+const PG_CH_CALCULATION_VERSION = 14;
 const PG_CH_TRATATIVAS = ['Em análise','Em tratativa','Aguardando retorno','Resolvido'];
 const PG_CH_ABA_EDICAO = 'Chamados_Tratativas';
 
@@ -358,7 +358,7 @@ function pgChAplicarColetasResumo_(s,manual){
  }
 }
 function pgChAplicarColetasDetalhe_(t,manual){
- for(const it of t.items||[]){const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(it.cd)])),delivery=pgChDataIntegral_(it.maps||[],it.qty,'delivery','delivered');if(!edit||!pgChDataRealChamado_(edit.date,t.created)||delivery&&edit.date>delivery||!pgChComplementoManual_(it.collection,it.qty,edit))continue;
+ for(const it of t.items||[]){const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(it.cd)])),delivery=it.deliveryEvidence?.date||it.stages?.[11]?.r||pgChDataIntegral_(it.maps||[],it.qty,'delivery','delivered');if(!edit||!pgChDataRealChamado_(edit.date,t.created)||delivery&&edit.date>delivery||!pgChComplementoManual_(it.collection,it.qty,edit))continue;
   const delta=Math.max(0,it.qty-Math.min(it.qty,it.picked));t.totals.picked+=delta;it.picked=it.qty;
   for(const k of [0,1,2,3,4,5,6,10]){const diff=Math.max(0,it.qty-(it.coverage[k]||0));t.totals.coverage[k]+=diff;it.coverage[k]=it.qty;it.stages[k].units=it.qty;}
   it.stages[10].r=it.collection.date;it.stages[10].f=it.collection.source;it.productionStatus={label:it.delivered>=it.qty?'Entregue integralmente':'Em trânsito',source:'Manual'};

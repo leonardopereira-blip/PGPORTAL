@@ -11,7 +11,22 @@ function pgChFinanceiro_(dados,tickets,numeros) {
   function ciclo(t) { const m=/\bV\d+[-/](\d{2})(?:\D|$)/i.exec(t.edition||'');return m?'20'+m[1]:''; }
   tickets.forEach(t=>{
     t.costs=[];t.orders=[];
-    t.items.forEach(it=>it.spg.forEach(s=>refs(s.oc).forEach(n=>pgChAdd_(ordensSPG,n,t))));
+    const unique=new Map();
+    t.items.forEach(it=>it.spg.forEach(s=>{
+      const numbers=refs(s.oc);
+      numbers.forEach(n=>{
+        pgChAdd_(ordensSPG,n,t);
+        const k=[n,pgChGraf_(it.printer),pgChCD_(it.cd)].join('|');
+        let o=unique.get(k);
+        if(!o){o={row:s.row,id:'SPG-'+n,req:'',oc:n,tri:'',system:s.legacy?'Painel de produção':'SPG',printer:it.printer,cd:it.cd,value:'',opened:'',sent:'',approved:'',approval:'',status:'',method:'OC do SPG + rota',source:s.legacy?'panel':'spg'};unique.set(k,o);t.orders.push(o);}
+        // Valor de uma OC se repete por SKU; não somar. Não repartir valor
+        // quando uma linha informa mais de uma OC sem valor individual.
+        if(numbers.length===1&&!o.value)o.value=s.ocValue||'';
+        if(!o.status)o.status=s.ocStatus||'';
+        o.opened=pgChUltima_([o.opened,s.ocOpen]);o.approved=pgChUltima_([o.approved,s.ocDone]);
+        if(o.approved)o.approval='Aprovada';
+      });
+    }));
   });
   for(const r of dados.cost||[]){
     if(!r.lotId || !r.sku || pgChNormal_(r.type)==='PRINCIPAL')continue;
@@ -58,7 +73,16 @@ function pgChFinanceiro_(dados,tickets,numeros) {
       return true;
     });
     if(match.length!==1){alerta(candidates,r,'oc','OC ou requisição com vínculo divergente; conferir ID, marca, fornecedor e CD');continue;}
-    match[0].orders.push({row:r.row,id:r.id,req:r.req,oc:r.oc,tri:r.tri,system:r.system,printer:pgChGrafNome_(r.printer),cd:pgChCDNome_(r.cd),value:r.value,
+    const t=match[0],existing=t.orders.find(o=>o.source&&refs(r.oc).includes(o.oc)&&pgChGraf_(o.printer)===pgChGraf_(r.printer)&&pgChCD_(o.cd)===pgChCD_(r.cd));
+    if(existing){
+      // BD OC complementa os campos que não existem no SPG, sem sobrescrever
+      // número, valor, aprovação, status ou abertura já registrados no SPG.
+      existing.id=r.id;existing.req=existing.req||r.req;existing.tri=existing.tri||r.tri;
+      existing.value=existing.value||r.value;existing.opened=existing.opened||pgChData_(r.opened);
+      existing.sent=existing.sent||pgChData_(r.sent);existing.approval=existing.approval||r.approval;
+      existing.status=existing.status||r.status;existing.externalRow=r.row;
+      existing.method='SPG + BD OC (mesma OC e rota)';
+    }else t.orders.push({row:r.row,id:r.id,req:r.req,oc:r.oc,tri:r.tri,system:r.system,printer:pgChGrafNome_(r.printer),cd:pgChCDNome_(r.cd),value:r.value,
       opened:pgChData_(r.opened),sent:pgChData_(r.sent),approval:r.approval,status:r.status,
       method:byLot.length?'ID completo do lote + rota':n?'Chamado no ID + rota':'OC do SPG + rota'});
   }

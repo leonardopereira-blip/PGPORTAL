@@ -26,9 +26,9 @@ test('TP usa o código inteiro e a última coleta até a última entrega, inclus
     const item=result.tickets.get(a.id).items[0], event=item.maps[0], summary=result.summaries[0];
     assert.equal(event.pick,'2026-10-08');assert.equal(event.delivery,event.pick);
     assert.equal(event.tpPickRow,12);assert.equal(event.tpDeliveryRow,13);
-    assert.equal(item.stages[10].r,event.pick);assert.equal(item.stages[11].r,event.delivery);
-    assert.equal(summary.pickDone,event.pick);assert.equal(summary.delivered,event.delivery);
-    assert.equal(summary.pickSource,'Transportes');assert.equal(summary.deliverySource,'Transportes');
+    assert.equal(item.stages[10].r,'2026-10-03');assert.equal(item.stages[11].r,event.delivery);
+    assert.equal(summary.pickDone,'2026-10-03');assert.equal(summary.delivered,event.delivery);
+    assert.equal(summary.pickSource,'SPG · Coleta real');assert.equal(summary.deliverySource,'Transportes');
     assert.equal(item.picked,100);assert.equal(item.delivered,100);assert.equal(item.maps.length,1);
   }
 });
@@ -51,13 +51,13 @@ test('TP mantém o valor anterior em cada campo ausente, inválido ou incompatí
     assert.equal(m.delivered,30);
   }
 });
-test('TP parcial substitui só a parcela do mapa; o saldo mantém a coleta do SPG',()=>{
+test('TP parcial não substitui a coleta real integral do SPG',()=>{
   const result=build({spg:[{...a,pick:'01/10/2026'},b],map:[map,{...map,row:8}],
     tp:[{map:map.map,pick:'03/10/2026',row:2}]});
   const it=result.tickets.get(a.id).items[0], events=it.collection.events;
-  assert.equal(it.collection.date,'2026-10-03');assert.equal(it.picked,100);
-  assert.equal(events.find(e=>e.source==='Transportes').qty,40);
-  assert.equal(events.find(e=>e.source.startsWith('SPG')).qty,60);
+  assert.equal(it.collection.date,'2026-10-01');assert.equal(it.picked,100);
+  assert.equal(events.filter(e=>e.source==='Transportes').length,0);
+  assert.equal(events.find(e=>e.source.startsWith('SPG')).qty,100);
   assert.equal(result.tickets.get(b.id).totals.picked,0);
 });
 test('parcelas com e sem TP mantêm suas datas; TP não preenche uma parcela sem evidência',()=>{
@@ -303,4 +303,27 @@ test('referência completa do próprio item recupera mapa com gráfica ausente s
 test('gráfica ausente nunca permite associação quando há mais de um chamado compatível',()=>{
  const x=build({spg:[{...a,printer:''},{...b,sku:'A',printer:''}],map:[map]});
  assert.equal(x.tickets.get(a.id).totals.mapped,0);assert.equal(x.tickets.get(b.id).totals.mapped,0);
+});
+
+
+test('SPG #3134: entrega real sem mapa e OC repetida nos cinco SKUs',()=>{
+ const spg=[40,50,50,40,50].map((q,i)=>({...a,n:'3134',sku:String(200719278+i*2),qty:String(q),brand:'SAE',printer:'POSIGRAF',created:'2026-11-06',pick:'2026-11-09',delivery:'2026-11-13',deliveryPlan:'2026-11-10',closed:'2026-11-24',oc:'4500034988',ocStatus:'CONCLUIDA',ocValue:'2330,3',ocOpen:'2026-11-09',ocDone:'2026-11-09',row:345+i}));
+ const result=build({spg}),t=result.tickets.get(a.id),s=result.summaries[0];
+ assert.equal(s.delivered,'2026-11-13');assert.equal(s.pickDone,'2026-11-09');assert.equal(t.totals.picked,230);assert.equal(t.totals.delivered,230);assert.equal(t.totals.mapped,0);
+ assert.equal(s.deliverySource,'SPG · Entrega real');assert.equal(s.production[0].label,'Entregue integralmente');
+ assert.equal(t.orders.length,1);assert.equal(t.orders[0].oc,'4500034988');assert.equal(t.orders[0].value,'2330,3');assert.equal(t.orders[0].approved,'2026-11-09');
+ assert.equal(s.okrRoutes.every(r=>r.delivery==='2026-11-13'),true);
+});
+test('entrega SPG prevalece sobre mapa conflitante e não se propaga a outro destino',()=>{
+ const result=build({spg:[{...a,pick:'2026-10-02',delivery:'2026-10-03'},{...a,cd:'CITA',qty:'50'}],map:[{...map,qty:'100',received:'100',delivered:'2026-10-05'}]});
+ const t=result.tickets.get(a.id),j=t.items.find(it=>it.cd==='CD JDI'),f=t.items.find(it=>it.cd==='CD FOR');
+ assert.equal(j.stages[11].r,'2026-10-03');assert.equal(j.delivered,100);assert.equal(j.stages[11].f,'SPG · Entrega real');assert.equal(f.delivered,0);assert.equal(result.summaries[0].delivered,'');
+});
+test('entrega real do SPG sem data de coleta confirma quantidade sem inventar data',()=>{
+ const t=build({spg:[{...a,delivery:'2026-10-03'}]}).tickets.get(a.id);
+ assert.equal(t.totals.picked,100);assert.equal(t.totals.delivered,100);assert.equal(t.items[0].collection.date,'');assert.equal(t.items[0].stages[11].r,'2026-10-03');
+});
+test('OC do SPG não é duplicada pelo BD OC e mantém valor e aprovação da origem',()=>{
+ const t=build({spg:[{...a,oc:order.oc,ocValue:'123,45',ocStatus:'CONCLUIDA',ocOpen:'2026-09-02',ocDone:'2026-09-03'}],cost:[cost],oc:[{...order,value:'999',approval:'Pendente'}]}).tickets.get(a.id);
+ assert.equal(t.orders.length,1);assert.equal(t.orders[0].value,'123,45');assert.equal(t.orders[0].approval,'Aprovada');assert.equal(t.orders[0].req,'888888');
 });
