@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-25T18:30:38.861Z",
+  "lido_em": "2026-11-25T18:37:54.471Z",
   "files": {
     "HTML:abaCentralChamados": "7eef3ef6054cd881544e2a508190f933352f93c640e12787710f01018ffe1795",
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
@@ -35,12 +35,12 @@
     "SERVER_JS:AuditoriaMetaArmazem": "7d32a16b41b4509f81f2913a61d63b68ec3dd1820afe9c7bd87adc559e673a8e",
     "HTML:AuditoriaPortalSheets": "378d2c5194568fc3352c66b2c9fc065f6658567363b82ffb1b5201446165b389",
     "SERVER_JS:CachePorCopia": "c094537469895360979f0a183e9a71fae119de3e86d9f8ffc8b6d320ece4c6a2",
-    "SERVER_JS:ChamadosAcordos": "1f7a38cd8daa65b914c5abbd4fb2336e75458d76b045161e82e136efff377629",
+    "SERVER_JS:ChamadosAcordos": "fb5e768990cde243dd8fcc592e8c36615bd7063de46530e16bc90267f8296adc",
     "SERVER_JS:ChamadosFinanceiro": "1f342208ca1bd5b9ed6b0a0f83b0f94868e091f8edeedabcb64799943c7090cc",
     "SERVER_JS:ChamadosFontes": "255f3497066d0374e9c29e8be51f701b14059641ea31ed0cebad871b39b1e499",
     "SERVER_JS:ChamadosIndicadores": "9de0bf45d1d935cbb0cf2b9ecb4fc2c08f097cca4b73a94ad082a39e92677c3d",
     "SERVER_JS:ChamadosModelo": "f38ab34bcd0136584e0c7cc8de135e38ce31d34064307ef222cbc13e3837b201",
-    "SERVER_JS:ChamadosPortal": "a0b48f3e172ef145b9e946f522de6b451ee85fec5df4ac6fb13992fc90512a8f",
+    "SERVER_JS:ChamadosPortal": "aecb87cfc2bb67d8580e4007669d57e724d4ac4cab809372699da3dec5fd68c0",
     "HTML:Cockpit": "c5b213863fd0f600de42e17ecf0d2c1c17633ed99ff5fbfa4164ab0d451add61",
     "SERVER_JS:Code": "eeff0452e61f917cf2427e718e766ad3a3169900263c09dbad4afdf12f8d5d80",
     "SERVER_JS:Código": "74cbcdb7ae26466a909fa5fa6deba2d3c41a24bb9a5972f71d5f46afa67fb0f8",
