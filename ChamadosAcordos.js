@@ -92,6 +92,7 @@ function pgChMailSelect_(records,allocated){
 function pgChMailHeader_(m,name){return (m.payload?.headers||[]).find(h=>String(h.name).toLowerCase()===name.toLowerCase())?.value||'';}
 // Gmail API returns URL-safe Base64, which can omit padding.
 function pgChMailDecode_(raw){
+ if(Array.isArray(raw)&&raw.every(x=>Number.isInteger(x)&&x>=-128&&x<=255))return raw.map(x=>x>127?x-256:x);
  const value=String(raw||'').replace(/\s/g,'').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
  if(!value)return [];
  if(value.length%4===1||/[^A-Za-z0-9_-]/.test(value))throw new Error('Conteúdo base64 inválido');
@@ -113,8 +114,25 @@ function pgChMailImages_(part){
  const own=/^image\/(?:png|jpeg|gif|webp|bmp)$/i.test(part.mimeType||'')&&part.body?.size>=1000&&part.body.size<=5000000?[part]:[];
  return own.concat((part.parts||[]).flatMap(pgChMailImages_));
 }
-function pgChMailOCR_(message,part){
- const bytes=part.body.data||Gmail.Users.Messages.Attachments.get('me',message.id,part.body.attachmentId).data;
+// Read the actual JSON wire representation, avoiding the advanced service's byte coercion.
+function pgChMailGet_(path,stats){
+ const url='https://gmail.googleapis.com/gmail/v1/users/me/'+path;
+ for(let i=0;i<6;i++){
+  if(Date.now()>=stats.deadline){const e=new Error('Tempo reservado à leitura de e-mails atingido');e.pgMailPartial=true;throw e;}
+  const response=UrlFetchApp.fetch(url,{headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()},muteHttpExceptions:true});
+  const status=response.getResponseCode(),body=response.getContentText();
+  if(status>=200&&status<300)return JSON.parse(body);
+  const quota=status===429||status===403&&/quota|rateLimit|resource.exhausted/i.test(body);
+  if(quota&&i<5){
+   const delay=Math.min(30000,2000*Math.pow(2,i));
+   if(Date.now()+delay<stats.deadline){Utilities.sleep(delay);continue;}
+  }
+  const e=new Error('Gmail HTTP '+status+(quota?' (limite de consultas)':''));
+  e.pgMailPartial=quota||status===401||status===403;throw e;
+ }
+}
+function pgChMailOCR_(message,part,stats){
+ const bytes=part.body.data||pgChMailGet_('messages/'+encodeURIComponent(message.id)+'/attachments/'+encodeURIComponent(part.body.attachmentId),stats).data;
  const blob=Utilities.newBlob(pgChMailDecode_(bytes),part.mimeType,'cronograma');
  let id='';
  try{
@@ -124,10 +142,11 @@ function pgChMailOCR_(message,part){
   return UrlFetchApp.fetch(url,{headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()}}).getContentText();
  }finally{if(id)try{DriveApp.getFileById(id).setTrashed(true);}catch(e){console.warn('[CH email] Falha na limpeza de OCR temporário');}}
 }
-function pgChMailReadThread_(id,allocated,stats){
- const thread=Gmail.Users.Threads.get('me',id,{format:'full'}),messages=(thread.messages||[]).slice().sort((a,b)=>Number(a.internalDate)-Number(b.internalDate));
+function pgChMailReadThread_(id,allocated,stats,meta){
+ const thread=pgChMailGet_('threads/'+encodeURIComponent(id)+'?format=full',stats),messages=(thread.messages||[]).slice().sort((a,b)=>Number(a.internalDate)-Number(b.internalDate));
  if(!messages.length)return [];
  const root=messages[0],subject=pgChMailSubject_(pgChMailHeader_(root,'Subject'));
+ if(meta)meta.n=subject?.n||'';
  if(!subject||!allocated.has(subject.n))return [];
  const allowed=allocated.get(subject.n),initialVendors=[...new Set(pgChMailDomains_(pgChMailHeader_(root,'To')+' '+pgChMailHeader_(root,'Cc')).map(pgChMailVendor_).filter(v=>allowed.has(v)))];
  if(initialVendors.length!==1)return [];
@@ -142,8 +161,8 @@ function pgChMailReadThread_(id,allocated,stats){
   let text=body,dates=pgChMailParse_(text,at);
   if(external&&subject.kind==='request'&&(!dates.file||!dates.approval||!dates.pickup)){
    for(const p of pgChMailImages_(m.payload)){
-    try{const ocr=pgChMailOCR_(m,p);stats.ocr++;if(ocr)text+='\n'+ocr;}
-    catch(e){stats.ocrErrors++;console.warn('[CH email] OCR não concluído em mensagem de cronograma');}
+    try{const ocr=pgChMailOCR_(m,p,stats);stats.ocr++;if(ocr)text+='\n'+ocr;}
+    catch(e){if(e.pgMailPartial)throw e;stats.ocrErrors++;console.warn('[CH email] OCR não concluído em mensagem de cronograma');}
    }
    dates=pgChMailParse_(text,at);
   }
@@ -151,35 +170,64 @@ function pgChMailReadThread_(id,allocated,stats){
  }
  return out;
 }
+// Durable checkpoint contains only extracted dates and identifiers, never message bodies.
+const PG_CH_MAIL_STORE='PG_CH_MAIL_CHECKPOINT_V2';
+function pgChMailScope_(allocated,n){return Array.from(allocated.get(n)||[]).sort().join('|');}
+function pgChMailLoad_(){
+ const id=PropertiesService.getScriptProperties().getProperty(PG_CH_MAIL_STORE);
+ if(!id)return {id:'',entries:{}};
+ try{return {id,entries:JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8')).entries||{}};}
+ catch(e){console.warn('[CH email] Não foi possível ler checkpoint');return {id,entries:{}};}
+}
+function pgChMailSave_(old,entries){
+ const file=DriveApp.getFolderById(PASTA_CACHE_ID).createFile(Utilities.newBlob(JSON.stringify({entries}),'application/json','PG_CH_MAIL_'+Utilities.getUuid()+'.json'));
+ PropertiesService.getScriptProperties().setProperty(PG_CH_MAIL_STORE,file.getId());
+ if(old)try{DriveApp.getFileById(old).setTrashed(true);}catch(e){console.warn('[CH email] Limpeza do checkpoint');}
+}
 function pgChLerAcordos_(spg){
  const effective=String(Session.getEffectiveUser().getEmail()||'').toLowerCase();
- if(effective!=='leonardo.pereira@arcoeducacao.com.br')throw new Error('A leitura de acordos exige a conta administradora do portal.');
+ if(effective!=='leonardo.pereira@arcoeducacao.com.br')throw new Error('A leitura de acordos exige a conta autorizada do portal.');
  const allocated=new Map(),starts=[];
  for(const r of spg||[]){
   const n=pgChNumero_(r.n),vendor=pgChGraf_(r.printer),d=pgChData_(r.created);
   if(!n||!vendor||/CANCEL/.test(pgChNormal_(r.status)))continue;
   if(!allocated.has(n))allocated.set(n,new Set());allocated.get(n).add(vendor);if(d)starts.push(d);
  }
- const stats={threads:0,ocr:0,ocrErrors:0,decodeErrors:0,matched:0},records=[];
- if(!allocated.size)return {agreements:{},stats};
- const date=(starts.sort()[0]||'2026-09-01').replace(/-/g,'/'),cache=CacheService.getScriptCache();
- let next;
- do{
-  const page=Gmail.Users.Threads.list('me',{q:'{subject:"Solicitação de prazo" subject:"Formalização da produção"} after:'+date+' -in:trash -in:spam',maxResults:100,pageToken:next});
-  for(const t of page.threads||[]){
-   stats.threads++;
-   const key='PGCHMAIL_V1_'+t.id+'_'+(t.historyId||'');
-   let cached=t.historyId?cache.get(key):null,rows;
-   if(cached){rows=JSON.parse(cached).filter(r=>allocated.get(r.n)?.has(r.vendor));}
-   else{
-    const before=stats.ocrErrors,beforeDecode=stats.decodeErrors;rows=pgChMailReadThread_(t.id,allocated,stats);
-    if(t.historyId&&rows.length&&stats.ocrErrors===before&&stats.decodeErrors===beforeDecode)try{cache.put(key,JSON.stringify(rows),21600);}catch(e){}
+ const stats={threads:0,ocr:0,ocrErrors:0,decodeErrors:0,matched:0,cached:0,read:0,partial:false,deadline:Date.now()+110000};
+ if(!allocated.size){delete stats.deadline;return {agreements:{},stats};}
+ const date=(starts.sort()[0]||'2026-09-01').replace(/-/g,'/'),saved=pgChMailLoad_(),entries=saved.entries,seen=new Set(),pending=[];
+ let next,listComplete=false,changed=false;
+ try{
+  do{
+   if(Date.now()>=stats.deadline)throw Error('Tempo reservado à listagem atingido');
+   // Keep the advanced list call for its existing OAuth scope; fetch message content as raw JSON.
+   const page=Gmail.Users.Threads.list('me',{q:'{subject:"Solicitação de prazo" subject:"Formalização da produção"} after:'+date+' -in:trash -in:spam',maxResults:100,pageToken:next});
+   for(const t of page.threads||[]){
+    if(seen.has(t.id))continue;seen.add(t.id);stats.threads++;
+    const old=entries[t.id];
+    if(old&&t.historyId&&String(old.history)===String(t.historyId)&&old.scope===pgChMailScope_(allocated,old.n)&&!old.retry)stats.cached++;
+    else pending.push(t);
    }
-   records.push(...rows);
-  }
-  next=page.nextPageToken;
- }while(next);
- const agreements=pgChMailSelect_(records,allocated);stats.matched=Object.keys(agreements).length;return {agreements,stats};
+   next=page.nextPageToken;
+  }while(next);
+  listComplete=true;
+ }catch(e){stats.partial=true;console.warn('[CH email] Listagem parcial: '+String(e.message||e));}
+ // Prioritize not-yet-read threads over retrying problematic images.
+ pending.sort((a,b)=>Number(!!entries[a.id]?.retry)-Number(!!entries[b.id]?.retry));
+ for(const t of pending){
+  if(Date.now()>=stats.deadline){stats.partial=true;break;}
+  const old=entries[t.id],meta={},before=stats.ocrErrors,beforeDecode=stats.decodeErrors;
+  try{
+   const rows=pgChMailReadThread_(t.id,allocated,stats,meta),retry=stats.ocrErrors!==before||stats.decodeErrors!==beforeDecode;
+   entries[t.id]={history:String(t.historyId||''),n:meta.n||'',scope:pgChMailScope_(allocated,meta.n),rows,retry};
+   stats.read++;changed=true;if(retry)stats.partial=true;
+  }catch(e){stats.partial=true;console.warn('[CH email] Leitura parcial: '+String(e.message||e));if(e.pgMailPartial)break;if(old)old.retry=true;}
+ }
+ if(listComplete)for(const id of Object.keys(entries))if(!seen.has(id)){delete entries[id];changed=true;}
+ if(changed)try{pgChMailSave_(saved.id,entries);}catch(e){stats.partial=true;console.warn('[CH email] Checkpoint não gravado: '+String(e.message||e));}
+ const records=Object.values(entries).flatMap(e=>e.rows||[]),agreements=pgChMailSelect_(records,allocated);
+ stats.matched=Object.keys(agreements).length;delete stats.deadline;
+ console.log('[CH email] '+JSON.stringify(stats));return {agreements,stats};
 }
 function pgChAplicarAcordo_(it,t,agreements){
  const key=pgChNumero_(t.n)+'|'+pgChGraf_(it.printer),a=it.printer&&!it.legacy?agreements?.[key]:null;
