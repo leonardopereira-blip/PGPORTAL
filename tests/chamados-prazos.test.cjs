@@ -5,10 +5,12 @@ test('coleta formalizada ancora etapas anteriores e prevalece sobre previsão e 
  const p=ctx.pgChLeadProfile_([]),t={created:'2026-11-01',brand:'SAS'},base={printer:'LOGPRINT',cd:'JDI',qty:10,coverage:Array(12).fill(0)};
  const x=ctx.pgChPrazoRota_(t,{...base,spg:[{q:5,formal:'2026-11-20',pickP:'2026-11-24'},{q:5,formal:'2026-11-22'}]},p,3);
  assert.equal(x.deadline,'2026-11-26');assert.equal(x.pickupAnchor,'2026-11-20');assert.equal(x.pickupAnchorSource,'Formalizada');
- assert.equal(x.dates[10],'2026-11-20');assert.ok(x.dates.slice(0,10).every(d=>d<'2026-11-20'));
+ assert.equal(x.dates[10],'2026-11-20');assert.ok(x.dates.slice(0,10).every(d=>d>='2026-11-01'&&d<='2026-11-20'));
  const y=ctx.pgChPrazoRota_(t,{...base,spg:[{q:10,pickP:'2026-11-22'}]},p,3);
  assert.equal(y.pickupAnchor,'2026-11-22');assert.equal(y.pickupAnchorSource,'Prevista');
  const z=ctx.pgChPrazoRota_(t,{...base,stages:Array.from({length:12},(_,i)=>i===10?{agreed:'2026-11-21'}:{})},p,3);
  assert.equal(z.pickupAnchor,'2026-11-21');
  const sum=ctx.pgChPrazoResumo_([{qty:10,target:x},{qty:10,target:y}]);assert.equal(sum.dates[0],x.dates[0]);assert.equal(sum.deadline,x.deadline);
 });
+
+test('formalização tardia não estende a janela proporcional além dos 25 dias menos SLA',()=>{const p=ctx.pgChLeadProfile_([]),t={created:'2026-11-01',brand:'SAS'},it={printer:'LOGPRINT',cd:'JDI',qty:1,coverage:Array(12).fill(0),spg:[{q:1,formal:'2026-12-10'}]};const x=ctx.pgChPrazoRota_(t,it,p,3);assert.equal(x.pickupAnchor,'2026-12-10');assert.equal(x.safePickup,'2026-11-23');assert.equal(x.deadline,'2026-11-26');assert.ok(x.dates.slice(0,10).every(d=>d>='2026-11-01'&&d<='2026-11-23'));});
