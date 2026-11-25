@@ -29,9 +29,10 @@ test('destinos separados sem duplicar peso de chamados nem tiragem',()=>{
  for(const unit of ['tickets','qty']){const opts={...f,unit},d=chOKR([x],opts),lines=chOKRDestinationRows(d,opts,[x]);assert.equal(lines.length,2);assert.equal(lines.reduce((n,x)=>n+x.qty,0),130);assert.equal(lines.reduce((n,x)=>n+x.den,0),d.den);assert.equal(lines.reduce((n,x)=>n+x.num,0),d.num);}
 });
 
-test('coletado antes do vencimento conta no prazo, ainda que encerramento SPG ocorra depois',()=>{
+test('coleta antecipada continua visível, mas somente entra na aderência depois do vencimento',()=>{
  const x={...t,created:'2026-11-06',desired:'2026-12-20',pickDone:'2026-11-09',closed:''};
- const z=chOKR([x],{...f,rule:'standard',asof:'2026-11-19'});assert.equal(z.num,1);assert.equal(z.den,1);assert.equal(z.upcoming,0);assert.equal(z.items[0].actual,'2026-11-09');
+ const z=chOKR([x],{...f,rule:'standard',asof:'2026-11-19'});assert.equal(z.num,0);assert.equal(z.den,0);assert.equal(z.upcoming,1);assert.equal(z.actual,1);assert.equal(z.items[0].actual,'2026-11-09');
+ const next=chOKR([x],{...f,rule:'standard',asof:'2026-12-21'});assert.equal(next.num,1);assert.equal(next.den,1);
 });
 test('coleta determina realizado no critério de 25 dias e ignora encerramento',()=>{
  const x={...t,created:'2026-10-23',pickDone:'2026-11-05',closed:'2026-11-18'};
@@ -104,4 +105,14 @@ test('corte histórico mantém exclusões documentadas apenas em V1, sem restaur
  assert.equal(chOKR([{...rows[0],shipment:'V4'}],opts).den,1);
  assert.equal(chOKR(rows,{...opts,rule:'pick'}).historicalExcluded,0);
  assert.equal(chOKR(rows,{...opts,rule:'fixed'}).historicalExcluded,3);
+});
+
+test('D-1 exclui todos os prazos de hoje e futuros e preserva realizados no dia do vencimento',()=>{
+ const base={...t,created:'2026-11-01',desired:'2026-11-26',totals:{qty:100,coverage:[]},pickDone:''};
+ for(const rule of ['fixed','standard','desired'])for(const unit of ['tickets','qty']){
+  const opts={...f,rule,unit,asof:'2026-11-26'},w=unit==='qty'?100:1;
+  const rows=[{...base,id:'EARLY',pickDone:'2026-11-20'},{...base,id:'TODAY',pickDone:'2026-11-26'},{...base,id:'OPEN'}];
+  const d=chOKR(rows,opts);assert.equal(d.den,0);assert.equal(d.num,0);assert.equal(d.upcoming,3*w);assert.equal(d.actual,2*w);
+  const e=chOKR(rows,{...opts,asof:'2026-11-27'});assert.equal(e.den,3*w);assert.equal(e.num,2*w);assert.equal(e.pending,w);assert.equal(e.late,w);
+ }
 });
