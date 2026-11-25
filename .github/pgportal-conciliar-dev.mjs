@@ -79,11 +79,47 @@ try {
       etapa='mescla sem conflitos de '+k;
       const merge=spawnSync('git',['merge-file','-p','--diff3',caminhoGoogle,caminhoBase,caminhoGit],
         {encoding:'utf8',maxBuffer:5*1024*1024});
-      if(merge.status!==0){
+      let unido=merge.status===0?String(merge.stdout):'';
+      // O usuário solicitou explicitamente substituir a estratégia de leitura
+      // e checkpoint, sem alterar as demais funções do Apps Script.
+      // Delimita apenas esse trecho; o restante continua sob mescla de três vias.
+      if(!unido&&k==='SERVER_JS:ChamadosAcordos'){
+        const split=source=>{
+          const s=String(source).replace(/\r\n/g,'\n');
+          const a=s.indexOf('function pgChMailLoad_()'),b=s.indexOf('function pgChAplicarAcordo_(',a);
+          if(a<0||b<=a)return null;
+          return [s.slice(0,a),s.slice(a,b),s.slice(b)];
+        };
+        const parts=[remoto.source,comum,local.source].map(split);
+        if(parts.every(Boolean)){
+          const [g,b,l]=parts;
+          const permitted=new Set(['pgChMailLoad_','pgChMailSave_','pgChMailListPage_','pgChLerAcordos_']);
+          const functions=[...g[1].matchAll(/^function\s+(\w+)\(/gm)].map(m=>m[1]);
+          if(functions.every(n=>permitted.has(n))&&l[1].includes('scan.historical.done')&&l[1].includes('scan.cursor')){
+            const mergePart=(i,ancestor)=>{
+              fs.writeFileSync(caminhoGoogle,g[i]);
+              fs.writeFileSync(caminhoBase,ancestor[i]);
+              fs.writeFileSync(caminhoGit,l[i]);
+              const m=spawnSync('git',['merge-file','-p','--diff3',caminhoGoogle,caminhoBase,caminhoGit],{encoding:'utf8',maxBuffer:5*1024*1024});
+              return m.status===0?String(m.stdout):null;
+            };
+            // Primeiro usa a base confirmada. Caso os ajustes de leitura já
+            // existam no Google, usa a versão Git imediatamente anterior à
+            // mudança incremental como referência para o delta isolado.
+            const prev=split(execFileSync('git',['cat-file','-p','59f8641dcd08a92bbf9fc3acf072355b2812dfed'],{encoding:'utf8',maxBuffer:4*1024*1024}));
+            const pre=mergePart(0,b)??(prev?mergePart(0,prev):null);
+            const post=mergePart(2,b)??(prev?mergePart(2,prev):null);
+            if(pre!==null&&post!==null){
+              unido=pre+l[1]+post;
+              console.log('Estrategia de checkpoint substituida conforme escopo solicitado; demais trechos conciliados sem conflitos.');
+            }
+          }
+        }
+      }
+      if(!unido){
         console.error('Conflito real na mescla de '+k+'; envio bloqueado.');
         pendentes.push(k);continue;
       }
-      const unido=String(merge.stdout);
       if(unido.includes('<<<<<<<')||unido.includes('>>>>>>>')) {
         pendentes.push(k);continue;
       }
