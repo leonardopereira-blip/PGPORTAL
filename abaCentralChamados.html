@@ -529,11 +529,7 @@
     const lines=display.map(t=>[t.n,t.cat,t.brand,t.shipment,t.owner,t.printers.join(' | '),t.cds.map(cdLabel).join(' | '),t.qty,t.totalQty,date(t.created),date(t.due),date(t.actual),t.days,t.pickSource,t.maps.join(' | '),t.age,t.localStatus||t.status,t.status,t.weight,t.den,t.num,t.historicalExcluded?'Excluído na apuração original':'',f.rule,f.unit,date(f.start),date(f.end),date(f.asof)]);
     const csv='\uFEFF'+[headers,...lines].map(a=>a.map(value).join(';')).join('\r\n'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='OKR_Reentradas_'+f.rule+'_'+f.unit+'_'+f.asof+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  function collectionCell(t,value){
-    const cd=t.cd||t.cds?.[0]||'';
-    if(value||!cd||/CANCEL/i.test(t.status||''))return dt(value);
-    return '<div style="display:flex;gap:4px;align-items:center"><input type="date" aria-label="Data de coleta" max="'+dayNow()+'" style="width:116px"><button type="button" class="ch-btn" data-collect-id="'+esc(t.id)+'" data-collect-cd="'+esc(cd)+'" title="Registrar coleta integral deste destino">Salvar</button></div>';
-  }
+  function collectionCell(t,value){return dt(value); }
   async function saveCollection(b){
     const date=b.parentElement.querySelector('input')?.value;if(!date){message('Informe a data de coleta.',true);return;}
     if(!confirm('Registrar coleta integral deste chamado no destino '+b.dataset.collectCd+' em '+dt(date)+'?'))return;
@@ -691,7 +687,6 @@
   root.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;
     if(b.hasAttribute('data-deadline')){state.deadline=state.deadline===b.dataset.deadline?'':b.dataset.deadline;state.page=1;render();return;}
-    if(b.dataset.collectId){saveCollection(b);return;}
     if(b.id==='ch-okr-export'){exportOKR();return;}
     if(b.id==='ch-okr-clear'){[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment'].forEach(k=>setFilterValue(el(k),''));setFilterValue(el('okr-cat'),'REENTRADA');el('okr-scope').value='ativos';renderOKR();return;}
     if(b.id==='ch-funnel-qty'||b.id==='ch-funnel-tickets'){state.funnelMode=b.id==='ch-funnel-qty'?'qty':'tickets';render();return;}
