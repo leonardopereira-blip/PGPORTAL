@@ -116,3 +116,5 @@ test('D-1 exclui todos os prazos de hoje e futuros e preserva realizados no dia 
   const e=chOKR(rows,{...opts,asof:'2026-11-27'});assert.equal(e.den,3*w);assert.equal(e.num,2*w);assert.equal(e.pending,w);assert.equal(e.late,w);
  }
 });
+
+test('entrega integral supre coleta ausente na mesma rota, preservando SPG e corte histórico',()=>{const route=(pick,delivery)=>({qty:100,pick,delivery,collection:{events:pick?[{date:pick,qty:100,source:'SPG · Coleta real'}]:[],parts:[]}});const base={...t,created:'2026-11-01',desired:'2026-11-26',totals:{qty:200,coverage:[]},okrRoutes:[route('2026-11-20','2026-11-22'),route('','2026-11-25')]};const a=chOKR([base],{...f,asof:'2026-11-27'});assert.equal(a.items[0].actual,'2026-11-25');assert.equal(a.num,1);assert.equal(a.den,1);const b=chOKR([base],{...f,asof:'2026-11-24'});assert.equal(b.items[0].actual,'');assert.equal(b.den,0);const c=chOKR([{...base,okrRoutes:[route('2026-11-20','2026-11-22'),route('','')]}],{...f,asof:'2026-11-27'});assert.equal(c.items[0].actual,'');assert.equal(c.pending,1);});

@@ -216,12 +216,12 @@ test('responsável PG da carteira é por gráfica/destino, sem utilizar respons�
 });
 
 
-test('entrega integral confirma coleta física na carteira sem fabricar data nem alterar o OKR',()=>{
+test('entrega integral fornece data de referência da coleta na carteira',()=>{
  const today='2026-11-25',base=ticket('A','2026-11-24',{okrRoutes:[{qty:10,delivery:'2026-11-20',pick:''}]});
  assert.equal(rules.chCarteiraColeta_(base,'',today).confirmed,true);
- assert.equal(rules.chCarteiraColeta_(base,'',today).date,'');
+ assert.equal(rules.chCarteiraColeta_(base,'',today).date,'2026-11-20');
  assert.equal(rules.chCarteiraColeta_(base,'2026-11-20',today).date,'2026-11-20');
- assert.equal(rules.chCarteiraColeta_(base,'2026-11-21',today).date,'');
+ assert.equal(rules.chCarteiraColeta_(base,'2026-11-21',today).date,'2026-11-20');
  const partial={...base,okrRoutes:[{qty:5,delivery:'2026-11-20'},{qty:5,delivery:''}]};
  assert.equal(rules.chCarteiraColeta_(partial,'',today).confirmed,false);
  const future={...base,okrRoutes:[{qty:10,delivery:'2026-11-26'}]};

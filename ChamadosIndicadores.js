@@ -221,6 +221,9 @@ function pgChColetaRota_(it){
  // datas históricas do painel. Para o SPG, o realizado sempre prevalece.
  const legacyMap=it.legacy&&pgChDataIntegral_(mapEvents,q,'date','qty');
  const events=pgChCompletarEventosRota_(sp,legacyMap?[]:primary,mapEvents,q,'pick');
+ // Entrega integral da mesma rota comprova a coleta. Só completa o saldo sem data.
+ const delivery=it.deliveryEvidence||pgChEntregaRota_(it),remaining=Math.max(0,q-events.reduce((n,e)=>n+e.qty,0));
+ if(remaining>0&&delivery.delivered>=q&&delivery.date&&events.every(e=>e.date<=delivery.date))events.push({date:delivery.date,qty:remaining,kit:'',map:'',source:'Entrega real · referência para coleta'});
  const mapPhysical=maps.reduce((n,m)=>n+Math.max(0,m.pick?m.qty:Math.min(m.qty,m.delivered)),0);
  const picked=Math.min(q,Math.max(mapPhysical,it.deliveryEvidence?.delivered||0,events.reduce((n,e)=>n+e.qty,0)));
  const date=pgChDataIntegral_(events,q,'date','qty');

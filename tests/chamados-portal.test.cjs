@@ -319,9 +319,9 @@ test('entrega SPG prevalece sobre mapa conflitante e não se propaga a outro des
  const t=result.tickets.get(a.id),j=t.items.find(it=>it.cd==='CD JDI'),f=t.items.find(it=>it.cd==='CD FOR');
  assert.equal(j.stages[11].r,'2026-10-03');assert.equal(j.delivered,100);assert.equal(j.stages[11].f,'SPG · Entrega real');assert.equal(f.delivered,0);assert.equal(result.summaries[0].delivered,'');
 });
-test('entrega real do SPG sem data de coleta confirma quantidade sem inventar data',()=>{
+test('entrega integral real do SPG fornece referência de coleta quando não há data',()=>{
  const t=build({spg:[{...a,delivery:'2026-10-03'}]}).tickets.get(a.id);
- assert.equal(t.totals.picked,100);assert.equal(t.totals.delivered,100);assert.equal(t.items[0].collection.date,'');assert.equal(t.items[0].stages[11].r,'2026-10-03');
+ assert.equal(t.totals.picked,100);assert.equal(t.totals.delivered,100);assert.equal(t.items[0].collection.date,'2026-10-03');assert.equal(t.items[0].stages[11].r,'2026-10-03');assert.match(t.items[0].collection.source,/Entrega real/);
 });
 test('OC do SPG não é duplicada pelo BD OC e mantém valor e aprovação da origem',()=>{
  const t=build({spg:[{...a,oc:order.oc,ocValue:'123,45',ocStatus:'CONCLUIDA',ocOpen:'2026-09-02',ocDone:'2026-09-03'}],cost:[cost],oc:[{...order,value:'999',approval:'Pendente'}]}).tickets.get(a.id);

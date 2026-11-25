@@ -58,6 +58,17 @@
   #ch-central .ch-okr-comparison .ch-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin:14px 0 12px}
   #ch-central .ch-okr-comparison td,#ch-central .ch-okr-comparison th{padding:7px 9px;white-space:normal}
   #ch-central .ch-okr-comparison .ch-compare-link{font-size:11px;margin-top:8px;display:inline-block}
+  /* Cards OKR: largura flexível pelo espaço disponível do painel. */
+  #ch-central #ch-okr-kpis,#ch-central .ch-okr-comparison .ch-grid{display:flex;flex-wrap:wrap;align-items:stretch;gap:12px;min-width:0}
+  #ch-central #ch-okr-kpis .ch-card{flex:1 1 172px;min-width:0;max-width:100%;box-sizing:border-box;display:flex;flex-direction:column;padding:12px 14px}
+  #ch-central #ch-okr-kpis .ch-money-card{flex:2 1 300px}
+  #ch-central .ch-okr-comparison .ch-grid .ch-card{flex:1 1 240px;min-width:0;max-width:100%;box-sizing:border-box;display:flex;flex-direction:column;padding:12px 14px}
+  #ch-central #ch-okr-kpis .ch-card small,#ch-central .ch-okr-comparison .ch-card small{white-space:normal;overflow-wrap:break-word;word-break:normal;min-height:0;line-height:1.4;margin-bottom:8px;flex:1 0 auto}
+  #ch-central #ch-okr-kpis .ch-card b,#ch-central .ch-okr-comparison .ch-card b{font-size:clamp(18px,1.6vw,24px);line-height:1.25;letter-spacing:-.025em;white-space:normal;overflow-wrap:anywhere;word-break:normal;max-width:100%;height:auto}
+  #ch-central #ch-okr-kpis .ch-money-card b{font-size:clamp(18px,1.5vw,23px);letter-spacing:-.02em}
+  #ch-central .ch-okr-comparison .ch-compare-link{white-space:normal;overflow-wrap:break-word;text-align:left;align-self:flex-start}
+  #ch-central #ch-oc-total .ch-between{flex-wrap:wrap;gap:8px}
+  #ch-central #ch-oc-total strong{min-width:0;max-width:100%;overflow-wrap:anywhere}
   #ch-central .ch-card:first-child{border-top-color:var(--ch-indigo)}
   #ch-central .ch-card[data-tone=orange]{border-top-color:var(--ch-orange)}
   #ch-central .ch-card[data-tone=navy]{border-top-color:var(--ch-navy)}
@@ -288,18 +299,19 @@
   const chStatusColeta=date=>date?'Coletado':'Não coletado';
   function chPickEvidence(t,asof){
     const valid=date=>!!date&&date<=asof&&(!t.created||date>=t.created);
-    if(!Array.isArray(t.okrRoutes)||!t.okrRoutes.length)return {due:t.pickDue||'',actual:valid(t.pickDone)?t.pickDone:'',late:!!t.pickLate&&valid(t.pickDone),invalid:!!t.pickUnverified&&valid(t.pickDone),days:null,source:t.pickSource||'',maps:t.pickMaps||[]};
+    if(!Array.isArray(t.okrRoutes)||!t.okrRoutes.length){const delivery=chDeliveryDate(t,asof),actual=valid(t.pickDone)&&(!delivery||t.pickDone<=delivery)?t.pickDone:delivery;return {due:t.pickDue||'',actual,late:!!t.pickLate&&!!actual,invalid:!!t.pickUnverified&&!!actual,days:null,source:actual&&actual!==t.pickDone?'Entrega real · referência para coleta':t.pickSource||'',maps:t.pickMaps||[]};}
     const last=a=>a.filter(Boolean).sort().pop()||'',rs=t.okrRoutes.filter(r=>r.qty>0),out=[];
     for(const r of rs){
       const parts=r.collection?.parts||[],events=(r.collection?.events||[]).filter(e=>valid(e.date)),dues=[...new Set(parts.map(p=>p.due).filter(Boolean))];
-      const formal=parts.length&&parts.every(p=>p.due)?last(dues):'',spgDate=r.collection?.spgDate||chIntegral(events.filter(e=>/^SPG\b/.test(e.source||'')),r.qty,asof),actual=valid(spgDate)?spgDate:chIntegral(events,r.qty,asof)||(valid(r.pick)?r.pick:'');
+      const formal=parts.length&&parts.every(p=>p.due)?last(dues):'',delivery=valid(r.delivery)?r.delivery:'',spgDate=r.collection?.spgDate||chIntegral(events.filter(e=>/^SPG\b/.test(e.source||'')),r.qty,asof),candidate=valid(spgDate)?spgDate:chIntegral(events,r.qty,asof)||(valid(r.pick)?r.pick:''),actual=candidate&&(!delivery||candidate<=delivery)?candidate:delivery;
+      const deliveryFallback=!!delivery&&actual===delivery&&candidate!==delivery;
       let invalid=!formal,late=false,days=0;
       if(formal&&dues.length>1){
         // Consolida por kit; um mesmo evento não pode comprovar dois compromissos.
         const kits=new Map();for(const p of parts){if(!p.kit){invalid=true;continue;}const k=kits.get(p.kit)||{qty:0,due:p.due};k.qty+=p.qty;if(k.due!==p.due)invalid=true;kits.set(p.kit,k);}
         for(const [kit,p] of kits){const d=chIntegral(events.filter(e=>e.kit===kit),p.qty,asof);if(!d&&actual)invalid=true;if(d&&d>p.due){late=true;days=Math.max(days,chDays(p.due,d));}else if(!d&&asof>p.due)days=Math.max(days,chDays(p.due,asof));}
       }else if(formal){const d=actual||asof;if(d>formal){days=chDays(formal,d);late=!!actual;}}
-      out.push({formal,actual,invalid,late,days,source:[...new Set(events.filter(e=>e.date<=asof).map(e=>e.source).filter(Boolean))].join(' + '),maps:r.collection?.maps||[]});
+      out.push({formal,actual,invalid,late,days,source:[...new Set([...events.filter(e=>e.date<=asof).map(e=>e.source).filter(Boolean),...(deliveryFallback?['Entrega real · referência para coleta']:[])])].join(' + '),maps:r.collection?.maps||[]});
     }
     return {due:out.length&&out.every(r=>r.formal)?last(out.map(r=>r.formal)):'',actual:out.length&&out.every(r=>r.actual)?last(out.map(r=>r.actual)):'',late:out.some(r=>r.late),invalid:out.some(r=>r.invalid),days:Math.max(0,...out.map(r=>r.days)),source:[...new Set(out.map(r=>r.source).filter(Boolean))].join(' + '),maps:[...new Set(out.flatMap(r=>r.maps).filter(Boolean))]};
   }
@@ -356,12 +368,11 @@
     if(items.length)return items.every(it=>it.delivered>=it.qty&&valid(it.stages?.[11]?.r))?items.map(it=>it.stages[11].r).sort().pop():'';
     return t.totals?.qty>0&&t.totals.delivered>=t.totals.qty&&valid(t.delivered)?t.delivered:'';
   }
-  // Entrega integral comprova a coleta física, mas não comprova sua data.
-  // Não altera o realizado datado nem a apuração histórica do OKR.
+  // Entrega integral: data real de entrega é referência conservadora quando falta coleta.
   function chCarteiraColeta_(t,date,asof){
     const delivery=chDeliveryDate(t,asof);
     if(date&&date<=asof&&(!t.created||date>=t.created)&&(!delivery||date<=delivery))return {date,confirmed:true};
-    return {date:'',confirmed:!!delivery};
+    return {date:delivery,confirmed:!!delivery,fallback:!!delivery};
   }
   function chFinalForecast(t){
     if(!Array.isArray(t.items))return {date:t.eta||'',partial:!!t.partial};
@@ -580,7 +591,7 @@
   const chOKRAge=d=>d.average===null?'—':num(Math.round(d.average*10)/10)+' dias';
   const chOKRTone=d=>d.pct===null?'navy':d.pct>=90?'green':'yellow';
   function chOKRHelpCard(k,v,tone,help,id,extra=''){
-    return '<div class="ch-card ch-help-card" data-tone="'+tone+'" tabindex="0" aria-describedby="'+id+'" title="'+esc(help)+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b>'+extra+'<span class="ch-card-tooltip" role="tooltip" id="'+id+'">'+esc(help)+'</span></div>';
+    return '<div class="ch-card ch-help-card'+(k==='Valor total das OCs'?' ch-money-card':'')+'" data-tone="'+tone+'" tabindex="0" aria-describedby="'+id+'" title="'+esc(help)+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b>'+extra+'<span class="ch-card-tooltip" role="tooltip" id="'+id+'">'+esc(help)+'</span></div>';
   }
   const chOKRMoney=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
   const chOKROCIds=t=>[...new Set((t.ocValues||[]).map(x=>x.oc).filter(Boolean))];
@@ -596,7 +607,7 @@
     const lines=results.map(({label,help,d})=>'<tr><td title="'+esc(help)+'">'+esc(label)+'</td>'+[chOKRPct(d.pct),num(d.num)+' / '+num(d.den),num(d.late),num(d.pending),num(d.upcoming),num(d.canceled),num(d.historicalExcluded),num(d.actual),num(d.notCollected),chOKRAge(d),chOKROCLabel(chTotalOC(d.items))].map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('');
     return '<p class="ch-muted">Mesmos filtros e unidade de apuração para os três critérios. A base elegível pode variar conforme o prazo de cada critério; todos consideram vencimento até D-1.</p><div class="ch-grid">'+cards+'</div><div class="ch-frame"><table><thead><tr>'+headers.map(h=>'<th title="'+esc(chOKRCardHelp[h]||'Critério utilizado para definir o prazo de coleta.')+'" tabindex="0">'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+lines+'</tbody></table></div>';
   }
-  const chOKRHelp={'OC':'Ordens de compra vinculadas ao chamado e destino.','Valor OC':'Valor integral das OCs únicas da linha. O total geral elimina duplicidades entre linhas e ignora valores ausentes ou divergentes.','Chamado':'Identificador da solicitação no SPG. Clique para abrir o detalhe.','Categoria':'Tipo da solicitação.','Marca':'Marca do chamado.','Envio':'Ciclo de envio.','Gráfica':'Gráfica vinculada à rota.','CD':'Centro de distribuição do destino.','Tiragem':'Quantidade do destino, sem duplicar a tiragem entre destinos.','Abertura':'Data de abertura do chamado.','Prazo':'Data limite conforme o critério de apuração selecionado.','Realizado':'Data da coleta integral do destino; coleta real do SPG tem prioridade, com complemento por mapa e Transportes quando necessário. Considera apenas datas válidas até o corte.','Dias de atraso':'Dias corridos de atraso em relação ao prazo selecionado.','Aging':'Dias corridos entre abertura e coleta integral.','Status':'Coletado quando há data integral válida no destino; caso contrário, não coletado. O indicador por chamado mantém sua regra de apuração integral.','Apuração histórica':'Exclusões documentadas do corte histórico, sem alterar as datas das fontes.'};
+  const chOKRHelp={'OC':'Ordens de compra vinculadas ao chamado e destino.','Valor OC':'Valor integral das OCs únicas da linha. O total geral elimina duplicidades entre linhas e ignora valores ausentes ou divergentes.','Chamado':'Identificador da solicitação no SPG. Clique para abrir o detalhe.','Categoria':'Tipo da solicitação.','Marca':'Marca do chamado.','Envio':'Ciclo de envio.','Gráfica':'Gráfica vinculada à rota.','CD':'Centro de distribuição do destino.','Tiragem':'Quantidade do destino, sem duplicar a tiragem entre destinos.','Abertura':'Data de abertura do chamado.','Prazo':'Data limite conforme o critério de apuração selecionado.','Realizado':'Data da coleta integral do destino; coleta real do SPG tem prioridade, com complemento por mapa e Transportes quando necessário. Se faltar coleta, usa a entrega real integral da mesma rota como referência. Considera apenas datas válidas até o corte.','Dias de atraso':'Dias corridos de atraso em relação ao prazo selecionado.','Aging':'Dias corridos entre abertura e coleta integral.','Status':'Coletado quando há data integral válida no destino; caso contrário, não coletado. O indicador por chamado mantém sua regra de apuração integral.','Apuração histórica':'Exclusões documentadas do corte histórico, sem alterar as datas das fontes.'};
   function chOKRTable(display){
     const headers=['Chamado','Categoria','Marca','Envio','Gráfica','CD','Tiragem','OC','Valor OC','Abertura','Prazo','Realizado','Dias de atraso','Aging','Status','Apuração histórica'];
     if(!display.length)return '<p class="ch-muted">Nenhum chamado no recorte.</p>';
@@ -613,11 +624,11 @@
     const lines=display.map(t=>[t.n,t.cat,t.brand,t.shipment,t.owner,t.printers.join(' | '),t.cds.map(cdLabel).join(' | '),t.qty,t.totalQty,chOKROCIds(t).join(' / '),chOKROCLabel(chTotalOC([t])),date(t.created),date(t.due),date(t.actual),t.days,t.age,t.localStatus||t.status,t.weight,t.den,t.num,t.historicalExcluded?'Excluído na apuração original':'',f.rule,f.unit,date(f.start),date(f.end),date(f.asof)]);
     const csv='\uFEFF'+[headers,...lines].map(a=>a.map(value).join(';')).join('\r\n'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='OKR_Reentradas_'+f.rule+'_'+f.unit+'_'+f.asof+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  function collectionCell(t,value){return dt(value); }
+  function collectionCell(t,value){return value&&/Entrega real · referência para coleta/.test(t.pickSource||'')?'<span title="Data real de entrega usada como referência da coleta sem registro.">'+dt(value)+'</span>':dt(value); }
   function carteiraCollectionCell(t,value,today,empty='—'){
     const result=chCarteiraColeta_(t,value,today);
-    if(result.date)return dt(result.date);
-    return result.confirmed?'<span class="ch-ontrack" title="Coleta confirmada pela entrega integral. A fonte não informa uma data de coleta válida.">Coletado</span>':empty;
+    if(result.date)return result.fallback?'<span class="ch-ontrack" title="Data real da entrega usada como referência; coleta sem data registrada.">'+dt(result.date)+'</span>':dt(result.date);
+    return empty;
   }
   async function saveCollection(b){
     const date=b.parentElement.querySelector('input')?.value;if(!date){message('Informe a data de coleta.',true);return;}
