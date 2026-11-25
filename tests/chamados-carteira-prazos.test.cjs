@@ -133,7 +133,7 @@ test('detalhe do SKU distingue metas, previsão e real sem inventar data nem exi
     eta: '', etaPartial: true, stages: stages('2026-11-22', ''), spg: [], cal: [], pcp: [], maps: [] };
   const detail = h.ui.itemHtml(it);
   assert.match(detail, /Data desejada da etapa<\/th><th>Data acordada \/ formalizada<\/th><th>Previsão da etapa<\/th><th>Real da etapa/);
-  assert.match(detail, /24\/11\/2026<\/td><td>—<\/td><td>22\/11\/2026<\/td><td>—<\/td>/);
+  assert.match(detail, /24\/11\/2026<\/td><td><span title="Estimativa: sem acordo identificado">~ 22\/11\/2026<\/span><\/td><td>22\/11\/2026<\/td><td>Sem registro real<\/td>/);
   assert.match(detail, /Previsão final de entrega<\/dt><dd>—<\/dd>/);
   assert.match(detail, /previsão e real vêm das fontes/);
   assert.doesNotMatch(detail, /Saldo/i);
