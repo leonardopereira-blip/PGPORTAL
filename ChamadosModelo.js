@@ -552,6 +552,7 @@ function pgChModelo_(dados) {
       it.stages.push(log(it.mapped,'',pgChUltima_(it.maps.map(m=>m.created))),log(it.picked,pgChUltima_(it.spg.map(s=>s.pickP)),
         it.collection.date),log(it.delivered,it.eta,pgChUltima_(it.maps.filter(m=>m.delivered>0).map(m=>m.delivery))));
       if(it.collection.source)it.stages[10].f=it.collection.source;
+      if(dados.agreements)pgChAplicarAcordo_(it,t,dados.agreements);
       const deliveredMaps=it.maps.filter(m=>m.delivered>0);
       if(deliveredMaps.some(m=>m.tpDeliveryRow))it.stages[11].f=pgChUnicos_(deliveredMaps.map(m=>m.tpDeliveryRow?'Transportes':'Mapa')).join(' + ');
       totals.qty+=it.qty;totals.balance+=saldo;
