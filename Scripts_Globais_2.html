@@ -5974,7 +5974,7 @@ window.processarEvolucao = function() {
     window.sincronizarSubmenu = function(idAlvo) {
         const mapa = {
           'abaGiroSemanal': 'sub-prod',
-            'abaGeral': 'sub-prod', 'abaEvolucao': 'sub-prod', 'abaFunil': 'sub-prod', 'abaMatriz': 'sub-prod', 'abaEficiencia': 'sub-prod', 'abaColetas': 'sub-pos', 'abaMetaCD': 'sub-prod', 'abaOtif': 'sub-prod', 'abaPlan': 'sub-prod', 'viewCockpit': 'sub-prod','abaOKRQ2': 'sub-prod',
+            'abaGeral': 'sub-prod', 'abaEvolucao': 'sub-prod', 'abaFunil': 'sub-prod', 'abaMatriz': 'sub-prod', 'abaEficiencia': 'sub-prod', 'abaColetas': 'sub-pos', 'abaTempSasAdapt': 'sub-pos', 'abaMetaCD': 'sub-prod', 'abaOtif': 'sub-prod', 'abaPlan': 'sub-prod', 'viewCockpit': 'sub-prod','abaOKRQ2': 'sub-prod',
             'abaQualidade': 'sub-pre', 'viewPreProd': 'sub-pre',
             'viewQualidade': 'sub-qual',
             
@@ -6078,6 +6078,7 @@ window.processarEvolucao = function() {
 
         // 🎯 O NOVO GATILHO DA ABA DE METAS (OKR Q2)
         if (abaId === 'abaOKRQ2' && window.iniciarAbaOKRQ2) window.iniciarAbaOKRQ2();
+        if (abaId === 'abaTempSasAdapt' && window.pgCarregarTempSasAdapt) window.pgCarregarTempSasAdapt();
         
     };
 
