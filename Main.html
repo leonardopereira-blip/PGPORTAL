@@ -144,6 +144,8 @@ window.exportarSkusFiltradosSheets = function() {
         .menu-btn:hover { background-color: #171717; color: white; }
         .menu-active { background-color: #dc2626 !important; color: white !important; font-weight: bold; }
 
+        #pgMenuHint{position:absolute;left:12px;top:calc(100% + 9px);z-index:80;max-width:min(310px,calc(100vw - 24px));width:max-content;padding:10px 13px;border:1px solid #dce2ea;border-radius:9px;background:white;color:#0c2340;box-shadow:0 6px 22px #0c234025;font-size:12px;line-height:1.45;font-weight:500;pointer-events:none}
+        #pgMenuHint[hidden]{display:none!important}#pgMenuHint:before{content:"";position:absolute;top:-6px;left:19px;width:10px;height:10px;background:white;border-left:1px solid #dce2ea;border-top:1px solid #dce2ea;transform:rotate(45deg)}
         /* VISIBILIDADE */
         .view-section { width: 100%; height: 100%; display: none; flex-direction: column; }
         .view-visible { display: flex !important; }
@@ -202,14 +204,15 @@ window.exportarSkusFiltradosSheets = function() {
         <button onclick="hideToast()" class="ml-auto text-neutral-400 hover:text-neutral-600">&times;</button>
     </div>
 
-    <header class="bg-black text-white shadow-md z-50 flex-shrink-0 h-14 flex items-center justify-between px-4 border-b border-neutral-800">
+    <header class="relative bg-black text-white shadow-md z-50 flex-shrink-0 h-14 flex items-center justify-between px-4 border-b border-neutral-800">
         <div class="flex items-center gap-4">
-            <button onclick="toggleMenu()" class="p-2 text-neutral-400 hover:text-white rounded transition-colors" title="Recolher Menu">
+            <button id="pgMenuToggle" type="button" onclick="toggleMenu()" class="p-2 text-neutral-400 hover:text-white rounded transition-colors" title="Recolher menu" aria-label="Recolher menu" aria-controls="sidebarMenu" aria-expanded="true">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
             </button>
             <h1 onclick="voltarParaHome()" class="text-xl font-black text-white tracking-tight cursor-pointer hover:text-neutral-300 transition-colors" title="Voltar para a Tela Inicial">Portal <span class="text-red-600">PG</span></h1>
         </div>
         <div class="text-[10px] text-neutral-500" id="userEmail">...</div>
+        <div id="pgMenuHint" role="status" hidden>Menu recolhido. Clique no ícone de menu acima para abrir novamente.</div>
     </header>
 
     <div class="flex-1 flex overflow-hidden relative">
@@ -550,8 +553,7 @@ window.exportarSkusFiltradosSheets = function() {
         // PG_LOADING_TODOS_MESES_V1
 
         function pgNavegarChamados(view) {
-            const menu=document.getElementById('sub-reen'), sidebar=document.getElementById('sidebarMenu');
-            if(sidebar?.classList.contains('w-0'))toggleMenu();
+            const menu=document.getElementById('sub-reen');
             if(menu?.classList.contains('hidden'))toggleSubmenuMenu('sub-reen','ic-reen');
             navegarView('viewChamados',document.getElementById('pg-menu-ch-'+view));
             pgAbrirChamados(view);
@@ -774,6 +776,7 @@ window.exportarSkusFiltradosSheets = function() {
             document.getElementById(viewId).classList.add('view-visible');
             document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('menu-active'));
             if(btnElement) btnElement.classList.add('menu-active');
+            if(viewId!=='viewDash'||btnElement)pgRecolherMenuAoNavegar();
             window.dispatchEvent(new Event('resize'));
         }
 
@@ -786,18 +789,31 @@ window.exportarSkusFiltradosSheets = function() {
             if(typeof window.alternarAbaDash === 'function') {
                 window.alternarAbaDash(graficoId);
             }
+            if(graficoId!=='abaHome')pgRecolherMenuAoNavegar();
         }
 
-        function toggleMenu() {
-            var sb = document.getElementById('sidebarMenu');
-            if(sb.classList.contains('w-64')) {
-                sb.classList.remove('w-64');
-                sb.classList.add('w-0');
-            } else {
-                sb.classList.remove('w-0');
-                sb.classList.add('w-64');
-            }
-            setTimeout(() => window.dispatchEvent(new Event('resize')), 300); 
+        let pgMenuHintTimer;
+        function pgOcultarMenuHint(){
+            clearTimeout(pgMenuHintTimer);const hint=document.getElementById('pgMenuHint');if(hint)hint.hidden=true;
+        }
+        function pgDefinirMenu(aberto){
+            const sb=document.getElementById('sidebarMenu'),btn=document.getElementById('pgMenuToggle');if(!sb)return false;
+            const changed=sb.classList.contains('w-64')!==aberto;
+            if(!aberto&&sb.contains?.(document.activeElement))btn?.focus();
+            sb.classList.toggle('w-64',aberto);sb.classList.toggle('w-0',!aberto);sb.classList.toggle('border-r',aberto);
+            sb.inert=!aberto;sb.setAttribute('aria-hidden',String(!aberto));
+            if(btn){const label=aberto?'Recolher menu':'Abrir menu';btn.setAttribute('aria-expanded',String(aberto));btn.setAttribute('aria-label',label);btn.title=label;}
+            if(aberto)pgOcultarMenuHint();
+            if(changed)setTimeout(()=>window.dispatchEvent(new Event('resize')),300);
+            return changed;
+        }
+        function pgRecolherMenuAoNavegar(){
+            if(!pgDefinirMenu(false))return;
+            const hint=document.getElementById('pgMenuHint');if(!hint)return;
+            pgOcultarMenuHint();hint.hidden=false;pgMenuHintTimer=setTimeout(pgOcultarMenuHint,5000);
+        }
+        function toggleMenu(){
+            const sb=document.getElementById('sidebarMenu');if(sb)pgDefinirMenu(!sb.classList.contains('w-64'));
         }
 
         function toggleSubmenuMenu(subId, iconId) {
