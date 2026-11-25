@@ -76,8 +76,13 @@
   #ch-central table{border-collapse:collapse;width:100%;font-size:11px;text-align:left}
   #ch-central th,#ch-central td{padding:9px 10px;border-bottom:1px solid #e8edf3;vertical-align:middle;white-space:nowrap}
   #ch-central th{font-size:10px;font-weight:600;letter-spacing:.025em;text-transform:uppercase;color:var(--ch-indigo);background:#edf3fa}
-  #ch-central #ch-table td{white-space:normal;overflow-wrap:anywhere;min-width:85px}#ch-central #ch-table td:nth-child(7){min-width:120px;max-width:185px}#ch-central #ch-table td:nth-child(8){min-width:195px;max-width:260px}#ch-central #ch-table table{table-layout:auto;min-width:1700px}#ch-central #ch-table .ch-date-head{text-align:center;border-left:2px solid #c6d6e8}#ch-central #ch-table .ch-date-first{border-left:2px solid #c6d6e8}#ch-central #ch-table .ch-date-cell{white-space:nowrap;min-width:96px}#ch-central .ch-overdue{color:#be381c;font-weight:600}#ch-central .ch-ontrack{color:#284081;font-weight:600}
-  #ch-central #ch-table .ch-total-row td{background:#284081;color:#fff;font-weight:700;border-bottom:2px solid #0c2340;white-space:nowrap;vertical-align:middle}#ch-central #ch-table .ch-total-phase{text-align:center;border-left:2px solid #9ab2d4}#ch-central #ch-table .ch-total-row small{color:#e5edf8;font-weight:500;display:block}
+  #ch-central #ch-table table{table-layout:fixed;min-width:0;max-width:none}
+  #ch-central #ch-table th,#ch-central #ch-table td{padding:7px 7px;min-width:0;white-space:normal;overflow-wrap:anywhere;word-break:normal;line-height:1.4;box-sizing:border-box}
+  #ch-central #ch-table th{letter-spacing:0}
+  #ch-central #ch-table .ch-date-head{text-align:center;border-left:2px solid #c6d6e8}#ch-central #ch-table .ch-date-first{border-left:2px solid #c6d6e8}#ch-central #ch-table .ch-date-cell{white-space:normal;font-variant-numeric:tabular-nums}
+  #ch-central #ch-table .ch-status-chip{max-width:100%;padding:4px 5px}
+  #ch-central #ch-table .ch-total-row td{white-space:normal;overflow-wrap:anywhere}#ch-central .ch-overdue{color:#be381c;font-weight:600}#ch-central .ch-ontrack{color:#284081;font-weight:600}
+  #ch-central #ch-table .ch-total-row td{background:#284081;color:#fff;font-weight:700;border-bottom:2px solid #0c2340;white-space:normal;vertical-align:middle}#ch-central #ch-table .ch-total-phase{text-align:center;border-left:2px solid #9ab2d4}#ch-central #ch-table .ch-total-row small{color:#e5edf8;font-weight:500;display:block}
   #ch-central tbody tr:nth-child(even){background:#f9fbfd}
   #ch-central tbody tr:hover{background:#eaf3fd}
   #ch-central tbody tr:last-child td{border-bottom:0}
@@ -149,7 +154,11 @@
   function chStageTable(headers,phases,rows,empty,totals){
     if(!rows.length)return '<p class="ch-muted">'+esc(empty)+'</p>';
     const labels=['Data segura (calculada)','Data acordada / formalizada','Previsão','Real'];
-    return '<div class="ch-frame"><table><thead><tr>'+headers.map(x=>'<th rowspan="2"'+(chHeaderHelp[x]?' title="'+esc(chHeaderHelp[x])+'" tabindex="0"':'')+'>'+esc(x)+'</th>').join('')+phases.map(x=>'<th class="ch-date-head" colspan="4" scope="colgroup">'+esc(x)+'</th>').join('')+'</tr><tr>'+phases.map(()=>labels.map((x,j)=>'<th'+(j===0?' class="ch-date-first"':'')+' title="'+esc(chHeaderHelp[x]||x)+'" tabindex="0">'+esc(x)+'</th>').join('')).join('')+'</tr></thead><tbody>'+(totals?'<tr class="ch-total-row">'+totals.fixed.map((c,i)=>'<td'+(i===0?' scope="row"':'')+'>'+c+'</td>').join('')+totals.phases.map(v=>'<td colspan="4" class="ch-total-phase" title="Tiragem com etapa coberta, conforme o funil">'+num(v)+' un.</td>').join('')+'</tr>':'')+rows.map(r=>'<tr>'+r.map((c,i)=>'<td'+(i>=headers.length?' class="ch-date-cell'+((i-headers.length)%4===0?' ch-date-first':'')+'"':'')+'>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+    // Larguras por conteúdo; o CD não herda a largura da gráfica.
+    const widths={'Chamado':78,'Categoria':94,'Envio':60,'Marca':80,'Prioridade':90,'Responsável PG':114,'Gráfica':118,'CD':82,'Status de produção':132,'Tiragem':90,'OC':104,'Valor OC':122,'Paginação':91,'Data de coleta':102,'Data de entrega':102,'Previsão final de entrega':111,'Prazo final (25 dias)':105,'Situação do prazo':114,'Próxima etapa':114};
+    const columns=headers.map(h=>widths[h]||105).concat(phases.flatMap(()=>[102,112,94,98]));
+    const tableWidth=columns.reduce((sum,w)=>sum+w,0);
+    return '<div class="ch-frame"><table style="width:'+tableWidth+'px"><colgroup>'+columns.map(w=>'<col style="width:'+w+'px">').join('')+'</colgroup><thead><tr>'+headers.map(x=>'<th rowspan="2"'+(chHeaderHelp[x]?' title="'+esc(chHeaderHelp[x])+'" tabindex="0"':'')+'>'+esc(x)+'</th>').join('')+phases.map(x=>'<th class="ch-date-head" colspan="4" scope="colgroup">'+esc(x)+'</th>').join('')+'</tr><tr>'+phases.map(()=>labels.map((x,j)=>'<th'+(j===0?' class="ch-date-first"':'')+' title="'+esc(chHeaderHelp[x]||x)+'" tabindex="0">'+esc(x)+'</th>').join('')).join('')+'</tr></thead><tbody>'+(totals?'<tr class="ch-total-row">'+totals.fixed.map((c,i)=>'<td'+(i===0?' scope="row"':'')+'>'+c+'</td>').join('')+totals.phases.map(v=>'<td colspan="4" class="ch-total-phase" title="Tiragem com etapa coberta, conforme o funil">'+num(v)+' un.</td>').join('')+'</tr>':'')+rows.map(r=>'<tr>'+r.map((c,i)=>'<td'+(i>=headers.length?' class="ch-date-cell'+((i-headers.length)%4===0?' ch-date-first':'')+'"':'')+'>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
   }
   function chAgreementCell(s,desired){
     if(s?.agreedStatus==='ACERVO')return s.p||desired?'<span title="Data de referência; etapa dispensada">'+dt(s.p||desired)+'</span>':'—';
