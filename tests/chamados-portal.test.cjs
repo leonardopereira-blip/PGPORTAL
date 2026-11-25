@@ -334,3 +334,21 @@ test('OC monetária em centavos, sem duplicação por SKU e sem valor inventado'
  assert.equal(s.ocValues.length,2);assert.equal(s.ocValues[0].centavos,233030);assert.equal(s.ocValues[1].centavos,null);assert.equal(t.ocValues.length,2);
  assert.equal(ctx.pgChOCCentavos_('1234.56'),123456);assert.equal(ctx.pgChOCCentavos_('0,00'),0);assert.equal(ctx.pgChOCCentavos_('—'),null);
 });
+
+test('aceite anterior à abertura valida coleta e entrega do próprio chamado sem alterar abertura',()=>{
+ const row={...a,n:'2888',created:'2026-10-23',accepted:'2026-09-08',pick:'2026-10-01',delivery:'2026-10-05'};
+ const result=build({spg:[row]}),ticket=result.tickets.get(a.id);
+ assert.equal(ticket.created,'2026-10-23');assert.equal(ticket.evidenceStart,'2026-09-08');
+ assert.equal(result.summaries[0].created,'2026-10-23');
+ assert.equal(ticket.items[0].spg[0].pick,'2026-10-01');assert.equal(ticket.items[0].spg[0].delivery,'2026-10-05');
+ assert.equal(ticket.totals.picked,100);assert.equal(ticket.totals.delivered,100);
+ for(const accepted of ['', '2026-10-24']){
+  const x=build({spg:[{...row,accepted}]}).tickets.get(a.id);
+  assert.equal(x.items[0].spg[0].pick,'');assert.equal(x.items[0].spg[0].delivery,'');
+ }
+ const early=build({spg:[{...row,pick:'2026-09-07',delivery:'2026-09-07'}]}).tickets.get(a.id);
+ assert.equal(early.items[0].spg[0].pick,'');assert.equal(early.items[0].spg[0].delivery,'');
+ const mapped=build({spg:[{...row,pick:'',delivery:''}],map:[{...map,n:'2888',qty:'100',received:'100'}],tp:[{map:map.map,pick:'03/10/2026',delivery:'03/10/2026'}]}).tickets.get(a.id);
+ assert.equal(mapped.items[0].maps[0].pick,'2026-10-03');assert.equal(mapped.items[0].maps[0].delivery,'2026-10-03');
+ assert.equal(mapped.totals.delivered,100);
+});

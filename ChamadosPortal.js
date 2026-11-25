@@ -1,4 +1,4 @@
-const PG_CH_CALCULATION_VERSION = 15;
+const PG_CH_CALCULATION_VERSION = 16;
 const PG_CH_TRATATIVAS = ['Em análise','Em tratativa','Aguardando retorno','Resolvido'];
 const PG_CH_ABA_EDICAO = 'Chamados_Tratativas';
 
@@ -335,7 +335,7 @@ function salvarColetaManualChamadoPortal(id,cd,date){
  pgChValidaId_(id);cd=pgChCDNome_(cd);const d=pgChData_(date),today=Utilities.formatDate(new Date(),'America/Sao_Paulo','yyyy-MM-dd'),user=Session.getActiveUser().getEmail();
  if(!user||!cd||!d||d>today)throw new Error('Informe uma data válida, não futura, e entre com sua conta.');
  const s=pgChSnapshot_(),t=s.rows.find(r=>r.id===id);
- if(!t||/CANCEL/i.test(t.status)||!t.created||d<t.created)throw new Error('Chamado cancelado, inexistente ou data anterior à abertura.');
+ if(!t||/CANCEL/i.test(t.status)||!(t.evidenceStart||t.created)||d<(t.evidenceStart||t.created))throw new Error('Chamado cancelado, inexistente ou data anterior ao início válido do chamado.');
  const routes=(t.okrRoutes||[]).filter(r=>pgChCDNome_(r.cd)===cd&&r.qty>0);
  if(!routes.length)throw new Error('Destino não localizado neste chamado.');
  if(routes.some(r=>r.delivery&&d>r.delivery))throw new Error('A coleta não pode ser posterior à entrega.');
@@ -362,7 +362,7 @@ function pgChAplicarColetasResumo_(s,manual){
  for(const t of s.rows||[]){
   let changed=false;
   for(const r of t.okrRoutes||[]){
-   const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(r.cd)]));if(!edit||!pgChDataRealChamado_(edit.date,t.created)||r.delivery&&edit.date>r.delivery||!pgChComplementoManual_(r.collection,r.qty,edit))continue;
+   const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(r.cd)]));if(!edit||!pgChDataRealChamado_(edit.date,t.evidenceStart||t.created)||r.delivery&&edit.date>r.delivery||!pgChComplementoManual_(r.collection,r.qty,edit))continue;
    changed=true;r.pick=r.collection.date;const prev=r.coverage||[];
    const {specRows,...dims}=r.dimensions||{},g=(t.groups||[]).find(g=>Object.keys(dims).every(k=>JSON.stringify(g[k])===JSON.stringify(dims[k])));
    const delta=Math.max(0,r.qty-(r.picked||0));t.totals.picked+=delta;if(g)g.picked+=delta;r.picked=r.qty;
@@ -375,7 +375,7 @@ function pgChAplicarColetasResumo_(s,manual){
  }
 }
 function pgChAplicarColetasDetalhe_(t,manual){
- for(const it of t.items||[]){const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(it.cd)])),delivery=it.deliveryEvidence?.date||it.stages?.[11]?.r||pgChDataIntegral_(it.maps||[],it.qty,'delivery','delivered');if(!edit||!pgChDataRealChamado_(edit.date,t.created)||delivery&&edit.date>delivery||!pgChComplementoManual_(it.collection,it.qty,edit))continue;
+ for(const it of t.items||[]){const edit=manual.get(JSON.stringify([t.id,pgChCDNome_(it.cd)])),delivery=it.deliveryEvidence?.date||it.stages?.[11]?.r||pgChDataIntegral_(it.maps||[],it.qty,'delivery','delivered');if(!edit||!pgChDataRealChamado_(edit.date,t.evidenceStart||t.created)||delivery&&edit.date>delivery||!pgChComplementoManual_(it.collection,it.qty,edit))continue;
   const delta=Math.max(0,it.qty-Math.min(it.qty,it.picked));t.totals.picked+=delta;it.picked=it.qty;
   for(const k of [0,1,2,3,4,5,6,10]){const diff=Math.max(0,it.qty-(it.coverage[k]||0));t.totals.coverage[k]+=diff;it.coverage[k]=it.qty;it.stages[k].units=it.qty;}
   it.stages[10].r=it.collection.date;it.stages[10].f=it.collection.source;it.productionStatus={label:it.delivered>=it.qty?'Entregue integralmente':'Em trânsito',source:'Manual'};

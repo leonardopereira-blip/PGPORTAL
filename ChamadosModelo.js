@@ -326,6 +326,9 @@ function pgChModelo_(dados) {
     }
     const opening=pgChData_(r.created);
     if(opening&&(!t.created||opening<t.created))t.created=opening;
+    // O aceite anterior à abertura registra o início real do próprio chamado.
+    const accepted=pgChData_(r.accepted);
+    if(accepted&&(!t.accepted||accepted<t.accepted))t.accepted=accepted;
     if(r.legacy&&!/CONCLU|ENTREGUE/.test(r.status))t.status=r.status;
     if(!t.op&&r.op)t.op=r.op;
     if(!t.edition&&r.edition)t.edition=r.edition;
@@ -343,6 +346,7 @@ function pgChModelo_(dados) {
     const k=kitKey(r); if (!lotes.has(k)) lotes.set(k,[]);
     lotes.get(k).push({t,r});
   });
+  for(const t of tickets.values())t.evidenceStart=t.accepted&&(!t.created||t.accepted<t.created)?t.accepted:t.created;
   function addItem(t,r,qty,printer) {
     const key=rotaKey(r.sku,t.brand,printer,r.cd);
     let it=t._groups.get(key);
@@ -358,7 +362,7 @@ function pgChModelo_(dados) {
     for(const code of pgChRefsMapa_(r.map))pgChAdd_(mapaRefs,code,it);
     it.qty+=qty; it.rows.push(r.row);
     if (r.kit && !it.kits.includes(r.kit)) it.kits.push(r.kit);
-    const real=pgChDatasMapa_(null,r.pick,r.delivery,t.created);
+    const real=pgChDatasMapa_(null,r.pick,r.delivery,t.evidenceStart);
     it.spg.push({q:qty,legacy:!!r.legacy,cut:r.cut,kit:r.kit,stock:pgChQtd_(r.stock),sub:pgChQtd_(r.sub),oc:r.oc,ocStatus:r.ocStatus,ocValue:r.ocValue,nf:r.nf,map:r.map,
       kitCreated:pgChData_(r.kitCreated),productCreated:pgChData_(r.productCreated),productLink:pgChData_(r.productLink),paginationDate:pgChData_(r.paginationDate),
       formal:pgChData_(r.formal),pickP:pgChData_(r.pickPlan),pick:real.pick,deliveryP:pgChData_(r.deliveryPlan),
@@ -458,9 +462,10 @@ function pgChModelo_(dados) {
       return;
     }
     const it=opts[0], qty=pgChQtd_(m.qty);
+    const evidenceStart=tickets.get(it.id).evidenceStart;
     const dates=pgChDatasMapa_(transport.get(pgChCodigoMapa_(code)),
-      pgChDataRealChamado_(m.picked,tickets.get(it.id).created)||(sameCol?pgChDataRealChamado_(m.colPick,tickets.get(it.id).created):''),
-      pgChDataRealChamado_(m.delivered,tickets.get(it.id).created)||pgChDataRealChamado_(m.checked,tickets.get(it.id).created),tickets.get(it.id).created);
+      pgChDataRealChamado_(m.picked,evidenceStart)||(sameCol?pgChDataRealChamado_(m.colPick,evidenceStart):''),
+      pgChDataRealChamado_(m.delivered,evidenceStart)||pgChDataRealChamado_(m.checked,evidenceStart),evidenceStart);
     const hasCount=pgChTexto_(m.received)!=='';
     const event={row:m.row,map:code,kit:m.kit,sku:m.sku,nf:m.nf,qty,created:pgChData_(m.created),book:pgChData_(m.book),
       ...dates,eta:pgChData_(m.eta),
@@ -573,7 +578,7 @@ function pgChModelo_(dados) {
       if(saldo){if(it.eta)pendingEtas.push(it.eta);if(!it.eta||it.etaPartial)missingEta=true;}
     }
     t.totals=totals;t.production=pgChResumoStatus_(t.items);t.target=pgChPrazoResumo_(t.items);
-    summaries.push({id:t.id,n:t.n,cat:t.cat,legacy:t.legacy,brand:t.brand,shipment:t.shipment,status:t.status,priority:t.priority,created:t.created,
+    summaries.push({id:t.id,n:t.n,cat:t.cat,legacy:t.legacy,brand:t.brand,shipment:t.shipment,status:t.status,priority:t.priority,created:t.created,evidenceStart:t.evidenceStart,
       goal:t.goal,desired:t.desired,eta:pgChUltima_(pendingEtas),partial:missingEta,issues:t.alerts.length,items:t.items.length,totals,production:t.production,target:t.target,
       ...pgChMetricaChamado_(t,specIdx,costHistory)});
   }
