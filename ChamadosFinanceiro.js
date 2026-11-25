@@ -37,7 +37,7 @@ function pgChFinanceiro_(dados,tickets,numeros) {
     const valid=candidates.filter(t=>rota(t,r,r.sku).length===1 && (!r.cycle || pgChNormal_(t.edition).startsWith(pgChNormal_(r.cycle))));
     if(valid.length!==1){alerta(candidates,r,'cost','Lote de custo citado; conferir SKU, marca, gráfica, ciclo e CD');continue;}
     const t=valid[0], key=pgChNormal_(r.lotId);
-    const detail={row:r.row,lot:r.lotId,sku:r.sku,printer:pgChGrafNome_(r.printer),cd:pgChCDNome_(r.cd),qty:r.qty,value:r.value,
+    const detail={row:r.row,lot:r.lotId,sku:r.sku,printer:pgChGrafNome_(r.printer),cd:pgChCDNome_(r.cd),qty:r.qty,value:r.value,unitValue:r.unitValue,
       status:r.status,date:pgChData_(r.end),sent:pgChData_(r.sent),req:r.req,oc:r.oc};
     t.costs.push(detail);
     pgChAdd_(lotes,key,t);
@@ -104,4 +104,21 @@ function pgChOCsResumo_(t){
  return (t.orders||[]).filter(o=>/^\d+$/.test(pgChTexto_(o.oc))&&!/CANCEL|REPROV/.test(pgChNormal_((o.status||'')+' '+(o.approval||'')))).map(o=>({
    oc:pgChTexto_(o.oc),centavos:pgChOCCentavos_(o.value),printer:o.printer||'',cd:o.cd||'',priority:(o.valueSource||o.source)==='spg'?2:1
  }));
+}
+
+function pgChUnitValue_(v){
+ if(v===null||v===undefined||String(v).trim()==='')return null;
+ if(typeof v==='number')return Number.isFinite(v)&&v>=0?v:null;
+ let s=String(v).trim().replace(/R\$|\s/g,'');
+ if(s.includes(',')){if(!/^\d+(?:\.\d{3})*,\d+$/.test(s))return null;s=s.replace(/\./g,'').replace(',','.');}
+ if(!/^\d+(?:\.\d+)?$/.test(s))return null;
+ const n=Number(s);return Number.isFinite(n)&&n>=0?n:null;
+}
+function pgChComercialItem_(t,it){
+ const costs=(t.costs||[]).filter(c=>pgChSku_(c.sku)===pgChSku_(it.sku)&&pgChGraf_(c.printer)===pgChGraf_(it.printer)&&pgChCD_(c.cd)===pgChCD_(it.cd)&&/^(CONCLUID[OA]|VALIDAD[OA]|FINALIZAD[OA])$/.test(pgChNormal_(c.status)));
+ const prices=[...new Set(costs.map(c=>pgChUnitValue_(c.unitValue)).filter(v=>v!==null))];
+ const refs=v=>(pgChTexto_(v).match(/\b\d{3,}\b/g)||[]);
+ const spg=it.spg||[],ocs=pgChUnicos_(spg.filter(s=>!/CANCEL|REPROV/.test(pgChNormal_(s.ocStatus))).flatMap(s=>refs(s.oc)));
+ const allowed=new Set((t.orders||[]).filter(o=>pgChGraf_(o.printer)===pgChGraf_(it.printer)&&pgChCD_(o.cd)===pgChCD_(it.cd)&&!/CANCEL|REPROV/.test(pgChNormal_((o.status||'')+' '+(o.approval||'')))).flatMap(o=>refs(o.oc)));
+ return {sku:it.sku,qty:it.qty,pages:it.pages??null,unitValue:prices.length===1?prices[0]:null,priceConflict:prices.length>1,oc:pgChUnicos_((ocs.length?ocs:costs.flatMap(c=>refs(c.oc))).filter(n=>allowed.has(n)))};
 }

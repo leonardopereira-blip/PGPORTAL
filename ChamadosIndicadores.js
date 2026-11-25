@@ -46,6 +46,10 @@ function pgChMetricaChamado_(t,idx) {
   const groups=new Map(),routes=[];
   for(const it of t.items){
     const attributes=pgChAtributos_(idx,it);it.attributes=attributes;
+    const specs=idx.get(pgChSku_(it.sku)+'|'+pgChMarca_(it.brand))||[];
+    const pages=[...new Set(specs.map(s=>pgChTexto_(s.pages)).filter(v=>/^\d+$/.test(v)).map(Number))];
+    it.pages=pages.length===1?pages[0]:null;
+    it.commercial=pgChComercialItem_(t,it);
     const sp=it.spg.filter(r=>r.q>0);
     const delivery=it.deliveryEvidence?.date||it.stages?.[11]?.r||'';
     const collection=it.collection||pgChColetaRota_(it),pick=collection.date;
@@ -64,14 +68,14 @@ function pgChMetricaChamado_(t,idx) {
     const {specRows,...dims}=attributes,key=JSON.stringify(dims);
     let g=groups.get(key);
     if(!g){
-      g={...dims,qty:0,mapped:0,picked:0,delivered:0,balance:0,coverage:it.stages.map(()=>0),eta:'',partial:false,production:[],targetItems:[],stageItems:[]};
+      g={...dims,qty:0,mapped:0,picked:0,delivered:0,balance:0,coverage:it.stages.map(()=>0),eta:'',partial:false,production:[],targetItems:[],stageItems:[],commercial:[]};
       groups.set(key,g);
     }
     g.qty+=it.qty;const label=it.productionStatus.label,prev=g.production.find(x=>x.label===label);if(prev)prev.qty+=it.qty;else g.production.push({label,qty:it.qty});
     ['mapped','picked','delivered'].forEach(k=>g[k]+=Math.min(it.qty,it[k]));
     g.balance+=Math.max(0,it.qty-it.delivered);
     for(let i=0;i<it.coverage.length;i++)g.coverage[i]+=it.coverage[i];
-    g.targetItems.push({qty:it.qty,target:it.target});g.stageItems.push(it);g.eta=pgChUltima_([g.eta,it.eta]);g.partial=g.partial||it.etaPartial;
+    g.commercial.push(it.commercial);g.targetItems.push({qty:it.qty,target:it.target});g.stageItems.push(it);g.eta=pgChUltima_([g.eta,it.eta]);g.partial=g.partial||it.etaPartial;
   }
   const delivered=pgChMarcoItens_(routes,'delivery');
   t.ocValues=pgChOCsResumo_(t);
