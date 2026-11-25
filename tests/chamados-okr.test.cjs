@@ -118,3 +118,14 @@ test('D-1 exclui todos os prazos de hoje e futuros e preserva realizados no dia 
 });
 
 test('entrega integral supre coleta ausente na mesma rota, preservando SPG e corte histórico',()=>{const route=(pick,delivery)=>({qty:100,pick,delivery,collection:{events:pick?[{date:pick,qty:100,source:'SPG · Coleta real'}]:[],parts:[]}});const base={...t,created:'2026-11-01',desired:'2026-11-26',totals:{qty:200,coverage:[]},okrRoutes:[route('2026-11-20','2026-11-22'),route('','2026-11-25')]};const a=chOKR([base],{...f,asof:'2026-11-27'});assert.equal(a.items[0].actual,'2026-11-25');assert.equal(a.num,1);assert.equal(a.den,1);const b=chOKR([base],{...f,asof:'2026-11-24'});assert.equal(b.items[0].actual,'');assert.equal(b.den,0);const c=chOKR([{...base,okrRoutes:[route('2026-11-20','2026-11-22'),route('','')]}],{...f,asof:'2026-11-27'});assert.equal(c.items[0].actual,'');assert.equal(c.pending,1);});
+
+
+test('recorte por vencimento de 30/09 a 31/12 respeita limites e D-1 nos três critérios e nas duas unidades',()=>{
+ const rows=[['A','2026-09-04','2026-09-29','2026-09-28'],['B','2026-09-05','2026-09-30','2026-09-30'],['C','2026-10-30','2026-11-24',''],['D','2026-10-31','2026-11-25',''],['E','2026-11-01','2026-11-26','2026-11-20'],['F','2026-12-06','2026-12-31',''],['G','2026-12-07','2027-01-01','']].map(([id,created,desired,pickDone])=>({...t,id,created,desired,pickDone,totals:{qty:100,coverage:[]}}));
+ for(const rule of ['fixed','standard','desired'])for(const unit of ['tickets','qty']){
+  const opts={...f,rule,unit,basis:'due',start:'2026-09-30',end:'2026-12-31',asof:'2026-11-25'},w=unit==='qty'?100:1;
+  const a=chOKR(rows,opts);assert.deepEqual(Array.from(a.items,x=>x.id),['B','C','D','E']);assert.equal(a.num,w);assert.equal(a.den,2*w);assert.equal(a.pending,w);assert.equal(a.upcoming,2*w);
+  const b=chOKR(rows,{...opts,asof:'2027-01-02'});assert.deepEqual(Array.from(b.items,x=>x.id),['B','C','D','E','F']);assert.equal(b.num,2*w);assert.equal(b.den,5*w);
+ }
+ assert.equal(chOKR([{...rows[1],desired:''}],{...f,rule:'desired',basis:'due',start:'2026-09-30',end:'2026-12-31',asof:'2026-11-25'}).items.length,0);
+});
