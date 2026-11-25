@@ -80,40 +80,18 @@ try {
       const merge=spawnSync('git',['merge-file','-p','--diff3',caminhoGoogle,caminhoBase,caminhoGit],
         {encoding:'utf8',maxBuffer:5*1024*1024});
       let unido=merge.status===0?String(merge.stdout):'';
-      // O usuário solicitou explicitamente substituir a estratégia de leitura
-      // e checkpoint, sem alterar as demais funções do Apps Script.
-      // Delimita apenas esse trecho; o restante continua sob mescla de três vias.
-      if(!unido&&k==='SERVER_JS:ChamadosAcordos'){
-        const split=source=>{
-          const s=String(source).replace(/\r\n/g,'\n');
-          const a=s.indexOf('function pgChMailLoad_()'),b=s.indexOf('function pgChAplicarAcordo_(',a);
-          if(a<0||b<=a)return null;
-          return [s.slice(0,a),s.slice(a,b),s.slice(b)];
-        };
-        const parts=[remoto.source,comum,local.source].map(split);
-        if(parts.every(Boolean)){
-          const [g,b,l]=parts;
-          const permitted=new Set(['pgChMailLoad_','pgChMailSave_','pgChMailListPage_','pgChLerAcordos_']);
-          const functions=[...g[1].matchAll(/^function\s+(\w+)\(/gm)].map(m=>m[1]);
-          if(functions.every(n=>permitted.has(n))&&l[1].includes('scan.historical.done')&&l[1].includes('scan.cursor')){
-            const mergePart=(i,ancestor)=>{
-              fs.writeFileSync(caminhoGoogle,g[i]);
-              fs.writeFileSync(caminhoBase,ancestor[i]);
-              fs.writeFileSync(caminhoGit,l[i]);
-              const m=spawnSync('git',['merge-file','-p','--diff3',caminhoGoogle,caminhoBase,caminhoGit],{encoding:'utf8',maxBuffer:5*1024*1024});
-              return m.status===0?String(m.stdout):null;
-            };
-            // Primeiro usa a base confirmada. Caso os ajustes de leitura já
-            // existam no Google, usa a versão Git imediatamente anterior à
-            // mudança incremental como referência para o delta isolado.
-            const prev=split(execFileSync('git',['cat-file','-p','59f8641dcd08a92bbf9fc3acf072355b2812dfed'],{encoding:'utf8',maxBuffer:4*1024*1024}));
-            const pre=mergePart(0,b)??(prev?mergePart(0,prev):null);
-            const post=mergePart(2,b)??(prev?mergePart(2,prev):null);
-            if(pre!==null&&post!==null){
-              unido=pre+l[1]+post;
-              console.log('Estrategia de checkpoint substituida conforme escopo solicitado; demais trechos conciliados sem conflitos.');
-            }
-          }
+      // Na execução 45649829905 o DEV foi salvo e relido antes de falhar
+      // o registro na main. Só retome dessa revisão se o Google ainda tiver
+      // exatamente o arquivo verificado naquela execução e a base for a antiga.
+      if (!unido && k === 'SERVER_JS:ChamadosAcordos' &&
+          registro === 'e843d31ef8c46daebaa5378369c38bfce5214cbb5da6b6b3945f7041fe6acc04' &&
+          hash(remoto.source) === '3bf5cc524b79848f54d0ddf63f3c47aa5fd298cd0679e4ef34204535da267898') {
+        const revisao = '0146148fffae1f1e133cbfba21056b820a1e548e';
+        git('merge-base', '--is-ancestor', revisao, 'HEAD');
+        const publicado = execFileSync('git', ['show', revisao + ':' + arquivo], {encoding:'utf8'});
+        if (hash(publicado) === hash(remoto.source)) {
+          unido = local.source;
+          console.log('ChamadosAcordos: retomada da revisão já relida no DEV.');
         }
       }
       if(!unido){
@@ -155,7 +133,9 @@ try {
       'tests/report-executiva-coleta-manual-quadro.test.cjs',
       'tests/coleta-manual-pcp.test.cjs',
       'tests/entrega-manual-pcp.test.cjs',
-      'tests/volumes-tp-cache-manual.test.cjs'],
+      'tests/volumes-tp-cache-manual.test.cjs',
+      ...(integrados.some(f=>/^Chamados(Acordos|Portal)\.(gs|js)$/.test(f))
+        ? ['tests/chamados-acordos.test.cjs','tests/chamados-json.test.cjs'] : [])],
       {encoding:'utf8',maxBuffer:8*1024*1024});
     let testes=executarTestes();
     if(testes.status!==0 && integrados.includes('Scripts_Globais_2.html')) {
