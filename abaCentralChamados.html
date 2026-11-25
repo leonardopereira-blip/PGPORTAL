@@ -214,6 +214,39 @@
     }
     return {due:out.length&&out.every(r=>r.formal)?last(out.map(r=>r.formal)):'',actual:out.length&&out.every(r=>r.actual)?last(out.map(r=>r.actual)):'',late:out.some(r=>r.late),invalid:out.some(r=>r.invalid),days:Math.max(0,...out.map(r=>r.days)),source:[...new Set(out.map(r=>r.source).filter(Boolean))].join(' + '),maps:[...new Set(out.flatMap(r=>r.maps).filter(Boolean))]};
   }
+  // Cadastro histórico de PG_PESSOAS (V1), congelado no corte de 09/11/2026.
+  const chOwnersV1={
+    'João Alberti':['POSIGRAF','WALPRINT','LEOGRAF'],
+    'Klayton':['COAN','MAXI','MIDIOGRAF','REPROSET','IMOS','ZIT','IPSIS','MARGRAF'],
+    'Amanda Costa':['LOGPRINT','BERCROM','META'],
+    'Elis':['PIFFER','PITFER','SAO FRANCISCO','FORMA CERTA','EMBALART','EMBALARTE','FELK','HR','ANTILHAS','TRATTO','KN','RAIZES'],
+    'Matheus':['RICARGRAF','ATHOS','RONA','STAR 7','OCEANO']
+  };
+  // Estrutura de Produção V2 fornecida pelo usuário, válida a partir de 10/11/2026.
+  const chOwnersV2={
+    'João Alberti':['POSIGRAF'],
+    'Klayton':['WALPRINT','IMOS','MAXI'],
+    'Amanda Costa':['REPROSET','FTD','LOGPRINT','META'],
+    'Elis':['PIFFER','SAO FRANCISCO','HR','EMBALARTE'],
+    'Matheus Jesus':['LEOGRAF','MARGRAF','RICARGRAF','RONA','STAR 7'],
+    'Amanda EZ':['BERCROM','FORMA CERTA','OCEANO','ATHOS','FELK']
+  };
+  function chOwnerKey(v){
+    const n=String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    return ({ANTIHAS:'ANTILHAS',PITFER:'PIFFER',EMBALART:'EMBALARTE'})[n]||n;
+  }
+  function chOwnerForPrinter(printer,created,category){
+    const fallback=/INCLUSIV|BRAILLE|AMPLIAD/.test(chOwnerKey(category))?'Klayton':'João Alberti';
+    const date=String(created||'').slice(0,10);
+    const map=/^\d{4}-\d{2}-\d{2}$/.test(date)?(date<='2026-11-09'?chOwnersV1:chOwnersV2):null;
+    const key=chOwnerKey(printer);
+    if(!map||!key)return fallback;
+    return Object.entries(map).find(([,list])=>list.some(g=>chOwnerKey(g)===key))?.[0]||fallback;
+  }
+  function chResponsible(t){
+    const printers=(t.groups||t.items||[]).filter(g=>g.qty==null||g.qty>0).map(g=>g.printer);
+    return [...new Set((printers.length?printers:['']).map(p=>chOwnerForPrinter(p,t.created,t.cat)))].join(' | ');
+  }
   function chDestinationRows(t){
     const by=new Map();
     for(const g of t.groups||[]){const key=g.cd||'';if(!by.has(key))by.set(key,[]);by.get(key).push(g);}
@@ -492,7 +525,7 @@
     const destinationRows=rows.flatMap(t=>chDestinationRows(t).map(r=>({...r,deadlineBucket:chDeadlineBucket(t,today),deadlineLabel:chDeadlineLabel(t,today)})));
     const maxPage=Math.max(1,Math.ceil(destinationRows.length/30));state.page=Math.min(state.page,maxPage);
     el('table').innerHTML=chStageTable(['Chamado','Categoria','Envio','Marca','Responsável PG','Gráfica','CD','Status de produção','Tiragem','Data de coleta','Data de entrega','Previsão final de entrega','Prazo final (25 dias)','Situação do prazo','Próxima etapa'],state.data.phases,destinationRows.slice((state.page-1)*30,state.page*30).map(t=>[
-      '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(t.owner),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),collectionCell(t,chPickEvidence(t,today).actual),dt(chDeliveryDate(t,today)),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),dt(t.target?.deadline),'<span class="ch-deadline-chip" data-deadline="'+esc(t.deadlineBucket)+'">'+esc(t.deadlineLabel)+'</span>',cell(state.data.phases[t.target?.nextStage]),...chStageDates(t,state.data.phases,today)]),'Nenhum chamado corresponde aos filtros.');
+      '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(chResponsible(t)),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),collectionCell(t,chPickEvidence(t,today).actual),dt(chDeliveryDate(t,today)),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),dt(t.target?.deadline),'<span class="ch-deadline-chip" data-deadline="'+esc(t.deadlineBucket)+'">'+esc(t.deadlineLabel)+'</span>',cell(state.data.phases[t.target?.nextStage]),...chStageDates(t,state.data.phases,today)]),'Nenhum chamado corresponde aos filtros.');
     el('count').textContent=num(rows.length)+' chamados · '+num(destinationRows.length)+' destinos';pager(el('pages'),state.page,destinationRows.length,30,'page');
   }
   async function openTicket(id){
@@ -503,7 +536,7 @@
   }
   function renderDetail(){
     const t=state.detail,forecast=chFinalForecast(t);
-    el('detail').innerHTML='<button class="ch-link" id="ch-back">Voltar à visão</button><section class="ch-box"><div class="ch-between"><h2>Chamado #'+esc(t.n)+'</h2><span class="ch-sub">'+productionCell(t)+'</span></div>'+fields({'Categoria':t.cat,'Envio':t.shipment,'Marca':t.brand,'Prioridade SPG':t.priority,'Responsável PG':t.owner,'OP':t.op,'Data desejada por Planning':dt(t.desired),'Data de entrega':dt(chDeliveryDate(t,dayNow())),'Previsão final de entrega':dt(forecast.date)+(forecast.partial&&forecast.date?' · parcial':''),'Prazo final (25 dias)':dt(t.target?.deadline),'Situação do prazo':chDeadlineLabel(t,dayNow()),'Meta de entrega SPG':dt(t.goal)})+'<h3>Solicitação</h3><p>'+cell(t.why)+'</p>'+(t.obs?'<p>'+esc(t.obs)+'</p>':'')+(t.reason?'<p>Cancelamento · '+esc(t.reason)+'</p>':'')+'</section>'+
+    el('detail').innerHTML='<button class="ch-link" id="ch-back">Voltar à visão</button><section class="ch-box"><div class="ch-between"><h2>Chamado #'+esc(t.n)+'</h2><span class="ch-sub">'+productionCell(t)+'</span></div>'+fields({'Categoria':t.cat,'Envio':t.shipment,'Marca':t.brand,'Prioridade SPG':t.priority,'Responsável PG':chResponsible(t),'OP':t.op,'Data desejada por Planning':dt(t.desired),'Data de entrega':dt(chDeliveryDate(t,dayNow())),'Previsão final de entrega':dt(forecast.date)+(forecast.partial&&forecast.date?' · parcial':''),'Prazo final (25 dias)':dt(t.target?.deadline),'Situação do prazo':chDeadlineLabel(t,dayNow()),'Meta de entrega SPG':dt(t.goal)})+'<h3>Solicitação</h3><p>'+cell(t.why)+'</p>'+(t.obs?'<p>'+esc(t.obs)+'</p>':'')+(t.reason?'<p>Cancelamento · '+esc(t.reason)+'</p>':'')+'</section>'+
       '<section class="ch-box"><h2>Tratativa do time</h2><div class="ch-tools"><label>Status da tratativa<select id="ch-manual-state"><option value="">Selecionar</option>'+state.data.states.map(v=>opt(v)).join('')+'</select></label><label style="flex:1;min-width:200px">Observação opcional<input id="ch-note" maxlength="1500"></label><button id="ch-save" class="ch-btn ch-primary">Salvar</button></div><p id="ch-save-msg" role="status"></p><div id="ch-history"></div></section>'+
       '<section class="ch-box"><h2>Marcos do chamado</h2>'+table(['Etapa','Previsão da etapa','Real da etapa','Fonte'],Object.entries(t.steps).map(([k,s])=>[esc(k),dt(s.p),dt(s.r),'SPG']))+
       detailBox('Registros do painel de produção ('+t.panel.length+')',table(['Gráfica / CD','Status','Andamento','Início plan. / real','Fim plan. / real','Origem'],t.panel.map(p=>[cell(p.printer)+' / '+cell(cdLabel(p.cd)),cell(p.status),cell([p.note,p.cause].filter(Boolean).join(' | ')),dt(p.startP)+' / '+dt(p.startR),dt(p.endP)+' / '+dt(p.endR),source('panel',p.row)])))+'</section>'+
