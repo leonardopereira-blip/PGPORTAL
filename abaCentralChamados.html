@@ -264,11 +264,12 @@
   const chDimensions=['printer','cd','series','material','feature','cover','finish'];
   const chHas=(f,v)=>Array.isArray(f)?f.includes(v):!f||f===v;
   const chDimMatch=(f,v)=>Array.isArray(v)?(Array.isArray(f)?v.some(x=>f.includes(x)):!f||v.includes(f)):chHas(f,v);
+  const chFinishKey=v=>[...new Set((Array.isArray(v)?v:[v]).map(x=>String(x||'').trim().toUpperCase()).filter(Boolean))].sort().join(' / ')||'SEM ACABAMENTO INFORMADO';
   function chGroups(t,f){
-    return (t.groups||[]).filter(g=>chDimensions.every(k=>chDimMatch(f[k],g[k])));
+    return (t.groups||[]).filter(g=>chDimensions.every(k=>chDimMatch(f[k],g[k]))&&(!f.finishKey||chFinishKey(g.finish)===f.finishKey));
   }
   function chFilteredTotals(t,f){
-    if(!chDimensions.some(k=>f[k]))return t;
+    if(!chDimensions.some(k=>f[k])&&(!f.finishKey||(!(t.groups||[]).length&&f.finishKey==='SEM ACABAMENTO INFORMADO')))return t;
     const groups=chGroups(t,f);if(!groups.length)return null;
     const totals={qty:0,mapped:0,picked:0,delivered:0,balance:0,coverage:t.totals.coverage.map(()=>0)};
     for(const g of groups){
@@ -278,7 +279,7 @@
     const by=new Map();groups.forEach(g=>(g.production||[]).forEach(p=>by.set(p.label,(by.get(p.label)||0)+p.qty)));
     const targets=groups.filter(g=>g.target).map(g=>g.target),pending=targets.filter(x=>x.next).sort((a,b)=>a.next.localeCompare(b.next));const target=targets.length?{dates:Array.from({length:12},(_,i)=>{const ds=targets.map(x=>x.dates?.[i]).filter(Boolean).sort();return (i<10?ds[0]:ds.pop())||'';}),deadline:targets.map(x=>x.deadline).filter(Boolean).sort().pop()||'',next:pending[0]?.next||'',nextStage:pending[0]?.nextStage??-1}:t.target;
     const stages=Array.from({length:12},(_,i)=>{const ss=groups.filter(g=>g.qty>0).map(g=>g.stages?.[i]);return {agreed:ss.length&&ss.every(s=>s?.agreed)?ss.map(s=>s.agreed).sort().pop():'',agreedStart:ss.length&&ss.every(s=>s?.agreedStart)?ss.map(s=>s.agreedStart).sort().pop():'',agreedStatus:ss.length&&ss.every(s=>s?.agreedStatus==='ACERVO')?'ACERVO':'',agreedSource:[...new Set(ss.map(s=>s?.agreedSource).filter(Boolean))].join(' + '),agreedStartSource:[...new Set(ss.map(s=>s?.agreedStartSource).filter(Boolean))].join(' + '),p:ss.map(s=>s?.p).filter(Boolean).sort().pop()||'',r:ss.length&&ss.every(s=>s?.r)?ss.map(s=>s.r).sort().pop():'',a:[...new Set(ss.map(s=>s?.a).filter(Boolean))].join(' | '),f:[...new Set(ss.map(s=>s?.f).filter(Boolean))].join(' + ')};});
-    const okrRoutes=(t.okrRoutes||[]).filter(r=>chDimensions.every(k=>chDimMatch(f[k],({...r,...r.dimensions})[k])));
+    const okrRoutes=(t.okrRoutes||[]).filter(r=>chDimensions.every(k=>chDimMatch(f[k],({...r,...r.dimensions})[k]))&&(!f.finishKey||chFinishKey(r.dimensions?.finish??r.finish)===f.finishKey));
     const ocValues=Array.isArray(t.ocValues)?t.ocValues.filter(o=>groups.some(g=>(g.printer||'')===(o.printer||'')&&(g.cd||'')===(o.cd||''))):undefined;
     return {...t,groups,totals,target,stages,okrRoutes,ocValues,...(t.okrRoutes?.length&&!okrRoutes.length?{pickDone:'',pickDue:'',pickLate:false,pickUnverified:false,pickSource:'',pickMaps:[]}:{}),production:Array.from(by,([label,qty])=>({label,qty})).sort((a,b)=>b.qty-a.qty),eta:groups.map(g=>g.eta).filter(Boolean).sort().pop()||'',partial:groups.some(g=>g.partial)};
   }
@@ -295,7 +296,7 @@
     if(!chHas(f.priority,chPriority(t)))return false;
     if(f.openStart&&(!t.created||t.created<f.openStart))return false;
     if(f.openEnd&&(!t.created||t.created>f.openEnd))return false;
-    if(chDimensions.some(k=>f[k])&&!chGroups(t,f).length)return false;
+    if((chDimensions.some(k=>f[k])||f.finishKey&&((t.groups||[]).length||f.finishKey!=='SEM ACABAMENTO INFORMADO'))&&!chGroups(t,f).length)return false;
     if(f.min!==''&&f.min!=null||f.max!==''&&f.max!=null){
       const age=chAging(t,asof);
       if(age===null||(f.min!==''&&f.min!=null&&age<Number(f.min))||(f.max!==''&&f.max!=null&&age>Number(f.max)))return false;
@@ -489,6 +490,19 @@
     let sum=0;out.bands=chBands.map(([lo,hi])=>{const count=out.ages.filter(x=>x.age>=lo&&x.age<=hi).reduce((a,x)=>a+x.w,0);sum+=count;return {label:hi===Infinity?'61+':lo+'–'+hi,count,pct:chPct(count,out.delivery),cum:chPct(sum,out.delivery)};});
     out.average=out.delivery?out.ages.reduce((a,b)=>a+b.age*b.w,0)/out.delivery:null;out.pct=chPct(out.num,out.den);return out;
   }
+  function chOKRByFinish(rows,f){
+    const keys=new Set();
+    for(const t of rows){
+      if(!chMatches(t,{...f,min:'',max:''},f.asof))continue;
+      const groups=chGroups(t,f);
+      if(!groups.length&&!(t.groups||[]).length&&!chDimensions.some(k=>f[k]))keys.add(chFinishKey(null));
+      groups.forEach(g=>{if(g.qty>0)keys.add(chFinishKey(g.finish));});
+    }
+    return [...keys].map(key=>{
+      const d=chOKR(rows,{...f,finishKey:key});
+      return {key,qty:d.items.reduce((sum,t)=>sum+t.qty,0),tickets:d.items.length,d};
+    }).filter(x=>x.tickets||x.d.canceled).sort((a,b)=>b.qty-a.qty||a.key.localeCompare(b.key));
+  }
   // CH_OKR_PURE_END
   const detailBox=(label,content)=>'<details><summary>'+esc(label)+'</summary>'+content+'</details>';
   function message(s,error){el('msg').textContent=s;el('msg').className=error?'ch-alert':s&&s.startsWith('Carregando')?'ch-loading':'ch-muted';}
@@ -567,7 +581,7 @@
       '<label>Coleta do chamado<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Não coletado</option><option value="concluidos">Coletado</option></select></label>'+
       '<label>Situação do prazo<select id="ch-okr-prazo"><option value="">Todos</option><option value="dentro">Dentro do prazo</option><option value="fora">Fora do prazo</option><option value="aberto">Em aberto (todos)</option><option value="vencido">Vencido em aberto</option><option value="abertoAVencer">Em aberto a vencer</option><option value="naoApurado">Não apurado</option></select></label></div>'+
       '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note" id="ch-okr-cutoff">Base: somente prazos vencidos até D-1 da data observada. Prazos de hoje ou futuros ficam fora da aderência, inclusive quando já coletados.</p></section>'+
-      '<div id="ch-okr-kpis" class="ch-grid"></div><details class="ch-box ch-okr-comparison" open><summary>Visão comparativa dos critérios de apuração</summary><div id="ch-okr-compare"></div></details><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de coleta</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Abrir no Google Sheets</button><small id="ch-okr-count"></small><a id="ch-okr-sheet-link" target="_blank" rel="noopener noreferrer" hidden>Abriu em outra aba? Acessar planilha</a><small id="ch-okr-export-msg" role="status"></small></div><div id="ch-okr-dragbar" class="ch-dragbar" hidden><button type="button" id="ch-okr-grip" class="ch-grip" aria-label="Segure e arraste horizontalmente a tabela. Use as setas para navegar." title="Segure e arraste para os lados"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-5a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L3 13a2 2 0 0 1 3-2z"/></svg>Segure e arraste</button><input id="ch-okr-scrollrange" type="range" min="0" max="0" value="0" aria-label="Posição horizontal da tabela de chamados"></div><div id="ch-okr-rows"></div></section>';
+      '<div id="ch-okr-kpis" class="ch-grid"></div><details class="ch-box ch-okr-comparison" open><summary>Visão comparativa dos critérios de apuração</summary><div id="ch-okr-compare"></div></details><section class="ch-box"><h2>OKR por acabamento</h2><div id="ch-okr-finish-summary"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de coleta</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Abrir no Google Sheets</button><small id="ch-okr-count"></small><a id="ch-okr-sheet-link" target="_blank" rel="noopener noreferrer" hidden>Abriu em outra aba? Acessar planilha</a><small id="ch-okr-export-msg" role="status"></small></div><div id="ch-okr-dragbar" class="ch-dragbar" hidden><button type="button" id="ch-okr-grip" class="ch-grip" aria-label="Segure e arraste horizontalmente a tabela. Use as setas para navegar." title="Segure e arraste para os lados"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-5a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L3 13a2 2 0 0 1 3-2z"/></svg>Segure e arraste</button><input id="ch-okr-scrollrange" type="range" min="0" max="0" value="0" aria-label="Posição horizontal da tabela de chamados"></div><div id="ch-okr-rows"></div></section>';
       el('okr').querySelectorAll('input,select').forEach(x=>x.addEventListener('change',renderOKR));
     }
     const re=state.data.rows;
@@ -580,11 +594,12 @@
     f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
     const d1=chAdd(f.asof,-1),effectiveEnd=f.basis==='due'&&f.end&&f.end<d1?f.end:d1;
     el('okr-cutoff').textContent='Aderência: vencimentos até '+dt(effectiveEnd)+' (D-1 da observação: '+dt(d1)+'). '+(f.basis==='due'&&f.start&&f.start>effectiveEnd?'Ainda não há vencimentos elegíveis no recorte.':'Prazos de hoje e futuros ficam fora da apuração, inclusive quando já coletados.');
-    state.okrExport=null;el('okr-export').disabled=true;if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-compare').innerHTML='';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
+    state.okrExport=null;el('okr-export').disabled=true;if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-compare').innerHTML='';el('okr-finish-summary').innerHTML='';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
     const d=chOKR(re,f),display=chOKRDestinationRows(d,f,re),unit=f.unit==='qty'?'Tiragem':'Chamados';state.okrExport={d,f,display};el('okr-export').disabled=!!state.okrSheetBusy;el('okr-count').textContent=num(d.items.length)+' chamados · '+num(display.length)+' linhas por destino';const pct=v=>v===null?'—':num(Math.round(v*10)/10)+'%';
     el('okr-kpis').innerHTML=chOKRCards(d,f);
     chFitOKRCards();
     el('okr-compare').innerHTML=chOKRCompare(re,f,d);
+    el('okr-finish-summary').innerHTML=chOKRFinishTable(re,f);
     el('okr-aging').innerHTML=table(['Dias',unit,'% da faixa','% acumulado'],d.bands.map(b=>[esc(b.label),num(b.count),pct(b.pct),pct(b.cum)]))+'<p class="ch-muted">Denominador: '+num(d.delivery)+' '+unit.toLowerCase()+' com coleta integral e aging válido.</p>';
     el('okr-rows').innerHTML=chOKRTable(display);
     chBindTableDrag('okr-');
@@ -664,6 +679,12 @@
     const cards=results.map(({rule,label,help,d},i)=>chOKRHelpCard(label,chOKRPct(d.pct),chOKRTone(d),help+' '+chOKRCardHelp['Aderência'],'ch-okr-compare-help-'+i,'<button type="button" class="ch-link ch-compare-link" data-okr-criterion="'+rule+'">Ver base detalhada</button>')).join('');
     const lines=results.map(({label,help,d})=>'<tr><td title="'+esc(help)+'">'+esc(label)+'</td>'+[chOKRPct(d.pct),num(d.num)+' / '+num(d.den),num(d.late),num(d.pending),num(d.upcoming),num(d.canceled),num(d.historicalExcluded),num(d.actual),num(d.notCollected),chOKRAge(d),chOKROCLabel(chTotalOC(d.items))].map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('');
     return '<p class="ch-muted">Mesmos filtros e unidade de apuração para os três critérios. A base elegível pode variar conforme o prazo de cada critério; todos consideram vencimento até D-1.</p><div class="ch-grid">'+cards+'</div><div class="ch-frame"><table><thead><tr>'+headers.map(h=>'<th title="'+esc(chOKRCardHelp[h]||'Critério utilizado para definir o prazo de coleta.')+'" tabindex="0">'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+lines+'</tbody></table></div>';
+  }
+  function chOKRFinishTable(rows,f){
+    const result=chOKRByFinish(rows,f),unit=f.unit==='qty'?'Tiragem':'Chamados';
+    const headers=['Acabamento','Tiragem total','Chamados','Aderência','Dentro do prazo','Base apurada','Fora do prazo','Vencido em aberto','A vencer','Coletados','Não coletados','Aging médio'];
+    const lines=result.map(({key,qty,tickets,d})=>[esc(key),num(qty),num(tickets),'<strong style="color:'+(d.pct===null?'#64748b':d.pct>=90?'#16734b':'#b54708')+'">'+esc(chOKRPct(d.pct))+'</strong>',num(d.num),num(d.den),num(d.late),num(d.pending),num(d.upcoming),num(d.actual),num(d.notCollected),esc(chOKRAge(d))]);
+    return '<p class="ch-muted">Apuração por '+esc(unit.toLowerCase())+', conforme o critério e o recorte selecionados. Cada combinação de acabamento aparece uma única vez; o mesmo chamado pode conter acabamentos diferentes. A aderência de cada grupo considera suas próprias rotas.</p>'+table(headers,lines,'Nenhum acabamento no recorte.');
   }
   const chOKRPrazoStatus=t=>!t.apurado?'Não apurado':t.noPrazo?'Dentro do prazo':'Fora do prazo';
   const chOKRHelp={'OC':'Ordens de compra vinculadas ao chamado e destino.','Valor OC':'Valor integral das OCs únicas da linha. O total geral elimina duplicidades entre linhas e ignora valores ausentes ou divergentes.','Chamado':'Identificador da solicitação no SPG. Clique para abrir o detalhe.','Categoria':'Tipo da solicitação.','Marca':'Marca do chamado.','Envio':'Ciclo de envio.','Gráfica':'Gráfica vinculada à rota.','CD':'Centro de distribuição do destino.','Tiragem':'Quantidade do destino, sem duplicar a tiragem entre destinos.','Abertura':'Data de abertura do chamado.','Prazo':'Data limite conforme o critério de apuração selecionado.','Realizado':'Data da coleta integral do destino; coleta real do SPG tem prioridade, com complemento por mapa e Transportes quando necessário. Se faltar coleta, usa a entrega real integral da mesma rota como referência. Considera apenas datas válidas até o corte.','Dias de atraso':'Dias corridos de atraso em relação ao prazo selecionado.','Aging':'Dias corridos entre abertura e coleta integral.','Status':'Coletado quando há data integral válida no destino; caso contrário, não coletado. O indicador por chamado mantém sua regra de apuração integral.','Situação do prazo':'Classificação usada na aderência do chamado: não apurado quando excluído do denominador; dentro do prazo quando entra no numerador; fora do prazo nos demais casos apurados.'};

@@ -150,3 +150,14 @@ test('OKR filtra situação do prazo com D-1, coleta integral, seleção múltip
   assert.equal(chOKR(list,{...opts,prazo:['aberto'],scope:'concluidos'}).items.length,0);
  }
 });
+
+
+test('visão por acabamento preserva tiragem e separa combinações sem duplicar SKUs',()=>{
+ const group=(qty,finish)=>({qty,finish,printer:'A',cd:'JDI',coverage:[]});
+ const route=(qty,finish,pick)=>({qty,printer:'A',cd:'JDI',dimensions:{finish,printer:'A',cd:'JDI'},pick,collection:{events:pick?[{date:pick,qty,source:'SPG · Coleta real'}]:[]}});
+ const x={...t,id:'A',created:'2026-10-01',desired:'2026-10-26',groups:[group(100,['PUR']),group(20,['PUR','GRAMPADO']),group(30,[])],totals:{qty:150,coverage:[]},okrRoutes:[route(100,['PUR'],'2026-10-25'),route(20,['GRAMPADO','PUR'],''),route(30,[],'2026-10-27')]};
+ const opts={...f,basis:'due',start:'2026-09-30',end:'2026-12-31',asof:'2026-11-25',rule:'fixed',unit:'qty'};
+ const rows=ctx.chOKRByFinish([x],opts),by=Object.fromEntries(rows.map(r=>[r.key,r]));assert.equal(rows.reduce((n,r)=>n+r.qty,0),150);assert.equal(by.PUR.d.num,100);assert.equal(by['GRAMPADO / PUR'].d.pending,20);assert.equal(by['SEM ACABAMENTO INFORMADO'].d.late,30);
+ const selected=ctx.chOKRByFinish([x],{...opts,finish:['PUR']});assert.equal(selected.reduce((n,r)=>n+r.qty,0),120);
+ const open=ctx.chOKRByFinish([x],{...opts,prazo:['vencido']});assert.equal(open.length,1);assert.equal(open[0].qty,20);
+});
