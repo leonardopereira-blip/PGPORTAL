@@ -12,3 +12,15 @@ test('Apenas gráfica alocada, ACERVO e início de máquina separados de real',(
  const it={printer:'REPROSET',stages:Array.from({length:12},()=>({p:'',r:''}))};api.pgChAplicarAcordo_(it,{n:'3118'},a);
  assert.equal(it.stages[0].agreedStatus,'ACERVO');assert.equal(it.stages[3].agreedStart,'2026-11-14');assert.equal(it.stages[3].r,'');assert.equal(it.stages[10].agreed,'2026-11-23');
 });
+
+test('Gmail: base64 sem padding, bytes e recuperação após limite de consultas',()=>{
+ let attempts=0;const sleeps=[];
+ const f=new Function('Utilities','UrlFetchApp','ScriptApp',read('ChamadosAcordos.js')+'\nreturn {decode:pgChMailDecode_,get:pgChMailGet_};')(
+  {base64DecodeWebSafe:v=>Array.from(Buffer.from(v,'base64url')),sleep:v=>sleeps.push(v)},
+  {fetch:()=>{const status=++attempts===1?429:200;return {getResponseCode:()=>status,getContentText:()=>status===429?'quota':'{"ok":true}'};}},
+  {getOAuthToken:()=>'simulado'});
+ assert.deepEqual(f.decode('YWJjZA'),[97,98,99,100]);
+ assert.deepEqual(f.decode([65,255,128]),[65,-1,-128]);
+ assert.deepEqual(f.get('threads/simulado',{deadline:Date.now()+60000}),{ok:true});
+ assert.deepEqual(sleeps,[2000]);
+});
