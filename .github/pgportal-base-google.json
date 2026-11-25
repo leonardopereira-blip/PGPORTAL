@@ -1,6 +1,6 @@
 {
   "scriptId": "17bR5aRSRvo_tC8HC5O7tE5lnQyLdB2l4twefjEH4ynETaf0XTrsutbQG",
-  "lido_em": "2026-11-25T12:48:10.546Z",
+  "lido_em": "2026-11-25T15:49:33.333Z",
   "files": {
     "HTML:abaCentralChamados": "d0ada3b94ae17f5ba42366d31ac5e1a816d12e1367d79893a9f76be39b6dd36e",
     "HTML:abaColetas": "0a9c0db187678c89b2391714d37bd52e86eb67359653e650336caaf4966470f7",
@@ -35,7 +35,7 @@
     "SERVER_JS:AuditoriaMetaArmazem": "7d32a16b41b4509f81f2913a61d63b68ec3dd1820afe9c7bd87adc559e673a8e",
     "HTML:AuditoriaPortalSheets": "378d2c5194568fc3352c66b2c9fc065f6658567363b82ffb1b5201446165b389",
     "SERVER_JS:CachePorCopia": "c094537469895360979f0a183e9a71fae119de3e86d9f8ffc8b6d320ece4c6a2",
-    "SERVER_JS:ChamadosAcordos": "7c4122d21b9f4c6811cb228bc9f4c2f3d8e6f2961bc71c0f56e2a92616d864ef",
+    "SERVER_JS:ChamadosAcordos": "e843d31ef8c46daebaa5378369c38bfce5214cbb5da6b6b3945f7041fe6acc04",
     "SERVER_JS:ChamadosFinanceiro": "855ab1237c28ed5b35058d1c431d244b7b0b9b83b6ff3a9eed450a81afa6619f",
     "SERVER_JS:ChamadosFontes": "d3880be49e96404ac210725b2ab0e1b565d7d2350e71ae4ea03378ed20eebb38",
     "SERVER_JS:ChamadosIndicadores": "200113a72c33aa9b485104100b85fda55110c9d4bd64089804f3c3038344a1d9",
