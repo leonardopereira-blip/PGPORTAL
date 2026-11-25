@@ -36,7 +36,8 @@ function pgChDatasEtapas_(items) {
   return PG_CH_ETAPAS.map((_,k)=>{
     const stages=routes.map(it=>(it.stages||[])[k]||{});
     const real=stages.map(s=>pgChData_(s.r)),complete=real.length>0&&real.every(Boolean);
-    return {p:pgChUltima_(stages.map(s=>pgChData_(s.p))),r:complete?pgChUltima_(real):'',
+    const agreed=stages.map(s=>pgChData_(s.agreed)),starts=stages.map(s=>pgChData_(s.agreedStart));
+    return {agreed:agreed.length&&agreed.every(Boolean)?pgChUltima_(agreed):'',agreedStart:starts.length&&starts.every(Boolean)?pgChUltima_(starts):'',agreedStatus:stages.length&&stages.every(s=>s.agreedStatus==='ACERVO')?'ACERVO':'',agreedSource:pgChUnicos_(stages.map(s=>s.agreedSource)).join(' + '),agreedStartSource:pgChUnicos_(stages.map(s=>s.agreedStartSource)).join(' + '),p:pgChUltima_(stages.map(s=>pgChData_(s.p))),r:complete?pgChUltima_(real):'',
       a:!complete&&real.some(Boolean)?'Parcial':pgChUnicos_(stages.map(s=>pgChTexto_(s.a))).join(' / '),
       f:pgChUnicos_(stages.flatMap(s=>pgChTexto_(s.f).split(/\s+\+\s+/))).join(' + ')};
   });
