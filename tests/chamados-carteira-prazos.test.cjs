@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '..', 'abaCentralChamados.html'), 'utf8');
 const pure = html.split('// CH_OKR_PURE_BEGIN')[1].split('// CH_OKR_PURE_END')[0];
 const ctx = vm.createContext({ Intl, Date });
-vm.runInContext(pure + ';this.rules={chDeadlineBucket,chDeadlineCounts,chDeadlineLabel,chDeliveryDate,chFinalForecast,chTodaySP,chFilteredTotals,chDestinationRows,chDeadlineSummary};', ctx);
+vm.runInContext(pure + ';this.rules={chDeadlineBucket,chDeadlineCounts,chDeadlineLabel,chDeliveryDate,chFinalForecast,chTodaySP,chFilteredTotals,chDestinationRows,chDeadlineSummary,chOwnerForPrinter,chResponsible};', ctx);
 const rules = ctx.rules;
 const stages = (p = '', r = '') => Array.from({ length: 12 }, () => ({ p, r, a: '', f: 'PCP' }));
 const target = deadline => ({ deadline, dates: Array(12).fill(deadline), next: deadline, nextStage: 3 });
@@ -178,4 +178,39 @@ test('acordo não substitui previsão, meta nem real e só consolida rotas com c
  delete b.stages[0].agreed;
  assert.equal(rules.chFilteredTotals(t,{cd:['CD JDI','CD FOR']}).stages[0].agreed,'');
  const h=viewHarness([t]);h.ui.render();assert.match(h.elements.get('ch-table').innerHTML,/20\/11\/2026/);
+});
+
+test('responsável PG usa o cadastro histórico inclusive em 09/11 e V2 a partir de 10/11',()=>{
+ const cases=[
+ ['WALPRINT','João Alberti','Klayton'],['REPROSET','Klayton','Amanda Costa'],
+ ['LEOGRAF','João Alberti','Matheus Jesus'],['MARGRAF','Klayton','Matheus Jesus'],
+ ['BERCROM','Amanda Costa','Amanda EZ'],['FORMA CERTA','Elis','Amanda EZ'],
+ ['OCEANO','Matheus','Amanda EZ'],['ATHOS','Matheus','Amanda EZ'],
+ ['FELK','Elis','Amanda EZ'],['STAR-7','Matheus','Matheus Jesus'],
+ ['FTD','João Alberti','Amanda Costa'],['SÃO FRANCISCO','Elis','Elis'],
+ ['EMBALART','Elis','Elis'],['PITFER','Elis','Elis']
+ ];
+ for(const [printer,oldOwner,newOwner] of cases){
+  assert.equal(rules.chOwnerForPrinter(printer,'2026-11-09','REENTRADA'),oldOwner,printer);
+  assert.equal(rules.chOwnerForPrinter(printer,'2026-11-10','REENTRADA'),newOwner,printer);
+ }
+ assert.equal(rules.chOwnerForPrinter('IPSIS','2026-11-09','REENTRADA'),'Klayton');
+ assert.equal(rules.chOwnerForPrinter('IPSIS','2026-11-10','REENTRADA'),'João Alberti');
+ for(const date of ['2026-11-09','2026-11-10','']){
+  assert.equal(rules.chOwnerForPrinter('',''+date,'INCLUSIVOS'),'Klayton');
+  assert.equal(rules.chOwnerForPrinter('DESCONHECIDA',date,'REENTRADA'),'João Alberti');
+ }
+});
+test('responsável PG da carteira é por gráfica/destino, sem utilizar responsável SPG',()=>{
+ const a=group('CD JDI','2026-11-24'),b=group('CD FOR','2026-11-24');
+ a.printer='WALPRINT';b.printer='REPROSET';
+ const t=ticket('105','2026-11-24',{created:'2026-11-10',owner:'Não usar SPG',groups:[a,b]});
+ assert.equal(rules.chResponsible(t),'Klayton | Amanda Costa');
+ const rows=rules.chDestinationRows(t);
+ assert.equal(rules.chResponsible(rows.find(r=>r.cd==='CD JDI')),'Klayton');
+ assert.equal(rules.chResponsible(rows.find(r=>r.cd==='CD FOR')),'Amanda Costa');
+ const h=viewHarness([t]);h.ui.render();
+ const html=h.elements.get('ch-table').innerHTML;
+ assert.match(html,/>Klayton<\/td>/);assert.match(html,/>Amanda Costa<\/td>/);
+ assert.doesNotMatch(html,/Não usar SPG/);
 });
