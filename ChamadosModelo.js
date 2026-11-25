@@ -249,7 +249,7 @@ function pgChAdd_(idx, key, value) {
   if (!idx.has(key)) idx.set(key, []);
   if (!idx.get(key).includes(value)) idx.get(key).push(value);
 }
-const PG_CH_ETAPAS = ['Arquivo enviado','Boneco recebido','Boneco aprovado','Impressão','Acabamento','Formação de kit',
+const PG_CH_ETAPAS = ['Envio de arquivo','Boneco recebido','Boneco aprovado','Impressão','Acabamento','Formação de kit',
   'Produção concluída','Custo validado','OC emitida','Mapa solicitado','Coleta real','Entrega no CD'];
 function pgChEtapa_(plan,real,fonte,andamento) {
   return {p:pgChData_(plan), r:pgChData_(real), f:fonte, a:andamento || ''};
