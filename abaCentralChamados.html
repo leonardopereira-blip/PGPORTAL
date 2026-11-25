@@ -452,6 +452,12 @@
     }
     return out;
   }
+  function chOKRPrazoFiltro(selected,result,actual){
+    if(selected==null||selected==='')return true;
+    const values=Array.isArray(selected)?selected:[selected];
+    const matches={dentro:!!result.den&&!!result.num,fora:!!result.den&&!result.num,aberto:!actual,vencido:!actual&&!!result.den&&!result.num,abertoAVencer:!actual&&!!result.upcoming,naoApurado:!result.den};
+    return values.some(v=>matches[v]===true);
+  }
   function chOKR(rows,f){
     const out={cohort:0,den:0,num:0,late:0,pending:0,upcoming:0,canceled:0,historicalExcluded:0,actual:0,delivery:0,notCollected:0,ages:[],items:[]};
     const inside=v=>!!v&&(!f.start||v>=f.start)&&(!f.end||v<=f.end);
@@ -468,6 +474,7 @@
       const actual=pick.actual,status=chStatusColeta(actual);
       if(f.scope==='abertos'&&actual||f.scope==='concluidos'&&!actual)continue;
       const result=chPrazoColeta(t,f,pick,due),days=result.days;
+      if(!chOKRPrazoFiltro(f.prazo,result,actual))continue;
       out.cohort+=w;
       if(actual){
         out.actual+=w;
@@ -557,7 +564,8 @@
       '<label>Início do corte<input type="date" id="ch-okr-start" value="'+first+'"></label><label>Fim do corte<input type="date" id="ch-okr-end" value="'+last+'"></label>'+
       '<label>Realizado observado até<input type="date" id="ch-okr-asof" value="'+today+'" max="'+today+'"></label>'+
       '<label>Categoria<select id="ch-okr-cat"><option value="">Todos</option><option value="REENTRADA" selected>REENTRADA</option></select></label><label>Marca<select id="ch-okr-brand"></select></label><label>Envio<select id="ch-okr-shipment"><option value="">Todos</option><option value="V1" selected>V1</option></select></label>'+
-      '<label>Coleta do chamado<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Não coletado</option><option value="concluidos">Coletado</option></select></label></div>'+
+      '<label>Coleta do chamado<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Não coletado</option><option value="concluidos">Coletado</option></select></label>'+
+      '<label>Situação do prazo<select id="ch-okr-prazo"><option value="">Todos</option><option value="dentro">Dentro do prazo</option><option value="fora">Fora do prazo</option><option value="aberto">Em aberto (todos)</option><option value="vencido">Vencido em aberto</option><option value="abertoAVencer">Em aberto a vencer</option><option value="naoApurado">Não apurado</option></select></label></div>'+
       '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note" id="ch-okr-cutoff">Base: somente prazos vencidos até D-1 da data observada. Prazos de hoje ou futuros ficam fora da aderência, inclusive quando já coletados.</p></section>'+
       '<div id="ch-okr-kpis" class="ch-grid"></div><details class="ch-box ch-okr-comparison" open><summary>Visão comparativa dos critérios de apuração</summary><div id="ch-okr-compare"></div></details><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de coleta</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Abrir no Google Sheets</button><small id="ch-okr-count"></small><a id="ch-okr-sheet-link" target="_blank" rel="noopener noreferrer" hidden>Abriu em outra aba? Acessar planilha</a><small id="ch-okr-export-msg" role="status"></small></div><div id="ch-okr-dragbar" class="ch-dragbar" hidden><button type="button" id="ch-okr-grip" class="ch-grip" aria-label="Segure e arraste horizontalmente a tabela. Use as setas para navegar." title="Segure e arraste para os lados"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-5a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L3 13a2 2 0 0 1 3-2z"/></svg>Segure e arraste</button><input id="ch-okr-scrollrange" type="range" min="0" max="0" value="0" aria-label="Posição horizontal da tabela de chamados"></div><div id="ch-okr-rows"></div></section>';
       el('okr').querySelectorAll('input,select').forEach(x=>x.addEventListener('change',renderOKR));
@@ -568,7 +576,7 @@
       target.innerHTML='<option value="">Todos</option>'+values.map(v=>opt(v)).join('');if(values.includes(old))target.value=old;
     }
     dimOptions('okr-',re);styleFilters();
-    const f={...readFilters('okr-'),...Object.fromEntries(['rule','basis','start','end','asof','cat','brand','shipment','scope','unit'].map(k=>[k,filterVal(el('okr-'+k))]))};
+    const f={...readFilters('okr-'),...Object.fromEntries(['rule','basis','start','end','asof','cat','brand','shipment','scope','unit','prazo'].map(k=>[k,filterVal(el('okr-'+k))]))};
     f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
     const d1=chAdd(f.asof,-1),effectiveEnd=f.basis==='due'&&f.end&&f.end<d1?f.end:d1;
     el('okr-cutoff').textContent='Aderência: vencimentos até '+dt(effectiveEnd)+' (D-1 da observação: '+dt(d1)+'). '+(f.basis==='due'&&f.start&&f.start>effectiveEnd?'Ainda não há vencimentos elegíveis no recorte.':'Prazos de hoje e futuros ficam fora da apuração, inclusive quando já coletados.');
@@ -854,7 +862,7 @@
     if(b.hasAttribute('data-deadline')){state.deadline=state.deadline===b.dataset.deadline?'':b.dataset.deadline;state.page=1;render();return;}
     if(b.id==='ch-okr-export'){exportOKR();return;}
     if(b.dataset.okrCriterion){el('okr-rule').value=b.dataset.okrCriterion;renderOKR();el('okr-rows').scrollIntoView?.({block:'nearest'});return;}
-    if(b.id==='ch-okr-clear'){[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment'].forEach(k=>setFilterValue(el(k),''));setFilterValue(el('okr-cat'),'REENTRADA');el('okr-scope').value='ativos';renderOKR();return;}
+    if(b.id==='ch-okr-clear'){[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment','okr-prazo'].forEach(k=>setFilterValue(el(k),''));setFilterValue(el('okr-cat'),'REENTRADA');el('okr-scope').value='ativos';renderOKR();return;}
     if(b.id==='ch-funnel-qty'||b.id==='ch-funnel-tickets'){state.funnelMode=b.id==='ch-funnel-qty'?'qty':'tickets';render();return;}
     if(b.id==='ch-refresh'){load(true);return;}if(b.id==='ch-save'){save();return;}
     if(b.id==='ch-back'){state.detailLoad++;state.detail=null;render();show();return;}

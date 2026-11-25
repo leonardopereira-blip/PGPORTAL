@@ -129,3 +129,24 @@ test('recorte por vencimento de 30/09 a 31/12 respeita limites e D-1 nos três c
  }
  assert.equal(chOKR([{...rows[1],desired:''}],{...f,rule:'desired',basis:'due',start:'2026-09-30',end:'2026-12-31',asof:'2026-11-25'}).items.length,0);
 });
+
+
+test('OKR filtra situação do prazo com D-1, coleta integral, seleção múltipla e sem duplicar tiragem',()=>{
+ const base={...t,desired:'',groups:[],created:'2026-10-01',pickDone:'',totals:{qty:10,coverage:[]}}, rows=[
+  {...base,id:'ON',pickDone:'2026-10-25'},
+  {...base,id:'LATE',pickDone:'2026-10-27'},
+  {...base,id:'OVERDUE'},
+  {...base,id:'TODAY',created:'2026-10-31'},
+  {...base,id:'EARLY',created:'2026-11-01',pickDone:'2026-11-20'},
+  {...base,id:'FUTURE',created:'2026-11-01'}];
+ for(const rule of ['standard','fixed','desired'])for(const unit of ['tickets','qty']){
+  const list=rows.map(r=>({...r,desired:r.created==='2026-10-01'?'2026-10-26':r.created==='2026-10-31'?'2026-11-25':'2026-11-26'}));
+  const opts={...f,rule,unit,basis:'due',start:'2026-09-30',end:'2026-12-31',asof:'2026-11-25'},w=unit==='qty'?10:1;
+  const expected={dentro:['ON'],fora:['LATE','OVERDUE'],aberto:['OVERDUE','TODAY','FUTURE'],vencido:['OVERDUE'],abertoAVencer:['TODAY','FUTURE'],naoApurado:['TODAY','EARLY','FUTURE']};
+  for(const [prazo,ids] of Object.entries(expected)){const d=chOKR(list,{...opts,prazo:[prazo]});assert.deepEqual(Array.from(d.items,x=>x.id),ids);assert.equal(d.cohort,ids.length*w);}
+  const mixed=chOKR(list,{...opts,prazo:['fora','vencido']});assert.equal(mixed.den,2*w);assert.equal(mixed.late,2*w);assert.equal(mixed.pending,w);
+  assert.equal(chOKR(list,{...opts,prazo:[]}).items.length,0);
+  assert.equal(chOKR(list,{...opts,prazo:''}).items.length,6);
+  assert.equal(chOKR(list,{...opts,prazo:['aberto'],scope:'concluidos'}).items.length,0);
+ }
+});
