@@ -53,10 +53,10 @@ try {
     for(const k of conflitos) {
       const local=mapaLocal.get(k),remoto=mapaRemoto.get(k);
       const registro=base.files[k];
-      if(k!=='HTML:Scripts_Globais_2'||!local||!remoto||!registro) {
+      if(!['HTML:Scripts_Globais_2','SERVER_JS:ChamadosAcordos','SERVER_JS:ChamadosPortal'].includes(k)||!local||!remoto||!registro) {
         pendentes.push(k);continue;
       }
-      etapa='localizar base comprovada de Scripts_Globais_2';
+      etapa='localizar base comprovada de '+k;
       const arquivo=path.relative(path.resolve('.'),path.resolve(local.localPath));
       const objetos=git('rev-list','--objects','HEAD','--',arquivo).split('\n')
         .map(s=>s.split(' ')).filter(a=>a.length>=2&&a.slice(1).join(' ')===arquivo);
@@ -66,7 +66,7 @@ try {
         if(hash(src)===registro){comum=src;break;}
       }
       if(comum===null){
-        console.error('Base de Scripts_Globais_2 nao encontrada no historico Git. Nenhuma sobreposicao foi permitida.');
+        console.error('Base comprovada nao encontrada no historico Git. Nenhuma sobreposicao foi permitida.');
         pendentes.push(k);continue;
       }
       const pasta=process.env.RUNNER_TEMP||'/tmp';
@@ -76,21 +76,25 @@ try {
       fs.writeFileSync(caminhoGoogle,remoto.source,'utf8');
       fs.writeFileSync(caminhoBase,comum,'utf8');
       fs.writeFileSync(caminhoGit,local.source,'utf8');
-      etapa='mescla sem conflitos de Scripts_Globais_2';
+      etapa='mescla sem conflitos de '+k;
       const merge=spawnSync('git',['merge-file','-p','--diff3',caminhoGoogle,caminhoBase,caminhoGit],
         {encoding:'utf8',maxBuffer:5*1024*1024});
       if(merge.status!==0){
-        console.error('Conflito real na mescla de Scripts_Globais_2; enviar foi bloqueado. Trecho: '+
-          String(merge.stdout||merge.stderr||'').slice(0,3000));
+        console.error('Conflito real na mescla de '+k+'; envio bloqueado.');
         pendentes.push(k);continue;
       }
       const unido=String(merge.stdout);
       if(unido.includes('<<<<<<<')||unido.includes('>>>>>>>')) {
         pendentes.push(k);continue;
       }
+      if(k.startsWith('SERVER_JS:')) {
+        const check=spawnSync('node',['--check'],{input:unido,encoding:'utf8'});
+        if(check.status!==0){console.error('Sintaxe inválida na mescla de '+k);pendentes.push(k);continue;}
+        if(k==='SERVER_JS:ChamadosAcordos'&&(!unido.includes('scan.historical.done')||!unido.includes('scan.cursor')||!unido.includes('pgChMailSave_(saved.id,entries,scan)'))){console.error('Leitura incremental não preservada');pendentes.push(k);continue;}
+      }
       fs.writeFileSync(local.localPath,unido,'utf8');
       integrados.push(arquivo);
-      console.log('Scripts_Globais_2 mesclado sem conflitos a partir da base Google verificada. Google SHA-256='+
+      console.log(k+' mesclado sem conflitos a partir da base Google verificada. Google SHA-256='+
         hash(remoto.source)+' GitHub SHA-256='+hash(local.source)+' Mescla SHA-256='+hash(unido));
     }
     if(pendentes.length) {
