@@ -164,7 +164,7 @@ function pgChJsonBuild_(before){
  const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:PG_CH_CALCULATION_VERSION,rows:model.summaries,phases:PG_CH_ETAPAS};
  result.emailAgreements=mail.stats;
  if(map.stale)result.notice='Mapa: última leitura íntegra em '+new Date(map.at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+'. Atualização automática pendente.';
- if(mail.stats.error||mail.stats.ocrErrors)result.notice=[result.notice,mail.stats.error?'Cronogramas de e-mail não lidos nesta geração (verificar autorização da conta administradora).':'Alguns prints de cronograma não foram lidos nesta geração.'].filter(Boolean).join(' ');
+ if(mail.stats.error||mail.stats.partial||mail.stats.ocrErrors||mail.stats.decodeErrors)result.notice=[result.notice,mail.stats.error?'Não foi possível acessar os cronogramas de e-mail nesta geração.':mail.stats.partial?'Leitura de cronogramas de e-mail em andamento; os acordos já recuperados foram mantidos.':'Alguns cronogramas de e-mail não foram interpretados.'].filter(Boolean).join(' ');
  if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');return {result,tickets:model.tickets};
 }
 function pgChJsonWrite_(folder,name,obj){
