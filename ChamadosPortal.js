@@ -119,6 +119,20 @@ function pgChJsonRelease_(token){
     if(lease && lease.token===token)props.deleteProperty(PG_CH_JSON_LEASE);
   }finally{lock.releaseLock();}
 }
+// Recuperação manual de reserva órfã. Execute somente após verificar que não há
+// geração em andamento em Execuções. Não apaga dados, cache publicado nem gatilhos.
+function liberarTravaChamadosPortal(){
+  pgChJsonAdmin_();
+  const lock=LockService.getScriptLock();lock.waitLock(5000);
+  try{
+    const props=PropertiesService.getScriptProperties();
+    const raw=props.getProperty(PG_CH_JSON_LEASE);
+    if(!raw){const result={liberada:false,mensagem:'Nenhuma reserva de chamados ativa.'};console.log(JSON.stringify(result));return result;}
+    props.deleteProperty(PG_CH_JSON_LEASE);
+    const result={liberada:true,mensagem:'Reserva da Central liberada; dados publicados preservados.'};
+    console.log(JSON.stringify(result));return result;
+  }finally{lock.releaseLock();}
+}
 // Referência da primeira carga: 16.923 registros com INFO_MAPA_CODE
 // conferidos na fonte em 18/11/2026, não o tamanho da grade.
 const PG_CH_MAPA_BOOTSTRAP_ROWS=16923;
