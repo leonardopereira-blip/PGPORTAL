@@ -381,3 +381,47 @@ function pgChAplicarColetasDetalhe_(t,manual){
   it.stages[10].r=it.collection.date;it.stages[10].f=it.collection.source;it.productionStatus={label:it.delivered>=it.qty?'Entregue integralmente':'Em trânsito',source:'Manual'};
  }
 }
+
+
+// Exporta exatamente a base por destino exibida no OKR. Valores RAW impedem
+// que dados textuais sejam interpretados como fórmulas na planilha criada.
+function exportarOKRChamadosSheets(payload){
+ const email=String(Session.getActiveUser().getEmail()||'').trim().toLowerCase();
+ if(!email||!/^([^@\s]+)@arcoeducacao\.com\.br$/.test(email))throw new Error('Entre com sua conta corporativa para exportar a base.');
+ const headers=['Chamado','Categoria','Marca','Envio','Gráfica','CD','Tiragem','OC','Valor OC','Abertura','Prazo','Realizado','Dias de atraso','Aging','Status','Situação do prazo'];
+ const clean=row=>{
+   if(!Array.isArray(row)||row.length!==headers.length)throw new Error('Colunas da exportação inválidas.');
+   return row.map(v=>{if(v===null||v===undefined)return '';if(typeof v==='number'&&Number.isFinite(v))return v;if(typeof v==='string'&&v.length<=4000)return v;throw new Error('Valor inválido na exportação.');});
+ };
+ if(!payload||!Array.isArray(payload.rows)||payload.rows.length>20000)throw new Error('Base de exportação inválida.');
+ const values=[headers,clean(payload.total),...payload.rows.map(clean)];
+ const txt=v=>typeof v==='string'?v.slice(0,300):'';
+ const numeric=v=>typeof v==='number'&&Number.isFinite(v)?v:'';
+ const metadata=[['Critério',txt(payload.criteria)],['Apuração',txt(payload.unit)],['Período por',txt(payload.basis)],['Início',txt(payload.start)],['Fim',txt(payload.end)],['Observado até',txt(payload.asof)],['Numerador',numeric(payload.num)],['Denominador',numeric(payload.den)],['Valor OC',payload.partial?'Total considera apenas OCs com valor identificado e consistente.':'OCs únicas, sem duplicação.']];
+ let ss=null;
+ try{
+   const stamp=Utilities.formatDate(new Date(),'America/Sao_Paulo','dd-MM-yyyy HH-mm-ss');
+   ss=SpreadsheetApp.create('OKR de reentradas - '+stamp,Math.max(2,values.length),headers.length);
+   ss.setSpreadsheetLocale('pt_BR');ss.setSpreadsheetTimeZone('America/Sao_Paulo');
+   const sheet=ss.getSheets()[0];sheet.setName('Base de apuração');
+   const info=ss.insertSheet('Recorte');
+   SpreadsheetApp.flush();
+   Sheets.Spreadsheets.Values.update({values},ss.getId(),"'Base de apuração'!A1",{valueInputOption:'RAW'});
+   Sheets.Spreadsheets.Values.update({values:metadata},ss.getId(),"'Recorte'!A1",{valueInputOption:'RAW'});
+   sheet.setFrozenRows(2);sheet.getRange(1,1,values.length,headers.length).setFontFamily('Arial').setFontSize(10).setVerticalAlignment('middle');
+   sheet.getRange(1,1,1,headers.length).setBackground('#0c2340').setFontColor('#ffffff').setFontWeight('bold').setWrap(true);
+   sheet.getRange(2,1,1,headers.length).setBackground('#eaf0f8').setFontWeight('bold');
+   sheet.getRange(2,7,values.length-1,1).setNumberFormat('#,##0');
+   sheet.getRange(2,9,values.length-1,1).setNumberFormat('"R$" #,##0.00');
+   sheet.getRange(2,10,values.length-1,3).setNumberFormat('dd/mm/yyyy');
+   sheet.getRange(2,13,values.length-1,2).setNumberFormat('0');
+   if(payload.partial)sheet.getRange(2,9).setNote('Total de OCs únicas com valor identificado e consistente.');
+   [95,105,90,70,145,105,100,150,135,105,105,105,95,80,120,145].forEach((w,i)=>sheet.setColumnWidth(i+1,w));
+   sheet.getRange(2,8,values.length-1,1).setWrap(true);sheet.getRange(2,5,values.length-1,2).setWrap(true);
+   info.setColumnWidth(1,160);info.setColumnWidth(2,440);info.getRange(1,1,metadata.length,1).setFontWeight('bold');
+   ss.setActiveSheet(sheet);SpreadsheetApp.flush();
+   const effective=String(Session.getEffectiveUser().getEmail()||'').toLowerCase();
+   if(email!==effective)DriveApp.getFileById(ss.getId()).addEditor(email);
+   return {url:ss.getUrl()};
+ }catch(e){if(ss)try{DriveApp.getFileById(ss.getId()).setTrashed(true);}catch(ignore){}throw e;}
+}
