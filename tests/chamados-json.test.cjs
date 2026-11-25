@@ -16,7 +16,7 @@ function makeFake(){
     Utilities:{getUuid:uuid,newBlob:(raw,mime,name)=>({raw,name,getBytes:()=>Array.from(raw)})},
     DriveApp:{getFolderById:id=>({...folder(id),createFolder:()=>folder('folder'+(++serial))}),getFileById:id=>({getBlob:()=>({getDataAsString:()=>{if(!files.has(id))throw Error('sem arquivo');return files.get(id);}})})},
     Session:{getActiveUser:admin,getEffectiveUser:admin},PASTA_CACHE_ID:'root',
-    ScriptApp:{getProjectTriggers:()=>triggers,deleteTrigger:t=>{triggers=triggers.filter(x=>x!==t);},newTrigger:name=>({timeBased:()=>({everyHours:n=>({create:()=>triggers.push({name,n,getHandlerFunction:()=>name})})})})},
+    ScriptApp:{getProjectTriggers:()=>triggers,deleteTrigger:t=>{triggers=triggers.filter(x=>x!==t);},newTrigger:name=>({timeBased:()=>({everyHours:n=>({create:()=>triggers.push({name,n,getHandlerFunction:()=>name})}),after:n=>({create:()=>triggers.push({name,n,getHandlerFunction:()=>name})})})})},
     console:{log(){},warn(){}}};
   return {mocks,props,files,folders,get builds(){return builds},get triggers(){return triggers},setFail:v=>fail=v,
     build:()=>{builds++;const gen=uuid(), t={id:uid,n:10};return {result:{gen,now:new Date().toISOString(),rows:[t],counts:{map:100,spg:1},phases:[]},tickets:new Map([[uid,t]])};}};
@@ -44,4 +44,18 @@ test('gerações distintas não misturam detalhe e gatilho não duplica',()=>{
   assert.notEqual(a.gen,b.gen);assert.equal(api.getDetalheChamadoPortal(uid,a.gen).ticket.id,uid);
   api.instalarAtualizacaoCacheChamadosPortal();api.instalarAtualizacaoCacheChamadosPortal();
   assert.equal(f.triggers.length,1);assert.equal(f.triggers[0].n,1);
+});
+
+
+test('e-mail incompleto conserva a geração publicada e agenda retomada sem duplicar',()=>{
+ const f=makeFake(),api=load(f),a=api.atualizarCacheChamadosPortal();
+ api.pgChJsonBuild_=()=>{const err=Error('incompleto');err.pgMailRetry=true;throw err;};
+ assert.equal(api.atualizarCacheChamadosPortal().reason,'EMAIL_INCOMPLETO');
+ assert.equal(api.getChamadosPortal(false).gen,a.gen);
+ api.atualizarCacheChamadosPortal();assert.equal(f.triggers.length,1);
+});
+test('barreira final rejeita resultado parcial mesmo se o construtor o devolver',()=>{
+ const f=makeFake(),api=load(f),a=api.atualizarCacheChamadosPortal();
+ api.pgChJsonBuild_=()=>{const b=f.build();b.result.emailAgreements={partial:true};return b;};
+ assert.equal(api.atualizarCacheChamadosPortal().reason,'FONTES_INCOMPLETAS');assert.equal(api.getChamadosPortal(false).gen,a.gen);
 });

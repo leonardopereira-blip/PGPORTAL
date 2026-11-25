@@ -24,3 +24,16 @@ test('Gmail: base64 sem padding, bytes e recuperação após limite de consultas
  assert.deepEqual(f.get('threads/simulado',{deadline:Date.now()+60000}),{ok:true});
  assert.deepEqual(sleeps,[2000]);
 });
+
+
+test('histórico só é buscado para chamados novos ou com lacunas alteradas',()=>{
+ const f=new Function(read('ChamadosAcordos.js')+'\nreturn pgChMailJobs_;')();
+ const jobs=f({'101':{signature:'A',until:200},'102':{signature:'B',until:300},'103':{signature:'velha',until:250}},new Map([['101','A'],['102','B'],['103','nova'],['104','C']]),new Map([['101',100],['102',100],['103',110],['104',120]]),300);
+ assert.deepEqual(jobs.map(j=>j.numbers),[['103','104'],['101']]);assert.equal(jobs[0].from,110);assert.equal(jobs[1].from,198);
+});
+test('consulta Gmail restringe os assuntos aos números do lote',()=>{
+ let q='';
+ const f=new Function('Gmail',read('ChamadosAcordos.js')+'\nreturn pgChMailListPage_;')({Users:{Threads:{list:(u,o)=>{q=o.q;return {};}}}});
+ f({numbers:['3134','3140'],from:100,to:200},{deadline:Date.now()+10000});
+ assert.match(q,/subject:"Chamado 3134"/);assert.match(q,/subject:"Chamado 3140"/);assert.match(q,/after:100 before:200/);
+});

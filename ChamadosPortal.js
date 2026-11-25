@@ -166,19 +166,30 @@ function pgChMapaFonte_(previous){
 function pgChAgendarRetryMapa_(){
  const handler='repetirCacheChamadosPortal';if(!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()===handler))ScriptApp.newTrigger(handler).timeBased().after(2*60*1000).create();
 }
+function pgChAgendarRetryEmail_(){
+ const handler='repetirCacheChamadosPortal';if(!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()===handler))ScriptApp.newTrigger(handler).timeBased().after(5*60*1000).create();
+}
 function repetirCacheChamadosPortal(){ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='repetirCacheChamadosPortal').forEach(t=>ScriptApp.deleteTrigger(t));return atualizarCacheChamadosPortal();}
 function pgChJsonBuild_(before){
  const datasets={},links={},counts={};
- Object.keys(PG_CH_FONTES).filter(k=>k!=='map').forEach(k=>{const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;if(k==='spg'&&(!counts[k]||(before&&counts[k]<before.counts[k]*0.8)))throw new Error('A base '+PG_CH_FONTES[k].sheet+' está em atualização.');});
- const map=pgChMapaFonte_(before&&before.counts.map);datasets.map=map.rows;links.map=map.url;counts.map=map.rows.length;datasets.sla=getMatrizSLAPortal();
- const tp=pgChLerTransportes_();datasets.tp=tp.rows;links.tp=tp.url;counts.tp=tp.rows.length;
+ const read=k=>{const src=pgChLerFonte_(k);datasets[k]=src.rows;links[k]=src.url;counts[k]=src.rows.length;};
+ // SPG primeiro. Não relê mapas/PCP/financeiro durante a recuperação
+ // de uma fila de e-mails ainda incompleta.
+ read('spg');
+ if(!counts.spg||(before&&counts.spg<before.counts.spg*0.8))throw new Error('A base '+PG_CH_FONTES.spg.sheet+' está em atualização.');
  let mail;
- try{mail=pgChLerAcordos_(datasets.spg);datasets.agreements=mail.agreements;counts.emailAcordos=mail.stats.matched;}
- catch(e){console.warn('[CH email] '+String(e.message||e));mail={stats:{error:true}};datasets.agreements={};}
- const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:map.stale,mapAt:map.at,calculationVersion:PG_CH_CALCULATION_VERSION,rows:model.summaries,phases:PG_CH_ETAPAS};
- result.emailAgreements=mail.stats;
- if(map.stale)result.notice='Mapa: última leitura íntegra em '+new Date(map.at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+'. Atualização automática pendente.';
- if(mail.stats.error||mail.stats.partial||mail.stats.ocrErrors||mail.stats.decodeErrors)result.notice=[result.notice,mail.stats.error?'Não foi possível acessar os cronogramas de e-mail nesta geração.':mail.stats.partial?'Leitura de cronogramas de e-mail em andamento; os acordos já recuperados foram mantidos.':'Alguns cronogramas de e-mail não foram interpretados.'].filter(Boolean).join(' ');
+ try{mail=pgChLerAcordos_(datasets.spg);}
+ catch(e){console.warn('[CH email] '+String(e.message||e));const err=new Error('Cronogramas indisponíveis; JSON anterior preservado.');err.pgMailRetry=true;throw err;}
+ if(!mail?.stats||mail.stats.error||mail.stats.partial||mail.stats.ocrErrors||mail.stats.decodeErrors||mail.stats.historyComplete!==true){
+   const err=new Error('Cronogramas incompletos; JSON anterior preservado.');err.pgMailRetry=true;throw err;
+ }
+ datasets.agreements=mail.agreements;counts.emailAcordos=mail.stats.matched;
+ Object.keys(PG_CH_FONTES).filter(k=>k!=='map'&&k!=='spg').forEach(read);
+ const map=pgChMapaFonte_(before&&before.counts.map);
+ if(map.stale){const err=new Error('Mapa sem leitura íntegra atual; JSON anterior preservado.');err.pgMapRetry=true;throw err;}
+ datasets.map=map.rows;links.map=map.url;counts.map=map.rows.length;datasets.sla=getMatrizSLAPortal();
+ const tp=pgChLerTransportes_();datasets.tp=tp.rows;links.tp=tp.url;counts.tp=tp.rows.length;
+ const model=pgChModelo_(datasets),gen=Utilities.getUuid(),now=new Date().toISOString(),result={gen,now,links,counts,mapPartial:false,mapStale:false,mapAt:map.at,calculationVersion:PG_CH_CALCULATION_VERSION,rows:model.summaries,phases:PG_CH_ETAPAS,emailAgreements:mail.stats};
  if(!model.summaries.length)throw new Error('Nenhum chamado encontrado; geração não publicada.');return {result,tickets:model.tickets};
 }
 function pgChJsonWrite_(folder,name,obj){
@@ -193,7 +204,13 @@ function atualizarCacheChamadosPortal(){
   let folder=null,published=false;
   try{
     const refs=pgChJsonRefs_(),before=refs.length?pgChSnapshot_():null;
-    let built;try{built=pgChJsonBuild_(before);}catch(e){if(e.pgMapRetry){pgChAgendarRetryMapa_();console.warn(e.message);return {pending:true,reason:'MAPA_EM_ATUALIZACAO'};}throw e;}const {result,tickets}=built;if(result.mapStale)pgChAgendarRetryMapa_();
+    let built;try{built=pgChJsonBuild_(before);}catch(e){if(e.pgMapRetry||e.pgMailRetry){if(e.pgMailRetry)pgChAgendarRetryEmail_();else pgChAgendarRetryMapa_();console.warn(e.message);return {pending:true,reason:e.pgMailRetry?'EMAIL_INCOMPLETO':'MAPA_EM_ATUALIZACAO'};}throw e;}
+    const {result,tickets}=built;
+    // Última barreira antes de criar arquivos e trocar o ponteiro publicado.
+    if(result.mapStale||result.mapPartial||result.emailAgreements?.partial||result.emailAgreements?.error||result.emailAgreements?.ocrErrors||result.emailAgreements?.decodeErrors){
+      if(result.mapStale||result.mapPartial)pgChAgendarRetryMapa_();else pgChAgendarRetryEmail_();
+      return {pending:true,reason:'FONTES_INCOMPLETAS'};
+    }
     folder=DriveApp.getFolderById(PASTA_CACHE_ID).createFolder('PG_CH_JSON_'+result.gen);
     const index={}, entries=Array.from(tickets.entries());
     for(let i=0;i<entries.length;i+=8){
