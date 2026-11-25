@@ -145,12 +145,24 @@ function pgChPrazoRota_(t,it,profile,slaDays){
  if(!t.created)return null;
  const brand=pgChMarca_(t.brand),graf=pgChGraf_(it.printer),cd=pgChCD_(it.cd),keys=['R|'+brand+'|'+graf+'|'+cd,'MG|'+brand+'|'+graf,'G|'+graf,'M|'+brand,'*'];
  const targets=profile.base.map((fallback,k)=>{for(const key of keys){const x=profile.stats.get(key)?.[k];if(x&&x.n>=10)return {v:x.median,n:x.n,key};}return {v:fallback,n:0,key:'META'};});
- const transit=slaDays!=null&&Number.isFinite(Number(slaDays))?Math.max(0,Number(slaDays)):Math.max(1,Math.ceil(targets[6].v)),available=25-Math.min(25,Math.ceil(transit));
- const weights=[Math.max(1,targets[0].v),Math.max(1,targets[1].v),Math.max(1,targets[2].v),Math.max(1,targets[5].v)],total=weights.reduce((a,b)=>a+b,0);
- const budget=weights.map(w=>available*w/total),alloc=Math.round(budget[0]),preEnd=Math.round(budget[0]+budget[1]),prodEnd=Math.round(budget[0]+budget[1]+budget[2]),pre=preEnd-alloc,prod=prodEnd-preEnd;
- // O painel mede blocos de produção; subdivisões abaixo são metas internas, não tempos observados.
- const dates=[alloc,alloc+Math.round(pre*.5),preEnd,preEnd+Math.round(prod*.5),preEnd+Math.round(prod*.85),prodEnd,prodEnd,Math.min(available,prodEnd+Math.ceil(targets[3].v)),Math.min(available,prodEnd+Math.ceil(targets[3].v+targets[4].v)),available,available,25].map(n=>pgChLeadAdd_(t.created,Math.min(25,Math.max(0,n))));
- const target={dates,deadline:dates[11],allocation:pgChLeadAdd_(t.created,alloc),transit,compressed:transit>25||total>available,profile:targets};
+ const transit=slaDays!=null&&Number.isFinite(Number(slaDays))?Math.max(0,Number(slaDays)):Math.max(1,Math.ceil(targets[6].v));
+ const deadline=pgChLeadAdd_(t.created,25);
+ // O compromisso mais cedo da própria rota protege todos os kits.
+ const parts=(it.spg||[]).filter(s=>s.q>0);
+ const valid=v=>pgChDataRealChamado_(v,t.created);
+ const earliest=a=>a.filter(Boolean).sort()[0]||'';
+ const formal=earliest(parts.map(s=>valid(s.formal)))||valid(it.stages?.[10]?.agreed);
+ const planned=earliest(parts.map(s=>valid(s.pickP)))||valid(it.stages?.[10]?.p);
+ const pickup=formal||planned||pgChLeadAdd_(deadline,-Math.ceil(transit));
+ const lead=k=>Math.max(0,Math.ceil(targets[k].v));
+ const costDays=lead(3),ocDays=lead(4),mapDays=1;
+ const productionEnd=pgChLeadAdd_(pickup,-Math.max(lead(5),costDays+ocDays+mapDays));
+ const productionDays=Math.max(1,lead(2)),preDays=Math.max(1,lead(1));
+ const productionStart=pgChLeadAdd_(productionEnd,-productionDays),file=pgChLeadAdd_(productionStart,-preDays);
+ const allocation=pgChLeadAdd_(file,-lead(0));
+ // Subdivisões de produção são metas internas, calculadas de trás para frente.
+ const dates=[file,pgChLeadAdd_(file,Math.floor(preDays/2)),productionStart,pgChLeadAdd_(productionStart,Math.floor(productionDays*.5)),pgChLeadAdd_(productionStart,Math.floor(productionDays*.85)),productionEnd,productionEnd,pgChLeadAdd_(productionEnd,costDays),pgChLeadAdd_(productionEnd,costDays+ocDays),pgChLeadAdd_(pickup,-mapDays),pickup,deadline];
+ const target={dates,deadline,allocation,transit,pickupAnchor:pickup,pickupAnchorSource:formal?'Formalizada':planned?'Prevista':'Prazo de 25 dias menos SLA (estimativa)',compressed:allocation<t.created,profile:targets};
  return pgChProximaEtapa_(target,it.qty,it.coverage);
 }
 function pgChProximaEtapa_(target,qty,coverage){
@@ -162,7 +174,7 @@ function pgChProximaEtapa_(target,qty,coverage){
 }
 function pgChPrazoResumo_(items){
  const valid=items.filter(it=>it.qty>0&&it.target);if(!valid.length)return null;const pending=valid.filter(it=>it.target.next).sort((a,b)=>a.target.next.localeCompare(b.target.next));
- return {dates:PG_CH_ETAPAS.map((_,k)=>pgChUltima_(valid.map(it=>it.target.dates[k]))),deadline:pgChUltima_(valid.map(it=>it.target.deadline)),next:pending[0]?.target.next||'',nextStage:pending[0]?.target.nextStage??-1};
+ return {dates:PG_CH_ETAPAS.map((_,k)=>k<10?valid.map(it=>it.target.dates[k]).filter(Boolean).sort()[0]||'':pgChUltima_(valid.map(it=>it.target.dates[k]))),deadline:pgChUltima_(valid.map(it=>it.target.deadline)),next:pending[0]?.target.next||'',nextStage:pending[0]?.target.nextStage??-1};
 }
 
 // A linha real do SPG é prioritária. As fontes da mesma rota só complementam
