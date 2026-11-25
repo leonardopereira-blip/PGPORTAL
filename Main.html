@@ -144,8 +144,8 @@ window.exportarSkusFiltradosSheets = function() {
         .menu-btn:hover { background-color: #171717; color: white; }
         .menu-active { background-color: #dc2626 !important; color: white !important; font-weight: bold; }
 
-        #pgMenuHint{position:absolute;left:12px;top:calc(100% + 9px);z-index:80;max-width:min(310px,calc(100vw - 24px));width:max-content;padding:10px 13px;border:1px solid #dce2ea;border-radius:9px;background:white;color:#0c2340;box-shadow:0 6px 22px #0c234025;font-size:12px;line-height:1.45;font-weight:500;pointer-events:none}
-        #pgMenuHint[hidden]{display:none!important}#pgMenuHint:before{content:"";position:absolute;top:-6px;left:19px;width:10px;height:10px;background:white;border-left:1px solid #dce2ea;border-top:1px solid #dce2ea;transform:rotate(45deg)}
+        #pgMenuHint{position:absolute;left:12px;top:calc(100% + 9px);z-index:80;max-width:min(310px,calc(100vw - 24px));width:max-content;padding:12px 15px;border:1px solid #FA4616;border-radius:9px;background:#FA4616;color:#0C2340;box-shadow:0 6px 22px #fa46164d;font-size:13px;line-height:1.45;font-weight:700;pointer-events:none}
+        #pgMenuHint[hidden]{display:none!important}#pgMenuHint:before{content:"";position:absolute;top:-6px;left:19px;width:10px;height:10px;background:#FA4616;border-left:1px solid #FA4616;border-top:1px solid #FA4616;transform:rotate(45deg)}
         /* VISIBILIDADE */
         .view-section { width: 100%; height: 100%; display: none; flex-direction: column; }
         .view-visible { display: flex !important; }
@@ -810,7 +810,7 @@ window.exportarSkusFiltradosSheets = function() {
         function pgRecolherMenuAoNavegar(){
             if(!pgDefinirMenu(false))return;
             const hint=document.getElementById('pgMenuHint');if(!hint)return;
-            pgOcultarMenuHint();hint.hidden=false;pgMenuHintTimer=setTimeout(pgOcultarMenuHint,5000);
+            pgOcultarMenuHint();hint.hidden=false;pgMenuHintTimer=setTimeout(pgOcultarMenuHint,10000);
         }
         function toggleMenu(){
             const sb=document.getElementById('sidebarMenu');if(sb)pgDefinirMenu(!sb.classList.contains('w-64'));
