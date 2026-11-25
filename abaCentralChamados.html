@@ -59,13 +59,19 @@
   #ch-central .ch-okr-comparison td,#ch-central .ch-okr-comparison th{padding:7px 9px;white-space:normal}
   #ch-central .ch-okr-comparison .ch-compare-link{font-size:11px;margin-top:8px;display:inline-block}
   /* Cards OKR: largura flexível pelo espaço disponível do painel. */
-  #ch-central #ch-okr-kpis,#ch-central .ch-okr-comparison .ch-grid{display:flex;flex-wrap:wrap;align-items:stretch;gap:12px;min-width:0}
-  #ch-central #ch-okr-kpis .ch-card{flex:1 1 172px;min-width:0;max-width:100%;box-sizing:border-box;display:flex;flex-direction:column;padding:12px 14px}
-  #ch-central #ch-okr-kpis .ch-money-card{flex:2 1 300px}
-  #ch-central .ch-okr-comparison .ch-grid .ch-card{flex:1 1 240px;min-width:0;max-width:100%;box-sizing:border-box;display:flex;flex-direction:column;padding:12px 14px}
-  #ch-central #ch-okr-kpis .ch-card small,#ch-central .ch-okr-comparison .ch-card small{white-space:normal;overflow-wrap:break-word;word-break:normal;min-height:0;line-height:1.4;margin-bottom:8px;flex:1 0 auto}
-  #ch-central #ch-okr-kpis .ch-card b,#ch-central .ch-okr-comparison .ch-card b{font-size:clamp(18px,1.6vw,24px);line-height:1.25;letter-spacing:-.025em;white-space:normal;overflow-wrap:anywhere;word-break:normal;max-width:100%;height:auto}
-  #ch-central #ch-okr-kpis .ch-money-card b{font-size:clamp(18px,1.5vw,23px);letter-spacing:-.02em}
+  #ch-central #ch-okr-kpis{display:flex;flex-wrap:nowrap;align-items:stretch;gap:6px;min-width:0;width:100%;margin-bottom:12px}
+  #ch-central #ch-okr-kpis .ch-card{flex:1 1 0;min-width:0;max-width:100%;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;padding:8px 6px;min-height:64px;border-radius:8px}
+  #ch-central #ch-okr-kpis .ch-money-card{flex:1.85 1 0}
+  #ch-central #ch-okr-kpis .ch-card small{font-size:9px;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;min-height:0;line-height:1.25;margin-bottom:5px;flex:1 0 auto}
+  #ch-central #ch-okr-kpis .ch-card b{font-size:clamp(11px,1.04vw,16px);line-height:1.25;letter-spacing:-.035em;white-space:normal;overflow-wrap:anywhere;word-break:normal;max-width:100%;height:auto}
+  #ch-central #ch-okr-kpis .ch-money-card b{font-size:clamp(11px,.95vw,15px);letter-spacing:-.035em}
+  #ch-central #ch-okr-kpis .ch-value-note{font-size:9px;line-height:1.2;margin:3px 0 0;color:#64748b;flex:0 0 auto}
+  #ch-central #ch-okr-kpis .ch-card:nth-last-child(-n+3) .ch-card-tooltip{left:auto;right:0}
+  #ch-central .ch-okr-comparison .ch-grid{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;min-width:0}
+  #ch-central .ch-okr-comparison .ch-grid .ch-card{flex:1 1 200px;min-width:0;max-width:100%;box-sizing:border-box;display:flex;flex-direction:column;padding:9px 12px}
+  #ch-central .ch-okr-comparison .ch-card small{font-size:10px;white-space:normal;overflow-wrap:break-word;min-height:0;line-height:1.3;margin-bottom:6px;flex:1 0 auto}
+  #ch-central .ch-okr-comparison .ch-card b{font-size:18px;line-height:1.25;letter-spacing:-.025em;white-space:normal;overflow-wrap:anywhere;max-width:100%}
+  @media(max-width:900px){#ch-central #ch-okr-kpis{flex-wrap:wrap}#ch-central #ch-okr-kpis .ch-card{flex:1 1 105px}#ch-central #ch-okr-kpis .ch-money-card{flex:1.5 1 155px}}
   #ch-central .ch-okr-comparison .ch-compare-link{white-space:normal;overflow-wrap:break-word;text-align:left;align-self:flex-start}
   #ch-central #ch-oc-total .ch-between{flex-wrap:wrap;gap:8px}
   #ch-central #ch-oc-total strong{min-width:0;max-width:100%;overflow-wrap:anywhere}
@@ -542,7 +548,7 @@
       const today=dayNow(),first='2026-09-05',last='2026-12-06';
       el('okr').innerHTML='<section class="ch-filter-panel"><div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg> Apuração:</span>'+
       '<label>Critério<select id="ch-okr-rule"><option value="standard">25 dias ou data desejada (o maior)</option><option value="fixed">25 dias corridos</option><option value="desired">Data desejada por Planning</option></select></label>'+
-      '<label>Apurar por<select id="ch-okr-unit"><option value="tickets">Chamados</option><option value="qty">Tiragem</option></select></label>'+
+      '<label>Apurar por<select id="ch-okr-unit"><option value="tickets">Chamados</option><option value="qty" selected>Tiragem</option></select></label>'+
       '<label>Período por<select id="ch-okr-basis"><option value="open">Abertura</option><option value="due">Vencimento</option></select></label>'+
       '<label>Início do corte<input type="date" id="ch-okr-start" value="'+first+'"></label><label>Fim do corte<input type="date" id="ch-okr-end" value="'+last+'"></label>'+
       '<label>Realizado observado até<input type="date" id="ch-okr-asof" value="'+today+'" max="'+today+'"></label>'+
@@ -591,7 +597,8 @@
   const chOKRAge=d=>d.average===null?'—':num(Math.round(d.average*10)/10)+' dias';
   const chOKRTone=d=>d.pct===null?'navy':d.pct>=90?'green':'yellow';
   function chOKRHelpCard(k,v,tone,help,id,extra=''){
-    return '<div class="ch-card ch-help-card'+(k==='Valor total das OCs'?' ch-money-card':'')+'" data-tone="'+tone+'" tabindex="0" aria-describedby="'+id+'" title="'+esc(help)+'"><small>'+esc(k)+'</small><b>'+esc(v)+'</b>'+extra+'<span class="ch-card-tooltip" role="tooltip" id="'+id+'">'+esc(help)+'</span></div>';
+    const isMoney=k==='Valor total das OCs',partial=isMoney&&String(v).includes(' · parcial'),value=partial?String(v).replace(' · parcial',''):v;
+    return '<div class="ch-card ch-help-card'+(isMoney?' ch-money-card':'')+'" data-tone="'+tone+'" tabindex="0" aria-describedby="'+id+'" title="'+esc(help)+'"><small>'+esc(k)+'</small><b>'+esc(value)+'</b>'+(partial?'<span class="ch-value-note">Parcial</span>':'')+extra+'<span class="ch-card-tooltip" role="tooltip" id="'+id+'">'+esc(help)+'</span></div>';
   }
   const chOKRMoney=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
   const chOKROCIds=t=>[...new Set((t.ocValues||[]).map(x=>x.oc).filter(Boolean))];
