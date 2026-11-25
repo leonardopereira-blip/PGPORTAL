@@ -69,6 +69,10 @@
   #ch-central .ch-dragbar .ch-grip{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;border:1px solid #ccd5e0;border-radius:7px;padding:6px 10px;background:#edf3fa;color:var(--ch-indigo);font-size:11px;font-weight:600}
   #ch-central .ch-dragbar .ch-grip.is-dragging{cursor:grabbing;background:#dceafa}#ch-central .ch-dragbar input[type=range]{flex:1;min-width:36px;max-width:100%;accent-color:var(--ch-indigo);cursor:ew-resize}
   #ch-central .ch-grip svg{width:18px;height:18px;flex:none}
+  #ch-central #ch-table{position:relative;min-width:0}
+  #ch-central .ch-panel-grip{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:21;display:grid;place-items:center;width:48px;height:48px;border:1px solid #284081;border-radius:50%;background:#ffffffed;color:#284081;box-shadow:0 4px 16px #0c234033;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+  #ch-central .ch-panel-grip:hover,#ch-central .ch-panel-grip:focus-visible{background:#edf3fa;box-shadow:0 4px 18px #0c23404d}#ch-central .ch-panel-grip.is-dragging{cursor:grabbing;background:#284081;color:white}
+  #ch-central .ch-panel-grip svg{width:25px;height:25px;pointer-events:none}
   #ch-central table{border-collapse:collapse;width:100%;font-size:11px;text-align:left}
   #ch-central th,#ch-central td{padding:9px 10px;border-bottom:1px solid #e8edf3;vertical-align:middle;white-space:nowrap}
   #ch-central th{font-size:10px;font-weight:600;letter-spacing:.025em;text-transform:uppercase;color:var(--ch-indigo);background:#edf3fa}
@@ -577,19 +581,39 @@
   function chBindTableDrag(){
     const host=el('table'),bar=el('dragbar'),grip=el('grip'),range=el('scrollrange');
     if(!host?.querySelector||!bar||!grip||!range)return;
+    if(state.dragCleanup)state.dragCleanup();
     if(state.dragResize)state.dragResize.disconnect();
     const frame=host.querySelector('.ch-frame');
     if(!frame){bar.hidden=true;return;}
-    const sync=()=>{const max=Math.max(0,frame.scrollWidth-frame.clientWidth);bar.hidden=max<=1;range.max=String(max);range.value=String(Math.min(max,frame.scrollLeft));};
-    frame.addEventListener('scroll',sync,{passive:true});
-    range.oninput=()=>{frame.scrollLeft=Number(range.value);};
+    const panelGrip=document.createElement('button');
+    panelGrip.type='button';panelGrip.className='ch-panel-grip';panelGrip.id='ch-panel-grip';
+    panelGrip.title='Segure e arraste a tabela para os lados';panelGrip.setAttribute('aria-label','Arraste horizontalmente a tabela. Use as setas para navegar.');
+    panelGrip.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-5a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L3 13a2 2 0 0 1 3-2z"/></svg>';
+    host.appendChild(panelGrip);
     let drag=null;
-    grip.classList.remove('is-dragging');
-    grip.onpointerdown=e=>{if(e.button!==0||drag)return;drag={id:e.pointerId,x:e.clientX,scroll:frame.scrollLeft};grip.setPointerCapture?.(e.pointerId);grip.classList.add('is-dragging');e.preventDefault();};
-    grip.onpointermove=e=>{if(!drag||drag.id!==e.pointerId)return;frame.scrollLeft=drag.scroll-(e.clientX-drag.x);sync();};
-    const end=e=>{if(!drag||drag.id!==e.pointerId)return;drag=null;grip.classList.remove('is-dragging');if(grip.hasPointerCapture?.(e.pointerId))grip.releasePointerCapture(e.pointerId);};
-    grip.onpointerup=end;grip.onpointercancel=end;grip.onlostpointercapture=end;
-    grip.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();frame.scrollLeft=e.key==='Home'?0:e.key==='End'?frame.scrollWidth:frame.scrollLeft+(e.key==='ArrowRight'?1:-1)*160;sync();};
+    const place=()=>{
+      const bounds=frame.getBoundingClientRect(),viewport=root.getBoundingClientRect(),anchor=host.getBoundingClientRect();
+      const top=Math.max(bounds.top,viewport.top,0,bar.hidden?0:bar.getBoundingClientRect().bottom);
+      const bottom=Math.min(bounds.bottom,viewport.bottom,window.innerHeight||viewport.bottom);
+      const left=Math.max(bounds.left,viewport.left,0),right=Math.min(bounds.right,viewport.right,window.innerWidth||viewport.right);
+      const visible=bottom-top>=64&&right-left>=64&&frame.scrollWidth-frame.clientWidth>1;
+      panelGrip.hidden=!visible;
+      if(visible){panelGrip.style.top=((top+bottom)/2-anchor.top)+'px';panelGrip.style.left=((left+right)/2-anchor.left)+'px';}
+    };
+    const sync=()=>{const max=Math.max(0,frame.scrollWidth-frame.clientWidth);bar.hidden=max<=1;range.max=String(max);range.value=String(Math.min(max,frame.scrollLeft));place();};
+    frame.addEventListener('scroll',sync,{passive:true});
+    root.addEventListener('scroll',place,{passive:true});window.addEventListener('resize',sync);
+    range.oninput=()=>{frame.scrollLeft=Number(range.value);};
+    function bind(handle){
+      handle.classList.remove('is-dragging');
+      handle.onpointerdown=e=>{if(e.button!==0||drag)return;drag={id:e.pointerId,x:e.clientX,scroll:frame.scrollLeft,handle};handle.setPointerCapture?.(e.pointerId);handle.classList.add('is-dragging');e.preventDefault();};
+      handle.onpointermove=e=>{if(!drag||drag.id!==e.pointerId||drag.handle!==handle)return;frame.scrollLeft=drag.scroll-(e.clientX-drag.x);sync();};
+      const end=e=>{if(!drag||drag.id!==e.pointerId||drag.handle!==handle)return;drag=null;handle.classList.remove('is-dragging');if(handle.hasPointerCapture?.(e.pointerId))handle.releasePointerCapture(e.pointerId);};
+      handle.onpointerup=end;handle.onpointercancel=end;handle.onlostpointercapture=end;
+      handle.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();frame.scrollLeft=e.key==='Home'?0:e.key==='End'?frame.scrollWidth:frame.scrollLeft+(e.key==='ArrowRight'?1:-1)*160;sync();};
+    }
+    bind(grip);bind(panelGrip);
+    state.dragCleanup=()=>{root.removeEventListener('scroll',place);window.removeEventListener('resize',sync);frame.removeEventListener('scroll',sync);panelGrip.remove();};
     if(typeof ResizeObserver==='function'){state.dragResize=new ResizeObserver(sync);state.dragResize.observe(frame);const table=frame.querySelector('table');if(table)state.dragResize.observe(table);}
     sync();
   }
