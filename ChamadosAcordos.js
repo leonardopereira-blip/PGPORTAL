@@ -1,7 +1,7 @@
 // Central de Chamados: leitura de cronogramas, sem enviar ou modificar mensagens.
 function pgChMailNorm_(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}
 function pgChMailSubject_(v){
- const m=pgChMailNorm_(v).match(/(?:^|\b)(solicitacao de prazo|formalizacao da producao)\s*:\s*chamado\s+(\d+)\b/);
+ const m=pgChMailNorm_(v).match(/(?:^|\b)(solicitacao de prazo|formalizacao da producao)(?:\s+ampliados?)?\s*:\s*chamado\s+(\d+)\b/);
  return m?{kind:m[1].startsWith('solicitacao')?'request':'formal',n:m[2]}:null;
 }
 function pgChMailDomains_(v){return [...new Set((String(v||'').match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi)||[]).map(x=>x.toLowerCase().split('@')[1]))];}
@@ -29,11 +29,11 @@ function pgChMailParse_(body,at){
  ['approval',/(?:data\s+(?:de\s+)?)?(?:aprove|aprovacao|aprovar|aceite)(?:\s+d[oe]s?\s+bonecos?)?/],
  ['op',/data\s+lib(?:eracao)?\.?\s*(?:de\s+)?op\s*(?:e|\/)\s*papel/],
  ['machine',/(?:data\s+(?:planejada\s+)?(?:de\s+)?)?(?:entrada\s+em\s+maquina|inicio\s+(?:de|da)\s+impressao)/],
- ['printEnd',/(?:data\s+(?:de\s+)?)?(?:fim|termino|conclusao)\s+(?:de|da)\s+impressao/],
+ ['printEnd',/(?:data\s+(?:de\s+)?)?(?:(?:fim|termino|conclusao)\s+(?:de|da)\s+impressao|prazo\s+de\s+finalizacao\s+de\s+producao)/],
  ['proof',/(?:data\s+(?:de\s+)?)?(?:envio|recebimento)\s+d[oe]s?\s+bonecos?/],
  ['file',/(?:data\s+(?:de\s+)?)?(?:envio\s+d[oe]s?\s+arquivos?|arquivo(?:s)?)/],
- ['pickup',/(?:disponibilizacao\s+para\s+coleta|(?:data\s+(?:da|de)\s+)?coleta(?:\s+(?:desejada|sugerida|respondida|estimada|formalizada))?|prazo\s+(?:respondido|sugerido))/],
- ['delivery',/(?:data\s+(?:de\s+)?)?entrega\s+(?:no|ao|em)\s+cd/]
+ ['pickup',/(?:prazo\s+de\s+envio\s+do\s+material|disponibilizacao\s+para\s+coleta|(?:data\s+(?:da|de)\s+)?coleta(?:\s+(?:desejada|sugerida|respondida|estimada|formalizada))?|prazo\s+(?:respondido|sugerido))/],
+ ['delivery',/(?:data\s+(?:de\s+)?)?(?:entrega\s+(?:no|ao|em)\s+cd|prazo\s+de\s+entrega\s+do\s+material)/]
  ];
  const lines=text.split('\n').map(x=>x.trim()).filter(Boolean);
  for(let i=0;i<lines.length;i++){
@@ -146,7 +146,7 @@ function pgChMailReadThread_(id,allocated,stats,meta){
  const thread=pgChMailGet_('threads/'+encodeURIComponent(id)+'?format=full',stats),messages=(thread.messages||[]).slice().sort((a,b)=>Number(a.internalDate)-Number(b.internalDate));
  if(!messages.length)return [];
  const root=messages[0],subject=pgChMailSubject_(pgChMailHeader_(root,'Subject'));
- if(meta)meta.n=subject?.n||'';
+ if(meta){meta.n=subject?.n||'';meta.history=String(thread.historyId||'');}
  if(!subject||!allocated.has(subject.n))return [];
  const allowed=allocated.get(subject.n),initialVendors=[...new Set(pgChMailDomains_(pgChMailHeader_(root,'To')+' '+pgChMailHeader_(root,'Cc')).map(pgChMailVendor_).filter(v=>allowed.has(v)))];
  if(initialVendors.length!==1)return [];
@@ -175,56 +175,86 @@ const PG_CH_MAIL_STORE='PG_CH_MAIL_CHECKPOINT_V2';
 function pgChMailScope_(allocated,n){return Array.from(allocated.get(n)||[]).sort().join('|');}
 function pgChMailLoad_(){
  const id=PropertiesService.getScriptProperties().getProperty(PG_CH_MAIL_STORE);
- if(!id)return {id:'',entries:{}};
- try{return {id,entries:JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8')).entries||{}};}
- catch(e){console.warn('[CH email] Não foi possível ler checkpoint');return {id,entries:{}};}
+ if(!id)return {id:'',entries:{},scan:null};
+ // Do not replace a checkpoint that could not be read.
+ const doc=JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8'));
+ if(!doc.entries||typeof doc.entries!=='object')throw Error('Checkpoint de cronogramas inválido');
+ return {id,entries:doc.entries,scan:doc.scan||null};
 }
-function pgChMailSave_(old,entries){
- const file=DriveApp.getFolderById(PASTA_CACHE_ID).createFile(Utilities.newBlob(JSON.stringify({entries}),'application/json','PG_CH_MAIL_'+Utilities.getUuid()+'.json'));
+function pgChMailSave_(old,entries,scan){
+ const file=DriveApp.getFolderById(PASTA_CACHE_ID).createFile(Utilities.newBlob(JSON.stringify({entries,scan}),'application/json','PG_CH_MAIL_'+Utilities.getUuid()+'.json'));
  PropertiesService.getScriptProperties().setProperty(PG_CH_MAIL_STORE,file.getId());
  if(old)try{DriveApp.getFileById(old).setTrashed(true);}catch(e){console.warn('[CH email] Limpeza do checkpoint');}
 }
+function pgChMailListPage_(window,stats){
+ const q='{subject:"Solicitação de prazo" subject:"Formalização da produção"} after:'+window.from+' before:'+window.to+' -in:trash -in:spam';
+ if(Date.now()>=stats.deadline)throw Error('Tempo reservado à listagem atingido');
+ return Gmail.Users.Threads.list('me',{q,maxResults:100,pageToken:window.token||undefined});
+}
 function pgChLerAcordos_(spg){
  const effective=String(Session.getEffectiveUser().getEmail()||'').toLowerCase();
- if(effective!=='leonardo.pereira@arcoeducacao.com.br')throw new Error('A leitura de acordos exige a conta autorizada do portal.');
+ if(effective!=="leonardo.pereira@arcoeducacao.com.br")throw new Error('A leitura de acordos exige a conta autorizada do portal.');
  const allocated=new Map(),starts=[];
  for(const r of spg||[]){
   const n=pgChNumero_(r.n),vendor=pgChGraf_(r.printer),d=pgChData_(r.created);
   if(!n||!vendor||/CANCEL/.test(pgChNormal_(r.status)))continue;
   if(!allocated.has(n))allocated.set(n,new Set());allocated.get(n).add(vendor);if(d)starts.push(d);
  }
- const stats={threads:0,ocr:0,ocrErrors:0,decodeErrors:0,matched:0,cached:0,read:0,partial:false,deadline:Date.now()+110000};
+ const stats={threads:0,ocr:0,ocrErrors:0,decodeErrors:0,matched:0,cached:0,read:0,partial:false,deadline:Date.now()+85000};
  if(!allocated.size){delete stats.deadline;return {agreements:{},stats};}
- const date=(starts.sort()[0]||'2026-09-01').replace(/-/g,'/'),saved=pgChMailLoad_(),entries=saved.entries,seen=new Set(),pending=[];
- let next,listComplete=false,changed=false;
- try{
-  do{
-   if(Date.now()>=stats.deadline)throw Error('Tempo reservado à listagem atingido');
-   // Keep the advanced list call for its existing OAuth scope; fetch message content as raw JSON.
-   const page=Gmail.Users.Threads.list('me',{q:'{subject:"Solicitação de prazo" subject:"Formalização da produção"} after:'+date+' -in:trash -in:spam',maxResults:100,pageToken:next});
-   for(const t of page.threads||[]){
-    if(seen.has(t.id))continue;seen.add(t.id);stats.threads++;
-    const old=entries[t.id];
-    if(old&&t.historyId&&String(old.history)===String(t.historyId)&&old.scope===pgChMailScope_(allocated,old.n)&&!old.retry)stats.cached++;
-    else pending.push(t);
-   }
-   next=page.nextPageToken;
-  }while(next);
-  listComplete=true;
- }catch(e){stats.partial=true;console.warn('[CH email] Listagem parcial: '+String(e.message||e));}
- // Prioritize not-yet-read threads over retrying problematic images.
- pending.sort((a,b)=>Number(!!entries[a.id]?.retry)-Number(!!entries[b.id]?.retry));
- for(const t of pending){
-  if(Date.now()>=stats.deadline){stats.partial=true;break;}
-  const old=entries[t.id],meta={},before=stats.ocrErrors,beforeDecode=stats.decodeErrors;
-  try{
-   const rows=pgChMailReadThread_(t.id,allocated,stats,meta),retry=stats.ocrErrors!==before||stats.decodeErrors!==beforeDecode;
-   entries[t.id]={history:String(t.historyId||''),n:meta.n||'',scope:pgChMailScope_(allocated,meta.n),rows,retry};
-   stats.read++;changed=true;if(retry)stats.partial=true;
-  }catch(e){stats.partial=true;console.warn('[CH email] Leitura parcial: '+String(e.message||e));if(e.pgMailPartial)break;if(old)old.retry=true;}
+ const saved=pgChMailLoad_(),entries=saved.entries;
+ const cutoff=Math.floor(Date.now()/1000),start=Math.floor(Date.parse((starts.sort()[0]||'2026-09-01')+'T00:00:00-03:00')/1000)-1;
+ const scan=saved.scan||{cursor:cutoff,historical:{from:start,to:cutoff+1,token:'',done:false},recent:null,pending:{}};
+ scan.pending=scan.pending||{};
+ const pending=scan.pending;
+ // Reopen only previously unknown or changed allocations, not all processed mail.
+ for(const [id,e] of Object.entries(entries)){
+  const scope=pgChMailScope_(allocated,e.n);
+  if((e.n&&scope!==e.scope&&scope)||e.retry||(e.parser!==2&&!e.n))if(!pending[id])pending[id]={history:e.history||'',priority:1};
  }
- if(listComplete)for(const id of Object.keys(entries))if(!seen.has(id)){delete entries[id];changed=true;}
- if(changed)try{pgChMailSave_(saved.id,entries);}catch(e){stats.partial=true;console.warn('[CH email] Checkpoint não gravado: '+String(e.message||e));}
+ if(start<scan.historical.from){scan.historical={from:start,to:scan.historical.from+1,token:'',done:false};}
+ // A fixed bounded window is resumed until completely enumerated. Keep a small overlap at its boundary.
+ if(!scan.recent&&cutoff>scan.cursor)scan.recent={from:Math.max(start,scan.cursor-2),to:cutoff+1,token:''};
+ function list(window,priority){
+  const page=pgChMailListPage_(window,stats);
+  for(const t of page.threads||[]){
+   stats.threads++;
+   const old=entries[t.id],history=String(t.historyId||'');
+   const same=old&&!old.retry&&old.scope===pgChMailScope_(allocated,old.n)&&old.n&&((history&&history===String(old.history))||(!history&&priority===1));
+   if(same){stats.cached++;continue;}
+   const queued=pending[t.id];
+   pending[t.id]={history:history||queued?.history||'',priority:Math.max(priority,queued?.priority||0)};
+  }
+  window.token=page.nextPageToken||'';
+  return !window.token;
+ }
+ let quota=false;
+ if(scan.recent)try{
+  if(list(scan.recent,2)){scan.cursor=scan.recent.to-1;scan.recent=null;}
+ }catch(e){stats.partial=true;quota=/quota|rate.limit|limite|429|403/i.test(String(e.message||e));if(!quota&&/page.?token|invalid.*token/i.test(String(e.message||e)))scan.recent.token='';console.warn('[CH email] Listagem incremental parcial');}
+ function process(priority,limit){
+  const ids=Object.keys(pending).filter(id=>pending[id].priority===priority).sort((a,b)=>Number(!!entries[a]?.retry)-Number(!!entries[b]?.retry));
+  for(const id of ids.slice(0,limit)){
+   if(Date.now()>=stats.deadline||quota)break;
+   const q=pending[id],old=entries[id],meta={},before=stats.ocrErrors,beforeDecode=stats.decodeErrors;
+   try{
+    const rows=pgChMailReadThread_(id,allocated,stats,meta),retry=stats.ocrErrors!==before||stats.decodeErrors!==beforeDecode;
+    const n=meta.n||old?.n||'';
+    entries[id]={history:String(meta.history||q.history||old?.history||''),n,scope:pgChMailScope_(allocated,n),rows:retry?(old?.rows||[]).concat(rows):rows,retry,parser:2};
+    stats.read++;
+    if(retry){pending[id].priority=1;stats.partial=true;}else delete pending[id];
+   }catch(e){stats.partial=true;if(old)old.retry=true;if(e.pgMailPartial){quota=true;break;}pending[id].priority=1;console.warn('[CH email] Leitura parcial');}
+  }
+ }
+ process(2,12);
+ // Recover history only after new messages; never re-enumerate an already completed history.
+ if(!quota&&!scan.historical.done&&Object.keys(pending).filter(id=>pending[id].priority===1).length<25)try{
+  scan.historical.done=list(scan.historical,1);
+ }catch(e){stats.partial=true;quota=/quota|rate.limit|limite|429|403/i.test(String(e.message||e));if(!quota&&/page.?token|invalid.*token/i.test(String(e.message||e)))scan.historical.token='';console.warn('[CH email] Listagem histórica parcial');}
+ if(!quota&&!Object.values(pending).some(q=>q.priority===2))process(1,Math.max(0,18-stats.read));
+ stats.partial=stats.partial||!!scan.recent||!scan.historical.done||Object.keys(pending).length>0;
+ stats.pending=Object.keys(pending).length;stats.historyComplete=scan.historical.done;stats.cursor=scan.cursor;
+ try{pgChMailSave_(saved.id,entries,scan);}catch(e){stats.partial=true;console.warn('[CH email] Checkpoint não gravado');}
  const records=Object.values(entries).flatMap(e=>e.rows||[]),agreements=pgChMailSelect_(records,allocated);
  stats.matched=Object.keys(agreements).length;delete stats.deadline;
  console.log('[CH email] '+JSON.stringify(stats));return {agreements,stats};
