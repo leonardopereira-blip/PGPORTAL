@@ -158,7 +158,7 @@
   <div id="ch-notice" class="ch-alert" hidden></div>
   <div id="ch-okr" hidden></div>
   <div id="ch-list" hidden>
-    <div class="ch-filter-panel"><div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span><label>Chamado<input id="ch-query" type="search" placeholder="Número do chamado"></label>
+    <div class="ch-filter-panel"><div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span><label>Chamado<input id="ch-query" type="search" placeholder="Um ou vários chamados"></label>
       <label>Categoria<select id="ch-cat"></select></label><label>Prioridade<select id="ch-priority"><option value="">Todos</option></select></label><label>Envio<select id="ch-shipment"></select></label>
       <label>Marca<select id="ch-brand"></select></label><label>Status de produção<select id="ch-production"><option value="">Todos</option></select></label><label>Situação<select id="ch-scope"><option value="ativos">Exceto cancelados</option><option value="abertos">Em aberto</option><option value="concluidos">Concluídos</option><option value="cancelados">Cancelados</option><option value="todos">Todos</option></select></label>
       <button id="ch-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button><div id="ch-routefilters" class="contents"></div></div></div>
@@ -308,7 +308,9 @@
   function chCentralAging(rows,asof){
     return chAgingAverage(rows.filter(t=>!chAgingCanceled(t,asof)).map(t=>({age:chAging(t,asof),w:Number(t.totals?.qty)||0})).filter(x=>x.age!==null));
   }
+  const chQueryIds=value=>[...new Set((String(value||'').match(/\d+/g)||[]).map(n=>n.replace(/^0+(?=\d)/,'')))];
   function chMatches(t,f,asof){
+    if(f.query&&String(f.query).trim()&&!chQueryIds(f.query).includes(String(t.n).trim().replace(/^0+(?=\d)/,'')))return false;
     if(['cat','shipment','brand'].some(k=>!chHas(f[k],t[k])))return false;
     if(!chHas(f.priority,chPriority(t)))return false;
     if(f.openStart&&(!t.created||t.created<f.openStart))return false;
@@ -605,9 +607,10 @@
       '<label>Categoria<select id="ch-okr-cat"><option value="">Todos</option><option value="REENTRADA" selected>REENTRADA</option></select></label><label>Marca<select id="ch-okr-brand"></select></label><label>Envio<select id="ch-okr-shipment"><option value="">Todos</option><option value="V1" selected>V1</option></select></label>'+
       '<label>Coleta do chamado<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Não coletado</option><option value="concluidos">Coletado</option></select></label>'+
       '<label>Situação do prazo<select id="ch-okr-prazo"><option value="">Todos</option><option value="dentro">Dentro do prazo</option><option value="fora">Fora do prazo</option><option value="aberto">Em aberto (todos)</option><option value="vencido">Vencido em aberto</option><option value="abertoAVencer">Em aberto a vencer</option><option value="naoApurado">Não apurado</option></select></label></div>'+
-      '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note" id="ch-okr-cutoff">Base: somente prazos vencidos até D-1 da data observada. Prazos de hoje ou futuros ficam fora da aderência, inclusive quando já coletados.</p></section>'+
+      '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+'<label>Chamado<input id="ch-okr-query" type="search" placeholder="Um ou vários chamados"></label>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note" id="ch-okr-cutoff">Base: somente prazos vencidos até D-1 da data observada. Prazos de hoje ou futuros ficam fora da aderência, inclusive quando já coletados.</p></section>'+
       '<div id="ch-okr-kpis" class="ch-grid"></div><details class="ch-box ch-okr-comparison" open><summary>Visão comparativa dos critérios de apuração</summary><div id="ch-okr-compare"></div></details><section class="ch-box"><h2>OKR por acabamento</h2><div id="ch-okr-finish-summary"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de coleta</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Abrir no Google Sheets</button><small id="ch-okr-count"></small><a id="ch-okr-sheet-link" target="_blank" rel="noopener noreferrer" hidden>Abriu em outra aba? Acessar planilha</a><small id="ch-okr-export-msg" role="status"></small></div><div id="ch-okr-rows"></div></section>';
-      el('okr').querySelectorAll('input,select').forEach(x=>x.addEventListener('change',renderOKR));
+      el('okr').querySelectorAll('input,select').forEach(x=>{if(x.id!=='ch-okr-query')x.addEventListener('change',renderOKR);});
+      chBindQuery(el('okr-query'),renderOKR);
     }
     const re=state.data.rows;
     for(const k of ['cat','brand','shipment']){
@@ -615,7 +618,7 @@
       target.innerHTML='<option value="">Todos</option>'+values.map(v=>opt(v)).join('');if(values.includes(old))target.value=old;
     }
     dimOptions('okr-',re);styleFilters();
-    const f={...readFilters('okr-'),...Object.fromEntries(['rule','basis','start','end','asof','cat','brand','shipment','scope','unit','prazo'].map(k=>[k,filterVal(el('okr-'+k))]))};
+    const f={...readFilters('okr-'),query:el('okr-query').value,...Object.fromEntries(['rule','basis','start','end','asof','cat','brand','shipment','scope','unit','prazo'].map(k=>[k,filterVal(el('okr-'+k))]))};
     f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
     const d1=chAdd(f.asof,-1),effectiveEnd=f.basis==='due'&&f.end&&f.end<d1?f.end:d1;
     el('okr-cutoff').textContent='Aderência: vencimentos até '+dt(effectiveEnd)+' (D-1 da observação: '+dt(d1)+'). '+(f.basis==='due'&&f.start&&f.start>effectiveEnd?'Ainda não há vencimentos elegíveis no recorte.':'Prazos de hoje e futuros ficam fora da apuração, inclusive quando já coletados.');
@@ -644,7 +647,7 @@
     'A vencer (fora da apuração)':'Prazos de hoje ou futuros, inclusive chamados coletados antecipadamente. Não entram no numerador nem no denominador da aderência.',
     'Cancelados excluídos':'Chamados cancelados até a data de observação, retirados antes da apuração.',
     'Exclusões históricas do corte':'Exclusões documentadas da apuração histórica de reentradas V1, preservadas somente no recorte original e nos critérios aplicáveis.',
-    'Coletados':'Quantidade com coleta integral comprovada por data válida até o corte, independentemente do resultado de aderência. SPG tem prioridade.',
+    'Coletados':'Quantidade com coleta integral comprovada por data válida até o corte, independentemente do resultado de aderência. Painel tem prioridade quando o chamado existe nas duas fontes.',
     'Não coletados':'Quantidade sem data de coleta integral válida até a data de observação, após os filtros. Coletas parciais não caracterizam coleta integral.',
     'Aging médio de coleta':'Média dos dias corridos entre abertura e coleta integral válida. Em Tiragem, é ponderada pela tiragem; em Chamados, cada chamado tem peso 1. Não inclui pendentes.'
   };
@@ -773,13 +776,12 @@
   }
   window.pgAbrirChamados=function(view){if(state.view!==view){state.detail=null;state.detailLoad++;}state.view=view;show();if(!state.data && !state.loading )load(false);};
   function selected(){
-    const q=el('query').value.trim().replace(/^#/,'').split(/[^0-9]+/).filter(Boolean),scope=el('scope').value;
-    const f={...readFilters('route-'),cat:filterVal(el('cat')),shipment:filterVal(el('shipment')),brand:filterVal(el('brand')),priority:filterVal(el('priority'))};
+    const scope=el('scope').value;
+    const f={...readFilters('route-'),query:el('query').value,cat:filterVal(el('cat')),shipment:filterVal(el('shipment')),brand:filterVal(el('brand')),priority:filterVal(el('priority'))};
     return state.data.rows.filter(t=>{
       const canceled=/CANCEL/.test(t.status), closed=/CONCLU/.test(t.status);
       return (scope==='todos'||(scope==='cancelados'?canceled:scope==='concluidos'?closed:scope==='abertos'?!canceled&&!closed:!canceled))
-        && chMatches(t,f,dayNow())
-        && (!el('query').value.trim() || (q.length===1?String(t.n).includes(q[0]):q.includes(String(t.n))));
+        && chMatches(t,f,dayNow());
     }).map(t=>chFilteredTotals(t,f)).filter(t=>t&&(filterVal(el('production'))===''||(t.production||[]).some(p=>chHas(filterVal(el('production')),p.label)))).sort((a,b)=>Number(b.n)-Number(a.n));
   }
   function pager(where,page,n,size,type){
@@ -915,7 +917,7 @@
     if(b.hasAttribute('data-deadline')){state.deadline=state.deadline===b.dataset.deadline?'':b.dataset.deadline;state.page=1;render();return;}
     if(b.id==='ch-okr-export'){exportOKR();return;}
     if(b.dataset.okrCriterion){el('okr-rule').value=b.dataset.okrCriterion;renderOKR();el('okr-rows').scrollIntoView?.({block:'nearest'});return;}
-    if(b.id==='ch-okr-clear'){[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment','okr-prazo'].forEach(k=>setFilterValue(el(k),''));setFilterValue(el('okr-cat'),'REENTRADA');el('okr-scope').value='ativos';renderOKR();return;}
+    if(b.id==='ch-okr-clear'){el('okr-query').value='';[...filterKeys.map(k=>'okr-'+k),'okr-brand','okr-shipment','okr-prazo'].forEach(k=>setFilterValue(el(k),''));setFilterValue(el('okr-cat'),'REENTRADA');el('okr-scope').value='ativos';renderOKR();return;}
     if(b.id==='ch-funnel-qty'||b.id==='ch-funnel-tickets'){state.funnelMode=b.id==='ch-funnel-qty'?'qty':'tickets';render();return;}
     if(b.id==='ch-refresh'){load(true);return;}if(b.id==='ch-save'){save();return;}
     if(b.id==='ch-back'){state.detailLoad++;state.detail=null;render();show();return;}
@@ -929,6 +931,16 @@
   el('routefilters').innerHTML=filterMarkup('route-');
   filterKeys.forEach(k=>el('route-'+k).addEventListener('change',()=>{state.page=1;render();}));
   styleFilters();
-  ['cat','brand','shipment','priority','scope','production','by','query'].forEach(k=>el(k).addEventListener(k==='query'?'input':'change',()=>{state.page=1;render();}));
+  function chBindQuery(input,refresh){
+    input.addEventListener('input',refresh);
+    input.addEventListener('paste',e=>{
+      const pasted=e.clipboardData?.getData('text');if(!pasted)return;
+      e.preventDefault();
+      const start=input.selectionStart??input.value.length,end=input.selectionEnd??start;
+      input.setRangeText(pasted.replace(/[^0-9]+/g,' '),start,end,'end');refresh();
+    });
+  }
+  chBindQuery(el('query'),()=>{state.page=1;render();});
+  ['cat','brand','shipment','priority','scope','production','by'].forEach(k=>el(k).addEventListener('change',()=>{state.page=1;render();}));
 })();
 </script>

@@ -260,7 +260,7 @@ function pgChImportarPainelSetembro_(spg,panel){
  const today=new Date().toISOString().slice(0,10);
  for(const r of panel||[]){
   const n=pgChNumero_(r.n),created=pgChData_(r.created);
-  if(!/^\d+$/.test(n)||present.has(n)||created<'2026-09-01'||created>'2026-09-30')continue;
+  if(!/^\d+$/.test(n)||(!present.has(n)&&(!created||created<'2026-09-01'||created>'2026-09-30')))continue;
   const type=pgChNormal_(r.category),cat=type.includes('REENTRADA')?'REENTRADA':type.includes('MANUSEIO')?'MANUSEIO':type.includes('SPOT')?'SPOT':/INCLUSIV|BRAILLE|AMPLIAD/.test(type)?'INCLUSIVOS':type||'SEM CATEGORIA';
   const key=JSON.stringify([n,pgChMarca_(r.brand),pgChGraf_(r.printer),pgChCD_(r.cd),pgChTexto_(r.description),pgChQtd_(r.qty),created,pgChData_(r.pickup),pgChData_(r.delivered),pgChNormal_(r.status)]);
   if(seen.has(key))continue;seen.add(key);
@@ -314,7 +314,9 @@ function pgChModelo_(dados) {
   const kitKey = (r) => [r.id || pgChNumero_(r.n),pgChSku_(r.sku),pgChMarca_(r.brand||r.brandName),pgChCD_(r.cd),r.kit,r.legacy?r.legacyKey:''].join('|');
   const lotes = new Map();
   const imported=pgChImportarPainelSetembro_(dados.spg,dados.panel);
-  (dados.spg||[]).concat(imported).forEach(r => {
+  // A precedência é por número de chamado, antes de agrupar SKU/destino e calcular Central/OKR.
+  const painelNumeros=new Set(imported.map(r=>pgChNumero_(r.n)));
+  (dados.spg||[]).filter(r=>!painelNumeros.has(pgChNumero_(r.n))).concat(imported).forEach(r => {
     if (!r.n || !r.cat) return;
     const id = r.id || 'SPG-'+pgChNumero_(r.n);
     let t = tickets.get(id);

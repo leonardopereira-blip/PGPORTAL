@@ -91,3 +91,11 @@ test('Central e OKR ponderam a mesma coleta integral pela tiragem, excluindo pen
   assert.equal(chCentralAging(rows,f.asof),chOKR(rows,f).average);
   assert.equal(chCentralAging([c,d,e],f.asof),null);
 });
+
+ test('pesquisa OKR em massa aceita delimitadores mistos e não inclui IDs parecidos',()=>{
+ const a=ticket(),b={...ticket(),id:'B',n:'42'},c={...ticket(),id:'C',n:'31480'};
+ const rows=[a,b,c],f={...filters,query:'3148, 42;\n\t3148|#0042'};
+ const result=chOKR(rows,f);assert.equal(result.items.length,2);assert.equal(result.cohort,2);assert.deepEqual(Array.from(result.items,x=>x.n),['3148','42']);
+ assert.equal(chOKR(rows,{...filters,query:'3148'}).items.length,1);
+ assert.equal(chOKRDestinationRows(result,f,rows).length,4);
+});

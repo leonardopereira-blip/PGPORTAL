@@ -192,10 +192,10 @@ test('mapa parcial e sem data integral não inventa data de coleta',()=>{
  const result=ctx.pgChColetaRota_({qty:100,spg:[{q:100}],maps:[{qty:40,pick:'2026-09-11'}]});assert.equal(result.date,'');assert.equal(result.picked,40);
 });
 
-test('importa exclusivamente setembro sem repetir chamado existente no SPG',()=>{
+test('importa o histórico de setembro e prioriza o Painel sobre o SPG sem repetir chamados',()=>{
  const r={n:'900',brand:'SAS',shipment:'V1',category:'Reentrada, Preventiva',printer:'Alpha',cd:'CJUN',qty:'100',created:'2026-09-05',pickup:'2026-09-20',status:'Concluído',row:7};
  const model=build({panel:[r,{...r,row:8},{...r,cd:'CITA',qty:'40',row:9},{...r,n:'101'},{...r,n:'901',created:'2026-10-01'},{...r,n:'902',created:'2026-08-30'}]});
- const x=model.tickets.get('PAINEL-900');assert.equal(x.totals.qty,140);assert.equal(x.totals.picked,140);assert.equal(x.totals.delivered,0);assert.equal(x.items.length,2);assert.equal(model.tickets.size,3);assert.equal(x.items[0].collection.source,'Painel de produção · Histórico');
+ const x=model.tickets.get('PAINEL-900');assert.equal(x.totals.qty,140);assert.equal(x.totals.picked,140);assert.equal(x.totals.delivered,0);assert.equal(x.items.length,2);assert.equal(model.tickets.size,3);assert.equal(model.tickets.has(a.id),false);assert.equal(model.tickets.get('PAINEL-101').totals.qty,100);assert.equal(x.items[0].collection.source,'Painel de produção · Histórico');
 });
 test('painel aberto não converte previsão em coleta e mapa exige vínculo explícito',()=>{
  const r={n:'900',brand:'SAS',shipment:'V1',category:'Reentrada',printer:'Alpha',cd:'CJUN',qty:'100',created:'2026-09-05',pickup:'2026-09-20',status:'Em produção',row:7};
@@ -351,4 +351,10 @@ test('aceite anterior à abertura valida coleta e entrega do próprio chamado se
  const mapped=build({spg:[{...row,pick:'',delivery:''}],map:[{...map,n:'2888',qty:'100',received:'100'}],tp:[{map:map.map,pick:'03/10/2026',delivery:'03/10/2026'}]}).tickets.get(a.id);
  assert.equal(mapped.items[0].maps[0].pick,'2026-10-03');assert.equal(mapped.items[0].maps[0].delivery,'2026-10-03');
  assert.equal(mapped.totals.delivered,100);
+});
+
+ test('Painel prevalece por chamado inclusive fora de setembro, sem aproveitar tiragem ou rotas SPG',()=>{
+ const r={n:'00101',brand:'SAS',shipment:'V1',category:'Reentrada',printer:'Beta',cd:'CITA',qty:'35',created:'2026-10-05',pickup:'2026-10-15',status:'Concluído',row:7};
+ const m=build({panel:[r],spg:[a,{...a,cd:'CJUN',qty:'999',pick:'2026-10-30'},b]});
+ const x=m.tickets.get('PAINEL-101');assert.equal(m.tickets.has(a.id),false);assert.equal(x.totals.qty,35);assert.equal(x.items.length,1);assert.equal(x.items[0].collection.date,'2026-10-15');assert.equal(m.tickets.get(b.id).totals.qty,100);
 });
