@@ -7,8 +7,8 @@ const vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,'..','abaCentralChamados.html'),'utf8')
   .split('// CH_OKR_PURE_BEGIN')[1].split('// CH_OKR_PURE_END')[0];
 const ctx=vm.createContext({});
-vm.runInContext(source+';this.rules={chOKR,chFilteredTotals,chOKRDestinationRows,chMatches};',ctx);
-const {chOKR,chFilteredTotals,chOKRDestinationRows,chMatches}=ctx.rules;
+vm.runInContext(source+';this.rules={chOKR,chFilteredTotals,chOKRDestinationRows,chMatches,chCentralAging};',ctx);
+const {chOKR,chFilteredTotals,chOKRDestinationRows,chMatches,chCentralAging}=ctx.rules;
 const filters={rule:'fixed',basis:'open',start:'2026-09-05',end:'2026-12-06',
   asof:'2026-11-24',cat:'REENTRADA',shipment:'V1',scope:'ativos',unit:'tickets'};
 
@@ -66,17 +66,28 @@ test('linhas por destino conservam evidência local quando o código da gráfica
   }
 });
 
-test('aging do filtro OKR usa coleta; a Central conserva aging de entrega',()=>{
+test('aging do filtro OKR e da Central usa a coleta integral da rota filtrada',()=>{
   const t=ticket(),f={...filters,cd:'CD JDI',min:20,max:25};
   // A coleta da rota ocorre aos 23 dias; a entrega do chamado aos 27.
   t.delivered='2026-11-24';
   const okr=chOKR([t],f);
   assert.equal(okr.items.length,1);assert.equal(okr.items[0].age,23);
   assert.equal(okr.num,1);assert.equal(okr.den,1);
-  assert.equal(chMatches(t,f,filters.asof),false,'a carteira mantém seu aging de entrega de 27 dias');
+  assert.equal(chMatches(t,f,filters.asof),true,'a Central usa a coleta de 23 dias');
+  assert.equal(chCentralAging([chFilteredTotals(t,f)],filters.asof),okr.average);
+  assert.equal(chMatches(t,{...f,cd:'CD FOR'},filters.asof),false);
   t.delivered='';
   assert.equal(chOKR([t],f).items.length,1,'a ausência da entrega não apaga o aging real de coleta');
   assert.equal(chOKR([t],{...f,max:22}).items.length,0);
   assert.equal(chOKR([t],{...f,min:24,max:30}).items.length,0);
   assert.equal(chOKR([t],{...f,cd:'CD FOR'}).items.length,0,'uma rota sem coleta não tem aging de coleta');
+});
+
+test('Central e OKR ponderam a mesma coleta integral pela tiragem, excluindo pendentes e cancelados',()=>{
+  const base={cat:'REENTRADA',shipment:'V1',created:'2026-10-01',status:'ALOCADO',groups:[]};
+  const a={...base,id:'A',totals:{qty:100,coverage:[]},pickDone:'2026-10-11'},b={...base,id:'B',totals:{qty:300,coverage:[]},pickDone:'2026-10-31'},c={...base,id:'C',totals:{qty:1000,coverage:[]}},d={...b,id:'D',status:'CANCELADO'},e={...b,id:'E',pickDone:'2026-09-30'};
+  const rows=[a,b,c,d,e],f={...filters,unit:'qty',start:'2026-10-01',end:'2026-10-31'};
+  assert.equal(chCentralAging(rows,f.asof),25);
+  assert.equal(chCentralAging(rows,f.asof),chOKR(rows,f).average);
+  assert.equal(chCentralAging([c,d,e],f.asof),null);
 });

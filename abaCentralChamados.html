@@ -295,9 +295,18 @@
     const days=chDays(created,date);
     return days!==null&&days>=0?days:null;
   }
-  function chAging(t,asof){
-    const delivered=t.delivered&&t.delivered<=asof?t.delivered:'';
-    return chAgingDays(t.created,delivered);
+  function chAging(t,asof,pick=chPickEvidence(t,asof)){
+    return chAgingDays(t.created,pick.actual);
+  }
+  function chAgingAverage(ages){
+    const weight=ages.reduce((sum,x)=>sum+x.w,0);
+    return weight?ages.reduce((sum,x)=>sum+x.age*x.w,0)/weight:null;
+  }
+  function chAgingCanceled(t,asof){
+    return !!(t.canceled&&t.canceled<=asof)||/CANCEL/i.test(t.status||'')&&!t.canceled;
+  }
+  function chCentralAging(rows,asof){
+    return chAgingAverage(rows.filter(t=>!chAgingCanceled(t,asof)).map(t=>({age:chAging(t,asof),w:Number(t.totals?.qty)||0})).filter(x=>x.age!==null));
   }
   function chMatches(t,f,asof){
     if(['cat','shipment','brand'].some(k=>!chHas(f[k],t[k])))return false;
@@ -306,7 +315,7 @@
     if(f.openEnd&&(!t.created||t.created>f.openEnd))return false;
     if((chDimensions.some(k=>f[k])||f.finishKey&&((t.groups||[]).length||f.finishKey!=='SEM ACABAMENTO INFORMADO'))&&!chGroups(t,f).length)return false;
     if(f.min!==''&&f.min!=null||f.max!==''&&f.max!=null){
-      const age=chAging(t,asof);
+      const scoped=chFilteredTotals(t,f),age=scoped&&!chAgingCanceled(scoped,asof)?chAging(scoped,asof):null;
       if(age===null||(f.min!==''&&f.min!=null&&age<Number(f.min))||(f.max!==''&&f.max!=null&&age>Number(f.max)))return false;
     }
     return true;
@@ -474,10 +483,10 @@
       if(!chMatches(t,{...f,min:'',max:''},f.asof)||t.created&&t.created>f.asof)continue;
       const scoped=chFilteredTotals(t,f);if(!scoped)continue;
       const qty=Number(scoped.totals?.qty)||0,w=f.unit==='qty'?qty:1;
-      const fixed=chAdd(t.created,25),pick=chPickEvidence(scoped,f.asof),age=chAgingDays(t.created,pick.actual);
+      const fixed=chAdd(t.created,25),pick=chPickEvidence(scoped,f.asof),age=chAging(scoped,f.asof,pick);
       if((f.min!==''&&f.min!=null||f.max!==''&&f.max!=null)&&(age===null||f.min!==''&&f.min!=null&&age<Number(f.min)||f.max!==''&&f.max!=null&&age>Number(f.max)))continue;
       const due=f.rule==='fixed'?fixed:f.rule==='desired'?t.desired:f.rule==='pick'?pick.due:fixed?[fixed,t.desired].filter(Boolean).sort().pop():'';
-      const canceled=!!(t.canceled&&t.canceled<=f.asof)||/CANCEL/i.test(t.status||'')&&!t.canceled;
+      const canceled=chAgingCanceled(t,f.asof);
       if(f.basis==='open'?!inside(t.created):!inside(due))continue;
       if(canceled){out.canceled+=w;continue;}
       const actual=pick.actual,status=chStatusColeta(actual);
@@ -496,7 +505,7 @@
       out.items.push({id:t.id,n:t.n,ocValues:scoped.ocValues,cat:t.cat,brand:t.brand,shipment:t.shipment,owner:t.owner||'',qty,totalQty:Number(t.totals?.qty)||qty,created:t.created,due,actual,pick:actual,pickSource:pick.source,maps:pick.maps,age,days,status,apurado:!!result.den,noPrazo:!!result.num,historicalExcluded:!!result.historicalExcluded,weight:w,den:result.den*w,num:result.num*w,printers:[...new Set((scoped.groups||[]).map(g=>g.printer).filter(Boolean))],cds:[...new Set((scoped.groups||[]).map(g=>g.cd).filter(Boolean))]});
     }
     let sum=0;out.bands=chBands.map(([lo,hi])=>{const count=out.ages.filter(x=>x.age>=lo&&x.age<=hi).reduce((a,x)=>a+x.w,0);sum+=count;return {label:hi===Infinity?'61+':lo+'–'+hi,count,pct:chPct(count,out.delivery),cum:chPct(sum,out.delivery)};});
-    out.average=out.delivery?out.ages.reduce((a,b)=>a+b.age*b.w,0)/out.delivery:null;out.pct=chPct(out.num,out.den);return out;
+    out.average=chAgingAverage(out.ages);out.pct=chPct(out.num,out.den);return out;
   }
   function chOKRByFinish(rows,f){
     const keys=new Set();
@@ -571,9 +580,7 @@
     }
   }
   function agingMarkup(rows,asof){
-    const ages=rows.map(t=>chAging(t,asof)).filter(n=>n!==null);
-    const avg=ages.length?ages.reduce((a,b)=>a+b,0)/ages.length:null;
-    return avg===null?'—':num(Math.round(avg*10)/10)+' dias';
+    return chOKRAge({average:chCentralAging(rows,asof)});
   }
   function renderOKR(){
     if(!state.data){el('okr').innerHTML='<p class="ch-muted">Aguardando dados publicados.</p>';return;}
@@ -776,7 +783,7 @@
     const pct=new Intl.NumberFormat('pt-BR',{style:'percent',minimumFractionDigits:1,maximumFractionDigits:1});
     el('deadline-summary').innerHTML=table(['Faixa de prazo','Chamados','% chamados','Tiragem','% tiragem'],chDeadlineSummary(baseRows,today).map(r=>[r.label==='Total'?'<b>Total</b>':esc(r.label),num(r.tickets),pct.format(r.ticketPct),num(r.qty),pct.format(r.qtyPct)]));
     el('deadline-selection').textContent=(state.deadline?'Filtro: '+chDeadlineLabels[state.deadline]+'. ':'Todos os prazos. ')+'Hoje: '+dt(today)+'.';
-    el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado',total('picked')],['Entregue no CD',total('delivered')],['Aging médio de entrega',agingMarkup(rows,today)]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
+    el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado',total('picked')],['Entregue no CD',total('delivered')],['Aging médio de coleta',agingMarkup(rows,today)]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
     const oc=chTotalOC(rows),money=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
     el('oc-total').innerHTML='<div class="ch-between"><h2>Valor total das OCs</h2><strong style="font-size:1.35rem;color:var(--ch-navy,#0C2340)">'+(oc.unavailable?'Atualize a base':esc(money.format(oc.cents/100)))+'</strong></div><p class="ch-muted">'+(oc.unavailable?'O JSON atual ainda não contém os valores consolidados.':num(oc.known)+' OCs com valor · '+num(oc.missing)+' sem valor'+(oc.conflicts?' · '+num(oc.conflicts)+' com valores divergentes (não somadas)':'')+' · Cada OC é contada uma única vez. O valor integral da OC é considerado quando vinculada aos filtros, sem rateio por SKU ou CD.')+'</p>';
     const priorityRows=chPrioritySummary(rows);
