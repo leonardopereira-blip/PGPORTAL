@@ -96,17 +96,13 @@
   #ch-central .ch-link,#ch-central a{color:var(--ch-indigo);font-weight:600;text-decoration:underline;text-underline-offset:3px}
   #ch-central .ch-link:hover{color:var(--ch-orange)}
   #ch-central .ch-frame{overflow-x:auto;border:1px solid #e5eaf1;border-radius:8px}
-  #ch-central .ch-dragbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:8px 10px;margin-bottom:5px;border:1px solid #dce5ef;border-radius:8px;background:#fff;box-shadow:0 3px 10px #0c234012}
-  #ch-central .ch-dragbar .ch-grip{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;border:1px solid #ccd5e0;border-radius:7px;padding:6px 10px;background:#edf3fa;color:var(--ch-indigo);font-size:11px;font-weight:600}
-  #ch-central .ch-dragbar .ch-grip.is-dragging{cursor:grabbing;background:#dceafa}#ch-central .ch-dragbar input[type=range]{flex:1;min-width:36px;max-width:100%;accent-color:var(--ch-indigo);cursor:ew-resize}
-  #ch-central .ch-grip svg{width:18px;height:18px;flex:none}
+  #ch-central .ch-frame.ch-table-draggable table{cursor:grab;user-select:none;-webkit-user-select:none}
+  #ch-central .ch-frame.ch-table-draggable button,#ch-central .ch-frame.ch-table-draggable a{cursor:grab}
+  #ch-central .ch-frame.is-dragging,#ch-central .ch-frame.is-dragging *{cursor:grabbing!important}
+  #ch-central .ch-frame:focus-visible{outline:2px solid var(--ch-blue);outline-offset:2px}
   #ch-central #ch-table,#ch-central #ch-okr-rows{position:relative;min-width:0}
   #ch-central #ch-okr-rows .ch-okr-total td{background:#edf3fa;font-weight:700;color:var(--ch-navy)}
   #ch-central #ch-okr-rows th,#ch-central #ch-okr-rows td{padding:7px;white-space:normal;overflow-wrap:anywhere;line-height:1.4;box-sizing:border-box}
-  #ch-central .ch-panel-grip[hidden],#ch-central .ch-dragbar[hidden]{display:none!important}
-  #ch-central .ch-panel-grip{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:21;display:grid;place-items:center;width:48px;height:48px;border:1px solid #284081;border-radius:50%;background:#ffffffed;color:#284081;box-shadow:0 4px 16px #0c234033;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
-  #ch-central .ch-panel-grip:hover,#ch-central .ch-panel-grip:focus-visible{background:#edf3fa;box-shadow:0 4px 18px #0c23404d}#ch-central .ch-panel-grip.is-dragging{cursor:grabbing;background:#284081;color:white}
-  #ch-central .ch-panel-grip svg{width:25px;height:25px;pointer-events:none}
   #ch-central table{border-collapse:collapse;width:100%;font-size:11px;text-align:left}
   #ch-central th,#ch-central td{padding:9px 10px;border-bottom:1px solid #e8edf3;vertical-align:middle;white-space:nowrap}
   #ch-central th{font-size:10px;font-weight:600;letter-spacing:.025em;text-transform:uppercase;color:var(--ch-indigo);background:#edf3fa}
@@ -174,7 +170,7 @@
       <select id="ch-by" aria-label="Agrupar por"><option value="cat">Categoria</option><option value="shipment">Envio</option><option value="brand">Marca</option><option value="priority">Prioridade</option></select></div><div id="ch-dist"></div></section></div>
     <section class="ch-box"><div class="ch-between"><h2>Prazos de entrega</h2><button type="button" class="ch-btn" data-deadline="">Todos os prazos</button></div><p class="ch-muted">Chamados sem entrega integral, pelo prazo final de 25 dias. Semanas de segunda a domingo; cada chamado é contado uma vez.</p><div id="ch-deadline-cards" class="ch-grid"></div><p id="ch-deadline-selection" class="ch-muted" role="status"></p></section>
     <section class="ch-box"><h2>Resumo dos prazos de entrega</h2><p class="ch-muted">Percentuais sobre todos os chamados e a tiragem dos filtros aplicados, antes da seleção de uma faixa. Tiragem total dos chamados.</p><div id="ch-deadline-summary"></div></section>
-    <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Chamados</h2><small id="ch-count"></small></div><div id="ch-dragbar" class="ch-dragbar" hidden><button type="button" id="ch-grip" class="ch-grip" aria-label="Segure e arraste horizontalmente a tabela. Use as setas para navegar." title="Segure e arraste para os lados"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-5a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L3 13a2 2 0 0 1 3-2z"/></svg>Segure e arraste</button><input id="ch-scrollrange" type="range" min="0" max="0" value="0" aria-label="Posição horizontal da tabela de chamados"></div><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
+    <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Chamados</h2><small id="ch-count"></small></div><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
   </div>
   <div id="ch-detail" hidden></div>
   <dialog id="ch-pagination-dialog" aria-labelledby="ch-pagination-title"><h2 id="ch-pagination-title">Paginação</h2><p id="ch-pagination-full"></p><form method="dialog" class="ch-actions"><button type="submit" class="ch-btn ch-primary" autofocus>Fechar</button></form></dialog>
@@ -593,7 +589,7 @@
       '<label>Coleta do chamado<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Não coletado</option><option value="concluidos">Coletado</option></select></label>'+
       '<label>Situação do prazo<select id="ch-okr-prazo"><option value="">Todos</option><option value="dentro">Dentro do prazo</option><option value="fora">Fora do prazo</option><option value="aberto">Em aberto (todos)</option><option value="vencido">Vencido em aberto</option><option value="abertoAVencer">Em aberto a vencer</option><option value="naoApurado">Não apurado</option></select></label></div>'+
       '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note" id="ch-okr-cutoff">Base: somente prazos vencidos até D-1 da data observada. Prazos de hoje ou futuros ficam fora da aderência, inclusive quando já coletados.</p></section>'+
-      '<div id="ch-okr-kpis" class="ch-grid"></div><details class="ch-box ch-okr-comparison" open><summary>Visão comparativa dos critérios de apuração</summary><div id="ch-okr-compare"></div></details><section class="ch-box"><h2>OKR por acabamento</h2><div id="ch-okr-finish-summary"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de coleta</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Abrir no Google Sheets</button><small id="ch-okr-count"></small><a id="ch-okr-sheet-link" target="_blank" rel="noopener noreferrer" hidden>Abriu em outra aba? Acessar planilha</a><small id="ch-okr-export-msg" role="status"></small></div><div id="ch-okr-dragbar" class="ch-dragbar" hidden><button type="button" id="ch-okr-grip" class="ch-grip" aria-label="Segure e arraste horizontalmente a tabela. Use as setas para navegar." title="Segure e arraste para os lados"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-5a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L3 13a2 2 0 0 1 3-2z"/></svg>Segure e arraste</button><input id="ch-okr-scrollrange" type="range" min="0" max="0" value="0" aria-label="Posição horizontal da tabela de chamados"></div><div id="ch-okr-rows"></div></section>';
+      '<div id="ch-okr-kpis" class="ch-grid"></div><details class="ch-box ch-okr-comparison" open><summary>Visão comparativa dos critérios de apuração</summary><div id="ch-okr-compare"></div></details><section class="ch-box"><h2>OKR por acabamento</h2><div id="ch-okr-finish-summary"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de coleta</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Abrir no Google Sheets</button><small id="ch-okr-count"></small><a id="ch-okr-sheet-link" target="_blank" rel="noopener noreferrer" hidden>Abriu em outra aba? Acessar planilha</a><small id="ch-okr-export-msg" role="status"></small></div><div id="ch-okr-rows"></div></section>';
       el('okr').querySelectorAll('input,select').forEach(x=>x.addEventListener('change',renderOKR));
     }
     const re=state.data.rows;
@@ -803,44 +799,46 @@
       '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(chPriority(t)),cell(chResponsible(t)),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),...financialCells(t),carteiraCollectionCell(t,chPickEvidence(t,today).actual,today),dt(chDeliveryDate(t,today)),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),dt(t.target?.deadline),'<span class="ch-deadline-chip" data-deadline="'+esc(t.deadlineBucket)+'">'+esc(t.deadlineLabel)+'</span>',cell(state.data.phases[t.target?.nextStage]),...chStageDates(t,state.data.phases,today)]),'Nenhum chamado corresponde aos filtros.',{fixed:fixedTotals,phases:portfolio.coverage});
     el('count').textContent=num(rows.length)+' chamados · '+num(destinationRows.length)+' destinos';pager(el('pages'),state.page,destinationRows.length,30,'page');chBindTableDrag();
   }
-  // Puxador fixo enquanto a página rola. Links e seleção de texto ficam intactos.
+  // Arraste horizontal diretamente na tabela, preservando cliques e rolagem nativa.
   function chBindTableDrag(prefix=''){
-    const host=el(prefix?'okr-rows':'table'),bar=el(prefix+'dragbar'),grip=el(prefix+'grip'),range=el(prefix+'scrollrange');
-    if(!host?.querySelector||!bar||!grip||!range)return;
     if(state.dragCleanup)state.dragCleanup();
-    if(state.dragResize)state.dragResize.disconnect();
-    const frame=host.querySelector('.ch-frame');
-    if(!frame){bar.hidden=true;return;}
-    const panelGrip=document.createElement('button');
-    panelGrip.type='button';panelGrip.className='ch-panel-grip';panelGrip.id='ch-'+prefix+'panel-grip';
-    panelGrip.title='Segure e arraste a tabela para os lados';panelGrip.setAttribute('aria-label','Arraste horizontalmente a tabela. Use as setas para navegar.');
-    panelGrip.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-5a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L3 13a2 2 0 0 1 3-2z"/></svg>';
-    host.appendChild(panelGrip);
-    let drag=null;
-    const place=()=>{
-      const bounds=frame.getBoundingClientRect(),viewport=root.getBoundingClientRect(),anchor=host.getBoundingClientRect();
-      const top=Math.max(bounds.top,viewport.top,0,bar.hidden?0:bar.getBoundingClientRect().bottom);
-      const bottom=Math.min(bounds.bottom,viewport.bottom,window.innerHeight||viewport.bottom);
-      const left=Math.max(bounds.left,viewport.left,0),right=Math.min(bounds.right,viewport.right,window.innerWidth||viewport.right);
-      const visible=bottom-top>=64&&right-left>=64&&frame.scrollWidth-frame.clientWidth>1;
-      panelGrip.hidden=!visible;
-      if(visible){panelGrip.style.top=((top+bottom)/2-anchor.top)+'px';panelGrip.style.left=((left+right)/2-anchor.left)+'px';}
+    const host=el(prefix?'okr-rows':'table'),frame=host?.querySelector('.ch-frame'),table=frame?.querySelector('table');
+    if(!frame||!table)return;
+    let drag=null,suppressClick=false;
+    const overflow=()=>frame.scrollWidth-frame.clientWidth>1;
+    const sync=()=>{frame.classList.toggle('ch-table-draggable',overflow());};
+    frame.tabIndex=0;frame.setAttribute('aria-label','Tabela com rolagem horizontal. Arraste ou use as setas.');
+    const down=e=>{
+      suppressClick=false;
+      if(e.button!==0||e.pointerType==='touch'||!overflow()||!table.contains(e.target))return;
+      drag={id:e.pointerId,x:e.clientX,y:e.clientY,scroll:frame.scrollLeft,active:false};
     };
-    const sync=()=>{const max=Math.max(0,frame.scrollWidth-frame.clientWidth);bar.hidden=max<=1;range.max=String(max);range.value=String(Math.min(max,frame.scrollLeft));place();};
-    frame.addEventListener('scroll',sync,{passive:true});
-    root.addEventListener('scroll',place,{passive:true});window.addEventListener('resize',sync);
-    range.oninput=()=>{frame.scrollLeft=Number(range.value);};
-    function bind(handle){
-      handle.classList.remove('is-dragging');
-      handle.onpointerdown=e=>{if(e.button!==0||drag)return;drag={id:e.pointerId,x:e.clientX,scroll:frame.scrollLeft,handle};handle.setPointerCapture?.(e.pointerId);handle.classList.add('is-dragging');e.preventDefault();};
-      handle.onpointermove=e=>{if(!drag||drag.id!==e.pointerId||drag.handle!==handle)return;frame.scrollLeft=drag.scroll-(e.clientX-drag.x);sync();};
-      const end=e=>{if(!drag||drag.id!==e.pointerId||drag.handle!==handle)return;drag=null;handle.classList.remove('is-dragging');if(handle.hasPointerCapture?.(e.pointerId))handle.releasePointerCapture(e.pointerId);};
-      handle.onpointerup=end;handle.onpointercancel=end;handle.onlostpointercapture=end;
-      handle.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();frame.scrollLeft=e.key==='Home'?0:e.key==='End'?frame.scrollWidth:frame.scrollLeft+(e.key==='ArrowRight'?1:-1)*160;sync();};
-    }
-    bind(grip);bind(panelGrip);
-    state.dragCleanup=()=>{root.removeEventListener('scroll',place);window.removeEventListener('resize',sync);frame.removeEventListener('scroll',sync);panelGrip.remove();};
-    if(typeof ResizeObserver==='function'){state.dragResize=new ResizeObserver(sync);state.dragResize.observe(frame);const table=frame.querySelector('table');if(table)state.dragResize.observe(table);}
+    const move=e=>{
+      if(!drag||drag.id!==e.pointerId)return;
+      const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+      if(!drag.active){
+        if(Math.abs(dx)<5&&Math.abs(dy)<5)return;
+        if(Math.abs(dx)<Math.abs(dy)){drag=null;return;}
+        drag.active=true;suppressClick=true;frame.classList.add('is-dragging');
+        try{frame.setPointerCapture?.(e.pointerId);}catch(_){}
+      }
+      e.preventDefault();frame.scrollLeft=drag.scroll-dx;
+    };
+    const end=e=>{
+      if(!drag||drag.id!==e.pointerId)return;
+      drag=null;frame.classList.remove('is-dragging');
+      if(frame.hasPointerCapture?.(e.pointerId))frame.releasePointerCapture(e.pointerId);
+    };
+    const cancel=()=>{drag=null;frame.classList.remove('is-dragging');};
+    const click=e=>{if(suppressClick&&e.detail!==0){suppressClick=false;e.preventDefault();e.stopImmediatePropagation();}};
+    const nativeDrag=e=>{if(drag)e.preventDefault();};
+    const key=e=>{if(e.target!==frame||!overflow()||!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();frame.scrollLeft=e.key==='Home'?0:e.key==='End'?frame.scrollWidth:frame.scrollLeft+(e.key==='ArrowRight'?160:-160);};
+    frame.addEventListener('pointerdown',down);window.addEventListener('pointermove',move,{passive:false});
+    window.addEventListener('pointerup',end);window.addEventListener('pointercancel',end);frame.addEventListener('lostpointercapture',end);
+    frame.addEventListener('click',click,true);frame.addEventListener('dragstart',nativeDrag);frame.addEventListener('keydown',key);window.addEventListener('blur',cancel);window.addEventListener('resize',sync);
+    const observer=typeof ResizeObserver==='function'?new ResizeObserver(sync):null;
+    observer?.observe(frame);observer?.observe(table);
+    state.dragCleanup=()=>{cancel();observer?.disconnect();frame.classList.remove('ch-table-draggable');frame.removeEventListener('pointerdown',down);window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',end);window.removeEventListener('pointercancel',end);frame.removeEventListener('lostpointercapture',end);frame.removeEventListener('click',click,true);frame.removeEventListener('dragstart',nativeDrag);frame.removeEventListener('keydown',key);window.removeEventListener('blur',cancel);window.removeEventListener('resize',sync);};
     sync();
   }
   async function openTicket(id){
