@@ -113,3 +113,9 @@ test('Central e OKR ponderam a mesma coleta integral pela tiragem, excluindo pen
  assert.equal(brands.reduce((n,g)=>n+g.den,0),d.den);assert.equal(brands.reduce((n,g)=>n+g.num,0),d.num);assert.equal(s.totals[0],20);assert.equal(s.totals[1],40);assert.equal(s.stages[0].inside,1);assert.equal(s.stages[1].outside,5);assert.equal(s.stages.reduce((n,x)=>n+x.impact,0),100);
  const missing={...b,allocated:''},dm=chOKR([a,missing],f),sm=chStageComparison(dm,[a,missing],f);assert.equal(sm.groups[1].weight,0);assert.equal(sm.totals[1],null);assert.equal(sm.groups[1].eligible,300);
 });
+
+ test('paginação total soma SKUs por chamado sem multiplicar tiragem nem duplicar destinos',()=>{
+ const chCommercial=vm.runInContext('chCommercial',ctx);
+ const rows=[{n:'101',totals:{qty:1000},groups:[{commercial:[{sku:'A',qty:100,pages:32},{sku:'B',qty:400,pages:32}]},{commercial:[{sku:'A',qty:500,pages:32}]}]},{n:'102',totals:{qty:50},groups:[{commercial:[{sku:'A',qty:50,pages:32}]}]}];
+ assert.equal(chCommercial(rows).pageTotal,96);assert.equal(chCommercial(rows).pageCount,3);assert.equal(chCommercial(rows).pageMissing,false);assert.equal(chCommercial(rows.slice(0,1)).pageTotal,64);
+});
