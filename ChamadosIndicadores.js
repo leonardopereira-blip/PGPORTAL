@@ -64,7 +64,7 @@ function pgChMetricaChamado_(t,idx,costHistory) {
         if(!collected)unverified=true;else if(collected>part.formal)late=true;
       }
     }
-    if(it.qty>0)routes.push({sku:it.sku,printer:it.printer,cd:it.cd,qty:it.qty,delivery,pick,formal,late,unverified,source:delivery?it.stages[11].f:'',dimensions:attributes,coverage:it.coverage.slice(),picked:Math.min(it.qty,it.picked),productionStatus:it.productionStatus.label,collection:{events:collection.events,parts:collection.parts,source:collection.source,maps:collection.maps,spgDate:pgChDataIntegral_(sp.filter(s=>!s.legacy&&s.pick&&(!s.delivery||s.pick<=s.delivery)).map(s=>({date:s.pick,qty:s.q})),it.qty,'date','qty')}});
+    if(it.qty>0)routes.push({sku:it.sku,printer:it.printer,cd:it.cd,qty:it.qty,delivery,pick,formal,late,unverified,source:delivery?it.stages[11].f:'',dimensions:attributes,coverage:it.coverage.slice(),picked:Math.min(it.qty,it.picked),productionStatus:it.productionStatus.label,collection:{events:collection.events,parts:collection.parts,source:collection.source,maps:collection.maps,authoritativePick:collection.authoritativePick||'',chronologyException:!!collection.chronologyException,spgDate:pgChDataIntegral_(sp.filter(s=>!s.legacy&&s.pick&&(!s.delivery||s.pick<=s.delivery)).map(s=>({date:s.pick,qty:s.q})),it.qty,'date','qty')}});
     const {specRows,...dims}=attributes,key=JSON.stringify(dims);
     let g=groups.get(key);
     if(!g){
@@ -214,6 +214,13 @@ function pgChEntregaRota_(it){
 }
 function pgChColetaRota_(it){
  const q=it.qty,sp=it.spg.filter(s=>s.q>0),maps=it.maps||[];
+ // Data escolhida entre Painel/SPG: não pode ser substituída por outra evidência.
+ if(sp.length&&sp.every(s=>s.preferredPick)){
+  const chronologyException=sp.some(s=>s.pickException),source=chronologyException?'SPG · Coleta real (dados do Painel)':'Painel de produção · Histórico';
+  const events=sp.map(s=>({date:s.preferredPick,qty:s.q,kit:s.kit||'',map:'',source}));
+  const date=pgChDataIntegral_(events,q,'date','qty');
+  return {picked:q,date,events,source,maps:pgChUnicos_(maps.map(m=>m.map)),parts:sp.map(s=>({kit:s.kit||'',qty:s.q,due:s.formal||''})),authoritativePick:date,chronologyException};
+ }
  const primary=sp.filter(s=>s.pick&&(!s.delivery||s.pick<=s.delivery)).map(s=>({date:s.pick,qty:s.q,kit:s.kit||'',map:'',source:s.legacy?'Painel de produção · Histórico':'SPG · Coleta real'}));
  const spgDelivery=pgChDataIntegral_(sp.filter(s=>!s.legacy&&s.delivery).map(s=>({date:s.delivery,qty:s.q})),q,'date','qty');
  const mapEvents=maps.filter(m=>m.pick&&m.qty>0&&(!spgDelivery||m.pick<=spgDelivery)&&!sp.some(s=>!s.legacy&&s.kit&&s.kit===m.kit&&s.delivery&&m.pick>s.delivery)).map(m=>({date:m.pick,qty:m.qty,kit:m.kit||'',map:m.map||'',source:m.tpPickRow?'Transportes':'Mapa'}));

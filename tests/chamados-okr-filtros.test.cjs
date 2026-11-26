@@ -99,3 +99,8 @@ test('Central e OKR ponderam a mesma coleta integral pela tiragem, excluindo pen
  assert.equal(chOKR(rows,{...filters,query:'3148'}).items.length,1);
  assert.equal(chOKRDestinationRows(result,f,rows).length,4);
 });
+
+ test('OKR preserva a coleta excepcional SPG com os dados do Painel, inclusive se anteceder a abertura',()=>{
+ const t=ticket();t.id='PAINEL-3148';t.created='2026-10-01';t.okrRoutes=t.okrRoutes.map(r=>({...r,pick:'2026-09-20',collection:{...r.collection,authoritativePick:'2026-09-20',chronologyException:true,events:[{date:'2026-09-20',qty:r.qty,source:'SPG · Coleta real (dados do Painel)'}]}}));
+ const d=chOKR([t],filters);assert.equal(d.items[0].actual,'2026-09-20');assert.equal(d.den,1);assert.equal(d.num,1);assert.equal(d.average,null);assert.equal(chOKRDestinationRows(d,filters,[t]).every(x=>x.actual==='2026-09-20'),true);
+});

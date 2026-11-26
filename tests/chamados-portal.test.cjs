@@ -192,7 +192,7 @@ test('mapa parcial e sem data integral não inventa data de coleta',()=>{
  const result=ctx.pgChColetaRota_({qty:100,spg:[{q:100}],maps:[{qty:40,pick:'2026-09-11'}]});assert.equal(result.date,'');assert.equal(result.picked,40);
 });
 
-test('importa o histórico de setembro e prioriza o Painel sobre o SPG sem repetir chamados',()=>{
+test('importa o histórico de setembro e usa o Painel quando só ele tem coleta',()=>{
  const r={n:'900',brand:'SAS',shipment:'V1',category:'Reentrada, Preventiva',printer:'Alpha',cd:'CJUN',qty:'100',created:'2026-09-05',pickup:'2026-09-20',status:'Concluído',row:7};
  const model=build({panel:[r,{...r,row:8},{...r,cd:'CITA',qty:'40',row:9},{...r,n:'101'},{...r,n:'901',created:'2026-10-01'},{...r,n:'902',created:'2026-08-30'}]});
  const x=model.tickets.get('PAINEL-900');assert.equal(x.totals.qty,140);assert.equal(x.totals.picked,140);assert.equal(x.totals.delivered,0);assert.equal(x.items.length,2);assert.equal(model.tickets.size,3);assert.equal(model.tickets.has(a.id),false);assert.equal(model.tickets.get('PAINEL-101').totals.qty,100);assert.equal(x.items[0].collection.source,'Painel de produção · Histórico');
@@ -357,4 +357,18 @@ test('aceite anterior à abertura valida coleta e entrega do próprio chamado se
  const r={n:'00101',brand:'SAS',shipment:'V1',category:'Reentrada',printer:'Beta',cd:'CITA',qty:'35',created:'2026-10-05',pickup:'2026-10-15',status:'Concluído',row:7};
  const m=build({panel:[r],spg:[a,{...a,cd:'CJUN',qty:'999',pick:'2026-10-30'},b]});
  const x=m.tickets.get('PAINEL-101');assert.equal(m.tickets.has(a.id),false);assert.equal(x.totals.qty,35);assert.equal(x.items.length,1);assert.equal(x.items[0].collection.date,'2026-10-15');assert.equal(m.tickets.get(b.id).totals.qty,100);
+});
+
+ test('seleciona a fonte da coleta mais antiga e mantém SPG em empate ou ausência de coleta',()=>{
+ const r={n:'101',brand:'SAS',shipment:'V1',category:'Reentrada',printer:'Beta',cd:'CITA',qty:'35',created:'2026-09-01',pickup:'2026-10-15',status:'Concluído',row:7};
+ const base={...a,created:'2026-09-01',pick:'2026-10-10'};
+ let x=build({spg:[base,b],panel:[r]});assert.equal(x.tickets.get(a.id).totals.qty,100);assert.equal(x.tickets.has('PAINEL-101'),false);
+ x=build({spg:[{...base,pick:'2026-10-20'},b],panel:[r]});assert.equal(x.tickets.get('PAINEL-101').totals.qty,35);assert.equal(x.tickets.get('PAINEL-101').items[0].collection.date,'2026-10-15');
+ x=build({spg:[{...base,pick:'2026-10-15'},b],panel:[r]});assert.equal(x.tickets.has(a.id),true);
+ x=build({spg:[a,b],panel:[{...r,status:'Em produção'}]});assert.equal(x.tickets.has(a.id),true);
+});
+ test('única coleta SPG com cronologia divergente preserva data e demais dados do Painel',()=>{
+ const r={n:'101',brand:'SAS',shipment:'V1',category:'Reentrada',printer:'Beta',cd:'CITA',qty:'35',created:'2026-09-20',status:'Em produção',row:7};
+ const x=build({spg:[{...a,created:'2026-10-01',pick:'2026-09-15'},b],panel:[r]}),p=x.tickets.get('PAINEL-101');
+ assert.equal(x.tickets.has(a.id),false);assert.equal(p.created,'2026-09-20');assert.equal(p.totals.qty,35);assert.equal(p.totals.picked,35);assert.equal(p.items[0].collection.date,'2026-09-15');assert.equal(p.items[0].collection.chronologyException,true);
 });

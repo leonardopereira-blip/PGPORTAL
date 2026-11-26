@@ -332,8 +332,9 @@
     if(!Array.isArray(t.okrRoutes)||!t.okrRoutes.length){const delivery=chDeliveryDate(t,asof),actual=valid(t.pickDone)&&(!delivery||t.pickDone<=delivery)?t.pickDone:delivery;return {due:t.pickDue||'',actual,late:!!t.pickLate&&!!actual,invalid:!!t.pickUnverified&&!!actual,days:null,source:actual&&actual!==t.pickDone?'Entrega real · referência para coleta':t.pickSource||'',maps:t.pickMaps||[]};}
     const last=a=>a.filter(Boolean).sort().pop()||'',rs=t.okrRoutes.filter(r=>r.qty>0),out=[];
     for(const r of rs){
-      const parts=r.collection?.parts||[],events=(r.collection?.events||[]).filter(e=>valid(e.date)),dues=[...new Set(parts.map(p=>p.due).filter(Boolean))];
-      const formal=parts.length&&parts.every(p=>p.due)?last(dues):'',delivery=valid(r.delivery)?r.delivery:'',spgDate=r.collection?.spgDate||chIntegral(events.filter(e=>/^SPG\b/.test(e.source||'')),r.qty,asof),candidate=valid(spgDate)?spgDate:chIntegral(events,r.qty,asof)||(valid(r.pick)?r.pick:''),actual=candidate&&(!delivery||candidate<=delivery)?candidate:delivery;
+      const explicit=r.collection?.authoritativePick||'',exception=!!r.collection?.chronologyException,validPick=date=>!!date&&date<=asof&&(exception||!t.created||date>=t.created);
+      const parts=r.collection?.parts||[],events=(r.collection?.events||[]).filter(e=>validPick(e.date)),dues=[...new Set(parts.map(p=>p.due).filter(Boolean))];
+      const formal=parts.length&&parts.every(p=>p.due)?last(dues):'',delivery=valid(r.delivery)?r.delivery:'',spgDate=r.collection?.spgDate||chIntegral(events.filter(e=>/^SPG\b/.test(e.source||'')),r.qty,asof),candidate=valid(spgDate)?spgDate:chIntegral(events,r.qty,asof)||(valid(r.pick)?r.pick:''),actual=explicit?(validPick(explicit)?explicit:''):candidate&&(!delivery||candidate<=delivery)?candidate:delivery;
       const deliveryFallback=!!delivery&&actual===delivery&&candidate!==delivery;
       let invalid=!formal,late=false,days=0;
       if(formal&&dues.length>1){
@@ -341,9 +342,9 @@
         const kits=new Map();for(const p of parts){if(!p.kit){invalid=true;continue;}const k=kits.get(p.kit)||{qty:0,due:p.due};k.qty+=p.qty;if(k.due!==p.due)invalid=true;kits.set(p.kit,k);}
         for(const [kit,p] of kits){const d=chIntegral(events.filter(e=>e.kit===kit),p.qty,asof);if(!d&&actual)invalid=true;if(d&&d>p.due){late=true;days=Math.max(days,chDays(p.due,d));}else if(!d&&asof>p.due)days=Math.max(days,chDays(p.due,asof));}
       }else if(formal){const d=actual||asof;if(d>formal){days=chDays(formal,d);late=!!actual;}}
-      out.push({formal,actual,invalid,late,days,source:[...new Set([...events.filter(e=>e.date<=asof).map(e=>e.source).filter(Boolean),...(deliveryFallback?['Entrega real · referência para coleta']:[])])].join(' + '),maps:r.collection?.maps||[]});
+      out.push({formal,actual,invalid,late,days,chronologyException:exception,source:[...new Set([...events.filter(e=>e.date<=asof).map(e=>e.source).filter(Boolean),...(deliveryFallback?['Entrega real · referência para coleta']:[])])].join(' + '),maps:r.collection?.maps||[]});
     }
-    return {due:out.length&&out.every(r=>r.formal)?last(out.map(r=>r.formal)):'',actual:out.length&&out.every(r=>r.actual)?last(out.map(r=>r.actual)):'',late:out.some(r=>r.late),invalid:out.some(r=>r.invalid),days:Math.max(0,...out.map(r=>r.days)),source:[...new Set(out.map(r=>r.source).filter(Boolean))].join(' + '),maps:[...new Set(out.flatMap(r=>r.maps).filter(Boolean))]};
+    return {chronologyException:out.some(r=>r.chronologyException),due:out.length&&out.every(r=>r.formal)?last(out.map(r=>r.formal)):'',actual:out.length&&out.every(r=>r.actual)?last(out.map(r=>r.actual)):'',late:out.some(r=>r.late),invalid:out.some(r=>r.invalid),days:Math.max(0,...out.map(r=>r.days)),source:[...new Set(out.map(r=>r.source).filter(Boolean))].join(' + '),maps:[...new Set(out.flatMap(r=>r.maps).filter(Boolean))]};
   }
   // Cadastro histórico de PG_PESSOAS (V1), congelado no corte de 09/11/2026.
   const chOwnersV1={
@@ -400,7 +401,8 @@
   }
   // Entrega integral: data real de entrega é referência conservadora quando falta coleta.
   function chCarteiraColeta_(t,date,asof){
-    const delivery=chDeliveryDate(t,asof);
+    const delivery=chDeliveryDate(t,asof),authoritative=(t.okrRoutes||t.items||[]).filter(r=>r.qty>0).map(r=>r.collection?.authoritativePick||'');
+    if(authoritative.length&&authoritative.every(Boolean)){const selected=authoritative.sort().pop();return selected<=asof?{date:selected,confirmed:true}:{date:'',confirmed:false};}
     if(date&&date<=asof&&(!t.created||date>=t.created)&&(!delivery||date<=delivery))return {date,confirmed:true};
     return {date:delivery,confirmed:!!delivery,fallback:!!delivery};
   }
@@ -457,7 +459,7 @@
     const actual=pick.actual;
     const excluded={days:null,den:0,num:0,upcoming:false};
     if(chExclusaoHistorica(t,f,pick))return {...excluded,historicalExcluded:true};
-    if(!t.created||!due||due<t.created||actual&&actual<t.created||f.rule==='pick'&&actual&&pick.invalid)return excluded;
+    if(!t.created||!due||due<t.created||actual&&actual<t.created&&!pick.chronologyException||f.rule==='pick'&&actual&&pick.invalid)return excluded;
     // Nos três critérios exibidos, o denominador amadurece apenas em D-1.
     // Coleta antecipada permanece registrada, mas não antecipa a apuração.
     if(f.rule!=='pick'&&due>=f.asof)return {...excluded,upcoming:true};
@@ -647,7 +649,7 @@
     'A vencer (fora da apuração)':'Prazos de hoje ou futuros, inclusive chamados coletados antecipadamente. Não entram no numerador nem no denominador da aderência.',
     'Cancelados excluídos':'Chamados cancelados até a data de observação, retirados antes da apuração.',
     'Exclusões históricas do corte':'Exclusões documentadas da apuração histórica de reentradas V1, preservadas somente no recorte original e nos critérios aplicáveis.',
-    'Coletados':'Quantidade com coleta integral comprovada por data válida até o corte, independentemente do resultado de aderência. Painel tem prioridade quando o chamado existe nas duas fontes.',
+    'Coletados':'Quantidade com coleta integral comprovada por data válida até o corte, independentemente do resultado de aderência. Quando existe nas duas fontes, usa a fonte com coleta integral mais antiga; se somente o SPG tem coleta com cronologia divergente, usa a data SPG e os demais dados do Painel.',
     'Não coletados':'Quantidade sem data de coleta integral válida até a data de observação, após os filtros. Coletas parciais não caracterizam coleta integral.',
     'Aging médio de coleta':'Média dos dias corridos entre abertura e coleta integral válida. Em Tiragem, é ponderada pela tiragem; em Chamados, cada chamado tem peso 1. Não inclui pendentes.'
   };

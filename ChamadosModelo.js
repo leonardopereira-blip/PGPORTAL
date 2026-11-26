@@ -270,6 +270,55 @@ function pgChImportarPainelSetembro_(spg,panel){
  }
  return out;
 }
+// Compara a coleta integral de cada fonte, sem somar suas tiragens.
+// Repetições/divisões de um kit seguem a mesma regra de lotes do modelo.
+function pgChColetaFonte_(rows,raw=false){
+ const today=new Date().toISOString().slice(0,10),lots=new Map();
+ for(const r of rows){
+  if(!(pgChQtd_(r.qty)||pgChQtd_(r.sub)))continue;
+  const key=JSON.stringify([r.id||pgChNumero_(r.n),pgChSku_(r.sku),pgChMarca_(r.brand||r.brandName),pgChCD_(r.cd),r.kit,r.legacy?r.legacyKey:'']);
+  if(!lots.has(key))lots.set(key,[]);lots.get(key).push(r);
+ }
+ if(!lots.size)return '';
+ const dates=[];
+ for(const group of lots.values()){
+  const total=Math.max(...group.map(r=>pgChQtd_(r.qty)||pgChQtd_(r.sub)));
+  const allocated=group.reduce((n,r)=>n+pgChQtd_(r.assigned),0);
+  const parts=group.length>1&&allocated>0&&allocated<=total?group.filter(r=>pgChQtd_(r.assigned)>0).concat(total>allocated?[group[0]]:[]):[group[0]];
+  for(const r of parts){
+   const date=pgChData_(r.pick),opening=pgChData_(r.created),delivery=pgChData_(r.delivery);
+   if(!date||date>today||!raw&&(opening&&date<opening||delivery&&date>delivery))return '';
+   dates.push(date);
+  }
+ }
+ return pgChUltima_(dates);
+}
+function pgChSelecionarFontes_(spg,panel){
+ const original=spg||[],historical=pgChImportarPainelSetembro_(original,panel);
+ const bySpg=new Map(),byPanel=new Map(),selected=[];
+ original.forEach(r=>pgChAdd_(bySpg,pgChNumero_(r.n),r));
+ historical.forEach(r=>pgChAdd_(byPanel,pgChNumero_(r.n),r));
+ for(const [n,rs] of bySpg){
+  const ps=byPanel.get(n);
+  if(!ps){selected.push(...rs);continue;}
+  byPanel.delete(n);
+  const spgDate=pgChColetaFonte_(rs),panelDate=pgChColetaFonte_(ps);
+  if(panelDate&&(!spgDate||panelDate<spgDate)){
+   selected.push(...ps.map(r=>({...r,preferredPick:r.pick})));continue;
+  }
+  if(!panelDate&&!spgDate){
+   const rawDate=pgChColetaFonte_(rs,true);
+   if(rawDate){
+    // Única coleta SPG com cronologia divergente: data SPG, demais dados Painel.
+    selected.push(...ps.map(r=>({...r,preferredPick:rawDate,pickException:true})));continue;
+   }
+  }
+  // Empate ou ausência de coleta nas duas fontes: preserva a base SPG original.
+  selected.push(...rs);
+ }
+ for(const ps of byPanel.values())selected.push(...ps);
+ return selected;
+}
 function pgChIndiceTransportes_(rows) {
   const index=new Map();
   for(const row of rows){
@@ -313,10 +362,7 @@ function pgChModelo_(dados) {
   const rotaKey = (sku,marca,grafica,cd) => [pgChSku_(sku),pgChMarca_(marca),pgChGraf_(grafica),pgChCD_(cd)].join('|');
   const kitKey = (r) => [r.id || pgChNumero_(r.n),pgChSku_(r.sku),pgChMarca_(r.brand||r.brandName),pgChCD_(r.cd),r.kit,r.legacy?r.legacyKey:''].join('|');
   const lotes = new Map();
-  const imported=pgChImportarPainelSetembro_(dados.spg,dados.panel);
-  // A precedência é por número de chamado, antes de agrupar SKU/destino e calcular Central/OKR.
-  const painelNumeros=new Set(imported.map(r=>pgChNumero_(r.n)));
-  (dados.spg||[]).filter(r=>!painelNumeros.has(pgChNumero_(r.n))).concat(imported).forEach(r => {
+  pgChSelecionarFontes_(dados.spg,dados.panel).forEach(r => {
     if (!r.n || !r.cat) return;
     const id = r.id || 'SPG-'+pgChNumero_(r.n);
     let t = tickets.get(id);
@@ -365,7 +411,7 @@ function pgChModelo_(dados) {
     it.qty+=qty; it.rows.push(r.row);
     if (r.kit && !it.kits.includes(r.kit)) it.kits.push(r.kit);
     const real=pgChDatasMapa_(null,r.pick,r.delivery,t.evidenceStart);
-    it.spg.push({q:qty,legacy:!!r.legacy,cut:r.cut,kit:r.kit,stock:pgChQtd_(r.stock),sub:pgChQtd_(r.sub),oc:r.oc,ocStatus:r.ocStatus,ocValue:r.ocValue,nf:r.nf,map:r.map,
+    it.spg.push({q:qty,legacy:!!r.legacy,preferredPick:pgChData_(r.preferredPick),pickException:!!r.pickException,cut:r.cut,kit:r.kit,stock:pgChQtd_(r.stock),sub:pgChQtd_(r.sub),oc:r.oc,ocStatus:r.ocStatus,ocValue:r.ocValue,nf:r.nf,map:r.map,
       kitCreated:pgChData_(r.kitCreated),productCreated:pgChData_(r.productCreated),productLink:pgChData_(r.productLink),paginationDate:pgChData_(r.paginationDate),
       formal:pgChData_(r.formal),pickP:pgChData_(r.pickPlan),pick:real.pick,deliveryP:pgChData_(r.deliveryPlan),
       delivery:real.delivery,produced:pgChData_(r.produced),cost:pgChData_(r.cost),costP:pgChData_(r.costPlan),ocOpen:pgChData_(r.ocOpen),ocDone:pgChData_(r.ocDone),row:r.row});
