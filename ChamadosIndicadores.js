@@ -54,6 +54,8 @@ function pgChMetricaChamado_(t,idx,costHistory) {
     const delivery=it.deliveryEvidence?.date||it.stages?.[11]?.r||'';
     const collection=it.collection||pgChColetaRota_(it),pick=collection.date;
     const formal=pgChMarcoItens_(sp,'formal');
+    const routePanel=(t.panel||[]).filter(p=>pgChGraf_(p.printer)===pgChGraf_(it.printer)&&pgChCD_(p.cd)===pgChCD_(it.cd));
+    const prepressEnd=pgChData_(it.stages?.[2]?.r)||pgChMarcoItens_(routePanel,'startR');
     const deadlines=pgChUnicos_(sp.map(r=>r.formal));
     let late=!!(pick && formal && pick>formal),unverified=false;
     if(formal && deadlines.length>1){
@@ -64,7 +66,7 @@ function pgChMetricaChamado_(t,idx,costHistory) {
         if(!collected)unverified=true;else if(collected>part.formal)late=true;
       }
     }
-    if(it.qty>0)routes.push({sku:it.sku,printer:it.printer,cd:it.cd,qty:it.qty,delivery,pick,formal,late,unverified,source:delivery?it.stages[11].f:'',dimensions:attributes,coverage:it.coverage.slice(),picked:Math.min(it.qty,it.picked),productionStatus:it.productionStatus.label,collection:{events:collection.events,parts:collection.parts,source:collection.source,maps:collection.maps,authoritativePick:collection.authoritativePick||'',chronologyException:!!collection.chronologyException,spgDate:pgChDataIntegral_(sp.filter(s=>!s.legacy&&s.pick&&(!s.delivery||s.pick<=s.delivery)).map(s=>({date:s.pick,qty:s.q})),it.qty,'date','qty')}});
+    if(it.qty>0)routes.push({sku:it.sku,printer:it.printer,cd:it.cd,qty:it.qty,delivery,pick,formal,prepressEnd,late,unverified,source:delivery?it.stages[11].f:'',dimensions:attributes,coverage:it.coverage.slice(),picked:Math.min(it.qty,it.picked),productionStatus:it.productionStatus.label,collection:{events:collection.events,parts:collection.parts,source:collection.source,maps:collection.maps,authoritativePick:collection.authoritativePick||'',chronologyException:!!collection.chronologyException,spgDate:pgChDataIntegral_(sp.filter(s=>!s.legacy&&s.pick&&(!s.delivery||s.pick<=s.delivery)).map(s=>({date:s.pick,qty:s.q})),it.qty,'date','qty')}});
     const {specRows,...dims}=attributes,key=JSON.stringify(dims);
     let g=groups.get(key);
     if(!g){
@@ -79,7 +81,7 @@ function pgChMetricaChamado_(t,idx,costHistory) {
   }
   const delivered=pgChMarcoItens_(routes,'delivery');
   t.ocValues=pgChOCsResumo_(t);
-  return {ocValues:t.ocValues,stages:pgChDatasEtapas_(t.items),groups:Array.from(groups.values(),g=>{g.target=pgChPrazoResumo_(g.targetItems);g.stages=pgChDatasEtapas_(g.stageItems);delete g.targetItems;delete g.stageItems;return g;}),closed:t.steps['Conclusão']?.r||'',canceled:t.steps.Cancelamento?.r||'',
+  return {ocValues:t.ocValues,allocated:pgChData_(t.steps['Alocação']?.r),stages:pgChDatasEtapas_(t.items),groups:Array.from(groups.values(),g=>{g.target=pgChPrazoResumo_(g.targetItems);g.stages=pgChDatasEtapas_(g.stageItems);delete g.targetItems;delete g.stageItems;return g;}),closed:t.steps['Conclusão']?.r||'',canceled:t.steps.Cancelamento?.r||'',
     delivered,deliverySource:delivered?pgChUnicos_(routes.map(r=>r.source)).join(' + '):'',
     pickDone:pgChMarcoItens_(routes,'pick'),pickDue:pgChMarcoItens_(routes,'formal'),
     pickLate:routes.some(r=>r.late),pickUnverified:routes.some(r=>r.unverified),okrRoutes:routes,pickMaps:pgChUnicos_(routes.flatMap(r=>r.collection.maps)),pickSource:pgChUnicos_(routes.map(r=>r.collection.source)).join(' + '),owner:t.owner||''};

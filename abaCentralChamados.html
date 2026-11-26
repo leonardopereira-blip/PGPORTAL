@@ -169,6 +169,7 @@
 <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="4" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/><rect x="13" y="10" width="8" height="10" rx="1"/></svg> Distribuição</h2>
       <select id="ch-by" aria-label="Agrupar por"><option value="cat">Categoria</option><option value="shipment">Envio</option><option value="brand">Marca</option><option value="priority">Prioridade</option></select></div><div id="ch-dist"></div></section></div>
     <section class="ch-box"><div class="ch-between"><h2>Prazos de coleta</h2><button type="button" class="ch-btn" data-deadline="">Todos os prazos</button></div><p class="ch-muted">Chamados sem coleta integral, pelo prazo de 25 dias. Materiais coletados, mesmo em trânsito, ficam fora das faixas. Semanas de segunda a domingo; cada chamado é contado uma vez.</p><div id="ch-deadline-cards" class="ch-grid"></div><p id="ch-deadline-selection" class="ch-muted" role="status"></p></section>
+    <div class="ch-flex"><section class="ch-box"><h2>Resultado por marca</h2><div id="ch-central-brand-summary"></div></section><section class="ch-box"><h2>Tempo por etapa | dentro x fora</h2><div id="ch-central-stage-summary"></div></section></div>
     <section class="ch-box"><h2>Resumo dos prazos de coleta</h2><p class="ch-muted">Percentuais sobre todos os chamados e a tiragem dos filtros aplicados, antes da seleção de uma faixa. Tiragem total dos chamados.</p><div id="ch-deadline-summary"></div></section>
     <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Chamados</h2><small id="ch-count"></small></div><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
   </div>
@@ -534,6 +535,39 @@
       return {key,qty:d.items.reduce((sum,t)=>sum+t.qty,0),tickets:d.items.length,d};
     }).filter(x=>x.tickets||x.d.canceled).sort((a,b)=>b.qty-a.qty||a.key.localeCompare(b.key));
   }
+  function chResultByBrand(d){
+    const groups=new Map();
+    for(const t of d.items){
+      if(!t.den)continue;
+      const brand=t.brand||'SEM MARCA',g=groups.get(brand)||{brand,den:0,num:0};
+      g.den+=t.den;g.num+=t.num;groups.set(brand,g);
+    }
+    return [...groups.values()].map(g=>({...g,late:g.den-g.num,pct:chPct(g.num,g.den)})).sort((a,b)=>b.pct-a.pct||b.den-a.den||a.brand.localeCompare(b.brand));
+  }
+  function chStageComparison(d,rows,f){
+    const source=new Map(rows.map(t=>[t.id,t])),groups=[{weight:0,eligible:0,sums:[0,0,0]},{weight:0,eligible:0,sums:[0,0,0]}];
+    for(const item of d.items){
+      if(!item.den||!item.actual)continue;
+      const group=groups[item.noPrazo?0:1],w=item.weight;
+      group.eligible+=w;
+      const t=source.get(item.id),scoped=t&&chFilteredTotals(t,f);if(!scoped)continue;
+      const routes=(scoped.okrRoutes||[]).filter(r=>r.qty>0);
+      const prepress=routes.length?routes.every(r=>r.prepressEnd)?routes.map(r=>r.prepressEnd).sort().pop():'':scoped.stages?.[2]?.r;
+      const dates=[item.created,scoped.allocated,prepress,item.actual];
+      if(dates.some(x=>!x)||dates.some((x,k)=>k>0&&x<dates[k-1]))continue;
+      const days=dates.slice(1).map((x,k)=>chDays(dates[k],x));
+      if(days.some(x=>x===null||!Number.isFinite(x)))continue;
+      group.weight+=w;days.forEach((x,k)=>group.sums[k]+=w*x);
+    }
+    const means=groups.map(g=>g.sums.map(s=>g.weight?s/g.weight:null));
+    const totals=means.map(a=>a.every(x=>x!==null)?a.reduce((s,x)=>s+x,0):null);
+    const diff=totals.every(x=>x!==null)?totals[1]-totals[0]:null;
+    const stages=['Alocação','Pré-impressão','Produção até coleta'].map((label,k)=>{
+      const inside=means[0][k],outside=means[1][k],delta=inside!==null&&outside!==null?outside-inside:null;
+      return {label,inside,outside,delta,impact:diff>0&&delta!==null?100*delta/diff:null};
+    });
+    return {stages,groups,totals,diff};
+  }
   // CH_OKR_PURE_END
   const detailBox=(label,content)=>'<details><summary>'+esc(label)+'</summary>'+content+'</details>';
   function message(s,error){el('msg').textContent=s;el('msg').className=error?'ch-alert':s&&s.startsWith('Carregando')?'ch-loading':'ch-muted';}
@@ -610,7 +644,7 @@
       '<label>Coleta do chamado<select id="ch-okr-scope"><option value="ativos">Todos exceto cancelados</option><option value="abertos">Não coletado</option><option value="concluidos">Coletado</option></select></label>'+
       '<label>Situação do prazo<select id="ch-okr-prazo"><option value="">Todos</option><option value="dentro">Dentro do prazo</option><option value="fora">Fora do prazo</option><option value="aberto">Em aberto (todos)</option><option value="vencido">Vencido em aberto</option><option value="abertoAVencer">Em aberto a vencer</option><option value="naoApurado">Não apurado</option></select></label></div>'+
       '<div class="ch-filterline"><span class="ch-filter-caption"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg> Filtros:</span>'+'<label>Chamado<input id="ch-okr-query" type="search" placeholder="Um ou vários chamados"></label>'+filterMarkup('okr-')+'<button id="ch-okr-clear" class="ch-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16 10-10 6 6-8 8H8zM10 10l6 6M12 20h8"/></svg> Limpar</button></div><p class="ch-note" id="ch-okr-cutoff">Base: somente prazos vencidos até D-1 da data observada. Prazos de hoje ou futuros ficam fora da aderência, inclusive quando já coletados.</p></section>'+
-      '<div id="ch-okr-kpis" class="ch-grid"></div><details class="ch-box ch-okr-comparison" open><summary>Visão comparativa dos critérios de apuração</summary><div id="ch-okr-compare"></div></details><section class="ch-box"><h2>OKR por acabamento</h2><div id="ch-okr-finish-summary"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de coleta</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Abrir no Google Sheets</button><small id="ch-okr-count"></small><a id="ch-okr-sheet-link" target="_blank" rel="noopener noreferrer" hidden>Abriu em outra aba? Acessar planilha</a><small id="ch-okr-export-msg" role="status"></small></div><div id="ch-okr-rows"></div></section>';
+      '<div id="ch-okr-kpis" class="ch-grid"></div><details class="ch-box ch-okr-comparison" open><summary>Visão comparativa dos critérios de apuração</summary><div id="ch-okr-compare"></div></details><div class="ch-flex"><section class="ch-box"><h2>Resultado por marca</h2><div id="ch-okr-brand-summary"></div></section><section class="ch-box"><h2>Tempo por etapa | dentro x fora</h2><div id="ch-okr-stage-summary"></div></section></div><section class="ch-box"><h2>OKR por acabamento</h2><div id="ch-okr-finish-summary"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Distribuição de aging de coleta</h2><div id="ch-okr-aging"></div></section><section class="ch-box"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Base de apuração</h2><div class="ch-tools" style="margin-bottom:12px"><button type="button" id="ch-okr-export" class="ch-btn ch-primary">Abrir no Google Sheets</button><small id="ch-okr-count"></small><a id="ch-okr-sheet-link" target="_blank" rel="noopener noreferrer" hidden>Abriu em outra aba? Acessar planilha</a><small id="ch-okr-export-msg" role="status"></small></div><div id="ch-okr-rows"></div></section>';
       el('okr').querySelectorAll('input,select').forEach(x=>{if(x.id!=='ch-okr-query')x.addEventListener('change',renderOKR);});
       chBindQuery(el('okr-query'),renderOKR);
     }
@@ -624,12 +658,14 @@
     f.asof=[f.asof||dayNow(),dayNow()].sort()[0];el('okr-asof').max=dayNow();el('okr-asof').value=f.asof;
     const d1=chAdd(f.asof,-1),effectiveEnd=f.basis==='due'&&f.end&&f.end<d1?f.end:d1;
     el('okr-cutoff').textContent='Aderência: vencimentos até '+dt(effectiveEnd)+' (D-1 da observação: '+dt(d1)+'). '+(f.basis==='due'&&f.start&&f.start>effectiveEnd?'Ainda não há vencimentos elegíveis no recorte.':'Prazos de hoje e futuros ficam fora da apuração, inclusive quando já coletados.');
-    state.okrExport=null;el('okr-export').disabled=true;if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-compare').innerHTML='';el('okr-finish-summary').innerHTML='';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
+    state.okrExport=null;el('okr-export').disabled=true;if(f.start&&f.end&&f.start>f.end){el('okr-kpis').textContent='O início do corte deve ser anterior ao fim.';el('okr-compare').innerHTML='';el('okr-finish-summary').innerHTML='';el('okr-brand-summary').innerHTML='';el('okr-stage-summary').innerHTML='';el('okr-aging').innerHTML='';el('okr-rows').innerHTML='';return;}
     const d=chOKR(re,f),display=chOKRDestinationRows(d,f,re),unit=f.unit==='qty'?'Tiragem':'Chamados';state.okrExport={d,f,display};el('okr-export').disabled=!!state.okrSheetBusy;el('okr-count').textContent=num(d.items.length)+' chamados · '+num(display.length)+' linhas por destino';const pct=v=>v===null?'—':num(Math.round(v*10)/10)+'%';
     el('okr-kpis').innerHTML=chOKRCards(d,f);
     chFitOKRCards();
     el('okr-compare').innerHTML=chOKRCompare(re,f,d);
     el('okr-finish-summary').innerHTML=chOKRFinishTable(re,f);
+    el('okr-brand-summary').innerHTML=chBrandResultTable(d,f);
+    el('okr-stage-summary').innerHTML=chStageComparisonTable(d,re,f);
     el('okr-aging').innerHTML=table(['Dias',unit,'% da faixa','% acumulado'],d.bands.map(b=>[esc(b.label),num(b.count),pct(b.pct),pct(b.cum)]))+'<p class="ch-muted">Denominador: '+num(d.delivery)+' '+unit.toLowerCase()+' com coleta integral e aging válido.</p>';
     el('okr-rows').innerHTML=chOKRTable(display);
     chBindTableDrag('okr-');
@@ -709,6 +745,23 @@
     const cards=results.map(({rule,label,help,d},i)=>chOKRHelpCard(label,chOKRPct(d.pct),chOKRTone(d),help+' '+chOKRCardHelp['Aderência'],'ch-okr-compare-help-'+i,'<button type="button" class="ch-link ch-compare-link" data-okr-criterion="'+rule+'">Ver base detalhada</button>')).join('');
     const lines=results.map(({label,help,d})=>'<tr><td title="'+esc(help)+'">'+esc(label)+'</td>'+[chOKRPct(d.pct),num(d.num)+' / '+num(d.den),num(d.late),num(d.pending),num(d.upcoming),num(d.canceled),num(d.historicalExcluded),num(d.actual),num(d.notCollected),chOKRAge(d),chOKROCLabel(chTotalOC(d.items),false)].map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('');
     return '<p class="ch-muted">Mesmos filtros e unidade de apuração para os três critérios. A base elegível pode variar conforme o prazo de cada critério; todos consideram vencimento até D-1.</p><div class="ch-grid">'+cards+'</div><div class="ch-frame"><table><thead><tr>'+headers.map(h=>'<th title="'+esc(chOKRCardHelp[h]||'Critério utilizado para definir o prazo de coleta.')+'" tabindex="0">'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+lines+'</tbody></table></div>';
+  }
+  const chStageNumber=v=>v===null?'—':new Intl.NumberFormat('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}).format(v);
+  const chStageDelta=v=>v===null?'—':(v>0?'+':'')+chStageNumber(v)+' d';
+  function chBrandResultTable(d,f){
+    const unit=f.unit==='qty'?'Tiragem':'Chamados',result=chResultByBrand(d),pct=v=>v===null?'—':chStageNumber(v)+'%';
+    const color=v=>v>=90?'#16734b':v>=70?'#b54708':'#c52222';
+    const lines=result.map(g=>[esc(g.brand),num(g.num),'<span style="color:#c52222">'+num(g.late)+'</span>','<strong style="color:'+color(g.pct)+'">'+pct(g.pct)+'</strong>']);
+    if(result.length)lines.push(['<b>Total</b>',num(d.num),num(d.late),'<b>'+pct(d.pct)+'</b>']);
+    const late=d.items.filter(t=>t.den>t.num).slice().sort((a,b)=>(b.den-b.num)-(a.den-a.num)).slice(0,6),sum=late.reduce((n,t)=>n+t.den-t.num,0);
+    return '<p class="ch-muted">'+unit+' apurada por situação'+(f.central?' · 25 dias ou data desejada, o maior; vencimentos até D-1.':'')+'</p>'+table(['Marca','Dentro','Fora','Aderência'],lines,'Nenhuma marca apurada no recorte.')+(late.length?'<p class="ch-note"><strong>'+num(late.length)+' chamados concentram '+pct(chPct(sum,d.late))+' do '+(f.unit==='qty'?'volume':'total')+' fora do prazo ('+num(sum)+').</strong> '+late.map(t=>'<button type="button" class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button> · '+num(t.den-t.num)).join(' &nbsp; ')+'</p>':'');
+  }
+  function chStageComparisonTable(d,rows,f){
+    const c=chStageComparison(d,rows,f),days=v=>v===null?'—':chStageNumber(v)+' d',pct=v=>v===null?'—':chStageNumber(v)+'%';
+    const lines=c.stages.map(s=>[esc(s.label),days(s.inside),days(s.outside),chStageDelta(s.delta),pct(s.impact)]);
+    lines.push(['<b>Aging da base comparável</b>',days(c.totals[0]),days(c.totals[1]),chStageDelta(c.diff),c.diff>0?'100%':'—']);
+    const unit=f.unit==='qty'?'un.':'chamados',coverage=c.groups.map(g=>num(g.weight)+' / '+num(g.eligible)+' '+unit);
+    return table(['Etapa','Dentro','Fora','Dif.','Impacto'],lines)+'<p class="ch-muted">Base comparável (coletados apurados com todos os marcos reais): dentro '+coverage[0]+' · fora '+coverage[1]+'. '+(f.unit==='qty'?'Média ponderada pela tiragem.':'Média por chamado.')+' Alocação: abertura → alocação; pré-impressão: alocação → aprovação real de boneco (ou início real da produção); produção: fim da pré-impressão → coleta. Impacto: diferença da etapa sobre a diferença total de aging, quando positiva.</p>';
   }
   function chOKRFinishTable(rows,f){
     const result=chOKRByFinish(rows,f),unit=f.unit==='qty'?'Tiragem':'Chamados';
@@ -802,6 +855,10 @@
     el('deadline-summary').innerHTML=table(['Faixa de prazo','Chamados','% chamados','Tiragem','% tiragem'],chDeadlineSummary(baseRows,today).map(r=>[r.label==='Total'?'<b>Total</b>':esc(r.label),num(r.tickets),pct.format(r.ticketPct),num(r.qty),pct.format(r.qtyPct)]));
     el('deadline-selection').textContent=(state.deadline?'Filtro: '+chDeadlineLabels[state.deadline]+'. ':'Todos os prazos. ')+'Hoje: '+dt(today)+'.';
     el('kpis').innerHTML=[['Chamados',rows.length],['Tiragem',total('qty')],['Mapa solicitado',total('mapped')],['Coletado',total('picked')],['Entregue no CD',total('delivered')],['Aging médio de coleta',agingMarkup(rows,today)]].map(([k,v])=>'<div class="ch-card" data-tone="'+(k==='Chamados'||k==='Tiragem'?'navy':'blue')+'"><small>'+esc(k)+'</small><b>'+(typeof v==='string'?esc(v):num(v))+'</b></div>').join('');
+    const centralF={central:true,rule:'standard',basis:'due',start:'',end:'',asof:today,scope:'ativos',unit:state.funnelMode};
+    const centralD=chOKR(rows,centralF);
+    el('central-brand-summary').innerHTML=chBrandResultTable(centralD,centralF);
+    el('central-stage-summary').innerHTML=chStageComparisonTable(centralD,rows,centralF);
     const oc=chTotalOC(rows),money=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
     el('oc-total').innerHTML='<div class="ch-between"><h2>Valor total das OCs</h2><strong style="font-size:1.35rem;color:var(--ch-navy,#0C2340)">'+(oc.unavailable?'Atualize a base':esc(money.format(oc.cents/100)))+'</strong></div><p class="ch-muted">'+(oc.unavailable?'O JSON atual ainda não contém os valores consolidados.':num(oc.known)+' OCs com valor · '+num(oc.missing)+' sem valor'+(oc.conflicts?' · '+num(oc.conflicts)+' com valores divergentes (não somadas)':'')+' · Cada OC é contada uma única vez. O valor integral da OC é considerado quando vinculada aos filtros, sem rateio por SKU ou CD.')+'</p>';
     const priorityRows=chPrioritySummary(rows);

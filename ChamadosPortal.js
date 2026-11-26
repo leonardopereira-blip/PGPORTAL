@@ -1,4 +1,4 @@
-const PG_CH_CALCULATION_VERSION = 18;
+const PG_CH_CALCULATION_VERSION = 19;
 const PG_CH_TRATATIVAS = ['Em análise','Em tratativa','Aguardando retorno','Resolvido'];
 const PG_CH_ABA_EDICAO = 'Chamados_Tratativas';
 

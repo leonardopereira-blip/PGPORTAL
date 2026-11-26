@@ -104,3 +104,12 @@ test('Central e OKR ponderam a mesma coleta integral pela tiragem, excluindo pen
  const t=ticket();t.id='PAINEL-3148';t.created='2026-10-01';t.okrRoutes=t.okrRoutes.map(r=>({...r,pick:'2026-09-20',collection:{...r.collection,authoritativePick:'2026-09-20',chronologyException:true,events:[{date:'2026-09-20',qty:r.qty,source:'SPG · Coleta real (dados do Painel)'}]}}));
  const d=chOKR([t],filters);assert.equal(d.items[0].actual,'2026-09-20');assert.equal(d.den,1);assert.equal(d.num,1);assert.equal(d.average,null);assert.equal(chOKRDestinationRows(d,filters,[t]).every(x=>x.actual==='2026-09-20'),true);
 });
+
+ test('marca e etapas usam a mesma apuração, ponderam pela tiragem e fecham o aging da base comparável',()=>{
+ const {chResultByBrand,chStageComparison}=vm.runInContext('({chResultByBrand,chStageComparison})',ctx);
+ const a=ticket();a.created='2026-09-10';a.allocated='2026-09-11';a.okrRoutes=a.okrRoutes.map(r=>({...r,prepressEnd:'2026-09-13',pick:'2026-09-30',collection:{events:[{date:'2026-09-30',qty:r.qty}],parts:[],maps:[]}}));
+ const b={...a,id:'B',n:'42',brand:'MAR',allocated:'2026-09-15',okrRoutes:a.okrRoutes.map(r=>({...r,prepressEnd:'2026-09-20',pick:'2026-10-20',collection:{events:[{date:'2026-10-20',qty:r.qty}],parts:[],maps:[]}}))};
+ const f={...filters,unit:'qty'},d=chOKR([a,b],f),brands=chResultByBrand(d),s=chStageComparison(d,[a,b],f);
+ assert.equal(brands.reduce((n,g)=>n+g.den,0),d.den);assert.equal(brands.reduce((n,g)=>n+g.num,0),d.num);assert.equal(s.totals[0],20);assert.equal(s.totals[1],40);assert.equal(s.stages[0].inside,1);assert.equal(s.stages[1].outside,5);assert.equal(s.stages.reduce((n,x)=>n+x.impact,0),100);
+ const missing={...b,allocated:''},dm=chOKR([a,missing],f),sm=chStageComparison(dm,[a,missing],f);assert.equal(sm.groups[1].weight,0);assert.equal(sm.totals[1],null);assert.equal(sm.groups[1].eligible,300);
+});
