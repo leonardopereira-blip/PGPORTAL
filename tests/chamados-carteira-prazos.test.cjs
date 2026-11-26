@@ -20,7 +20,7 @@ const ticket = (id, deadline, overrides = {}) => ({ id, n: id, status: 'ALOCADO'
     balance: 10, coverage: Array(12).fill(0) }, production: [{ label: 'Em produção', qty: 10 }],
   stages: stages(), eta: '2026-11-27', partial: false, ...overrides });
 
-test('faixas de prazo usam entrega final, hoje SP e semanas de segunda a domingo', () => {
+test('faixas de prazo de coleta usam 25 dias, hoje SP e semanas de segunda a domingo', () => {
   const today = '2026-11-24';
   for (const [deadline, expected] of [['2026-11-23', 'backlog'], ['2026-11-24', 'today'],
     ['2026-11-25', 'week'], ['2026-11-29', 'week'], ['2026-11-30', 'next'],
@@ -37,13 +37,20 @@ test('faixas de prazo usam entrega final, hoje SP e semanas de segunda a domingo
   assert.equal(rules.chTodaySP(Date.parse('2026-11-24T03:00:00Z')), '2026-11-24');
 });
 
-test('somente cancelamento ou entrega integral comprovada retiram o chamado das faixas', () => {
+test('cancelamento ou coleta integral comprovada retiram o chamado das faixas, mesmo em trânsito', () => {
   const base = ticket('A', '2026-11-20');
   assert.equal(rules.chDeadlineBucket({ ...base, status: 'CONCLUÍDO', closed: '2026-11-21' }, '2026-11-24'), 'backlog');
   assert.equal(rules.chDeadlineBucket({ ...base, status: 'CANCELADO' }, '2026-11-24'), '');
   assert.equal(rules.chDeadlineBucket({ ...base, canceled: '2026-11-23' }, '2026-11-24'), '');
   assert.equal(rules.chDeadlineBucket({ ...base, delivered: '2026-11-23', totals: { ...base.totals, delivered: 5 } }, '2026-11-24'), 'backlog');
   assert.equal(rules.chDeadlineBucket({ ...base, delivered: '2026-11-23', totals: { ...base.totals, delivered: 10 } }, '2026-11-24'), '');
+  assert.equal(rules.chDeadlineBucket({ ...base, pickDone: '2026-11-21' }, '2026-11-24'), '');
+  assert.equal(rules.chDeadlineLabel({ ...base, pickDone: '2026-11-21' }, '2026-11-24'), 'Coletado');
+  assert.equal(rules.chDeadlineBucket({ ...base, pickDone: '2026-11-25' }, '2026-11-24'), 'backlog');
+  assert.equal(rules.chDeadlineBucket({ ...base, evidenceStart:'2026-10-01', pickDone:'2026-10-20' }, '2026-11-24'), '');
+  assert.equal(rules.chDeadlineBucket({ ...base, okrRoutes:[{qty:5,pick:'2026-11-21'},{qty:5,pick:''}] }, '2026-11-24'), 'backlog');
+  assert.equal(rules.chDeadlineBucket({ ...base, okrRoutes:[{qty:5,pick:'2026-11-21'},{qty:5,pick:'2026-11-22'}] }, '2026-11-24'), '');
+  assert.equal(rules.chDeadlineBucket({ ...base, items:[{qty:10,collection:{date:'2026-11-21'}}] }, '2026-11-24'), '');
   const routes = [{ qty: 5, delivery: '2026-11-21' }, { qty: 5, delivery: '' }];
   assert.equal(rules.chDeadlineBucket({ ...base, okrRoutes: routes }, '2026-11-24'), 'backlog');
   assert.equal(rules.chDeadlineBucket({ ...base, okrRoutes: [routes[0], { qty: 5, delivery: '2026-11-23' }] }, '2026-11-24'), '');
