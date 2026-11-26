@@ -113,6 +113,12 @@
   #ch-central #ch-table table{table-layout:fixed;min-width:0;max-width:none}
   #ch-central #ch-table th,#ch-central #ch-table td{padding:7px 7px;min-width:0;white-space:normal;overflow-wrap:anywhere;word-break:normal;line-height:1.4;box-sizing:border-box}
   #ch-central #ch-table th{letter-spacing:0}
+  #ch-central #ch-table .ch-pagination-preview{display:block;width:100%;min-width:0;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+  #ch-central #ch-table .ch-pagination-more{display:block;font-size:10px;line-height:1.4;margin-top:2px;white-space:nowrap}
+  #ch-central #ch-pagination-dialog{position:fixed;inset:0;margin:auto;box-sizing:border-box;width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;padding:20px;border:1px solid var(--ch-line);border-radius:12px;background:white;color:var(--ch-navy);box-shadow:0 12px 48px #0c234044}
+  #ch-central #ch-pagination-dialog::backdrop{background:#0c234066}
+  #ch-central #ch-pagination-full{white-space:normal;overflow-wrap:anywhere;line-height:1.8;margin:8px 0 16px}
+  #ch-central #ch-pagination-dialog .ch-actions{justify-content:flex-end}
   #ch-central #ch-table .ch-date-head{text-align:center;border-left:2px solid #c6d6e8}#ch-central #ch-table .ch-date-first{border-left:2px solid #c6d6e8}#ch-central #ch-table .ch-date-cell{white-space:normal;font-variant-numeric:tabular-nums}
   #ch-central #ch-table .ch-status-chip{max-width:100%;padding:4px 5px}
   #ch-central #ch-table .ch-total-row td{white-space:normal;overflow-wrap:anywhere}#ch-central .ch-overdue{color:#be381c;font-weight:600}#ch-central .ch-ontrack{color:#284081;font-weight:600}
@@ -171,6 +177,7 @@
     <section class="ch-box"><div class="ch-between"><h2><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6m-6 4h6m-6 4h4"/></svg> Chamados</h2><small id="ch-count"></small></div><div id="ch-dragbar" class="ch-dragbar" hidden><button type="button" id="ch-grip" class="ch-grip" aria-label="Segure e arraste horizontalmente a tabela. Use as setas para navegar." title="Segure e arraste para os lados"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-5a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3.4L3 13a2 2 0 0 1 3-2z"/></svg>Segure e arraste</button><input id="ch-scrollrange" type="range" min="0" max="0" value="0" aria-label="Posição horizontal da tabela de chamados"></div><div id="ch-table"></div><div id="ch-pages" class="ch-pager"></div></section>
   </div>
   <div id="ch-detail" hidden></div>
+  <dialog id="ch-pagination-dialog" aria-labelledby="ch-pagination-title"><h2 id="ch-pagination-title">Paginação</h2><p id="ch-pagination-full"></p><form method="dialog" class="ch-actions"><button type="submit" class="ch-btn ch-primary" autofocus>Fechar</button></form></dialog>
 </div></section>
 <script>
 (function(){
@@ -184,6 +191,11 @@
   const opt=(x,label=x)=>'<option value="'+esc(x)+'">'+esc(label)+'</option>';
   const productionCell=t=>(t.production||[]).length?(t.production||[]).map(p=>'<span class="ch-status-chip" title="'+num(p.qty)+' unidades">'+esc(p.label)+'</span>').join(' '):'Atualização da base necessária';
   const cell=x=>x==null||x===''?'—':esc(x);
+  function chPaginationCell(c){
+    if(!c.pages.length)return '—';
+    const full=c.pages.map(num).join(' / ')+(c.pageQty<c.total?' · parcial':'');
+    return '<span class="ch-pagination-preview">'+esc(full)+'</span>'+(full.length>9?'<button type="button" class="ch-link ch-pagination-more" data-pagination="'+esc(full)+'" aria-haspopup="dialog">Ver mais</button>':'');
+  }
   const chHeaderHelp={'Tiragem':'Quantidade total de exemplares do chamado e destino.','OC':'Número das ordens de compra vinculadas ao chamado e destino.','Valor OC':'Valor integral das OCs únicas, sem duplicar por SKU; pode se repetir entre destinos.','Paginação':'Paginação total da especificação técnica do SPG por SKU.','Valor médio geral':'Soma do custo total histórico dividido pela tiragem histórica, de todas as gráficas. SKU e marca; primeiro últimos 3 meses, depois histórico disponível.','Valor médio na gráfica':'Soma do custo total histórico dividido pela tiragem histórica na própria gráfica. Primeiro SKU nos últimos 3 meses, depois marca na gráfica; sem resultado, amplia o período.','Valor unitário médio':'Média histórica unitária da gráfica, ponderada pela tiragem atual. Se não houver referência na gráfica, usa a média geral.','Valor médio total':'Valor unitário médio histórico multiplicado pela tiragem do chamado.','Valor unitário':'Valor total vinculado à OC dividido pela tiragem correspondente, sem média simples entre SKUs.','Valor total':'Custo validado vinculado à OC por SKU e destino; quando não houver valor vinculado, fica em branco.','Data segura (calculada)':'Distribuição proporcional dos tempos históricos por etapa, marca, gráfica e CD entre abertura e coleta formalizada, limitada aos 25 dias menos SLA de transporte. Na falta da formalização, usa a coleta prevista; sem ambas, o prazo de 25 dias menos SLA.','Data acordada / formalizada':'Data acordada ou formalizada com a gráfica; se ausente, estimativa identificada na célula.','Previsão':'Previsão operacional; na ausência, estimativa calculada.','Real':'Data de realização comprovada pelas fontes.'};
   function chStageTable(headers,phases,rows,empty,totals){
     if(!rows.length)return '<p class="ch-muted">'+esc(empty)+'</p>';
@@ -785,7 +797,7 @@
     const maxPage=Math.max(1,Math.ceil(destinationRows.length/30));state.page=Math.min(state.page,maxPage);
     const portfolio=chPortfolioTotals(rows,state.data.phases.length),commercial=chCommercial(rows),fixedTotals=Array(19).fill('—');
     const financialCells=t=>{const c=chCommercial([t]),o=chTotalOC([t]),ids=[...new Set((t.ocValues||[]).map(x=>x.oc).filter(Boolean))];
-      return [cell(ids.join(' / ')),o.unavailable?'—':o.known?esc(money.format(o.cents/100))+(o.missing||o.conflicts?' · parcial':''):'—',c.pages.length?esc(c.pages.map(num).join(' / '))+(c.pageQty<c.total?' · parcial':''):'—'];};
+      return [cell(ids.join(' / ')),o.unavailable?'—':o.known?esc(money.format(o.cents/100))+(o.missing||o.conflicts?' · parcial':''):'—',chPaginationCell(c)];};
     fixedTotals[0]='TOTAL GERAL<small>'+num(portfolio.tickets)+' chamados</small>';fixedTotals[7]=num(destinationRows.length)+'<small>destinos</small>';fixedTotals[9]=num(portfolio.qty);fixedTotals[10]=num(oc.count)+'<small>OCs únicas</small>';fixedTotals[11]=oc.unavailable?'—':esc(money.format(oc.cents/100));fixedTotals[12]=commercial.pageQty?num(commercial.pageTotal)+'<small>páginas × tiragem'+(commercial.pageQty<commercial.total?' · parcial':'')+'</small>':'—';fixedTotals[13]=num(portfolio.picked)+'<small>un. coletadas</small>';fixedTotals[14]=num(portfolio.delivered)+'<small>un. entregues</small>';
     el('table').innerHTML=chStageTable(['Chamado','Categoria','Envio','Marca','Prioridade','Responsável PG','Gráfica','CD','Status de produção','Tiragem','OC','Valor OC','Paginação','Data de coleta','Data de entrega','Previsão final de entrega','Prazo final (25 dias)','Situação do prazo','Próxima etapa'],state.data.phases,destinationRows.slice((state.page-1)*30,state.page*30).map(t=>[
       '<button class="ch-link" data-ticket="'+esc(t.id)+'">#'+esc(t.n)+'</button>',cell(t.cat),cell(t.shipment),cell(t.brand),cell(chPriority(t)),cell(chResponsible(t)),cell([...new Set((t.groups||[]).map(g=>g.printer).filter(Boolean))].join(' | ')),cell([...new Set((t.groups||[]).map(g=>cdLabel(g.cd)).filter(Boolean))].join(' | ')),productionCell(t),num(t.totals.qty),...financialCells(t),carteiraCollectionCell(t,chPickEvidence(t,today).actual,today),dt(chDeliveryDate(t,today)),dt(t.eta)+(t.partial&&t.eta?' · parcial':''),dt(t.target?.deadline),'<span class="ch-deadline-chip" data-deadline="'+esc(t.deadlineBucket)+'">'+esc(t.deadlineLabel)+'</span>',cell(state.data.phases[t.target?.nextStage]),...chStageDates(t,state.data.phases,today)]),'Nenhum chamado corresponde aos filtros.',{fixed:fixedTotals,phases:portfolio.coverage});
@@ -880,6 +892,7 @@
   }
   root.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;
+    if(b.hasAttribute('data-pagination')){el('pagination-full').textContent=b.dataset.pagination;el('pagination-dialog').showModal();return;}
     if(b.hasAttribute('data-deadline')){state.deadline=state.deadline===b.dataset.deadline?'':b.dataset.deadline;state.page=1;render();return;}
     if(b.id==='ch-okr-export'){exportOKR();return;}
     if(b.dataset.okrCriterion){el('okr-rule').value=b.dataset.okrCriterion;renderOKR();el('okr-rows').scrollIntoView?.({block:'nearest'});return;}
