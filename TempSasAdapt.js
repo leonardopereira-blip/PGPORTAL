@@ -776,20 +776,30 @@ function pgTempSasAdaptConciliarJanelas_(janelas, saidasMapa, internalizado) {
 }
 
 function getTempSasAdapt() {
+  var inicio=Date.now(), marco=inicio;
+  function medir(etapa) { var agora=Date.now(); console.log('[TEMP SAS ADAPT] '+etapa+' ms='+(agora-marco)+' totalMs='+(agora-inicio)); marco=agora; }
   var pcp = pgTempSasAdaptLerColunas_('PCP', PG_TEMP_SAS_ADAPT_CAMPOS_PCP);
   var resumo = pgTempSasAdaptResumoGraficas_(pcp);
+  medir('PCP e gráficas');
   var camposAcabadoras = ['GRÁFICA', 'UNIDADE', 'ENVIO', 'CARACTERÍSTICA DA SOLICITAÇÃO',
     'SKU', 'TIRAGEM A ENTREGAR (total por CD)'];
   var acabadoras = pgTempSasAdaptLerColunas_('PCP_ACABADORAS', camposAcabadoras);
   var planoAthos = pgTempSasAdaptTiragemAcabadoras_(acabadoras);
+  medir('PCP acabadoras');
   resumo.pcpTotal = planoAthos.total;
   var saidasMapa = pgTempSasAdaptLerSaidasMapa_();
+  medir('Mapa');
   var internalizado = pgTempSasAdaptLerInternalizado_();
+  medir('Internalização');
   Object.assign(resumo, pgTempSasAdaptSaidaPorSkuCD_(saidasMapa, internalizado, planoAthos.skus));
   // Falha da nova referencia nao interrompe a visao nem muda seus totais.
   try {
-    Object.assign(resumo, pgTempSasAdaptConciliarJanelas_(pgTempSasAdaptLerJanelas_(), saidasMapa, internalizado));
+    var janelas=pgTempSasAdaptLerJanelas_();
+    medir('Leitura janelas');
+    Object.assign(resumo, pgTempSasAdaptConciliarJanelas_(janelas, saidasMapa, internalizado));
+    medir('Conciliação janelas');
   } catch (e) {
+    console.warn('[TEMP SAS ADAPT] Janelas: '+e.message);
     resumo.entregasPorJanela = []; resumo.janelasPorCD = []; resumo.athosPorSku = []; resumo.expedicoesAthos = []; resumo.divergenciasMapa=[]; resumo.trilhaMapa=[];
     resumo.erroEntregasPorJanela = 'Não foi possível atualizar as entregas por janela. Tente atualizar a visão.';
   }

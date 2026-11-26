@@ -167,7 +167,7 @@
 </div>
 <script>
 (function () {
-  var ultimo = null, original = null, carregando = false;
+  var ultimo = null, original = null, carregando = false, erroAtualizacao = '';
   var formatoVolume = new Intl.NumberFormat('pt-BR');
   var formatoPct = new Intl.NumberFormat('pt-BR', {maximumFractionDigits:2});
   function el(id) { return document.getElementById(id); }
@@ -347,7 +347,8 @@
     window.pgFiltrarTempSasAdapt();
     var at=el('pgTempTabelaAuditoria');if(at)at.innerHTML=(d.trilhaMapa||[]).map(function(r){return '<tr>'+['janela','destino','kit','sku','mapa','nfs','linhasMapa','dataColeta','dataEntrega','mapaSolicitado','coletado','entregue','status'].map(function(k){return '<td>'+esc(r[k]==null?'—':r[k])+'</td>';}).join('')+'</tr>';}).join('')||'<tr><td colspan="13">Sem registros no filtro</td></tr>';
     var data = d.atualizadoEm ? new Date(d.atualizadoEm) : null;
-    el('statusTempSasAdapt').textContent = data && !isNaN(data.getTime()) ? 'Atualizado em ' + data.toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'}) : 'Atualizado.';
+    var status = data && !isNaN(data.getTime()) ? 'Atualizado em ' + data.toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'}) : 'Atualizado.';
+    if (!carregando) el('statusTempSasAdapt').textContent = erroAtualizacao ? erroAtualizacao + ' · ' + status : status;
   }
   window.pgFiltrarGlobalTempSasAdapt=function(){
     if(!original)return;
@@ -380,23 +381,42 @@
     if (original && !forcar) { mostrar(original); return; }
     carregando = true;
     estadoCarregando(true);
-    el('statusTempSasAdapt').textContent = 'Carregando…';
-    google.script.run.withSuccessHandler(function(d) {
-      carregando = false;
-      estadoCarregando(false);
-      if (!d || typeof d.pcpTotal !== 'number' || typeof d.mapaSolicitado !== 'number' ||
-          !Array.isArray(d.graficas) || !Array.isArray(d.expedicoesAthos) ||
-          typeof d.coletadoAthos !== 'number' || typeof d.entregueAthos !== 'number' ||
-          !Array.isArray(d.athosPorSku)) {
-        el('statusTempSasAdapt').textContent = 'Não foi possível carregar. Tente atualizar a visão.';
-        return;
-      }
-      mostrar(d);
-    }).withFailureHandler(function(e) {
-      carregando = false;
-      estadoCarregando(false);
-      el('statusTempSasAdapt').textContent = 'Erro ao atualizar: ' + (e && e.message ? e.message : String(e));
-    }).getTempSasAdapt();
+    el('statusTempSasAdapt').textContent = original ? 'Atualizando… Dados anteriores disponíveis.' : 'Carregando…';
+    var tentativa = 0, maxTentativas = 3;
+    function finalizar() { carregando = false; estadoCarregando(false); }
+    function falha(mensagem) {
+      finalizar();
+      erroAtualizacao = original ? 'Falha ao atualizar. Exibindo a última atualização válida' : '';
+      if (original) mostrar(original);
+      else el('statusTempSasAdapt').textContent = 'Erro ao atualizar: ' + mensagem + '. Tente atualizar a visão.';
+    }
+    function executar() {
+      tentativa++;
+      google.script.run.withSuccessHandler(function(d) {
+        if (!d || typeof d.pcpTotal !== 'number' || typeof d.mapaSolicitado !== 'number' ||
+            !Array.isArray(d.graficas) || !Array.isArray(d.expedicoesAthos) ||
+            typeof d.coletadoAthos !== 'number' || typeof d.entregueAthos !== 'number' ||
+            !Array.isArray(d.athosPorSku)) {
+          falha('Resposta incompleta'); return;
+        }
+        if (original && !original.erroEntregasPorJanela && d.erroEntregasPorJanela) {
+          falha(d.erroEntregasPorJanela); return;
+        }
+        finalizar();
+        erroAtualizacao = '';
+        mostrar(d);
+      }).withFailureHandler(function(e) {
+        var mensagem = e && e.message ? e.message : String(e);
+        var transitorio = /HTTP\s*(?:0|429|500|502|503|504)\b|NetworkError|failed to fetch|falha na conex[aã]o|timed?\s*out|timeout|temporarily unavailable/i.test(mensagem);
+        if (transitorio && tentativa < maxTentativas) {
+          el('statusTempSasAdapt').textContent = 'Falha temporária de conexão. Nova tentativa ' + (tentativa+1) + '/' + maxTentativas + '…' + (original?' Dados anteriores disponíveis.':'');
+          setTimeout(executar, tentativa * 1500);
+          return;
+        }
+        falha(mensagem);
+      }).getTempSasAdapt();
+    }
+    executar();
   };
 })();
 </script>

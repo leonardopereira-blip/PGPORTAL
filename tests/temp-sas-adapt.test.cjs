@@ -536,7 +536,7 @@ test('falha na nova fonte de Fortaleza mantém Jundiaí e não usa recebido lega
   assert.equal(r.entregueAthos, 100);
 });
 
-function frontHarness(data) {
+function frontHarness(data, responses=[]) {
   const html = fs.readFileSync(path.join(root, 'abaTempSasAdapt.html'), 'utf8');
   const elements = new Map();
   for (const match of html.matchAll(/\bid="([^"]+)"/g)) {
@@ -544,11 +544,11 @@ function frontHarness(data) {
   }
   const downloads = [];
   const blobs = [];
-  let success;
+  let success, failure, calls=0; const timers=[];
   const run = {
     withSuccessHandler(fn) { success = fn; return run; },
-    withFailureHandler() { return run; },
-    getTempSasAdapt() { success(data); }
+    withFailureHandler(fn) { failure=fn; return run; },
+    getTempSasAdapt() { calls++; const next=responses.length?responses.shift():data; if(next instanceof Error)failure(next);else success(next); }
   };
   const context = vm.createContext({
     document: {
@@ -559,10 +559,10 @@ function frontHarness(data) {
     google: { script: { run } }, window: {},
     Blob: class { constructor(parts, options) { this.parts = parts; this.options = options; blobs.push(this); } },
     URL: { createObjectURL() { return 'blob:test-download'; }, revokeObjectURL() {} },
-    setTimeout() {}, alert(message) { assert.fail(message); }, console
+    setTimeout(fn) { timers.push(fn); }, alert(message) { assert.fail(message); }, console
   });
   for (const script of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) vm.runInContext(script[1], context);
-  return { html, elements, context, downloads, blobs };
+  return { html, elements, context, downloads, blobs, timers, calls:()=>calls };
 }
 
 function dadosVisaoAthos() {
@@ -739,3 +739,14 @@ test('falha na referência de janelas mantém os indicadores, busca e exportaç�
   h.context.window.pgExportarTempSasAdapt('athos');
   assert.equal(h.downloads.length, 1);
 });
+
+test('HTTP 0 tenta novamente sem chamadas paralelas e preserva dados na falha persistente',()=>{
+ const data=dadosVisaoAthos(),err=new Error('NetworkError: Falha na conexão devido a HTTP 0'),h=frontHarness(data,[err,err,data,err,err,err]);
+ h.context.window.pgCarregarTempSasAdapt(true); assert.equal(h.calls(),1);assert.equal(h.elements.get('pgTempAtualizar').disabled,true);
+ h.context.window.pgCarregarTempSasAdapt(true);assert.equal(h.calls(),1);
+ h.timers.shift()();h.timers.shift()();assert.equal(h.calls(),3);assert.equal(h.elements.get('pgTempTotalVolume').textContent,'250');
+ h.context.window.pgCarregarTempSasAdapt(true);h.timers.shift()();h.timers.shift()();assert.equal(h.calls(),6);
+ assert.equal(h.elements.get('pgTempTotalVolume').textContent,'250');assert.equal(h.elements.get('pgTempAtualizar').disabled,false);assert.match(h.elements.get('statusTempSasAdapt').textContent,/última atualização válida/);
+ h.context.window.pgFiltrarGlobalTempSasAdapt();assert.match(h.elements.get('statusTempSasAdapt').textContent,/última atualização válida/);
+});
+test('erro definitivo de fonte não repete chamada',()=>{const h=frontHarness(dadosVisaoAthos(),[new Error('Coluna ausente')]);h.context.window.pgCarregarTempSasAdapt(true);assert.equal(h.calls(),1);assert.equal(h.timers.length,0);assert.match(h.elements.get('statusTempSasAdapt').textContent,/Coluna ausente/);});
